@@ -9,6 +9,8 @@
 - Added saved, reusable Merged Runs, combining any Advisor farming categories through the existing Director planner and wave splitter.
 - Added per-category priority inheritance with optional per-preset priority overrides. Regular crop selections remain automatic or manually ranked; current-run and permanent single-patch crop overrides now have distinct scope.
 - Moved most planner controls out of the active guide. Added ready-only and include-unverified preferences, a shorter active-guide display with optional diagnostic details, and inline patch-edit actions.
+- Moved route ordering and travel choices into another sidebar page; merged-run presets retain independent itinerary and teleport choices.
+- Added an Advisor-backed farming status page exposing observed timers and farming contracts without restoring a second sidebar GUI.
 - Preserved completed steps and active mode while opening editor/settings/patches; banking replans continue with the active run and respect newly disabled patches.
 - Added regression tests for merged priorities, patch expansion/exclusions, saved profile isolation and active-run mode selection.
 - Known limits: patch unlock verification is incomplete; the compost page shows existing observed actions and supplies but not a full step-routed itinerary; some older Advisor controls need equivalent unified UI; no in-game/Windows client acceptance testing has been performed.

@@ -55,7 +55,11 @@ workflow nor in-game behavior has been tested by this CI.
    manual priority order, plus stock reservations. For merged runs select a
    named preset, check the run categories, and save. A merged run inherits each
    category's crop choice by default; optional per-category overrides can be
-   saved for that preset. Category changes are not applied until Save.
+   saved for that preset. Category changes are not applied until Save. The
+   **Route Editor** is also a page inside the sidebar: reorder or skip stops,
+   choose supported travel items, and save. Merged presets preserve their own
+   route membership and teleport choices instead of modifying the general
+   All Enabled route.
 4. The **Patch Manager** shows individual known patches grouped by type and
    location. Search, expand/collapse categories, toggle individual patches or
    use location/category bulk controls. Disabled means **excluded globally**
@@ -72,7 +76,9 @@ workflow nor in-game behavior has been tested by this CI.
 7. Choose **Compost Run** for a sidebar readout of the existing Advisor
    compost-bin state, next actions, and supply estimates. Compost state
    tracking and relevant overlays remain in Advisor's backend; a fully guided,
-   individually navigable compost itinerary is still future work.
+   individually navigable compost itinerary is still future work. The
+   **Timers & farming contract** page displays currently observed Advisor
+   timers and the latest recorded farming-contract assignment.
 
 Run Selection lists Advisor's nine original categories, plus All Enabled,
 Compost, and Merged. Separate legacy combinations remain internally supported
