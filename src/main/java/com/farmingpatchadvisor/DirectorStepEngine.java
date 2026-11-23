@@ -29,7 +29,8 @@ final class DirectorStepEngine
     static boolean supportsProtection(PatchType type)
     {
         return type == PatchType.TREE || type == PatchType.FRUIT_TREE ||
-            type == PatchType.CALQUAT || type == PatchType.HARDWOOD_TREE;
+            type == PatchType.CALQUAT || type == PatchType.HARDWOOD_TREE ||
+            type == PatchType.CELASTRUS || type == PatchType.REDWOOD;
     }
 
     static boolean isTreeType(PatchType type)
@@ -85,7 +86,24 @@ final class DirectorStepEngine
         }
     }
 
+    static Action actionForStep(DirectorPlanner.Step step, CropState state, Boolean protection)
+    {
+        PatchType type = step.patch.getPatchType();
+        if (step.harvestOnly && state == CropState.HARVESTABLE && isTreeType(type))
+        {
+            if (type == PatchType.FRUIT_TREE || type == PatchType.CALQUAT || type == PatchType.CELASTRUS)
+                return Action.HARVEST;
+            return Action.COMPLETE;
+        }
+        return action(type, state, step.protectionPlanned, protection);
+    }
+
     static String instruction(Action action, Crop crop, PatchType type)
+    {
+        return instruction(action, crop, type, true);
+    }
+
+    static String instruction(Action action, Crop crop, PatchType type, boolean compost)
     {
         String name = crop == null ? "a suitable replacement crop" : crop.getName();
         switch (action)
@@ -94,14 +112,19 @@ final class DirectorStepEngine
                 if (type == PatchType.HESPORI)
                     return "Prepare for Hespori combat if alive; harvest only after defeating it. Replant manually when appropriate.";
                 if (type == PatchType.CELASTRUS)
-                    return "Harvest the bark if available, then remove the harvested tree and replant if desired.";
+                    return crop == null ? "Harvest the bark and leave the tree planted; no replacement allocated."
+                        : "Harvest the bark if available, then remove the harvested tree and replant if desired.";
+                if (crop == null && (type == PatchType.FRUIT_TREE || type == PatchType.CALQUAT))
+                    return "Pick the fruit and leave the tree planted. Press Next when done.";
                 return crop == null
                     ? "Harvest this patch; no replacement stock allocated. Refill and replan."
                     : "Harvest this " + type.getDisplayName().toLowerCase() +
                         " patch, then replant " + name + " if appropriate.";
             case CHECK_HEALTH:
                 if (type == PatchType.SPIRIT_TREE) return "Check health and leave the spirit tree planted for travel.";
-                if (type == PatchType.CELASTRUS) return "Check health, then harvest the bark before removing the tree.";
+                if (type == PatchType.CELASTRUS) return crop == null
+                    ? "Check health, then harvest the bark and leave the tree planted."
+                    : "Check health, then harvest the bark before removing the tree.";
                 return "Check the tree's health, then remove the tree if replanting.";
             case REMOVE_TREE:
                 return "Chop the tree or pay the gardener to remove it.";
@@ -114,15 +137,14 @@ final class DirectorStepEngine
                     : "Cure the diseased crop before harvesting.";
             case PLANT:
                 return crop == null ? "No suitable planting stock allocated. Bank or replan."
-                    : isTreeType(type)
-                    ? "Rake if necessary, compost and plant " + name + "."
-                    : "Rake if necessary, harvest if needed, compost and plant "
-                        + name + ".";
+                    : "Rake if necessary, " +
+                        (compost && type.usesCompost() ? "compost, " : "") + "plant " + name + ".";
             case PROTECT_TREE:
                 return "Ask the gardener to protect the tree. Continue automatically "
                     + "when protection is detected, or press Next to confirm.";
             case COMPLETE:
-                return "Already growing. This patch can be skipped.";
+                return crop == null && isTreeType(type) ? "Existing tree checked; leave it planted."
+                    : "Patch complete. Continue to the next stop.";
             default:
                 return "Patch state unknown. Inspect the patch or visit it to load "
                     + "live Farming data; use Next as a manual fallback.";

@@ -95,7 +95,9 @@ final class FarmingDirectorPanel extends PluginPanel
             DirectorRunSelection.MERGED, DirectorRunSelection.ALL
         });
     private final JCheckBox customPriority = new JCheckBox("Use custom priority");
-    private final JCheckBox protectTrees = new JCheckBox("Carry tree protection payments", true);
+    private final JCheckBox protectTrees = new JCheckBox("Pay for tree protection when possible", true);
+    private final JCheckBox includeCompostForRun = new JCheckBox("Plan compost for planting");
+    private final JSpinner harvestSlots = new JSpinner(new SpinnerNumberModel(-1, -1, 26, 1));
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JCheckBox herbloreFocus = new JCheckBox("Prioritize Herblore supplies (preset)", false);
@@ -688,7 +690,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel settings = vertical();
         addFull(settings, nav("← Back to runs", "selection"));
         addFull(settings, label("Global Settings", true));
-        for (JCheckBox toggle : new JCheckBox[] {protectTrees, autoNext,
+        for (JCheckBox toggle : new JCheckBox[] {protectTrees, includeCompostForRun, autoNext,
             nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified, shortestPathEnabled})
         {
             toggle.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -702,6 +704,8 @@ final class FarmingDirectorPanel extends PluginPanel
         });
         addFull(settings, label("Maximum stops per loadout", false));
         addFull(settings, maxStopsPerWave);
+        addFull(settings, label("Harvest space reserve (-1 = run default)", false));
+        addFull(settings, harvestSlots);
         addFull(settings, label("Bank between loadouts", false));
         bankChoice.addActionListener(e ->
         {
@@ -1425,6 +1429,12 @@ final class FarmingDirectorPanel extends PluginPanel
             profileValue("directorCustom" + name, "false")));
         protectTrees.setSelected(Boolean.parseBoolean(
             profileValue("directorProtectTrees", "true")));
+        includeCompostForRun.setSelected(Boolean.parseBoolean(
+            profileValue("directorUseCompost", Boolean.toString(config.includeCompost()))));
+        int reserve = -1;
+        try { reserve = Integer.parseInt(profileValue("directorFreeSlots", "-1")); }
+        catch (NumberFormatException ignored) {}
+        harvestSlots.setValue(Math.max(-1, Math.min(26, reserve)));
         // This is a global setting, not a control tied to the visible run choice.
         protectTrees.setVisible(true);
         autoNext.setSelected(Boolean.parseBoolean(profileValue("directorAutoNext", "true")));
@@ -1475,6 +1485,9 @@ final class FarmingDirectorPanel extends PluginPanel
             Boolean.toString(customPriority.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorProtectTrees",
             Boolean.toString(protectTrees.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorUseCompost",
+            Boolean.toString(includeCompostForRun.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorFreeSlots", harvestSlots.getValue().toString());
         configManager.setRSProfileConfiguration(GROUP, "directorAutoNext",
             Boolean.toString(autoNext.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorNearest",
@@ -1544,6 +1557,8 @@ final class FarmingDirectorPanel extends PluginPanel
         if (!preserveProgress) temporaryOverrides.clear();
         final Map<String, String> localOverrides = new HashMap<>(temporaryOverrides);
         final boolean protection = protectTrees.isSelected();
+        final boolean useCompost = includeCompostForRun.isSelected();
+        final int freeSlots = (Integer) harvestSlots.getValue();
         final boolean proximity = nearestRoute.isSelected();
         final boolean herbPriority = herbloreFocus.isSelected();
         final int waveCap = (Integer) maxStopsPerWave.getValue();
@@ -1570,7 +1585,7 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 calculated = compute(selected, custom, priorityText,
                     reserveText, protection, proximity, herbPriority, waveCap, skip,
-                    presetName, onlyActionable, includeUnverified, localOverrides);
+                    presetName, onlyActionable, includeUnverified, localOverrides, useCompost, freeSlots);
             }
             catch (RuntimeException problem)
             {
@@ -1622,7 +1637,8 @@ final class FarmingDirectorPanel extends PluginPanel
         boolean custom, String priorityText, String reserveText,
         boolean protection, boolean proximity, boolean herbPriority, int waveCap,
         Set<String> skip, String presetName, boolean onlyActionable,
-        boolean includeUnverified, Map<String, String> localOverrides)
+        boolean includeUnverified, Map<String, String> localOverrides, boolean useCompost,
+        int freeSlots)
     {
         List<String> warnings = new ArrayList<>();
         if (client.getGameState() != GameState.LOGGED_IN)
@@ -1786,7 +1802,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
         // Recalculate tools and compost for the actual selected stops of each wave.
         // A filled bottomless bucket is observed as an item; its charge count is not known.
-        final boolean compost = config.includeCompost();
+        final boolean compost = useCompost;
         final boolean bottomless = stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED);
         final boolean carrySecateurs = stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
             && !loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS);
@@ -1814,11 +1830,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 }
             }
         }
-        int harvestReserve = selection == DirectorRunSelection.TREES ||
-            selection == DirectorRunSelection.FRUIT_TREES ||
-            selection == DirectorRunSelection.HARDWOODS ? 2 :
-            selection == DirectorRunSelection.ALLOTMENTS ? Math.max(14, config.directorHarvestSlots())
-                : config.directorHarvestSlots();
+        int harvestReserve = DirectorSupplies.harvestReserve(selection, config.directorHarvestSlots(), freeSlots);
 
         Map<FarmRunType, String> categoryPriority = new EnumMap<>(FarmRunType.class);
         Map<String, Integer> combinedReserves = DirectorPlanner.parseReserves(reserveText);
@@ -2127,10 +2139,8 @@ final class FarmingDirectorPanel extends PluginPanel
         }
 
         DirectorPlanner.Step step = plan.steps.get(index);
-        DirectorStepEngine.Action action = DirectorStepEngine.action(
-            step.patch.getPatchType(), observation.state,
-            DirectorStepEngine.supportsProtection(step.patch.getPatchType()) && protectTrees.isSelected(),
-            observation.protectedByFarmer);
+        DirectorStepEngine.Action action = DirectorStepEngine.actionForStep(
+            step, observation.state, observation.protectedByFarmer);
         boolean changed = visibleObservation == null ||
             !Objects.equals(visibleObservation.state, observation.state) ||
             visibleObservation.source != observation.source ||
@@ -2574,7 +2584,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 ? "Harvest/clearing complete or patch empty. No replacement seed "
                     + "allocated; press Next, or restock and Replan remaining."
                 : DirectorStepEngine.instruction(visibleAction, current.crop,
-                    current.patch.getPatchType());
+                    current.patch.getPatchType(), includeCompostForRun.isSelected());
             if (visibleObservation != null)
             {
                 String source = visibleObservation.source.name().replace('_', ' ');
@@ -2671,6 +2681,8 @@ final class FarmingDirectorPanel extends PluginPanel
                     : step.harvestOnly ? "Harvest-only: refill before replanting"
                     : "Existing crop: check condition or gardener protection";
                 item.add(warning(instruction));
+                if (isCurrent && step.protectionPlanned)
+                    item.add(warning("Gardener protection planned / verify payment"));
                 if (isCurrent && guideDetails.isSelected())
                 {
                     // The panel rendering is on EDT. Use already-known Quest

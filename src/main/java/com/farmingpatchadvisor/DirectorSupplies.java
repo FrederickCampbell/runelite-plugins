@@ -45,6 +45,16 @@ final class DirectorSupplies
         return result;
     }
 
+    static int harvestReserve(DirectorRunSelection selection, int configured, int override)
+    {
+        if (override >= 0) return Math.min(26, override);
+        int defaults = Math.max(0, Math.min(26, configured));
+        if (selection == DirectorRunSelection.TREES || selection == DirectorRunSelection.FRUIT_TREES ||
+            selection == DirectorRunSelection.HARDWOODS) return 2;
+        if (selection == DirectorRunSelection.ALLOTMENTS) return Math.max(14, defaults);
+        return defaults;
+    }
+
     static String name(int id)
     {
         switch (id)

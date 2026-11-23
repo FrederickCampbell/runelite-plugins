@@ -27,6 +27,7 @@ final class DirectorPlanner
         final Crop crop;
         final boolean requiresPlanting;
         final boolean harvestOnly;
+        final boolean protectionPlanned;
 
         Step(FarmRunPatch patch, Crop crop)
         {
@@ -40,10 +41,17 @@ final class DirectorPlanner
 
         Step(FarmRunPatch patch, Crop crop, boolean requiresPlanting, boolean harvestOnly)
         {
+            this(patch, crop, requiresPlanting, harvestOnly, false);
+        }
+
+        Step(FarmRunPatch patch, Crop crop, boolean requiresPlanting, boolean harvestOnly,
+             boolean protectionPlanned)
+        {
             this.patch = patch;
             this.crop = crop;
             this.requiresPlanting = requiresPlanting;
             this.harvestOnly = harvestOnly;
+            this.protectionPlanned = protectionPlanned;
         }
     }
 
@@ -203,7 +211,11 @@ final class DirectorPlanner
                     if (result.isEmpty()) continue;
                     break;
                 }
-                result.add(new Step(patch, null, false));
+                boolean verify = protectTrees && DirectorStepEngine.supportsProtection(patch.getPatchType());
+                result.add(new Step(patch, null, false, false, verify));
+                if (verify)
+                    warnings.add("Existing crop at " + patch.getDisplayName() +
+                        ": verify protection manually; no payment amount inferred.");
                 continue;
             }
             Crop choice = null;
@@ -296,12 +308,31 @@ final class DirectorPlanner
             Map<Integer, Integer> nextSeeds = new LinkedHashMap<>(used);
             nextSeeds.merge(choice.getItemId(), count * choice.getQuantity(), Integer::sum);
             Map<Integer, Integer> nextPayments = new LinkedHashMap<>(paymentItems);
-            if (DirectorStepEngine.isTreeType(patchType) && protectTrees)
+            Map<Integer, Integer> stopPayments = new LinkedHashMap<>();
+            if (DirectorStepEngine.supportsProtection(patchType) && protectTrees)
             {
                 for (ProtectionPayment payment : ProtectionPaymentCatalog.forCrop(choice))
+                    stopPayments.merge(payment.getItemId(), count * payment.getQuantity(), Integer::sum);
+            }
+            boolean paymentFits = !stopPayments.isEmpty();
+            if (paymentFits)
+            {
+                Map<Integer, Integer> singleSeed = Collections.singletonMap(choice.getItemId(),
+                    count * choice.getQuantity());
+                paymentFits = occupied(type, singleSeed, stopPayments, fixedToolSlots,
+                    teleportSlotsForSelected.applyAsInt(Collections.singletonList(patch)), stackable) <= budget;
+                for (Map.Entry<Integer, Integer> payment : stopPayments.entrySet())
                 {
-                    nextPayments.merge(payment.getItemId(), count * payment.getQuantity(), Integer::sum);
+                    int id = payment.getKey();
+                    int required = payment.getValue() + paymentItems.getOrDefault(id, 0) +
+                        nextSeeds.getOrDefault(id, 0);
+                    if (stock.getOrDefault(id, 0) < required) paymentFits = false;
                 }
+                if (paymentFits)
+                    stopPayments.forEach((id, amount) -> nextPayments.merge(id, amount, Integer::sum));
+                else
+                    warnings.add("Protection payment unavailable or too large at " + patch.getDisplayName()
+                        + "; preferred crop kept without planned payment. Use compost or protect manually.");
             }
             List<FarmRunPatch> selectedStops = new ArrayList<>();
             for (Step planned : result) selectedStops.add(planned.patch);
@@ -320,7 +351,7 @@ final class DirectorPlanner
                 break;
             }
 
-            result.add(new Step(patch, choice));
+            result.add(new Step(patch, choice, true, false, paymentFits));
             used = nextSeeds;
             paymentItems = nextPayments;
         }
