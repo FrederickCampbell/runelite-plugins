@@ -108,6 +108,12 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JButton overrideCrop = new JButton("Override this patch");
     private final JButton clearOverride = new JButton("Clear override");
     private final JLabel currentAction = new JLabel("Start a run to see context-aware steps");
+    private final JLabel activeTitle = new JLabel("Active guide");
+    private final javax.swing.JProgressBar progressBar = new javax.swing.JProgressBar(0, 1);
+    private final JLabel prioritySummary = new JLabel();
+    private final JButton returnGuide = new JButton("Resume active guide");
+    private final JLabel selectionStatus = new JLabel();
+    private final JLabel reserveSummary = new JLabel();
     private final JTextField priorities = new JTextField();
     private final JTextField reserves = new JTextField();
     private final JLabel progress = new JLabel("Choose a run and press Start");
@@ -318,24 +324,27 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createSelection()
     {
         JPanel list = vertical();
-        JLabel title = label("Ironman Farming Director", true);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
+        JLabel title = label("Farming Director", true);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
         addFull(list, title);
-        addFull(list, label("Choose a run", false));
+        addFull(list, label("IRONMAN  ·  v0.6 beta", false));
+        addFull(list, selectionStatus);
+        addFull(list, label("START A RUN", true));
         addFull(list, runType);
         start.setText("Start farming run");
         start.addActionListener(e -> beginRun());
         addFull(list, start);
         resume.addActionListener(e -> resumeSavedRun());
         addFull(list, resume);
+        returnGuide.addActionListener(e -> { if (currentPlan != null) showPage("guide"); });
+        addFull(list, returnGuide);
+        addFull(list, new javax.swing.JSeparator());
+        addFull(list, label("CONFIGURATION", true));
         addFull(list, nav("Edit selected run", "editor"));
         addFull(list, nav("Manage farming patches", "patches"));
         addFull(list, nav("Timers & farming contract", "status"));
         addFull(list, nav("Global settings", "settings"));
-        JButton guide = new JButton("Return to active guide");
-        guide.addActionListener(e -> { if (currentPlan != null) showPage("guide"); });
-        addFull(list, guide);
-        addFull(list, label("Routes, crops and bank supplies are planned from your saved choices.", false));
+        addFull(list, label("Routes, crops and supplies use your character's saved choices.", false));
         return new JPanel(new BorderLayout())
         {{
             setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -354,14 +363,17 @@ final class FarmingDirectorPanel extends PluginPanel
         menu.add(nav("Patches", "patches"));
         menu.add(nav("Settings", "settings"));
         addFull(header, menu);
-        currentAction.setForeground(new Color(120, 205, 238));
+        activeTitle.setFont(activeTitle.getFont().deriveFont(Font.BOLD, 15f));
+        currentAction.setForeground(new Color(150, 218, 239));
         progress.setForeground(new Color(244, 197, 86));
+        progressBar.setStringPainted(true);
+        progressBar.setForeground(new Color(120, 173, 113));
+        addFull(header, activeTitle);
         addFull(header, progress);
+        addFull(header, progressBar);
         addFull(header, currentAction);
-        addFull(header, storage);
         addFull(header, inventory);
         replan.addActionListener(e -> beginRun(true));
-        addFull(header, replan);
         JPanel overrides = new JPanel(new GridLayout(1, 2, 3, 0));
         overrides.setBackground(ColorScheme.DARK_GRAY_COLOR);
         overrideCrop.setText("Edit crop");
@@ -369,23 +381,34 @@ final class FarmingDirectorPanel extends PluginPanel
         clearOverride.addActionListener(e -> clearCropOverride());
         overrides.add(overrideCrop);
         overrides.add(clearOverride);
-        addFull(header, overrides);
         guideDetails.setForeground(Color.LIGHT_GRAY);
         guideDetails.setBackground(ColorScheme.DARK_GRAY_COLOR);
         guideDetails.addActionListener(e -> render());
-        addFull(header, guideDetails);
         guide.add(header, BorderLayout.NORTH);
         stepList.setLayout(new BoxLayout(stepList, BoxLayout.Y_AXIS));
         stepList.setBackground(ColorScheme.DARK_GRAY_COLOR);
         stepList.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        guide.add(scrolling(stepList), BorderLayout.CENTER);
-        JPanel actions = new JPanel(new GridLayout(1, 4, 3, 0));
+        JPanel content = vertical();
+        addFull(content, replan);
+        addFull(content, overrides);
+        addFull(content, guideDetails);
+        addFull(content, stepList);
+        guide.add(scrolling(content), BorderLayout.CENTER);
+        JPanel actions = new JPanel(new GridLayout(2, 2, 4, 4));
         actions.setBorder(BorderFactory.createEmptyBorder(6, 7, 7, 7));
         actions.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         back.addActionListener(e -> advance(-1));
         next.addActionListener(e -> advance(1));
         pause.addActionListener(e -> togglePause());
-        end.addActionListener(e -> { stopRun(); showPage("selection"); });
+        end.addActionListener(e ->
+        {
+            if (runFinished || JOptionPane.showConfirmDialog(this,
+                "End this run and discard its saved checkpoint?", "End run",
+                JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION)
+            {
+                stopRun(); showPage("selection");
+            }
+        });
         actions.add(back);
         actions.add(next);
         actions.add(pause);
@@ -404,11 +427,26 @@ final class FarmingDirectorPanel extends PluginPanel
         customPriority.setForeground(Color.WHITE);
         customPriority.setBackground(ColorScheme.DARK_GRAY_COLOR);
         addFull(regularControls, customPriority);
-        addFull(regularControls, label("Crop priority list (first available wins)", false));
-        priorities.setToolTipText("Example: Ranarr, Snapdragon, Toadflax");
-        addFull(regularControls, priorities);
-        addFull(regularControls, label("Reserved stock, e.g. Ranarr=10, Snapdragon=3", false));
-        addFull(regularControls, reserves);
+        addFull(regularControls, prioritySummary);
+        addFull(regularControls, reserveSummary);
+        JButton rank = new JButton("Edit crop priorities & reserves");
+        rank.addActionListener(e ->
+        {
+            DirectorRunSelection selected = (DirectorRunSelection) runType.getSelectedItem();
+            if (selected == null) return;
+            DirectorPriorityDialog.Result result = DirectorPriorityDialog.show(this,
+                selected::includes, priorities.getText(), reserves.getText(), true);
+            if (result != null)
+            {
+                priorities.setText(result.priorities);
+                reserves.setText(result.reserves);
+                customPriority.setSelected(!result.priorities.isEmpty());
+                updatePrioritySummary();
+            }
+        });
+        addFull(regularControls, rank);
+        customPriority.addActionListener(e -> updatePrioritySummary());
+        addFull(regularControls, label("Only listed crops are eligible in custom mode. Use Add remaining crops for fallbacks.", false));
         JButton save = new JButton("Save this run's choices");
         save.addActionListener(e -> { savePreferences(); showPage("selection"); });
         addFull(regularControls, save);
@@ -529,14 +567,13 @@ final class FarmingDirectorPanel extends PluginPanel
         if (!(category instanceof FarmRunType)) return;
         String key = "directorMergedPriority_" + name + "_" + ((FarmRunType)category).name();
         String prior = profileValue(key, "");
-        String value = JOptionPane.showInputDialog(this,
-            "Comma-separated crops. Leave blank to inherit this category's usual preferences.",
-            prior);
-        if (value == null) return;
-        if (value.trim().isEmpty())
+        DirectorPriorityDialog.Result result = DirectorPriorityDialog.show(this,
+            type -> FarmRunType.forPatchType(type) == category, prior, "", false);
+        if (result == null) return;
+        if (result.priorities.isEmpty())
             configManager.unsetRSProfileConfiguration(GROUP, key);
         else
-            configManager.setRSProfileConfiguration(GROUP, key, value.trim());
+            configManager.setRSProfileConfiguration(GROUP, key, result.priorities);
     }
 
     private JPanel createSettings()
@@ -1085,7 +1122,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private static JLabel label(String text, boolean strong)
     {
-        JLabel l = new JLabel(text);
+        JLabel l = new JLabel(wrapped(text, 184));
         l.setForeground(strong ? Color.WHITE : Color.LIGHT_GRAY);
         l.setAlignmentX(Component.LEFT_ALIGNMENT);
         return l;
@@ -1095,6 +1132,16 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         String value = configManager.getRSProfileConfiguration(GROUP, key);
         return value == null ? fallback : value;
+    }
+
+    private void updatePrioritySummary()
+    {
+        int ranked = DirectorPlanner.priorityRanks(priorities.getText()).size();
+        prioritySummary.setText(wrapped(customPriority.isSelected()
+            ? ranked + " ranked crops · first available wins"
+            : "Automatic · highest eligible crop", 184));
+        reserveSummary.setText(wrapped(DirectorPlanner.parseReserves(reserves.getText()).isEmpty()
+            ? "No reserved stock" : "Keep: " + reserves.getText(), 184));
     }
 
     private void loadPreferences()
@@ -1149,6 +1196,7 @@ final class FarmingDirectorPanel extends PluginPanel
             bankChoice.setSelectedItem(DirectorBankStops.Bank.AUTO);
         }
         loadingPreferences = false;
+        updatePrioritySummary();
     }
 
     private void savePreferences()
@@ -2167,17 +2215,17 @@ final class FarmingDirectorPanel extends PluginPanel
         int steps = active ? currentPlan.steps.size() : 0;
         int waveCount = currentSession == null ? 0 : currentSession.waves.size();
         String wave = waveCount > 0 ? "Wave " + (waveIndex + 1) + " / " + waveCount : "No wave";
-        progress.setText(!active ? "Configure a run and press Start"
+        progress.setText(wrapped(!active ? "Configure a run and press Start"
             : awaitingBank ? "Bank checkpoint · " + wave
             : runFinished ? (currentSession != null && currentSession.unplanned > 0
                 ? "Partial run · unplanned patches remain"
                 : "All planned patches completed")
             : steps == 0 ? "No planting steps allocated"
             : wave + " · patch " + (currentStep + 1) + " / " + steps
-                + (paused ? " (paused)" : ""));
-        inventory.setText(!active ? "28 inventory slots available"
+                + (paused ? " (paused)" : ""), 184));
+        inventory.setText(wrapped(!active ? "28 inventory slots available"
             : currentPlan.occupiedSlots + " planned + " + currentPlan.reservedSlots
-                + " reserved / 28 slots");
+                + " reserved / 28 slots", 184));
         storage.setText(!active ? "Bank & vault snapshots are checked at Start"
             : "Using observed stock; reopen storage if estimates are stale");
         String actionText;
@@ -2215,16 +2263,26 @@ final class FarmingDirectorPanel extends PluginPanel
                     ? ": unknown)" : ": " + visibleObservation.state.name().toLowerCase() + ")");
             }
         }
-        currentAction.setText("<html><body style='width:245px'>"
-            + escape(actionText) + "</body></html>");
-        back.setEnabled(active && currentStep > 0);
-        next.setEnabled(active && !runFinished && (awaitingBank || currentStep < steps));
+        currentAction.setText(wrapped(actionText, 184));
+        activeTitle.setText(wrapped(activeRunSelection == null ? "Active guide" :
+            activeRunSelection == DirectorRunSelection.MERGED ? activePresetName :
+            activeRunSelection.toString(), 184));
+        int complete = completedSteps.size();
+        progressBar.setMaximum(Math.max(1, steps));
+        progressBar.setValue(complete);
+        progressBar.setString(complete + " / " + steps + " stops");
+        returnGuide.setEnabled(active);
+        selectionStatus.setText(wrapped(active && !runFinished ?
+            "Run in progress · " + completedPatchKeys.size() + " completed" :
+            "Choose a run to plan your next harvest.", 184));
+        back.setEnabled(active && !paused && !planningInFlight && currentStep > 0);
+        next.setEnabled(active && !paused && !planningInFlight && !runFinished && (awaitingBank || currentStep < steps));
         next.setText(awaitingBank ? "Replan" : "Next step");
         next.setToolTipText(awaitingBank
             ? "Continue after banking. No items are withdrawn automatically." : null);
         pause.setEnabled(active && steps > 0 && !runFinished);
         end.setEnabled(active);
-        replan.setEnabled(active && currentSession != null);
+        replan.setEnabled(active && !planningInFlight && currentSession != null);
         resume.setEnabled(!profileValue("directorSavedMode", "").isEmpty());
         overrideCrop.setEnabled(active && !runFinished && !awaitingBank && steps > 0);
         clearOverride.setEnabled(active && !runFinished && !awaitingBank && steps > 0);
@@ -2237,17 +2295,19 @@ final class FarmingDirectorPanel extends PluginPanel
                 DirectorPlanner.Step step = currentPlan.steps.get(i);
                 JPanel item = new JPanel();
                 item.setLayout(new BoxLayout(item, BoxLayout.Y_AXIS));
-                item.setBackground(i == currentStep
-                    ? ColorScheme.DARKER_GRAY_COLOR : ColorScheme.DARK_GRAY_COLOR);
+                boolean isCurrent = i == currentStep && !runFinished && !awaitingBank;
+                boolean isDone = completedSteps.contains(i);
+                item.setBackground(isCurrent ? new Color(52, 55, 46) : ColorScheme.DARKER_GRAY_COLOR);
                 item.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 0, 1, 0, ColorScheme.BORDER_COLOR),
+                    BorderFactory.createMatteBorder(0, 3, 1, 0, isCurrent
+                        ? new Color(244, 197, 86) : isDone ? new Color(120, 173, 113) : ColorScheme.BORDER_COLOR),
                     BorderFactory.createEmptyBorder(8, 9, 8, 7)));
                 item.setAlignmentX(Component.LEFT_ALIGNMENT);
                 final int index = i;
-                JButton place = new JButton((i == currentStep ? "▶ "
-                    : completedSteps.contains(i) ? "✓ " : "○ ")
-                    + step.patch.getDisplayName());
-                place.setForeground(i == currentStep ? new Color(244, 197, 86) : Color.WHITE);
+                JButton place = new JButton(wrapped((isCurrent ? "▶ "
+                    : isDone ? "✓ " : "○ ") + step.patch.getDisplayName(), 128));
+                place.setForeground(isCurrent ? new Color(244, 197, 86) :
+                    isDone ? new Color(143, 187, 136) : Color.WHITE);
                 place.setBackground(item.getBackground());
                 place.setBorderPainted(false);
                 place.setContentAreaFilled(false);
@@ -2259,7 +2319,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 JPanel stepHeader = new JPanel(new BorderLayout());
                 stepHeader.setBackground(item.getBackground());
                 stepHeader.add(place, BorderLayout.CENTER);
-                if (i == currentStep && !runFinished)
+                if (isCurrent)
                 {
                     JButton edit = new JButton("✎");
                     edit.setToolTipText("Set a permanent crop preference for this patch");
@@ -2268,15 +2328,15 @@ final class FarmingDirectorPanel extends PluginPanel
                 }
                 item.add(stepHeader);
                 item.add(Box.createVerticalStrut(4));
-                String instruction = i == currentStep && !runFinished
-                    ? DirectorStepEngine.instruction(visibleAction, step.crop,
-                        step.patch.getPatchType())
-                    : completedSteps.contains(i) ? "Completed / skipped"
+                String instruction = isCurrent
+                    ? (step.crop == null ? step.patch.getPatchType().getDisplayName() :
+                        step.crop.getName() + " · " + step.patch.getPatchType().getDisplayName())
+                    : isDone ? "Completed / skipped"
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
                     : step.harvestOnly ? "Harvest-only: refill before replanting"
                     : "Existing crop: check condition or gardener protection";
                 item.add(warning(instruction));
-                if (i == currentStep && !runFinished)
+                if (isCurrent && guideDetails.isSelected())
                 {
                     // The panel rendering is on EDT. Use already-known Quest
                     // Helper exact locations; observed/area hints are loaded by
@@ -2446,12 +2506,16 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private static JLabel warning(String message)
     {
-        JLabel label = new JLabel("<html><body style='width:235px'>"
-            + escape(message) + "</body></html>");
+        JLabel label = new JLabel(wrapped(message, 170));
         label.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
         label.setForeground(Color.LIGHT_GRAY);
         label.setAlignmentX(Component.LEFT_ALIGNMENT);
         return label;
+    }
+
+    private static String wrapped(String raw, int width)
+    {
+        return "<html><body style='width:" + width + "px'>" + escape(raw) + "</body></html>";
     }
 
     private static String escape(String raw)

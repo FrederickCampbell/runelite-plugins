@@ -1,7 +1,7 @@
 name: Ironman Farming Director build
 on:
   push:
-    branches: [ironman-farming-director-v0.1, ironman-farming-director-v0.2, ironman-farming-director-v0.3, ironman-farming-director-v0.4, ironman-farming-director-v0.5]
+    branches: [ironman-farming-director-v0.1, ironman-farming-director-v0.2, ironman-farming-director-v0.3, ironman-farming-director-v0.4, ironman-farming-director-v0.5, ironman-farming-director-v0.6]
   workflow_dispatch:
 
 permissions:
