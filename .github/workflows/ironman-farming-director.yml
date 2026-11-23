@@ -1,4 +1,4 @@
-name: Farming Helper build and v0.7 release
+name: Farming Helper build and v0.8 release
 on:
   push:
     branches: [master, farming-helper-v0.8]
@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: farming-helper-v0.7-release
+      group: farming-helper-v0.8-release
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -42,15 +42,15 @@ jobs:
         with:
           name: farming-helper-jar
           path: release-artifacts
-      - name: Publish the verified v0.7 beta
+      - name: Publish the verified v0.8 beta
         id: publish
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag=v0.7.0-beta.1
-          if ! grep -qx 'version=0.7.0-beta.1' runelite-plugin.properties; then
+          tag=v0.8.0-beta.1
+          if ! grep -qx 'version=0.8.0-beta.1' runelite-plugin.properties; then
             echo "Different version; this one-time release is not applicable."
             exit 0
           fi
@@ -64,40 +64,19 @@ jobs:
             git push origin "refs/tags/$tag"
           fi
           if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$tag" release-artifacts/*.jar --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "Farming Helper v0.7 beta" --notes-file RELEASE_NOTES.md
+            gh release create "$tag" release-artifacts/*.jar --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "Farming Helper v0.8 beta" --notes-file RELEASE_NOTES.md
           fi
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,url
           echo "published=true" >> "$GITHUB_OUTPUT"
-      - name: Prune only superseded farming development branches
+      - name: Prune merged v0.8 development branch
         if: steps.publish.outputs.published == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          # One-time cleanup authorized for these exact branch tips only.
-          # Every tip must be an ancestor of the published release.
-          # A branch that has received any new commit is preserved.
-          while read -r branch expected; do
-            actual=$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)
-            if [ -z "$actual" ]; then
-              echo "$branch already absent"
-              continue
-            fi
-            if [ "$actual" != "$expected" ]; then
-              echo "Preserving $branch: tip changed"
-              continue
-            fi
-            if ! git merge-base --is-ancestor "$expected" "$GITHUB_SHA"; then
-              echo "Preserving $branch: history not included"
-              continue
-            fi
-            git push --force-with-lease="refs/heads/$branch:$expected" origin ":refs/heads/$branch"
-          done <<'BRANCHES'
-          ironman-farming-director-v0.1 7efff2d0ccc4c002ac49173938f74bf6170309be
-          ironman-farming-director-v0.2 7efff2d0ccc4c002ac49173938f74bf6170309be
-          ironman-farming-director-v0.3 69bf587cc3100ffc0ba425eb4661d53e9dc129a3
-          ironman-farming-director-v0.4 a781140a76544a63c229a05551abcae59b6fd1ed
-          ironman-farming-director-v0.5 036a1ae74620aa247cc2d475d13cc8495d2f8ccc
-          ironman-farming-director-v0.6 0d60eb0d1b7cc4973af1331626001ab82f818b17
-          ironman-farming-director-v0.6.1 b6da399971b22df8d352297e5c8d54e3dee4b5a5
-          ironman-farming-director-v0.7 9a906bf8307284721e830380e215e2b50a4b462b
-          BRANCHES
+          branch=farming-helper-v0.8
+          actual=$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)
+          if [ "$actual" = "$GITHUB_SHA" ]; then
+            git push --force-with-lease="refs/heads/$branch:$actual" origin ":refs/heads/$branch"
+          else
+            echo "Preserving branch: absent or tip differs from released commit"
+          fi

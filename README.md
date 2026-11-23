@@ -1,4 +1,4 @@
-# Farming Helper — v0.7.0-beta.1
+# Farming Helper — v0.8.0-beta.1
 
 **Basically, Quest Helper, for farm runs.**
 
@@ -11,10 +11,8 @@ the vendored Quest Helper farming-state reader, with the unified RuneLite-native
 
 - **Farming Patch Advisor** is the backend for crops, patches, growth timers,
   contracts, compost, payments, teleports, bank and Seed Vault observations.
-  Its original panel is no longer a visible tab, but the implementations and
-  existing overlays are retained. Some specialized legacy panel controls still
-  remain accessible through RuneLite plugin configuration; bank filtering, item
-  outlines and checklist overlays now follow the Director's active wave.
+  Its original panel is no longer a visible tab; the implementations are retained, but legacy overlays are no longer registered. Some specialized legacy panel controls still
+  remain accessible through RuneLite plugin configuration; bank filtering and item outlines are restricted to preparation or active interactions.
 - **Quest Helper** farming-region, patch-state and varbit logic is vendored under
   `com.farmingpatchadvisor.queststate`; the external Quest Helper plugin is
   not required. The sidebar uses Quest Helper-style stages and manual controls,
@@ -31,7 +29,7 @@ the vendored Quest Helper farming-state reader, with the unified RuneLite-native
 
 ## Installation — RuneLite Dev Manager
 
-[Download the v0.7 beta from GitHub Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.7.0-beta.1) — choose **Source code (zip)**.
+[Download the v0.8 beta from GitHub Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.8.0-beta.1) — choose **Source code (zip)**.
 
 The release is not a Plugin Hub listing; it is intended for the local development manager.
 
@@ -43,6 +41,16 @@ Use **Refresh → Build → Launch** in RuneLite Dev Manager. A normal local bui
 from the project root uses `gradlew.bat clean test build`. CI uses Java 21 to
 run Gradle while the source targets Java 11. Neither the Windows launch
 workflow nor in-game behavior has been tested by this CI.
+
+## v0.8 — Polish Update
+
+- Forest-green sidebar with locally styled Swing controls and OSRS item sprites.
+- Run cards, settings groups and patch categories/locations start collapsed. Expand a run to configure and start it.
+- One settings cog; routine preferences save on change. Explicit route saves remain for multi-step edits.
+- Global/category/location/individual patch enable and disable controls, independent of unlock checks. Bulk controls include filtered-out patches in the stated scope.
+- Legacy Advisor overlay registrations and recommendation fallbacks are removed. Only active Quest Helper-style hints and required bank/vault item outlines/filter during preparation/restocking remain. Tracking, timers, contracts and planning remain.
+- New runs begin at the supply checklist. Default stop cap is 28; the existing inventory budget determines wave sizes. Explicit previously saved limits remain intact.
+- Existing configuration and account preferences are unchanged.
 
 ## v0.7 interaction guidance
 
@@ -82,8 +90,7 @@ rows and unavailable scene objects do not get guessed highlights.
 The gardener NPC is selected using the vendored Quest Helper farming registry.
 Newly planted crops with observed work and compost enabled wait for compost
 confirmation from Advisor's care tracker before auto-next; manual Next remains
-available when tracking is incomplete. The timer overlay is hidden during
-active loadouts; use Timers & farming contract for additional information.
+available when tracking is incomplete. The legacy timer overlay is disabled; use Timers / contracts for additional information.
 
 The default guide shows the current destination, short action, progress and
 next two stops; More options & details reveals the diagnostic/advanced controls.

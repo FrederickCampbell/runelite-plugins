@@ -1,5 +1,15 @@
 # Farming Helper development history
 
+## v0.8.0-beta.1 — Polish Update
+
+- Local forest-green Swing theme: buttons, checkboxes, dropdowns, fields, spinners and lists; no global LookAndFeel changes.
+- Collapsed run cards and OSRS item sprites replace the run dropdown and separate editor. Centralized cog access and inline crop priorities. Hide unavailable Resume actions.
+- Settings groups and patch categories/locations start collapsed. Routine settings and crop priorities save automatically; explicit route save retained.
+- Global/category/location/individual patch preferences, enabled counts, unlock distinction, full-scope bulk actions.
+- Remove legacy overlay registrations and fallback recommendations. Preparation/restocking alone exposes bank/vault outlines/filter; active run exposes Quest Helper-style action hints. Idle, paused and finished states show no farming overlays.
+- Supply checklist at start, default stop cap 28 with saved limits preserved. Added overlay policy and local theme regression tests. Live RuneLite testing still required.
+
+
 ## v0.7.0-beta.1 — Quest Helper interaction parity pass
 
 - Public name changed to Farming Helper; consolidated release on the default branch. All former development commits are retained. Internal configuration and account-specific preferences are unchanged.

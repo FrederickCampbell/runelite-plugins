@@ -99,6 +99,10 @@ final class FarmingHelperTheme
                 {
                     c.setBackground(SURFACE); c.setForeground(PRIMARY);
                 }
+                else if (c instanceof JScrollBar)
+                {
+                    c.setBackground(BASE); c.setForeground(BORDER);
+                }
                 else if (c instanceof JSeparator) c.setForeground(BORDER);
             }
         }

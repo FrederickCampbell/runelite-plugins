@@ -70,20 +70,10 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	@Inject
 	private FarmingItemOverlay itemOverlay;
 
-	@Inject
-	private PatchTimerOverlay timerOverlay;
 
-	@Inject
-	private FarmRunChecklistOverlay checklistOverlay;
 
-	@Inject
-	private BankFarmRunOverlay bankFarmRunOverlay;
 
-	@Inject
-	private StorageScanReminderOverlay storageScanReminderOverlay;
 
-	@Inject
-	private CompostBinOverlay compostBinOverlay;
 
 	@Inject
 	private FarmingLoadout farmingLoadout;

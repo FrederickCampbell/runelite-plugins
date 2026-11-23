@@ -156,8 +156,6 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JLabel activeDestination = new JLabel();
     private final JLabel routeStatus = new JLabel();
     private final JButton routeOptions = new JButton("Navigation…");
-    private final JComboBox<String> homePresetChoice = new JComboBox<>();
-    private boolean syncingHomePreset;
     private final javax.swing.DefaultListModel<FarmRunPatch> routeModel =
         new javax.swing.DefaultListModel<>();
     private final javax.swing.JList<FarmRunPatch> routeList =
@@ -318,6 +316,7 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             javax.swing.JComponent component = (javax.swing.JComponent) child;
             component.setAlignmentX(Component.LEFT_ALIGNMENT);
+            FarmingHelperTheme.style(child);
             if (component instanceof JButton)
             {
                 JButton button = (JButton) component;
@@ -338,7 +337,6 @@ final class FarmingDirectorPanel extends PluginPanel
                     : child instanceof JTextField || child instanceof JComboBox ? 28
                     : child instanceof javax.swing.JSeparator ? 2 : Integer.MAX_VALUE));
         }
-        FarmingHelperTheme.style(child);
         parent.add(child);
         parent.add(Box.createVerticalStrut(4));
     }
@@ -490,7 +488,7 @@ final class FarmingDirectorPanel extends PluginPanel
             boolean open = e.getKey() == expandedRun;
             e.getValue().setVisible(open);
             JButton header = runHeaders.get(e.getKey());
-            header.setText(wrapped((open ? "▾ " : "▸ ") + e.getKey(), 130));
+            header.setText(wrapped((open ? "▾ " : "▸ ") + e.getKey(), 117));
             header.putClientProperty("fh.primary", open);
             header.repaint();
             if (open) e.getValue().add(inlineEditor, BorderLayout.CENTER);
@@ -534,7 +532,7 @@ final class FarmingDirectorPanel extends PluginPanel
         clearOverride.addActionListener(e -> clearCropOverride());
         overrides.add(overrideCrop);
         overrides.add(clearOverride);
-        guideDetails.setForeground(Color.LIGHT_GRAY);
+        guideDetails.setForeground(FarmingHelperTheme.MUTED);
         guideDetails.setBackground(FarmingHelperTheme.BASE);
         guideDetails.addActionListener(e -> render());
         guide.add(header, BorderLayout.NORTH);
@@ -662,8 +660,6 @@ final class FarmingDirectorPanel extends PluginPanel
         if (inlineEditor != null) for (Component c : inlineEditor.getComponents())
             if ("fh.route".equals(c.getName())) c.setVisible(!compost);
         if (merged) reloadPresetNames();
-        homePresetChoice.setVisible(merged);
-        syncHomePresets();
         mergedControls.revalidate();
     }
 
@@ -680,17 +676,6 @@ final class FarmingDirectorPanel extends PluginPanel
             presetChoice.setSelectedIndex(0);
         loadingPresets = false;
         loadPreset();
-        syncHomePresets();
-    }
-
-    private void syncHomePresets()
-    {
-        syncingHomePreset = true;
-        homePresetChoice.removeAllItems();
-        for (int i = 0; i < presetChoice.getItemCount(); i++)
-            homePresetChoice.addItem(presetChoice.getItemAt(i));
-        homePresetChoice.setSelectedItem(presetChoice.getSelectedItem());
-        syncingHomePreset = false;
     }
 
     private void loadPreset()
@@ -702,7 +687,6 @@ final class FarmingDirectorPanel extends PluginPanel
         for (Map.Entry<FarmRunType, JCheckBox> row : mergedTypes.entrySet())
             row.getValue().setSelected(types.contains(row.getKey()));
         loadingMerged = false;
-        if (!syncingHomePreset) syncHomePresets();
         if (settingsReady && configManager.getRSProfileKey() != null)
             configManager.setRSProfileConfiguration(GROUP, "directorLastPreset", name);
     }
@@ -821,10 +805,23 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(guidance, autoNext);
         addFull(guidance, shortestPathEnabled);
         addFull(guidance, worldHints);
+        JButton targetColor = new JButton("Highlight color…");
+        targetColor.addActionListener(e ->
+        {
+            Color picked = javax.swing.JColorChooser.showDialog(this, "Active highlight color", config.directorTargetColor());
+            if (picked != null) configManager.setConfiguration(GROUP, "directorTargetColor", picked);
+        });
+        addFull(guidance, targetColor);
         shortestPathEnabled.addActionListener(e ->
         {
             navigationEnabled = shortestPathEnabled.isSelected();
             if (!navigationEnabled) clearRoute();
+            else if (settingsReady && !loadingPreferences && !paused && !runFinished)
+            {
+                if (compostPageOpen) requestCompostRoute();
+                else if (awaitingBank) requestBankRoute();
+                else if (currentPlan != null && !preparingLoadout && currentStep < currentPlan.steps.size()) requestRoute(currentPlan.steps.get(currentStep));
+            }
         });
         worldHints.addActionListener(e ->
         {
@@ -1417,7 +1414,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel header = vertical();
         addFull(header, nav("← Back to runs", "selection"));
         addFull(header, label("Global Patch Manager", true));
-        addFull(header, label("Disabled patches are excluded from every run.", false));
+        addFull(header, label("Disabled patches are excluded from every run. Bulk actions include hidden matches.", false));
         patchSearch.setToolTipText("Filter patch names and locations");
         addFull(header, patchSearch);
         disabledOnly.setBackground(FarmingHelperTheme.BASE);
@@ -1434,6 +1431,8 @@ final class FarmingDirectorPanel extends PluginPanel
         disableAll.addActionListener(e -> setCategoryEnabled(new ArrayList<>(patchViews), false));
         bulkAll.add(enableAll); bulkAll.add(disableAll);
         addFull(header, bulkAll);
+        disableAll.setToolTipText("Disable every registered patch, even when filters are active");
+        enableAll.setToolTipText("Enable every registered patch; unlock requirements still apply");
         JButton refresh = new JButton("Refresh patch states");
         refresh.addActionListener(e -> refreshPatchManager());
         addFull(header, refresh);
@@ -1863,7 +1862,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 currentPlan = result.firstWave();
                 currentStep = 0;
                 paused = wasPaused;
-                preparingLoadout = false;
+                preparingLoadout = !currentPlan.steps.isEmpty() && !paused && !preserveProgress;
                 runFinished = false;
                 completedSteps.clear();
                 if (!preserveProgress) completedPatchKeys.clear();
@@ -1872,14 +1871,13 @@ final class FarmingDirectorPanel extends PluginPanel
                 start.setEnabled(true);
                 replan.setEnabled(true);
                 render();
-                if (!preserveProgress || "guide".equals(visiblePage)
-                    || "selection".equals(visiblePage)) showPage("guide");
-                if (!currentPlan.steps.isEmpty() && !paused && (!preserveProgress || suppliesMissing()))
+                if (!currentPlan.steps.isEmpty() && !paused && (preparingLoadout || suppliesMissing()))
                 {
                     preparingLoadout = true;
                     showPage("loadout");
                 }
-                else if ("loadout".equals(visiblePage)) showPage("guide");
+                else if (!preserveProgress || "guide".equals(visiblePage) || "selection".equals(visiblePage)
+                    || "loadout".equals(visiblePage)) showPage("guide");
                 if (!currentPlan.steps.isEmpty() && !paused && !preparingLoadout)
                 {
                     requestRoute(currentPlan.steps.get(0));

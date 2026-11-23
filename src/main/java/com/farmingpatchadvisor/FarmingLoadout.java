@@ -224,6 +224,7 @@ final class FarmingLoadout
 		seedVaultItems.clear();
 		seedRunBaselines.clear();
         directorChecklist = null;
+        directorBankGuidance = false;
 		bankScanned = false;
 		seedVaultScanned = false;
 		bankOpen = false;

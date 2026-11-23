@@ -45,7 +45,7 @@ final class BankChecklistFilter
         if (!farmingLoadout.directorBankGuidance()) { removeButton(); return; }
 		Widget bankRoot = client.getWidget(InterfaceID.Bankmain.UNIVERSE);
 		Widget itemsContainer = client.getWidget(InterfaceID.Bankmain.ITEMS_CONTAINER);
-		if (bankRoot == null || itemsContainer == null)
+		if (bankRoot == null || bankRoot.isHidden() || itemsContainer == null)
 		{
 			return;
 		}
