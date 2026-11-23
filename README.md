@@ -1,4 +1,4 @@
-# Farming Helper — v0.9.0-beta.1
+# Farming Helper — v0.10.0-beta.1
 
 **Basically, Quest Helper, for farm runs.**
 
@@ -9,10 +9,17 @@ A standalone RuneLite farming assistant designed for ironmen and useful for any 
 1. Log in and open your bank and Seed Vault to observe supplies.
 2. In Patch Settings, choose Automatic or rank crops separately for each patch type. Enable the locations you want. Access and planting requirements are independent.
 3. In Global Settings, choose compost, gardener payments, guidance and banking preferences.
-4. Start a run, gather the planned supplies, then follow the active interaction hints. Optional Shortest Path navigation points toward the next destination.
+4. Start a run to open its live guide. Gather missing supplies from the inline checklist; when ready, guidance requests navigation to the first verified destination. You may explicitly continue with missing items. All in-game actions remain manual.
 5. Pause or finish to clear the active guide. Timers and contracts remain accessible in the sidebar.
 
 The plugin is read-only guidance: every in-game action remains manual. Unknown patch observations and access are not treated as proven. Optional nearest-stop routing is a heuristic.
+
+## v0.10
+
+- Complete itineraries have no arbitrary stop cap; inventory slot budget and available stock determine loadouts.
+- Inline live supply checklist, auto-start once carried supplies are ready, completed/upcoming patch rows, and remaining travel requirements.
+- Quest Helper verified destinations or saved player waypoints drive Shortest Path requests; legacy timers remain a state observation source, not a route source.
+- Existing crop preferences and settings are preserved. This is an unverified development beta until build and in-client checks pass.
 
 ## v0.9
 
@@ -25,7 +32,7 @@ The plugin is read-only guidance: every in-game action remains manual. Unknown p
 
 ## Development and install
 
-Download [v0.9 from Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.9.0-beta.1) when published, or use the exact validated source commit.
+Use a validated source commit or a published release. Do not install a development branch as a verified release.
 
 Extract the Gradle project to the Farming-Helper directory in RuneLite Dev Manager. Refresh → Build → Launch. Run `gradlew.bat clean test build` (Windows) or `bash gradlew clean test build` (Linux/macOS). Java 11 source target; CI uses JDK 21.
 
