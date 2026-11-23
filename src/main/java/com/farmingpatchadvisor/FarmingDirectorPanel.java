@@ -130,6 +130,9 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JPanel patchRows = new JPanel();
     private final JTextField patchSearch = new JTextField();
     private final JCheckBox disabledOnly = new JCheckBox("Show disabled only");
+    private final JCheckBox actionableOnly = new JCheckBox("Needs attention only");
+    private final JLabel patchSummary = new JLabel();
+    private final JLabel guideWarning = new JLabel();
     private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
     private final JCheckBox allowUnverified = new JCheckBox("Include unverified-access locations");
     private final JCheckBox shortestPathEnabled = new JCheckBox("Send navigation to Shortest Path", true);
@@ -373,6 +376,8 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(header, progressBar);
         addFull(header, currentAction);
         addFull(header, inventory);
+        guideWarning.setForeground(new Color(244, 197, 86));
+        addFull(header, guideWarning);
         replan.addActionListener(e -> beginRun(true));
         JPanel overrides = new JPanel(new GridLayout(1, 2, 3, 0));
         overrides.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -469,6 +474,9 @@ final class FarmingDirectorPanel extends PluginPanel
         JButton newMerged = new JButton("Create new preset");
         newMerged.addActionListener(e -> createMergedPreset());
         addFull(mergedControls, newMerged);
+        JButton deleteMerged = new JButton("Delete selected preset");
+        deleteMerged.addActionListener(e -> deleteMergedPreset());
+        addFull(mergedControls, deleteMerged);
         JButton cropOverride = new JButton("Per-category crop priority override");
         cropOverride.addActionListener(e -> chooseMergedPriorityOverride());
         addFull(mergedControls, cropOverride);
@@ -545,6 +553,11 @@ final class FarmingDirectorPanel extends PluginPanel
             JOptionPane.showMessageDialog(this, "Choose a name of 1–40 safe characters.");
             return;
         }
+        if (presets.names().contains(name))
+        {
+            JOptionPane.showMessageDialog(this, "A preset with this name already exists.");
+            return;
+        }
         EnumSet<FarmRunType> selected = EnumSet.noneOf(FarmRunType.class);
         for (Map.Entry<FarmRunType, JCheckBox> entry : mergedTypes.entrySet())
             if (entry.getValue().isSelected()) selected.add(entry.getKey());
@@ -555,6 +568,27 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         reloadPresetNames();
         presetChoice.setSelectedItem(name);
+        configManager.setRSProfileConfiguration(GROUP, "directorLastPreset", name);
+    }
+
+    private void deleteMergedPreset()
+    {
+        String name = (String) presetChoice.getSelectedItem();
+        if (name == null || configManager.getRSProfileKey() == null) return;
+        if (activeRunSelection == DirectorRunSelection.MERGED && Objects.equals(activePresetName, name)
+            && currentPlan != null && !runFinished)
+        {
+            JOptionPane.showMessageDialog(this, "End the active merged run before deleting its preset.");
+            return;
+        }
+        if (JOptionPane.showConfirmDialog(this, "Delete preset " + name + " and its saved choices?",
+            "Delete merged preset", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        if (presets.delete(name))
+        {
+            reloadPresetNames();
+            configManager.setRSProfileConfiguration(GROUP, "directorLastPreset",
+                (String) presetChoice.getSelectedItem());
+        }
     }
 
     private void chooseMergedPriorityOverride()
@@ -566,14 +600,18 @@ final class FarmingDirectorPanel extends PluginPanel
             FarmRunType.values(), FarmRunType.HERB);
         if (!(category instanceof FarmRunType)) return;
         String key = "directorMergedPriority_" + name + "_" + ((FarmRunType)category).name();
+        String reserveKey = "directorMergedReserve_" + name + "_" + ((FarmRunType)category).name();
         String prior = profileValue(key, "");
         DirectorPriorityDialog.Result result = DirectorPriorityDialog.show(this,
-            type -> FarmRunType.forPatchType(type) == category, prior, "", false);
+            type -> FarmRunType.forPatchType(type) == category, prior,
+            profileValue(reserveKey, ""), true);
         if (result == null) return;
         if (result.priorities.isEmpty())
             configManager.unsetRSProfileConfiguration(GROUP, key);
         else
             configManager.setRSProfileConfiguration(GROUP, key, result.priorities);
+        if (result.reserves.isEmpty()) configManager.unsetRSProfileConfiguration(GROUP, reserveKey);
+        else configManager.setRSProfileConfiguration(GROUP, reserveKey, result.reserves);
     }
 
     private JPanel createSettings()
@@ -630,7 +668,8 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 FarmRunPatch patch = (FarmRunPatch) value;
                 return super.getListCellRendererComponent(list,
-                    (index + 1) + ". " + patch.getDisplayName(),
+                    wrapped((index + 1) + ". " + patch.getDisplayName() +
+                        " · " + patch.getPatchType().getDisplayName(), 174),
                     index, selected, focused);
             }
         });
@@ -681,6 +720,9 @@ final class FarmingDirectorPanel extends PluginPanel
         });
         arrows.add(up); arrows.add(down); arrows.add(remove);
         addFull(bottom, arrows);
+        JButton restore = new JButton("Add omitted stop…");
+        restore.addActionListener(e -> restoreRouteStop());
+        addFull(bottom, restore);
         JButton save = new JButton("Save route and teleports");
         save.addActionListener(e -> saveRouteEditor());
         addFull(bottom, save);
@@ -718,6 +760,38 @@ final class FarmingDirectorPanel extends PluginPanel
                     : inherited);
         }
         if (!routeModel.isEmpty()) routeList.setSelectedIndex(0);
+    }
+
+    private void restoreRouteStop()
+    {
+        DirectorRunSelection selection = (DirectorRunSelection) runType.getSelectedItem();
+        if (selection == null || selection == DirectorRunSelection.COMPOST) return;
+        Set<String> present = new HashSet<>();
+        for (int i = 0; i < routeModel.size(); i++) present.add(FarmRouteManager.key(routeModel.get(i)));
+        List<FarmRunPatch> available = routes.directorAllPatches();
+        if (selection == DirectorRunSelection.MERGED)
+            available = DirectorMergedPresets.selected(available, presets.categories((String) presetChoice.getSelectedItem()));
+        available.removeIf(p -> !selection.includes(p.getPatchType()) || present.contains(FarmRouteManager.key(p)));
+        if (available.isEmpty())
+        {
+            JOptionPane.showMessageDialog(this, "All available stops are already in this route.");
+            return;
+        }
+        String[] labels = available.stream().map(p -> p.getDisplayName() + " · " +
+            p.getPatchType().getDisplayName()).toArray(String[]::new);
+        Object choice = JOptionPane.showInputDialog(this, "Restore a stop to the route:", "Add stop",
+            JOptionPane.PLAIN_MESSAGE, null, labels, labels[0]);
+        for (int i = 0; choice != null && i < labels.length; i++)
+            if (labels[i].equals(choice))
+            {
+                FarmRunPatch patch = available.get(i);
+                RouteTeleport inherited = routes.teleportPreferred(routeEditFilter, patch);
+                routeEdits.putIfAbsent(FarmRouteManager.key(patch), selection == DirectorRunSelection.MERGED
+                    ? presets.teleport((String) presetChoice.getSelectedItem(), patch, inherited) : inherited);
+                routeModel.addElement(patch);
+                routeList.setSelectedIndex(routeModel.size() - 1);
+                break;
+            }
     }
 
     private void moveRoute(int direction)
@@ -784,6 +858,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void refreshStatusPage()
     {
+        final String profile = configManager.getRSProfileKey();
         clientThread.invoke(() ->
         {
             List<String> descriptions = new ArrayList<>();
@@ -809,6 +884,7 @@ final class FarmingDirectorPanel extends PluginPanel
             }
             SwingUtilities.invokeLater(() ->
             {
+                if (!Objects.equals(profile, configManager.getRSProfileKey())) return;
                 statusRows.removeAll();
                 for (String line : descriptions) addFull(statusRows, warning(line));
                 statusRows.revalidate();
@@ -968,6 +1044,14 @@ final class FarmingDirectorPanel extends PluginPanel
         disabledOnly.setBackground(ColorScheme.DARK_GRAY_COLOR);
         disabledOnly.setForeground(Color.WHITE);
         addFull(header, disabledOnly);
+        actionableOnly.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        actionableOnly.setForeground(Color.WHITE);
+        addFull(header, actionableOnly);
+        actionableOnly.addActionListener(e -> drawPatchRows());
+        addFull(header, patchSummary);
+        JButton refresh = new JButton("Refresh patch states");
+        refresh.addActionListener(e -> refreshPatchManager());
+        addFull(header, refresh);
         patchSearch.getDocument().addDocumentListener(new DocumentListener()
         {
             public void insertUpdate(DocumentEvent e) { drawPatchRows(); }
@@ -1047,8 +1131,11 @@ final class FarmingDirectorPanel extends PluginPanel
         String query = patchSearch.getText().trim().toLowerCase(java.util.Locale.ROOT);
         boolean onlyOff = disabledOnly.isSelected();
         Map<FarmRunType, List<PatchView>> byType = new EnumMap<>(FarmRunType.class);
+        int enabledCount = 0;
         for (PatchView patch : patchViews)
         {
+            if (patchPrefs.enabled(patch.patch)) enabledCount++;
+            if (actionableOnly.isSelected() && !patch.state.startsWith("Needs attention")) continue;
             if (onlyOff && patchPrefs.enabled(patch.patch)) continue;
             if (!query.isEmpty() && !patch.patch.getDisplayName()
                 .toLowerCase(java.util.Locale.ROOT).contains(query)
@@ -1056,9 +1143,11 @@ final class FarmingDirectorPanel extends PluginPanel
                     .toLowerCase(java.util.Locale.ROOT).contains(query)) continue;
             byType.computeIfAbsent(patch.patch.getFarmRunType(), t -> new ArrayList<>()).add(patch);
         }
+        patchSummary.setText(wrapped(enabledCount + " / " + patchViews.size() +
+            " enabled · " + byType.values().stream().mapToInt(List::size).sum() + " shown", 184));
         for (Map.Entry<FarmRunType, List<PatchView>> group : byType.entrySet())
         {
-            JPanel category = new JPanel(new GridLayout(1, 3, 3, 0));
+            JPanel category = new JPanel(new BorderLayout(3, 3));
             category.setBackground(ColorScheme.DARKER_GRAY_COLOR);
             JButton fold = new JButton((collapsedTypes.contains(group.getKey()) ? "▸ " : "▾ ")
                 + group.getKey().getDisplayName());
@@ -1067,13 +1156,17 @@ final class FarmingDirectorPanel extends PluginPanel
                 if (!collapsedTypes.add(group.getKey())) collapsedTypes.remove(group.getKey());
                 drawPatchRows();
             });
-            category.add(fold);
-            JButton all = new JButton("All");
+            fold.setText(wrapped(fold.getText() + " (" + group.getValue().size() + ")", 164));
+            category.add(fold, BorderLayout.NORTH);
+            JPanel bulk = new JPanel(new GridLayout(1, 2, 3, 0));
+            bulk.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            JButton all = new JButton("Enable shown");
             all.addActionListener(e -> setCategoryEnabled(group.getValue(), true));
-            category.add(all);
-            JButton none = new JButton("None");
+            bulk.add(all);
+            JButton none = new JButton("Disable shown");
             none.addActionListener(e -> setCategoryEnabled(group.getValue(), false));
-            category.add(none);
+            bulk.add(none);
+            category.add(bulk, BorderLayout.SOUTH);
             addFull(patchRows, category);
             if (collapsedTypes.contains(group.getKey())) continue;
 
@@ -1083,17 +1176,24 @@ final class FarmingDirectorPanel extends PluginPanel
                     loc -> new ArrayList<>()).add(patch);
             for (Map.Entry<String, List<PatchView>> location : byLocation.entrySet())
             {
-                JPanel locationBar = new JPanel(new GridLayout(1, 3, 3, 0));
+                JPanel locationBar = new JPanel(new BorderLayout(3, 0));
                 locationBar.setBackground(ColorScheme.DARK_GRAY_COLOR);
-                locationBar.add(label(location.getKey(), true));
+                JLabel locationTitle = new JLabel(wrapped(location.getKey(), 106));
+                locationTitle.setForeground(Color.WHITE);
+                locationBar.add(locationTitle, BorderLayout.CENTER);
+                JPanel locationActions = new JPanel(new GridLayout(1, 2, 2, 0));
+                locationActions.setBackground(ColorScheme.DARK_GRAY_COLOR);
                 JButton enable = new JButton("+");
                 enable.setToolTipText("Enable all patches at this location in this category");
                 enable.addActionListener(e -> setCategoryEnabled(location.getValue(), true));
-                locationBar.add(enable);
+                enable.setMargin(new java.awt.Insets(2, 5, 2, 5));
+                locationActions.add(enable);
                 JButton disable = new JButton("−");
                 disable.setToolTipText("Disable all patches at this location in this category");
                 disable.addActionListener(e -> setCategoryEnabled(location.getValue(), false));
-                locationBar.add(disable);
+                disable.setMargin(new java.awt.Insets(2, 5, 2, 5));
+                locationActions.add(disable);
+                locationBar.add(locationActions, BorderLayout.EAST);
                 addFull(patchRows, locationBar);
                 for (PatchView patch : location.getValue())
                 {
@@ -1103,11 +1203,15 @@ final class FarmingDirectorPanel extends PluginPanel
                         ? patch.patch.getPatchType().getDisplayName()
                         : patch.patch.getName() + " · " + patch.patch.getPatchType().getDisplayName(),
                         patchPrefs.enabled(patch.patch));
+                    enabled.setText(wrapped(enabled.getText(), 146));
                     enabled.setForeground(Color.WHITE);
                     enabled.setBackground(ColorScheme.DARK_GRAY_COLOR);
                     enabled.setEnabled(configManager.getRSProfileKey() != null);
-                    enabled.addActionListener(e -> patchPrefs.setEnabled(patch.patch,
-                        enabled.isSelected()));
+                    enabled.addActionListener(e ->
+                    {
+                        patchPrefs.setEnabled(patch.patch, enabled.isSelected());
+                        drawPatchRows();
+                    });
                     addFull(entry, enabled);
                     addFull(entry, label(patch.unlock + " · " + patch.state, false));
                     addFull(patchRows, entry);
@@ -1251,11 +1355,16 @@ final class FarmingDirectorPanel extends PluginPanel
     /** Replan keeps completed patch IDs so we can safely refill at a bank. */
     private void beginRun(boolean preserveProgress)
     {
+        if (planningInFlight) return;
         if (!preserveProgress) savePreferences();
         final DirectorRunSelection selected = replanSelection(
             preserveProgress ? activeRunSelection : null,
             (DirectorRunSelection) runType.getSelectedItem());
         if (selected == null) return;
+        if (!preserveProgress && selected != DirectorRunSelection.COMPOST &&
+            currentPlan != null && !runFinished && JOptionPane.showConfirmDialog(this,
+                "Replace the active run and its checkpoint?", "Start new run",
+                JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
         if (selected == DirectorRunSelection.COMPOST)
         {
             compostIndex = 0;
@@ -1293,6 +1402,8 @@ final class FarmingDirectorPanel extends PluginPanel
             return;
         }
         planningInFlight = true;
+        guideWarning.setText(wrapped("Planning remaining patches…", 184));
+        guideWarning.setVisible(true);
         start.setEnabled(false);
         replan.setEnabled(false);
         clearRoute();
@@ -1555,7 +1666,8 @@ final class FarmingDirectorPanel extends PluginPanel
                 : config.directorHarvestSlots();
 
         Map<FarmRunType, String> categoryPriority = new EnumMap<>(FarmRunType.class);
-        if (selection == DirectorRunSelection.MERGED)
+        Map<String, Integer> combinedReserves = DirectorPlanner.parseReserves(reserveText);
+        if (selection == DirectorRunSelection.MERGED || selection == DirectorRunSelection.ALL && !custom)
         {
             for (FarmRunType category : FarmRunType.values())
             {
@@ -1563,15 +1675,23 @@ final class FarmingDirectorPanel extends PluginPanel
                 String saved = profileValue("directorCustom" + base, "false");
                 if (Boolean.parseBoolean(saved))
                     categoryPriority.put(category, profileValue("directorPriority" + base, ""));
-                String local = profileValue("directorMergedPriority_" + presetName
-                    + "_" + category.name(), "");
-                if (!local.isEmpty()) categoryPriority.put(category, local);
+                DirectorPlanner.parseReserves(profileValue("directorReserve" + base, ""))
+                    .forEach((crop, quantity) -> combinedReserves.merge(crop, quantity, Math::max));
+                if (selection == DirectorRunSelection.MERGED)
+                {
+                    String local = profileValue("directorMergedPriority_" + presetName
+                        + "_" + category.name(), "");
+                    if (!local.isEmpty()) categoryPriority.put(category, local);
+                    DirectorPlanner.parseReserves(profileValue("directorMergedReserve_" + presetName
+                        + "_" + category.name(), ""))
+                        .forEach((crop, quantity) -> combinedReserves.merge(crop, quantity, Math::max));
+                }
             }
         }
 
         Map<Integer, Integer> equippedItems = loadout.directorEquipment();
         DirectorWavePlanner.Result wavePlan = DirectorWavePlanner.split(candidates, level,
-            stock, custom, priorityText, reserveText, 0, 0,
+            stock, custom, priorityText, DirectorPriorityEditorModel.encodeReserves(combinedReserves), 0, 0,
             harvestReserve, protection, id ->
                 itemManager.getItemComposition(id).isStackable(), preplanted,
                 harvestOnly, cropOverrides, herbPriority, waveCap,
@@ -1917,7 +2037,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void moveStep(int delta, boolean automatic)
     {
-        if (currentPlan == null || planningInFlight || paused) return;
+        if (currentPlan == null || planningInFlight || paused || runFinished) return;
         if (awaitingBank)
         {
             if (delta > 0)
@@ -2229,9 +2349,13 @@ final class FarmingDirectorPanel extends PluginPanel
         storage.setText(!active ? "Bank & vault snapshots are checked at Start"
             : "Using observed stock; reopen storage if estimates are stale");
         String actionText;
-        if (!active || steps == 0)
+        if (!active)
         {
             actionText = "Start a run to see state-driven instructions.";
+        }
+        else if (steps == 0)
+        {
+            actionText = "No actionable stops planned. Check planning details, scan storage or change your patch and crop choices.";
         }
         else if (runFinished)
         {
@@ -2271,21 +2395,30 @@ final class FarmingDirectorPanel extends PluginPanel
         progressBar.setMaximum(Math.max(1, steps));
         progressBar.setValue(complete);
         progressBar.setString(complete + " / " + steps + " stops");
+        int warningCount = currentSession == null ? 0 : currentSession.warnings.size();
+        guideWarning.setVisible(warningCount > 0 || planningInFlight);
+        guideWarning.setText(wrapped(planningInFlight ? "Planning…" :
+            warningCount + " planning notices · see details", 184));
+        if (active && currentSession != null && currentSession.unplanned > 0)
+        {
+            guideWarning.setText(wrapped(currentSession.unplanned + " unplanned stops · check details", 184));
+            guideWarning.setVisible(true);
+        }
         returnGuide.setEnabled(active);
         selectionStatus.setText(wrapped(active && !runFinished ?
             "Run in progress · " + completedPatchKeys.size() + " completed" :
             "Choose a run to plan your next harvest.", 184));
-        back.setEnabled(active && !paused && !planningInFlight && currentStep > 0);
+        back.setEnabled(active && !runFinished && !paused && !planningInFlight && currentStep > 0);
         next.setEnabled(active && !paused && !planningInFlight && !runFinished && (awaitingBank || currentStep < steps));
         next.setText(awaitingBank ? "Replan" : "Next step");
         next.setToolTipText(awaitingBank
             ? "Continue after banking. No items are withdrawn automatically." : null);
-        pause.setEnabled(active && steps > 0 && !runFinished);
+        pause.setEnabled(active && !planningInFlight && steps > 0 && !runFinished);
         end.setEnabled(active);
         replan.setEnabled(active && !planningInFlight && currentSession != null);
         resume.setEnabled(!profileValue("directorSavedMode", "").isEmpty());
-        overrideCrop.setEnabled(active && !runFinished && !awaitingBank && steps > 0);
-        clearOverride.setEnabled(active && !runFinished && !awaitingBank && steps > 0);
+        overrideCrop.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && steps > 0);
+        clearOverride.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && steps > 0);
         pause.setText(paused ? "Resume" : "Pause");
 
         if (active)

@@ -96,6 +96,12 @@ final class DirectorMergedPresets
         names.remove(name);
         manager.setRSProfileConfiguration(GROUP, INDEX, String.join(";", names));
         manager.unsetRSProfileConfiguration(GROUP, "directorMerged_" + name);
+        resetRoute(name);
+        for (FarmRunType category : FarmRunType.values())
+        {
+            manager.unsetRSProfileConfiguration(GROUP, "directorMergedPriority_" + name + "_" + category.name());
+            manager.unsetRSProfileConfiguration(GROUP, "directorMergedReserve_" + name + "_" + category.name());
+        }
         return true;
     }
 
@@ -151,6 +157,8 @@ final class DirectorMergedPresets
         if (!validName(name) || manager.getRSProfileKey() == null) return false;
         manager.unsetRSProfileConfiguration(GROUP, "directorMergedRouteIncluded_" + name);
         manager.unsetRSProfileConfiguration(GROUP, "directorMergedRouteOrder_" + name);
+        for (FarmRunPatch patch : FarmRunCatalog.patches())
+            manager.unsetRSProfileConfiguration(GROUP, "directorMergedTeleport_" + name + "_" + FarmRouteManager.key(patch));
         return true;
     }
 
