@@ -83,6 +83,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private DirectorPlanner.Plan currentPlan;
     private int currentStep;
     private boolean paused;
+    private volatile boolean routeIssued;
     private boolean loadingPreferences;
 
     @Inject
@@ -410,12 +411,24 @@ final class FarmingDirectorPanel extends PluginPanel
             data.put("target", destination);
             // The receiver may not be installed: posting is a safe no-op then.
             eventBus.post(new PluginMessage("shortestpath", "path", data));
+            routeIssued = true;
         });
     }
 
     private void clearRoute()
     {
-        clientThread.invoke(() -> eventBus.post(new PluginMessage("shortestpath", "clear")));
+        if (!routeIssued)
+        {
+            return;
+        }
+        clientThread.invoke(() ->
+        {
+            if (routeIssued)
+            {
+                eventBus.post(new PluginMessage("shortestpath", "clear"));
+                routeIssued = false;
+            }
+        });
     }
 
     private void advance(int delta)

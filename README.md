@@ -37,7 +37,7 @@ Each character has separate stored Guide priorities (RuneLite RS-profile configu
 - Regular-tree crops are plantable saplings, not raw seeds; raw seeds trigger a preparation warning when no suitable saplings are available.
 - Custom priorities, insufficient stock, reserved stock and Farming-level limits are handled by an explicit allocation algorithm.
 - Planned seeds, unstackable saplings, payment items and configurable harvest reserve are counted against 28 inventory slots. Impossible full runs are shortened, with a banking warning.
-- Basic quest checks cover Morytania, Troll Stronghold and Weiss. Farming Guild has separate level gates (45 for regular trees, 65 for herbs). Some new/unverified areas are opt-in, never silently assumed accessible.
+- Basic quest checks cover Morytania, Troll Stronghold and Weiss. Farming Guild has separate level gates (65 for both regular trees and herbs). Some new/unverified areas are opt-in, never silently assumed accessible.
 - Advisor's route order can be edited in its Route & Teleports control; no global optimization in v0.1.
 - Protection-payment requirements may be missing from available stock, and the sidebar warns.
 - No game actions are automated. Manual step completion is intentional for first validation.

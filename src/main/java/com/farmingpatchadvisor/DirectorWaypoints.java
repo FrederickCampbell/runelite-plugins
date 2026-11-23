@@ -55,7 +55,7 @@ final class DirectorWaypoints
     {
         if ("Farming Guild".equals(location))
         {
-            int min = type == PatchType.HERB ? 65 : 45;
+            int min = 65;
             return farmingLevel < min ? "Farming Guild " + type.getDisplayName()
                 + " requires level " + min + " Farming (unboosted)." : null;
         }
