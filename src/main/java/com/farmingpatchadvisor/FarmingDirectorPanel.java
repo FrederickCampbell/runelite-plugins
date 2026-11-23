@@ -34,6 +34,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
@@ -82,6 +84,9 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JCheckBox herbloreFocus = new JCheckBox("Prioritize Herblore supplies (preset)", false);
     private final JCheckBox autoReplanBank = new JCheckBox("Replan after banking", false);
+    private final JSpinner maxStopsPerWave = new JSpinner(new SpinnerNumberModel(8, 1, 28, 1));
+    private final JComboBox<DirectorBankStops.Bank> bankChoice =
+        new JComboBox<>(DirectorBankStops.Bank.values());
     private final JButton replan = new JButton("Replan remaining");
     private final JButton resume = new JButton("Resume saved run");
     private final JButton overrideCrop = new JButton("Override this patch");
@@ -99,6 +104,11 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JButton pause = new JButton("Pause");
     private final JButton end = new JButton("End");
     private volatile DirectorPlanner.Plan currentPlan;
+    private DirectorSessionPlan currentSession;
+    private int waveIndex;
+    private boolean awaitingBank;
+    private boolean sawHarvestable;
+    private DirectorBankStops.Bank suggestedBank;
     private volatile int currentStep;
     private volatile boolean paused;
     private volatile boolean runFinished;
@@ -208,6 +218,14 @@ final class FarmingDirectorPanel extends PluginPanel
         autoReplanBank.setForeground(Color.WHITE);
         autoReplanBank.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         advanced.add(autoReplanBank);
+        advanced.add(label("Maximum patch stops per loadout", false));
+        maxStopsPerWave.setMaximumSize(new Dimension(Integer.MAX_VALUE, 25));
+        maxStopsPerWave.setAlignmentX(Component.LEFT_ALIGNMENT);
+        advanced.add(maxStopsPerWave);
+        advanced.add(label("Bank between waves", false));
+        bankChoice.setMaximumSize(new Dimension(Integer.MAX_VALUE, 25));
+        bankChoice.setAlignmentX(Component.LEFT_ALIGNMENT);
+        advanced.add(bankChoice);
         advanced.setVisible(false);
 
         JButton advancedToggle = new JButton("Planner options ▸");
@@ -331,6 +349,25 @@ final class FarmingDirectorPanel extends PluginPanel
         nearestRoute.setSelected(Boolean.parseBoolean(profileValue("directorNearest", "false")));
         herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
         autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "false")));
+        int cap = 8;
+        try
+        {
+            cap = Integer.parseInt(profileValue("directorWaveStopLimit", "8"));
+        }
+        catch (NumberFormatException ignored)
+        {
+            // Keep safe default for corrupted or old preferences.
+        }
+        maxStopsPerWave.setValue(Math.max(1, Math.min(28, cap)));
+        try
+        {
+            bankChoice.setSelectedItem(DirectorBankStops.Bank.valueOf(
+                profileValue("directorBankStop", "AUTO")));
+        }
+        catch (IllegalArgumentException ignored)
+        {
+            bankChoice.setSelectedItem(DirectorBankStops.Bank.AUTO);
+        }
         loadingPreferences = false;
     }
 
@@ -358,6 +395,11 @@ final class FarmingDirectorPanel extends PluginPanel
             Boolean.toString(herbloreFocus.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorAutoReplanBank",
             Boolean.toString(autoReplanBank.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorWaveStopLimit",
+            maxStopsPerWave.getValue().toString());
+        DirectorBankStops.Bank bank = (DirectorBankStops.Bank) bankChoice.getSelectedItem();
+        configManager.setRSProfileConfiguration(GROUP, "directorBankStop",
+            bank == null ? "AUTO" : bank.name());
     }
 
     private void beginRun()
@@ -377,6 +419,7 @@ final class FarmingDirectorPanel extends PluginPanel
         final boolean protection = protectTrees.isSelected();
         final boolean proximity = nearestRoute.isSelected();
         final boolean herbPriority = herbloreFocus.isSelected();
+        final int waveCap = (Integer) maxStopsPerWave.getValue();
         final Set<String> skip = preserveProgress
             ? new HashSet<>(completedPatchKeys) : Collections.emptySet();
         final long generation = ++planningGeneration;
@@ -385,25 +428,31 @@ final class FarmingDirectorPanel extends PluginPanel
         clearRoute();
         clientThread.invoke(() ->
         {
-            DirectorPlanner.Plan calculated;
+            DirectorSessionPlan calculated;
             try
             {
                 calculated = compute(selected, custom, priorityText,
-                    reserveText, protection, proximity, herbPriority, skip);
+                    reserveText, protection, proximity, herbPriority, waveCap, skip);
             }
             catch (RuntimeException problem)
             {
                 log.warn("Farming Director could not generate a run", problem);
-                calculated = new DirectorPlanner.Plan(Collections.emptyList(),
-                    Collections.emptyMap(), Collections.emptyMap(),
-                    Collections.singletonList("Could not generate this run. Check RuneLite logs "
-                        + "and reopen storage before retrying."), 0, 0);
+                List<String> errors = Collections.singletonList(
+                    "Could not generate this run. Check RuneLite logs and reopen storage before retrying.");
+                calculated = new DirectorSessionPlan(
+                    new DirectorWavePlanner.Result(Collections.emptyList(),
+                        Collections.emptyList(), errors),
+                    new DirectorStockLedger(Collections.emptyMap(), Collections.emptyMap(),
+                        Collections.emptyMap(), false, false), errors);
             }
-            final DirectorPlanner.Plan result = calculated;
+            final DirectorSessionPlan result = calculated;
             SwingUtilities.invokeLater(() ->
             {
                 if (generation != planningGeneration) return;
-                currentPlan = result;
+                currentSession = result;
+                waveIndex = 0;
+                awaitingBank = false;
+                currentPlan = result.firstWave();
                 currentStep = 0;
                 paused = false;
                 runFinished = false;
@@ -423,16 +472,20 @@ final class FarmingDirectorPanel extends PluginPanel
         });
     }
 
-    private DirectorPlanner.Plan compute(DirectorRunSelection selection,
+    private DirectorSessionPlan compute(DirectorRunSelection selection,
         boolean custom, String priorityText, String reserveText,
-        boolean protection, boolean proximity, boolean herbPriority, Set<String> skip)
+        boolean protection, boolean proximity, boolean herbPriority, int waveCap,
+        Set<String> skip)
     {
         List<String> warnings = new ArrayList<>();
         if (client.getGameState() != GameState.LOGGED_IN)
         {
             warnings.add("Log into a character before planning a run.");
-            return new DirectorPlanner.Plan(Collections.emptyList(), Collections.emptyMap(),
-                Collections.emptyMap(), warnings, 0, 0);
+            return new DirectorSessionPlan(
+                new DirectorWavePlanner.Result(Collections.emptyList(),
+                    Collections.emptyList(), warnings),
+                new DirectorStockLedger(Collections.emptyMap(), Collections.emptyMap(),
+                    Collections.emptyMap(), false, false), warnings);
         }
         int level = plugin.getFarmingLevel();
         lastPlannedFarmingLevel = level;
