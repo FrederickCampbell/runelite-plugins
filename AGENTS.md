@@ -2,30 +2,13 @@
 
 ## Farming Helper development overrides
 
-The former Ironman Farming Director project is now Farming Helper. The default
-branch is the consolidated v0.7.0-beta.1 development baseline. Preserve all
-history through normal commits, publish validated release tags, and use short-lived
-branches for future work. For v0.9 the author explicitly authorizes a clean pre-Hub configuration reset. Preserve releases and upstream attribution. Keep the plugin standalone, preserve upstream
-licenses, and never represent CI as live client validation.
-
+Farming Helper is the standalone farming guide. Preserve history and upstream licenses; use validated versioned releases. The v0.9 pre-Hub reset uses package `com.farminghelper` and group `farming-helper`. Do not change them casually after publication. Keep gameplay read-only and test manually.
 
 ## Versioning
 
-- User established the current local baseline as V1.0 on 2026-09-17.
-- Number subsequent updates V1.1, V1.2, V1.3, and so on, once per update batch
-  rather than once per edit or test. Continue with V1.10 after V1.9.
-- Keep build.gradle, runelite-plugin.properties, README.md, and CHANGELOG.md in sync.
-- Teleport checklist/custom route ordering is implemented in V1.1. Preserve the V1.0
-  restore tag, and create a local checkpoint for each version after validation.
-- Keep updates local until the user explicitly requests publishing to GitHub/Plugin Hub.
-- For every new local version, also save a copy of its complete source archive,
-  matching test/transfer guide, and a short README of changes since the prior
-  version in
-  `C:\Users\Nate\Desktop\Farming Patch Advisor V1.3 Test Package`.
-  Use versioned filenames, preserve earlier versions, and verify the archive
-  against its local version tag. The change README should name the previous
-  version, summarize player-visible changes, and note test status. Do not email
-  a new version unless requested.
+- Keep build.gradle, runelite-plugin.properties, README.md and CHANGELOG.md in sync.
+- Maintain Java 11 compatibility and test with the RuneLite development environment.
+- Publish beta releases after successful compilation and regression tests. Never claim live client testing from CI alone.
 
 ## Logging
 

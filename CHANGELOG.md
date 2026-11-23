@@ -2,6 +2,8 @@
 
 ## v0.9.0-beta.1 — UI and architecture refactor
 
+- Rename the Java source/test packages to `com.farminghelper`, plugin entry point to `FarmingHelperPlugin`, and config group to `farming-helper`. Pre-Hub configuration reset intentionally requires new settings; old group remains untouched.
+
 - Component-local FlatLaf styles where supported, compact fallback controls, consistent typography and dark narrow scrollbars.
 - Reusable headers, rows, search and normalized item sprites; simplified home, collapsed filters and advanced patch controls.
 - Single physical crop priority store; obsolete per-run UI removed. Crop priorities reset for this pre-Hub beta.

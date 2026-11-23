@@ -14,7 +14,7 @@ repositories {
 }
 
 def runeLiteVersion = 'latest.release'
-def pluginMainClass = 'com.farmingpatchadvisor.FarmingPatchAdvisorPluginTest'
+def pluginMainClass = 'com.farminghelper.FarmingHelperPluginTest'
 
 dependencies {
 	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
@@ -28,7 +28,7 @@ dependencies {
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'com.ironmanfarmingdirector'
+group = 'com.farminghelper'
 version = '0.9.0-beta.1'
 
 tasks.withType(JavaCompile).configureEach {

@@ -1,0 +1,873 @@
+package com.farminghelper;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import javax.inject.Inject;
+import javax.swing.BorderFactory;
+import javax.swing.AbstractButton;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.Timer;
+import javax.swing.JToggleButton;
+import javax.swing.SwingUtilities;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
+import net.runelite.client.config.ConfigManager;
+import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.PluginPanel;
+
+final class FarmingPatchPanel extends PluginPanel
+{
+	private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("h:mm a").withZone(ZoneId.systemDefault());
+	private final PatchTimerManager timerManager;
+	private final FarmingHelperConfig config;
+	private final ConfigManager configManager;
+	private final FarmingContractManager contractManager;
+	private final FarmingLoadout farmingLoadout;
+	private final FarmRunFilterState runFilterState;
+	private final FarmRouteManager routes;
+	private final CompostBinManager compostBinManager;
+	private final JComboBox<FarmRunFilter> runFilter = new JComboBox<>(FarmRunFilter.values());
+	private final JToggleButton checklistToggle = new JToggleButton();
+	private final JButton editRoute = new JButton("Route & Teleports");
+	private final JPanel patches = new JPanel();
+	private final JScrollPane patchScrollPane;
+	private final Timer refreshTimer;
+	private final List<Runnable> liveUpdates = new ArrayList<>();
+	private boolean updatingRunFilter;
+	private int renderedModelFingerprint;
+	private volatile boolean rebuildRequested = true;
+
+	@Inject
+	private FarmingPatchPanel(PatchTimerManager timerManager, FarmingHelperConfig config,
+		ConfigManager configManager, FarmingContractManager contractManager, FarmingLoadout farmingLoadout,
+		FarmRunFilterState runFilterState, FarmRouteManager routes, CompostBinManager compostBinManager)
+	{
+		super(false);
+		this.timerManager = timerManager;
+		this.config = config;
+		this.configManager = configManager;
+		this.contractManager = contractManager;
+		this.farmingLoadout = farmingLoadout;
+		this.runFilterState = runFilterState;
+		this.routes = routes;
+		this.compostBinManager = compostBinManager;
+		setLayout(new BorderLayout());
+		setBackground(ColorScheme.DARK_GRAY_COLOR);
+		setBorder(BorderFactory.createLineBorder(ColorScheme.BORDER_COLOR));
+
+		JPanel header = new JPanel();
+		header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+		header.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		header.setBorder(BorderFactory.createEmptyBorder(12, 10, 12, 10));
+		JLabel title = new JLabel("Farm Run");
+		title.setAlignmentX(Component.LEFT_ALIGNMENT);
+		title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
+		title.setForeground(Color.WHITE);
+		header.add(title);
+		header.add(Box.createRigidArea(new Dimension(0, 8)));
+		styleRunFilter();
+		header.add(runFilter);
+		header.add(Box.createRigidArea(new Dimension(0, 12)));
+		JPanel actions = new JPanel(new GridLayout(1, 2, 4, 0));
+		actions.setAlignmentX(Component.LEFT_ALIGNMENT);
+		actions.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+		actions.setOpaque(false);
+		styleButton(checklistToggle);
+		styleCompactButton(checklistToggle);
+		checklistToggle.addActionListener(event -> toggleChecklist());
+		updateChecklistButton();
+		actions.add(checklistToggle);
+		JButton clear = new JButton("Clear timers");
+		styleButton(clear);
+		styleCompactButton(clear);
+		clear.addActionListener(event ->
+		{
+			if (runFilterState.getSelected().isCompostOnly())
+			{
+				compostBinManager.clear();
+			}
+			else
+			{
+				timerManager.clear();
+				if (runFilterState.getSelected() == FarmRunFilter.ALL)
+				{
+					compostBinManager.clear();
+				}
+			}
+		});
+		actions.add(clear);
+		header.add(actions);
+		styleButton(editRoute);
+		editRoute.setAlignmentX(Component.LEFT_ALIGNMENT);
+		editRoute.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+		editRoute.addActionListener(event ->
+		{
+			FarmRouteEditor.open(this, routes, runFilterState.getSelected());
+			rebuild();
+		});
+		header.add(Box.createRigidArea(new Dimension(0, 8)));
+		header.add(editRoute);
+		add(header, BorderLayout.NORTH);
+
+		patches.setLayout(new BoxLayout(patches, BoxLayout.Y_AXIS));
+		patches.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		patches.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+		patchScrollPane = new JScrollPane(patches);
+		patchScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		patchScrollPane.setBorder(BorderFactory.createEmptyBorder());
+		patchScrollPane.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
+		styleNarrowScrollBar(patchScrollPane);
+		add(patchScrollPane, BorderLayout.CENTER);
+
+		refreshTimer = new Timer(1000, event -> refreshPanel());
+		refreshTimer.start();
+		rebuild();
+	}
+
+	void stop()
+	{
+		refreshTimer.stop();
+	}
+
+	void start()
+	{
+		if (!refreshTimer.isRunning())
+		{
+			refreshTimer.start();
+		}
+		rebuild();
+	}
+
+	void requestRebuild()
+	{
+		rebuildRequested = true;
+	}
+
+	private void refreshPanel()
+	{
+		if (!isShowing())
+		{
+			return;
+		}
+
+		int fingerprint = modelFingerprint();
+		if (rebuildRequested || fingerprint != renderedModelFingerprint)
+		{
+			rebuild();
+			return;
+		}
+
+		updateChecklistButton();
+		for (Runnable update : liveUpdates)
+		{
+			update.run();
+		}
+		patches.repaint();
+	}
+
+	private int modelFingerprint()
+	{
+		FarmingContract contract = contractManager.getContract();
+		int hash = Objects.hash(runFilterState.getSelected(), config.showFarmingContract(),
+			contract == null ? 0 : contract.getCrop().getItemId());
+		for (PatchTimer timer : timerManager.getTimers())
+		{
+			hash = 31 * hash + Objects.hash(timer.key(), timer.getCrop().getItemId(),
+				timer.getPlantedAt(), timer.getReadyAt(), timer.isPlantedTimer(),
+				timer.getObservedStage(), timer.getTotalStages(), timer.isDead(),
+				timer.isDiseased(), timer.isPicked(), timer.isCompostApplied(), timer.isWatered());
+		}
+		for (CompostBinLocation location : compostBinManager.enabledLocations())
+		{
+			CompostBinState state = compostBinManager.getState(location);
+			hash = 31 * hash + location.hashCode();
+			if (state != null)
+			{
+				hash = 31 * hash + Objects.hash(state.getProduct(), state.getPhase(), state.getAmount(),
+					state.getStage(), state.getObservedAt(), state.getReadyAt());
+			}
+		}
+		return hash;
+	}
+
+	private void rebuild()
+	{
+		liveUpdates.clear();
+		updateChecklistButton();
+		patches.removeAll();
+		Set<ChecklistPatch> selectedPatches = ChecklistPatch.selected(config);
+		List<PatchTimer> unmatchedTimers = new ArrayList<>(timerManager.getTimers());
+		unmatchedTimers.removeIf(timer -> !ChecklistPatch.includes(selectedPatches, timer.getPatchType()));
+		int order = 1;
+		List<FarmRunPatch> enabledCatalog = FarmRunCatalog.patches(config);
+		updateRunFilterOptions(enabledCatalog, selectedPatches);
+		FarmRunFilter selectedFilter = runFilterState.getSelected();
+		editRoute.setEnabled(!selectedFilter.isCompostOnly());
+		editRoute.setToolTipText(selectedFilter.isCompostOnly()
+			? "Compost bins use the efficient built-in route" : null);
+		if (!selectedFilter.isCompostOnly() && config.showFarmingContract())
+		{
+			patches.add(createContractCard());
+			patches.add(Box.createRigidArea(new Dimension(0, 10)));
+		}
+		if (selectedFilter.isCompostOnly())
+		{
+			addCompostSection();
+			finishRebuild();
+			return;
+		}
+		if (routes.isCustom(runFilterState.getSelected()))
+		{
+			for (FarmRunPatch patch : routes.activePatches())
+			{
+				List<PatchTimer> matching = takeMatchingTimers(unmatchedTimers, patch);
+				patches.add(matching.isEmpty() ? createUntrackedCard(order++, patch)
+					: createTrackedCard(order++, patch, matching));
+				patches.add(Box.createRigidArea(new Dimension(0, 5)));
+			}
+			finishRebuild();
+			return;
+		}
+		for (FarmRunType runType : FarmRunType.values())
+		{
+			FarmRunFilter selectedRunFilter = (FarmRunFilter) runFilter.getSelectedItem();
+			if (selectedRunFilter != null && !selectedRunFilter.includes(runType))
+			{
+				continue;
+			}
+			boolean runSelected = enabledCatalog.stream().anyMatch(patch -> patch.getFarmRunType() == runType
+				&& ChecklistPatch.includes(selectedPatches, patch.getPatchType()));
+			if (!runSelected)
+			{
+				continue;
+			}
+			patches.add(createRunHeader(runType));
+			patches.add(Box.createRigidArea(new Dimension(0, 5)));
+			for (FarmRunPatch patch : enabledCatalog)
+			{
+				if (patch.getFarmRunType() != runType
+					|| !ChecklistPatch.includes(selectedPatches, patch.getPatchType()))
+				{
+					continue;
+				}
+				List<PatchTimer> matchingTimers = takeMatchingTimers(unmatchedTimers, patch);
+				patches.add(matchingTimers.isEmpty()
+					? createUntrackedCard(order++, patch)
+					: createTrackedCard(order++, patch, matchingTimers));
+				patches.add(Box.createRigidArea(new Dimension(0, 5)));
+			}
+			for (int i = unmatchedTimers.size() - 1; i >= 0; i--)
+			{
+				PatchTimer timer = unmatchedTimers.get(i);
+				if (FarmRunType.forPatchType(timer.getPatchType()) != runType)
+				{
+					continue;
+				}
+				unmatchedTimers.remove(i);
+				FarmRunPatch unknown = new FarmRunPatch(PatchLocationCatalog.name(timer.getPatchLocation()), "", timer.getPatchType());
+				patches.add(createTrackedCard(order++, unknown, java.util.Collections.singletonList(timer)));
+				patches.add(Box.createRigidArea(new Dimension(0, 5)));
+			}
+			patches.add(Box.createRigidArea(new Dimension(0, 7)));
+		}
+		if (selectedFilter.includesCompost(config.includeCompostBinsInFarmRuns()))
+		{
+			addCompostSection();
+		}
+		finishRebuild();
+	}
+
+	private void finishRebuild()
+	{
+		renderedModelFingerprint = modelFingerprint();
+		rebuildRequested = false;
+		patches.revalidate();
+		patches.repaint();
+	}
+
+	private void updateRunFilterOptions(List<FarmRunPatch> enabledCatalog,
+		Set<ChecklistPatch> selectedPatches)
+	{
+		Set<FarmRunType> availableRunTypes = EnumSet.noneOf(FarmRunType.class);
+		for (FarmRunPatch patch : enabledCatalog)
+		{
+			if (ChecklistPatch.includes(selectedPatches, patch.getPatchType()))
+			{
+				availableRunTypes.add(patch.getFarmRunType());
+			}
+		}
+
+		FarmRunFilter current = (FarmRunFilter) runFilter.getSelectedItem();
+		List<FarmRunFilter> availableFilters = new ArrayList<>();
+		boolean compostAvailable = !compostBinManager.enabledLocations().isEmpty();
+		for (FarmRunFilter filter : FarmRunFilter.values())
+		{
+			if (filter.isAvailable(availableRunTypes, compostAvailable))
+			{
+				availableFilters.add(filter);
+			}
+		}
+		boolean unchanged = runFilter.getItemCount() == availableFilters.size();
+		for (int i = 0; unchanged && i < availableFilters.size(); i++)
+		{
+			unchanged = runFilter.getItemAt(i) == availableFilters.get(i);
+		}
+		if (unchanged)
+		{
+			return;
+		}
+
+		updatingRunFilter = true;
+		runFilter.removeAllItems();
+		for (FarmRunFilter filter : availableFilters)
+		{
+			runFilter.addItem(filter);
+		}
+		FarmRunFilter selected = availableFilters.contains(current) ? current : FarmRunFilter.ALL;
+		runFilter.setSelectedItem(selected);
+		runFilterState.setSelected(selected);
+		updatingRunFilter = false;
+	}
+
+	private void styleRunFilter()
+	{
+		runFilter.setAlignmentX(Component.LEFT_ALIGNMENT);
+		runFilter.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+		runFilter.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+		runFilter.setForeground(Color.WHITE);
+		runFilter.setFocusable(false);
+		runFilter.setBorder(BorderFactory.createLineBorder(ColorScheme.BORDER_COLOR));
+		runFilter.setRenderer(new DefaultListCellRenderer()
+		{
+			@Override
+			public Component getListCellRendererComponent(javax.swing.JList<?> list, Object value,
+				int index, boolean isSelected, boolean cellHasFocus)
+			{
+				JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index,
+					isSelected, cellHasFocus);
+				label.setBackground(isSelected ? ColorScheme.DARK_GRAY_COLOR : ColorScheme.MEDIUM_GRAY_COLOR);
+				label.setForeground(Color.WHITE);
+				label.setBorder(BorderFactory.createEmptyBorder(4, 7, 4, 7));
+				return label;
+			}
+		});
+		runFilter.addPopupMenuListener(new PopupMenuListener()
+		{
+			@Override
+			public void popupMenuWillBecomeVisible(PopupMenuEvent event)
+			{
+				SwingUtilities.invokeLater(() -> styleRunFilterPopup());
+			}
+
+			@Override
+			public void popupMenuWillBecomeInvisible(PopupMenuEvent event)
+			{
+			}
+
+			@Override
+			public void popupMenuCanceled(PopupMenuEvent event)
+			{
+			}
+		});
+		runFilter.addActionListener(event ->
+		{
+			if (!updatingRunFilter)
+			{
+				runFilterState.setSelected((FarmRunFilter) runFilter.getSelectedItem());
+				rebuild();
+			}
+		});
+	}
+
+	private void styleRunFilterPopup()
+	{
+		Component popup = runFilter.getAccessibleContext().getAccessibleChild(0) instanceof Component
+			? (Component) runFilter.getAccessibleContext().getAccessibleChild(0) : null;
+		JScrollPane scrollPane = findScrollPane(popup);
+		if (scrollPane != null)
+		{
+			styleNarrowScrollBar(scrollPane);
+		}
+	}
+
+	private static JScrollPane findScrollPane(Component component)
+	{
+		if (component instanceof JScrollPane)
+		{
+			return (JScrollPane) component;
+		}
+		if (component instanceof Container)
+		{
+			for (Component child : ((Container) component).getComponents())
+			{
+				JScrollPane scrollPane = findScrollPane(child);
+				if (scrollPane != null)
+				{
+					return scrollPane;
+				}
+			}
+		}
+		return null;
+	}
+
+	static void styleNarrowScrollBar(JScrollPane scrollPane)
+	{
+		scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		scrollPane.getVerticalScrollBar().setUI(new NarrowScrollBarUI());
+		scrollPane.getVerticalScrollBar().setPreferredSize(new Dimension(NarrowScrollBarUI.WIDTH, 0));
+		scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+	}
+
+	private JPanel createContractCard()
+	{
+		FarmingContract contract = contractManager.getContract();
+		if (contract == null)
+		{
+			JPanel card = createCard(false, ColorScheme.MEDIUM_GRAY_COLOR);
+			addLine(card, "Farming Contract", new Color(255, 152, 31), true);
+			card.add(Box.createRigidArea(new Dimension(0, 3)));
+			addLine(card, "Contract unknown", Color.LIGHT_GRAY, true);
+			addLine(card, "Talk to Guildmaster Jane", Color.GRAY, false);
+			return finishCard(card);
+		}
+
+		Crop crop = contract.getCrop();
+		List<ProtectionPayment> payments = ProtectionPaymentCatalog.forCrop(crop);
+		PatchTimer timer = findContractTimer(crop);
+		boolean seedNeeded = contractSeedNeeded(timer);
+		JPanel card = createCard(false, ColorScheme.MEDIUM_GRAY_COLOR);
+		addLine(card, "Farming Contract", new Color(255, 152, 31), true);
+		card.add(Box.createRigidArea(new Dimension(0, 3)));
+		addLine(card, "Crop: " + contract.getName(), Color.WHITE, true);
+		addLine(card, "Patch: " + crop.getPatchType().getDisplayName() + " - Farming Guild",
+			Color.LIGHT_GRAY, false);
+		if (seedNeeded)
+		{
+			addLine(card, "Required: " + farmingLoadout.inventoryQuantity(crop.getItemId()) + "/"
+				+ crop.getQuantity() + " " + crop.getItemName(), config.seedColor(), false);
+		}
+		if (payments.isEmpty())
+		{
+			addLine(card, "Payment: None", Color.GRAY, false);
+		}
+		else
+		{
+			for (ProtectionPayment payment : payments)
+			{
+				addLine(card, "Payment: " + farmingLoadout.inventoryQuantity(payment.getItemId()) + "/"
+					+ payment.getQuantity() + " " + payment.getName(), config.requiredItemColor(), false);
+			}
+		}
+		if (timer == null)
+		{
+			addLine(card, "Status: Not tracked", Color.GRAY, false);
+		}
+		else
+		{
+			JLabel status = addLine(card, "", Color.WHITE, true);
+			Runnable updateStatus = () ->
+			{
+				Instant now = Instant.now();
+				boolean ready = !timer.isDead() && !timer.isDiseased() && !timer.isPicked()
+					&& !now.isBefore(timer.getReadyAt());
+				setLine(status, "Status: " + (timer.isDead() ? "DEAD" : timer.isDiseased() ? "DISEASED"
+					: timer.isPicked() ? "PICKED"
+					: ready ? "READY"
+					: PatchTimerOverlay.formatRemaining(Duration.between(now, timer.getReadyAt()))),
+					PatchTimerOverlay.stateColor(timer, now));
+			};
+			updateStatus.run();
+			liveUpdates.add(updateStatus);
+			String remedy = PatchRemedy.forTimer(timer);
+			if (remedy != null)
+			{
+				addLine(card, "Remedy: " + remedy, Color.LIGHT_GRAY, false);
+			}
+		}
+		return finishCard(card);
+	}
+
+	static boolean contractSeedNeeded(PatchTimer timer)
+	{
+		return timer == null || timer.isDead();
+	}
+
+	private PatchTimer findContractTimer(Crop crop)
+	{
+		for (PatchTimer timer : timerManager.getTimers())
+		{
+			if (timer.getPatchType() == crop.getPatchType() && timer.getCrop().equals(crop)
+				&& "Farming Guild".equals(PatchLocationCatalog.name(timer.getPatchLocation())))
+			{
+				return timer;
+			}
+		}
+		return null;
+	}
+
+	private static JPanel createRunHeader(FarmRunType runType)
+	{
+		JPanel header = new JPanel(new BorderLayout());
+		header.setAlignmentX(Component.LEFT_ALIGNMENT);
+		header.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+		header.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+		JLabel label = new JLabel("<html><body style='width:160px'>" + runType.getDisplayName() + "</body></html>");
+		label.setForeground(Color.WHITE);
+		label.setFont(label.getFont().deriveFont(Font.BOLD));
+		header.add(label, BorderLayout.WEST);
+		return finishCard(header);
+	}
+
+	private void addCompostSection()
+	{
+		JPanel header = new JPanel(new BorderLayout());
+		header.setAlignmentX(Component.LEFT_ALIGNMENT);
+		header.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+		header.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+		JLabel label = new JLabel("Compost Run");
+		label.setForeground(Color.WHITE);
+		label.setFont(label.getFont().deriveFont(Font.BOLD));
+		header.add(label, BorderLayout.WEST);
+		patches.add(finishCard(header));
+		patches.add(Box.createRigidArea(new Dimension(0, 5)));
+		int order = 1;
+		for (CompostBinLocation location : compostBinManager.enabledLocations())
+		{
+			patches.add(createCompostCard(order++, location, compostBinManager.getState(location)));
+			patches.add(Box.createRigidArea(new Dimension(0, 5)));
+		}
+		patches.add(Box.createRigidArea(new Dimension(0, 7)));
+	}
+
+	private JPanel createCompostCard(int order, CompostBinLocation location, CompostBinState state)
+	{
+		Instant now = Instant.now();
+		Color color = compostStateColor(state, now);
+		JPanel card = createCard(!Color.WHITE.equals(color) && !Color.LIGHT_GRAY.equals(color), color);
+		JLabel title = addLine(card, order + ". " + location.getDisplayName(), color, true);
+		card.add(Box.createRigidArea(new Dimension(0, 3)));
+		addLine(card, "Bin: " + location.getBinName(), Color.LIGHT_GRAY, false);
+		JLabel status = null;
+		if (state == null)
+		{
+			addLine(card, "Status: Not inspected", Color.GRAY, false);
+		}
+		else
+		{
+			String statusText = CompostBinManager.remaining(state, now);
+			if (statusText == null)
+			{
+				statusText = state.getPhase() == CompostBinPhase.FILLING
+					? "FILLING " + state.getAmount() + "/" + location.getCapacity()
+					: state.getPhase().toString();
+			}
+			status = addLine(card, "Status: " + statusText, color, true);
+			if (state.getProduct() != CompostProduct.EMPTY && state.getProduct() != CompostProduct.UNKNOWN)
+			{
+				addLine(card, "Contents: " + compostProductName(state.getProduct()), Color.LIGHT_GRAY, false);
+			}
+		}
+		addLine(card, compostBinManager.nextAction(location, state), Color.LIGHT_GRAY, false);
+		if (state != null)
+		{
+			JLabel liveStatus = status;
+			Runnable updateStatus = () ->
+			{
+				Instant current = Instant.now();
+				Color currentColor = compostStateColor(state, current);
+				String statusText = CompostBinManager.remaining(state, current);
+				if (statusText == null)
+				{
+					statusText = state.getPhase() == CompostBinPhase.FILLING
+						? "FILLING " + state.getAmount() + "/" + location.getCapacity()
+						: state.getPhase().toString();
+				}
+				setLine(title, order + ". " + location.getDisplayName(), currentColor);
+				setLine(liveStatus, "Status: " + statusText, currentColor);
+				setCardState(card, currentColor);
+			};
+			liveUpdates.add(updateStatus);
+		}
+		JPopupMenu menu = new JPopupMenu();
+		JMenuItem reset = new JMenuItem("Reset " + location.getDisplayName());
+		reset.addActionListener(event -> compostBinManager.reset(location));
+		menu.add(reset);
+		card.setComponentPopupMenu(menu);
+		for (Component component : card.getComponents())
+		{
+			if (component instanceof javax.swing.JComponent)
+			{
+				((javax.swing.JComponent) component).setComponentPopupMenu(menu);
+			}
+		}
+		return finishCard(card);
+	}
+
+	private static Color compostStateColor(CompostBinState state, Instant now)
+	{
+		if (state == null || state.getPhase() == CompostBinPhase.EMPTY)
+		{
+			return Color.LIGHT_GRAY;
+		}
+		if (state.isReady(now) || state.getPhase() == CompostBinPhase.READY
+			|| state.getPhase() == CompostBinPhase.COLLECTING)
+		{
+			return Color.GREEN;
+		}
+		return state.getPhase() == CompostBinPhase.FILLING ? Color.ORANGE : Color.WHITE;
+	}
+
+	private static String compostProductName(CompostProduct product)
+	{
+		switch (product)
+		{
+			case COMPOST: return "Compost";
+			case SUPERCOMPOST: return "Supercompost";
+			case ULTRACOMPOST: return "Ultracompost";
+			case ROTTEN_TOMATO: return "Rotten tomatoes";
+			default: return product.toString();
+		}
+	}
+
+	private void toggleChecklist()
+	{
+		configManager.setConfiguration("farming-helper", "showChecklistOverlay",
+			!config.showChecklistOverlay());
+		updateChecklistButton();
+	}
+
+	private void updateChecklistButton()
+	{
+		boolean selected = config.showChecklistOverlay();
+		checklistToggle.setSelected(selected);
+		checklistToggle.setText(selected ? "Checklist ON" : "Checklist OFF");
+		checklistToggle.setBackground(selected ? new Color(45, 110, 70) : ColorScheme.MEDIUM_GRAY_COLOR);
+		checklistToggle.setForeground(Color.WHITE);
+	}
+
+	private static void styleButton(AbstractButton button)
+	{
+		button.setFocusPainted(false);
+		button.setForeground(Color.WHITE);
+		button.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+		button.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createLineBorder(ColorScheme.BORDER_COLOR),
+			BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+	}
+
+	private static void styleCompactButton(AbstractButton button)
+	{
+		button.setFont(button.getFont().deriveFont(11f));
+		button.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createLineBorder(ColorScheme.BORDER_COLOR),
+			BorderFactory.createEmptyBorder(6, 4, 6, 4)));
+	}
+
+	private static List<PatchTimer> takeMatchingTimers(List<PatchTimer> timers, FarmRunPatch patch)
+	{
+		List<PatchTimer> matching = new ArrayList<>();
+		for (int i = timers.size() - 1; i >= 0; i--)
+		{
+			PatchTimer timer = timers.get(i);
+			if (timer.getPatchType() == patch.getPatchType()
+				&& PatchLocationCatalog.name(timer.getPatchLocation()).equals(patch.getLocation()))
+			{
+				matching.add(0, timers.remove(i));
+			}
+		}
+		return matching;
+	}
+
+	private JPanel createUntrackedCard(int order, FarmRunPatch patch)
+	{
+		RouteTeleport teleport = routes.teleport(runFilterState.getSelected(), patch);
+		JPanel card = createCard(false, ColorScheme.MEDIUM_GRAY_COLOR);
+		addLine(card, order + ". " + patch.getDisplayName(), Color.WHITE, true);
+		card.add(Box.createRigidArea(new Dimension(0, 3)));
+		addLine(card, patch.getPatchType().getDisplayName() + " - Not inspected", Color.GRAY, false);
+		addTeleportLines(card, teleport);
+		addResetMenu(card, patch);
+		return finishCard(card);
+	}
+
+	private JPanel createTrackedCard(int order, FarmRunPatch patch, List<PatchTimer> matchingTimers)
+	{
+		Instant now = Instant.now();
+		Color cardStateColor = combinedStateColor(matchingTimers, now);
+		boolean attention = !Color.WHITE.equals(cardStateColor);
+		RouteTeleport teleport = routes.teleport(runFilterState.getSelected(), patch);
+		JPanel card = createCard(attention, cardStateColor);
+		JLabel title = addLine(card, order + ". " + patch.getDisplayName(), cardStateColor, true);
+		card.add(Box.createRigidArea(new Dimension(0, 3)));
+		addLine(card, "Patch: " + patch.getPatchType().getDisplayName()
+			+ (patch.getPatchCount() > 1 ? " (" + matchingTimers.size() + "/" + patch.getPatchCount() + " tracked)" : ""),
+			Color.LIGHT_GRAY, false);
+		addTeleportLines(card, teleport);
+		int timerNumber = 1;
+		for (PatchTimer timer : matchingTimers)
+		{
+			String prefix = matchingTimers.size() > 1 ? timerNumber++ + ". " : "";
+			addLine(card, prefix + "Planted: " + timer.getCrop().getName(), Color.LIGHT_GRAY, false);
+			addLine(card, (timer.isPlantedTimer() ? "Started: " : "Inspected: ") + CLOCK.format(timer.getPlantedAt()), Color.LIGHT_GRAY, false);
+			JLabel stage = null;
+			if (!timer.isPlantedTimer() && !timer.isDead() && !timer.isDiseased() && !timer.isPicked())
+			{
+				stage = addLine(card, "Stage: " + timer.getEstimatedStage(now) + "/" + timer.getTotalStages() + " (maximum estimate)", Color.LIGHT_GRAY, false);
+			}
+			JLabel remainingLabel = addLine(card, "", Color.WHITE, true);
+			JLabel liveStage = stage;
+			Runnable updateTimer = () ->
+			{
+				Instant current = Instant.now();
+				if (liveStage != null)
+				{
+					setLine(liveStage, "Stage: " + timer.getEstimatedStage(current) + "/"
+						+ timer.getTotalStages() + " (maximum estimate)", Color.LIGHT_GRAY);
+				}
+				boolean timerReady = !timer.isDead() && !timer.isDiseased() && !timer.isPicked()
+					&& !current.isBefore(timer.getReadyAt());
+				String remaining = timer.isDead() ? "DEAD" : timer.isDiseased() ? "DISEASED"
+					: timer.isPicked() ? "PICKED"
+					: timerReady ? "READY"
+					: PatchTimerOverlay.formatRemaining(Duration.between(current, timer.getReadyAt()));
+				setLine(remainingLabel, "Time remaining: " + remaining,
+					PatchTimerOverlay.stateColor(timer, current));
+			};
+			updateTimer.run();
+			liveUpdates.add(updateTimer);
+			String remedy = PatchRemedy.forTimer(timer);
+			if (remedy != null)
+			{
+				addLine(card, "Remedy: " + remedy, Color.LIGHT_GRAY, false);
+			}
+		}
+		Runnable updateCard = () ->
+		{
+			Color currentColor = combinedStateColor(matchingTimers, Instant.now());
+			setLine(title, order + ". " + patch.getDisplayName(), currentColor);
+			setCardState(card, currentColor);
+		};
+		liveUpdates.add(updateCard);
+		addResetMenu(card, patch);
+		return finishCard(card);
+	}
+
+	private static void addTeleportLines(JPanel card, RouteTeleport teleport)
+	{
+		if (teleport != RouteTeleport.NONE)
+		{
+			addLine(card, "Teleport: " + teleport, Color.LIGHT_GRAY, false);
+		}
+	}
+
+	private static Color combinedStateColor(List<PatchTimer> timers, Instant now)
+	{
+		Color color = Color.WHITE;
+		for (PatchTimer timer : timers)
+		{
+			Color timerColor = PatchTimerOverlay.stateColor(timer, now);
+			if (Color.RED.equals(timerColor))
+			{
+				return Color.RED;
+			}
+			if (Color.ORANGE.equals(timerColor))
+			{
+				color = Color.ORANGE;
+			}
+			else if (Color.GREEN.equals(timerColor) && Color.WHITE.equals(color))
+			{
+				color = Color.GREEN;
+			}
+		}
+		return color;
+	}
+
+	private void addResetMenu(JPanel card, FarmRunPatch patch)
+	{
+		JPopupMenu menu = new JPopupMenu();
+		JMenuItem reset = new JMenuItem("Reset " + patch.getDisplayName());
+		reset.addActionListener(event -> timerManager.reset(patch.getLocation(), patch.getPatchType()));
+		menu.add(reset);
+		card.setComponentPopupMenu(menu);
+		for (Component component : card.getComponents())
+		{
+			if (component instanceof JLabel)
+			{
+				((JLabel) component).setComponentPopupMenu(menu);
+			}
+		}
+	}
+
+	private static JPanel createCard(boolean ready, Color readyColor)
+	{
+		JPanel card = new JPanel();
+		card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+		card.setAlignmentX(Component.LEFT_ALIGNMENT);
+		card.setMinimumSize(new Dimension(PANEL_WIDTH - 28, 0));
+		card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+		card.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		setCardState(card, ready ? readyColor : Color.WHITE);
+		return card;
+	}
+
+	private static void setCardState(JPanel card, Color stateColor)
+	{
+		boolean attention = !Color.WHITE.equals(stateColor) && !Color.LIGHT_GRAY.equals(stateColor);
+		card.setBorder(BorderFactory.createCompoundBorder(
+			BorderFactory.createLineBorder(attention ? stateColor : ColorScheme.BORDER_COLOR),
+			BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+	}
+
+	private static JPanel finishCard(JPanel card)
+	{
+		int height = card.getPreferredSize().height;
+		card.setPreferredSize(new Dimension(PANEL_WIDTH - 28, height));
+		card.setMinimumSize(new Dimension(PANEL_WIDTH - 28, height));
+		card.setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
+		return card;
+	}
+
+	private static JLabel addLine(JPanel card, String text, Color color, boolean bold)
+	{
+		JLabel label = new JLabel();
+		label.setAlignmentX(Component.LEFT_ALIGNMENT);
+		label.setHorizontalAlignment(JLabel.LEFT);
+		setLine(label, text, color);
+		if (bold)
+		{
+			label.setFont(label.getFont().deriveFont(Font.BOLD));
+		}
+		card.add(label);
+		return label;
+	}
+
+	private static void setLine(JLabel label, String text, Color color)
+	{
+		String escaped = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+		label.setText("<html><body style='width:170px'>" + escaped + "</body></html>");
+		label.setForeground(color);
+	}
+}

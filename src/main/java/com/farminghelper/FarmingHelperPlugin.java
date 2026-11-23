@@ -1,0 +1,498 @@
+package com.farminghelper;
+
+import com.google.inject.Provides;
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+import javax.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.api.GameObject;
+import net.runelite.api.GameState;
+import net.runelite.api.InventoryID;
+import net.runelite.api.ItemContainer;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.api.ObjectComposition;
+import net.runelite.api.ScriptID;
+import net.runelite.api.Skill;
+import net.runelite.api.events.GameObjectDespawned;
+import net.runelite.api.events.GameObjectSpawned;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.ScriptCallbackEvent;
+import net.runelite.api.events.ScriptPostFired;
+import net.runelite.api.events.WidgetClosed;
+import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.ProfileChanged;
+import net.runelite.client.events.RuneScapeProfileChanged;
+import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
+
+@Slf4j
+@PluginDescriptor(
+	name = "Farming Helper",
+	description = "Basically, Quest Helper, for farm runs.",
+	tags = {"farming", "seed", "patch", "bank", "highlight"}
+)
+public class FarmingHelperPlugin extends Plugin
+{
+	@Inject
+	private Client client;
+
+	@Inject
+	private ClientThread clientThread;
+
+	@Inject
+	private OverlayManager overlayManager;
+
+	@Inject
+	private FarmingPatchOverlay patchOverlay;
+    @Inject
+    private WidgetOverlay directorWidgetOverlay;
+
+	@Inject
+	private FarmingItemOverlay itemOverlay;
+
+
+
+
+
+
+	@Inject
+	private FarmingLoadout farmingLoadout;
+
+	@Inject
+	private BankChecklistFilter bankChecklistFilter;
+
+	@Inject
+	private PatchTimerManager timerManager;
+
+	@Inject
+	private CompostBinManager compostBinManager;
+
+	@Inject
+	private ClientToolbar clientToolbar;
+
+
+	@Inject
+	private FarmingHelperPanel directorPanel;
+
+	@Inject
+	private FarmingHelperConfig config;
+
+	@Inject
+	private FarmingContractManager contractManager;
+
+	private NavigationButton navigationButton;
+
+	private final Set<GameObject> patchObjects = new HashSet<>();
+    private final Set<GameObject> directorObjects = new HashSet<>();
+
+	@Override
+	protected void startUp()
+	{
+		contractManager.load();
+		timerManager.load();
+		compostBinManager.load();
+		overlayManager.add(patchOverlay);
+        overlayManager.add(directorWidgetOverlay);
+		overlayManager.add(itemOverlay);
+		directorPanel.requestRefresh();
+		navigationButton = NavigationButton.builder()
+			.tooltip("Farming Helper")
+			.icon(createNavigationIcon())
+			.priority(8)
+			.panel(directorPanel)
+			.build();
+		clientToolbar.addNavigation(navigationButton);
+		bankChecklistFilter.addButton();
+		log.debug("Farming Patch Advisor started");
+	}
+
+	@Override
+	protected void shutDown()
+	{
+		overlayManager.remove(patchOverlay);
+        overlayManager.remove(directorWidgetOverlay);
+		overlayManager.remove(itemOverlay);
+		if (navigationButton != null)
+		{
+			clientToolbar.removeNavigation(navigationButton);
+			navigationButton = null;
+		}
+		directorPanel.shutDown();
+		bankChecklistFilter.removeButton();
+		patchObjects.clear();
+        directorObjects.clear();
+		compostBinManager.unload();
+		log.debug("Farming Patch Advisor stopped");
+	}
+
+	@Subscribe
+	public void onGameObjectSpawned(GameObjectSpawned event)
+	{
+		GameObject object = event.getGameObject();
+		if (getRecognizedPatchType(object) != null)
+		{
+			patchObjects.add(object);
+		}
+        if (QuestTargets.knownObject(client, object)) directorObjects.add(object);
+		timerManager.onPatchObjectSpawned(object);
+		compostBinManager.onGameObjectSpawned(object);
+	}
+
+	@Subscribe
+	public void onGameObjectDespawned(GameObjectDespawned event)
+	{
+		patchObjects.remove(event.getGameObject());
+        directorObjects.remove(event.getGameObject());
+		compostBinManager.onGameObjectDespawned(event.getGameObject());
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		if (event.getGameState() == GameState.LOGGED_IN)
+		{
+			contractManager.load();
+			timerManager.load();
+			compostBinManager.load();
+		}
+		if (event.getGameState() == GameState.LOADING || event.getGameState() == GameState.LOGIN_SCREEN)
+		{
+			patchObjects.clear();
+        directorObjects.clear();
+			compostBinManager.clearObjects();
+			if (event.getGameState() == GameState.LOGIN_SCREEN)
+			{
+				directorPanel.resetCharacter();
+				farmingLoadout.clearStorageSnapshots();
+				timerManager.unload();
+				contractManager.unload();
+				compostBinManager.unload();
+			}
+		}
+	}
+
+	@Subscribe
+	public void onMenuOptionClicked(MenuOptionClicked event)
+	{
+		timerManager.onMenuOptionClicked(event);
+	}
+
+	@Subscribe
+	public void onChatMessage(ChatMessage event)
+	{
+		timerManager.onChatMessage(event);
+		contractManager.checkGameMessage(event.getMessage());
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		contractManager.checkJaneDialogue();
+		compostBinManager.observeCurrentLocation();
+		for (GameObject object : new HashSet<>(patchObjects))
+		{
+			timerManager.onPatchObjectSpawned(object);
+		}
+		// Evaluate Quest Helper farming states after Advisor updates its observations.
+		directorPanel.onClientTick();
+	}
+
+	@Subscribe
+	public void onProfileChanged(ProfileChanged event)
+	{
+		reloadCharacterData();
+	}
+
+	@Subscribe
+	public void onRuneScapeProfileChanged(RuneScapeProfileChanged event)
+	{
+		reloadCharacterData();
+	}
+
+	private void reloadCharacterData()
+	{
+		directorPanel.resetCharacter();
+		patchObjects.clear();
+        directorObjects.clear();
+		farmingLoadout.clearStorageSnapshots();
+		contractManager.load();
+		timerManager.load();
+		compostBinManager.load();
+	}
+
+	@Subscribe
+	public void onItemContainerChanged(ItemContainerChanged event)
+	{
+		farmingLoadout.onItemContainerChanged(event);
+		directorPanel.requestRefresh();
+	}
+
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if ("farming-helper".equals(event.getGroup()))
+		{
+		}
+	}
+
+	@Subscribe
+	public void onWidgetLoaded(WidgetLoaded event)
+	{
+		if (event.getGroupId() == InterfaceID.BANKMAIN)
+		{
+			farmingLoadout.markBankScanned();
+			clientThread.invokeLater(() ->
+			{
+				ItemContainer observed = client.getItemContainer(InventoryID.BANK);
+				if (observed != null) farmingLoadout.observeBank(observed.getItems());
+			});
+			bankChecklistFilter.addButton();
+		}
+		else if (event.getGroupId() == InterfaceID.SEED_VAULT)
+		{
+			farmingLoadout.markSeedVaultScanned();
+			clientThread.invokeLater(() ->
+			{
+				ItemContainer observed = client.getItemContainer(InventoryID.SEED_VAULT);
+				if (observed != null) farmingLoadout.observeVault(observed.getItems());
+			});
+		}
+	}
+
+	@Subscribe
+	public void onWidgetClosed(WidgetClosed event)
+	{
+		if (event.getGroupId() == InterfaceID.BANKMAIN)
+		{
+			farmingLoadout.markBankClosed();
+			bankChecklistFilter.onBankClosed();
+			directorPanel.onStorageClosed();
+		}
+		else if (event.getGroupId() == InterfaceID.SEED_VAULT)
+		{
+			farmingLoadout.markSeedVaultClosed();
+			directorPanel.onStorageClosed();
+		}
+	}
+
+	@Subscribe(priority = -200)
+	public void onScriptCallbackEvent(ScriptCallbackEvent event)
+	{
+		if ("bankSearchFilter".equals(event.getEventName()))
+		{
+			bankChecklistFilter.filterBankItem();
+		}
+	}
+
+	@Subscribe
+	public void onScriptPostFired(ScriptPostFired event)
+	{
+		if (event.getScriptId() == ScriptID.BANKMAIN_SIZE_CHECK
+			|| event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING
+			|| event.getScriptId() == ScriptID.BANKMAIN_POPUP_TAB_DRAW)
+		{
+			bankChecklistFilter.addButton();
+			bankChecklistFilter.repositionButton();
+		}
+	}
+
+    void refreshDirectorBankFilter()
+    {
+        clientThread.invokeLater(bankChecklistFilter::refreshDirectorFilter);
+    }
+
+    WorldGuide.Target activeDirectorWorldTarget()
+    {
+        return directorPanel.activeWorldTarget();
+    }
+
+    boolean directorRunDisplayed()
+    {
+        return directorPanel.directorRunDisplayed();
+    }
+
+    boolean directorPatchHasWeeds(FarmRunPatch patch)
+    {
+        return patchOverlay.directorPatchHasWeeds(patch);
+    }
+
+    WorldPoint directorPatchAnchor(FarmRunPatch patch)
+    {
+        return patchOverlay.directorPatchAnchor(patch);
+    }
+
+    PatchType directorPatchType(GameObject object)
+    {
+        // Explicit Director physical-patch choices supersede legacy area switches.
+        return getRecognizedPatchType(object);
+    }
+
+	Set<GameObject> getDirectorObjects()
+    {
+        return Collections.unmodifiableSet(directorObjects);
+    }
+
+    Set<GameObject> getPatchObjects()
+	{
+		return Collections.unmodifiableSet(patchObjects);
+	}
+
+	PatchType getPatchType(GameObject object)
+	{
+		PatchType patchType = getRecognizedPatchType(object);
+		String location = PatchLocationCatalog.name(object.getWorldLocation());
+		return patchType != null && PatchLocationSelection.isEnabled(config, location) ? patchType : null;
+	}
+
+	private PatchType getRecognizedPatchType(GameObject object)
+	{
+		if (!PatchClassifier.isFarmRunPatchObject(object.getId()))
+		{
+			return null;
+		}
+		ObjectComposition composition = client.getObjectDefinition(object.getId());
+		if (composition.getImpostorIds() != null)
+		{
+			composition = composition.getImpostor();
+		}
+		String name = composition == null ? "" : composition.getName();
+		// Decorative fields and crop scenery can share names with real Farming crops, but
+		// only an actual player-usable Farming patch exposes the Guide action.
+		if (!PatchClassifier.hasAction(composition, "Guide")
+			&& !PatchClassifier.isSpecialHerbPatchObject(object.getId()))
+		{
+			return null;
+		}
+		// Growing objects often use the crop name (for example "Strawberry plant") instead
+		// of the empty patch name. Classify that live name before consulting a nearby timer,
+		// otherwise an adjacent one-tile patch can inherit the allotment timer after planting.
+		PatchType patchType = PatchClassifier.classifyGrowing(object.getId(), name);
+		boolean farmingState = PatchClassifier.hasAction(composition, "Inspect");
+		if (patchType == null && farmingState)
+		{
+			// Only inherit a timer from the same patch footprint. The herb and flower
+			// patches at standard farming sites are close enough that a wider lookup
+			// can classify the flower patch as herb when its live object has a generic
+			// name such as "Farming patch".
+			PatchTimer timer = timerManager.findTimer(object.getWorldLocation(), 1);
+			patchType = timer == null ? null : timer.getPatchType();
+		}
+		String location = PatchLocationCatalog.name(object.getWorldLocation());
+		return patchType != null && FarmRunCatalog.hasPatch(location, patchType) ? patchType : null;
+	}
+
+	Crop getPatchCrop(GameObject object, PatchType patchType)
+	{
+		if (patchType == null)
+		{
+			return null;
+		}
+		ObjectComposition composition = client.getObjectDefinition(object.getId());
+		if (composition.getImpostorIds() != null)
+		{
+			composition = composition.getImpostor();
+		}
+		return composition == null ? null : CropCatalog.findInText(composition.getName(), patchType);
+	}
+
+	int getFarmingLevel()
+	{
+		return client.getGameState() == GameState.LOGGED_IN
+			? client.getRealSkillLevel(Skill.FARMING)
+			: 1;
+	}
+
+	WorldPoint getPatchAnchor(PatchType patchType, WorldPoint clicked)
+	{
+		GameObject seed = null;
+		int nearest = Integer.MAX_VALUE;
+		for (GameObject object : patchObjects)
+		{
+			if (getPatchType(object) != patchType || object.getPlane() != clicked.getPlane())
+			{
+				continue;
+			}
+			WorldPoint point = object.getWorldLocation();
+			int distance = Math.max(Math.abs(point.getX() - clicked.getX()), Math.abs(point.getY() - clicked.getY()));
+			if (distance < nearest)
+			{
+				nearest = distance;
+				seed = object;
+			}
+		}
+		if (seed == null || nearest > 4)
+		{
+			return clicked;
+		}
+
+		Set<GameObject> connected = new HashSet<>();
+		ArrayDeque<GameObject> queue = new ArrayDeque<>();
+		connected.add(seed);
+		queue.add(seed);
+		while (!queue.isEmpty())
+		{
+			GameObject current = queue.removeFirst();
+			WorldPoint currentPoint = current.getWorldLocation();
+			for (GameObject candidate : patchObjects)
+			{
+				if (connected.contains(candidate) || getPatchType(candidate) != patchType
+					|| candidate.getWorldView() != current.getWorldView() || candidate.getPlane() != current.getPlane())
+				{
+					continue;
+				}
+				WorldPoint candidatePoint = candidate.getWorldLocation();
+				if (Math.abs(currentPoint.getX() - candidatePoint.getX()) <= 1
+					&& Math.abs(currentPoint.getY() - candidatePoint.getY()) <= 1)
+				{
+					connected.add(candidate);
+					queue.addLast(candidate);
+				}
+			}
+		}
+
+		int x = connected.stream().mapToInt(object -> object.getWorldLocation().getX()).min().orElse(clicked.getX());
+		int y = connected.stream().mapToInt(object -> object.getWorldLocation().getY()).min().orElse(clicked.getY());
+		return new WorldPoint(x, y, clicked.getPlane());
+	}
+
+	@Provides
+	FarmingHelperConfig provideConfig(ConfigManager configManager)
+	{
+		return configManager.getConfig(FarmingHelperConfig.class);
+	}
+
+	private static BufferedImage createNavigationIcon()
+	{
+		BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D graphics = image.createGraphics();
+		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		graphics.setColor(new Color(74, 45, 24));
+		graphics.setStroke(new BasicStroke(2f));
+		graphics.drawLine(8, 14, 8, 7);
+		graphics.setColor(new Color(60, 190, 80));
+		graphics.fillOval(2, 2, 7, 7);
+		graphics.fillOval(7, 1, 7, 7);
+		graphics.dispose();
+		return image;
+	}
+}

@@ -73,7 +73,7 @@ jobs:
           fi
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,url
           echo "published=true" >> "$GITHUB_OUTPUT"
-      - name: Prune merged v0.9 development branch
+      - name: Prune merged development branches
         if: steps.publish.outputs.published == 'true'
         shell: bash
         run: |
@@ -84,4 +84,10 @@ jobs:
             git push --force-with-lease="refs/heads/$branch:$actual" origin ":refs/heads/$branch"
           else
             echo "Preserving branch: absent or tip differs from released commit"
+          fi
+          old=farming-helper-v0.8.1
+          expected=2e0e706d59dc0644dca23afd7fbecda234633604
+          actual=$(git ls-remote --heads origin "refs/heads/$old" | cut -f1)
+          if [ "$actual" = "$expected" ] && git merge-base --is-ancestor "$expected" "$GITHUB_SHA"; then
+            git push --force-with-lease="refs/heads/$old:$expected" origin ":refs/heads/$old"
           fi
