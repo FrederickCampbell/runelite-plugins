@@ -1033,9 +1033,6 @@ final class FarmingHelperPanel extends PluginPanel
             beginNextWave();
             return;
         }
-        if (preparingLoadout && suppliesMissing() && JOptionPane.showConfirmDialog(this,
-            "Some supplies are still missing. Continue anyway?", "Check supplies",
-            JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
         preparingLoadout = false;
         showPage("guide");
         render();
@@ -1069,7 +1066,7 @@ final class FarmingHelperPanel extends PluginPanel
     {
         boolean active = currentPlan != null && !currentPlan.steps.isEmpty() && !runFinished && !planningInFlight;
         requirementsToggle.setVisible(active);
-        beginWithMissing.setVisible(active && (preparingLoadout || awaitingBank) && !paused);
+        beginWithMissing.setVisible(false);
         beginWithMissing.setText(awaitingBank ? "Replan after banking" : "Begin with current supplies");
         guideRequirements.setVisible(active && (requirementsExpanded || preparingLoadout));
         if (!active)
@@ -1100,7 +1097,7 @@ final class FarmingHelperPanel extends PluginPanel
     {
         if (!preparingLoadout || paused || planningInFlight || awaitingBank || runFinished ||
             currentPlan == null || currentPlan.steps.isEmpty() || compostPageOpen ||
-            !Objects.equals(activeProfile, configManager.getRSProfileKey()) || suppliesMissing()) return;
+            !Objects.equals(activeProfile, configManager.getRSProfileKey())) return;
         preparingLoadout = false;
         if ("loadout".equals(visiblePage)) showPage("guide");
         render();
@@ -1115,7 +1112,7 @@ final class FarmingHelperPanel extends PluginPanel
         leaveLoadout.setEnabled(currentPlan != null && !planningInFlight);
         boolean missing = suppliesMissing();
         loadoutReady.setForeground(missing ? FarmingHelperTheme.GOLD : new Color(143, 187, 136));
-        loadoutReady.setText(wrapped(missing ? "Withdraw the missing items below." :
+        loadoutReady.setText(wrapped(missing ? "Missing items shown below; navigation remains active." :
             "Carried items ready. Check teleport charges manually.", 184));
         if (currentSession == null || currentPlan == null)
         {
@@ -1129,7 +1126,7 @@ final class FarmingHelperPanel extends PluginPanel
                 ? currentSession.waves.get(index) : currentPlan;
             Map<Integer, Integer> kit = index < currentSession.supplies.size()
                 ? currentSession.supplies.get(index) : Collections.emptyMap();
-            addFull(loadoutRows, label("WAVE " + (index + 1) + " · " + wave.steps.size() + " stops", true));
+            addFull(loadoutRows, label("RUN SUPPLIES · " + wave.steps.size() + " stops", true));
             liveLoadoutRows(loadoutRows, loadout.directorChecklistRows());
             liveLoadoutRows(loadoutRows, loadout.directorTravelRows());
             if (guideDetails.isSelected())
@@ -1842,7 +1839,7 @@ final class FarmingHelperPanel extends PluginPanel
                 currentPlan = result.firstWave();
                 currentStep = 0;
                 paused = wasPaused;
-                preparingLoadout = !currentPlan.steps.isEmpty();
+                preparingLoadout = false;
                 requirementsExpanded = true;
                 runFinished = currentPlan.steps.isEmpty();
                 completedSteps.clear();
@@ -1858,7 +1855,11 @@ final class FarmingHelperPanel extends PluginPanel
                 replan.setEnabled(true);
                 render();
                 showPage("guide");
-                startWhenSupplied();
+                if (!runFinished)
+                {
+                    requestRoute(currentPlan.steps.get(currentStep));
+                    clientThread.invoke(this::onClientTick);
+                }
             });
         });
     }
@@ -2062,11 +2063,10 @@ final class FarmingHelperPanel extends PluginPanel
             patchPriorities.put(type, priorityStore.get(type));
 
         Map<Integer, Integer> equippedItems = loadout.directorEquipment();
-        WavePlanner.Result wavePlan = WavePlanner.split(candidates, level,
-            stock, false, "", "", 0, 0,
-            harvestReserve, protection, id ->
+        RunPlanner.Plan itinerary = RunPlanner.guide(candidates, level,
+            stock, harvestReserve, protection, id ->
                 itemManager.getItemComposition(id).isStackable(), preplanted,
-                harvestOnly, cropOverrides, herbPriority, waveCap,
+                harvestOnly, cropOverrides, herbPriority,
             selectedPatches ->
             {
                 int travelSlots = TeleportPlan.inventorySlots(
@@ -2076,7 +2076,10 @@ final class FarmingHelperPanel extends PluginPanel
                     compostItem, carrySecateurs, payToRemove);
                 return travelSlots + Supplies.slots(selectedPatches, kit,
                     id -> itemManager.getItemComposition(id).isStackable(), payToRemove);
-            }, Collections.emptyMap(), patchPriorities);
+            }, patchPriorities);
+        WavePlanner.Result wavePlan = new WavePlanner.Result(
+            itinerary.steps.isEmpty() ? Collections.emptyList() : Collections.singletonList(itinerary),
+            Collections.emptyList(), itinerary.warnings);
 
         List<Map<RouteTeleport, Integer>> travelRequirements =
             TeleportPlan.perWave(wavePlan, teleportForPatch);
@@ -2390,8 +2393,12 @@ final class FarmingHelperPanel extends PluginPanel
             sawLiveEmpty = true;
         StepEngine.Action action = StepEngine.actionForStep(
             step, observation.state, observation.protectedByFarmer);
-        action = StepEngine.withCompost(action, step, plannedCompostItem() >= 0,
-            sawLiveEmpty || sawHarvestable && !initiallyGrowing, compostConfirmed);
+        // An empty-to-growing transition is evidence of planting; curing a crop is not.
+        // Compost is a recommendation, not a prerequisite for continuing.
+        if (RunReadiness.growing(observation) && sawHarvestable && !sawLiveEmpty)
+            action = StepEngine.Action.COMPLETE;
+        if (action == StepEngine.Action.PROTECT_TREE && !sawLiveEmpty)
+            action = StepEngine.Action.COMPLETE;
         QuestTargets.Definition def = QuestTargets.get(step.patch);
         action = StepEngine.refine(action, activePayRemoval, def != null && def.gardenerId >= 0, weeds);
         if (action == StepEngine.Action.CHOP_TREE && step.patch.getPatchType() == PatchType.CALQUAT)
@@ -2434,6 +2441,10 @@ final class FarmingHelperPanel extends PluginPanel
         if (changed)
         {
             render();
+        }
+        else if ("guide".equals(visiblePage))
+        {
+            refreshGuideRequirements();
         }
     }
 
@@ -2498,15 +2509,6 @@ final class FarmingHelperPanel extends PluginPanel
         currentStep = nextIndex;
         if (currentStep >= currentPlan.steps.size())
         {
-            if (currentSession != null && waveIndex + 1 < currentSession.waves.size())
-            {
-                awaitingBank = true;
-                suggestedBank = null;
-                clearRoute();
-                requestBankRoute();
-                render();
-                return;
-            }
             runFinished = true;
             if (currentSession == null || currentSession.unplanned == 0)
             {
@@ -2676,13 +2678,7 @@ final class FarmingHelperPanel extends PluginPanel
     {
         if (currentPlan == null || planningInFlight || runFinished || awaitingBank ||
             currentStep < 0 || currentStep >= currentPlan.steps.size()) return;
-        if (preparingLoadout)
-        {
-            skippedPatchKeys.add(FarmRouteManager.key(currentPlan.steps.get(currentStep).patch));
-            persistProgress();
-            beginRun(true);
-        }
-        else moveStep(1, false);
+        moveStep(1, false);
     }
 
     private void jumpTo(int targetIndex)
@@ -2856,7 +2852,7 @@ final class FarmingHelperPanel extends PluginPanel
             next = BankChecklist.remaining(wave, kit, travel, done);
         }
         boolean changed = loadout.publishDirectorChecklist(next);
-        boolean bankGuidance = OverlayPolicy.bank(next != null, preparingLoadout, awaitingBank,
+        boolean bankGuidance = OverlayPolicy.bank(next != null, true, false,
             paused, runFinished, planningInFlight, compostPageOpen);
         if (loadout.setDirectorBankGuidance(bankGuidance) || changed) plugin.refreshDirectorBankFilter();
     }
@@ -2868,7 +2864,7 @@ final class FarmingHelperPanel extends PluginPanel
         int steps = active ? currentPlan.steps.size() : 0;
         int waveCount = currentSession == null ? 0 : currentSession.waves.size();
         String wave = waveCount > 0 ? "Wave " + (waveIndex + 1) + " / " + waveCount : "No wave";
-        progress.setText(wrapped(!active ? "Configure a run and press Start"
+        progress.setText(wrapped(!active ? "Choose a run"
             : awaitingBank ? "Bank checkpoint · " + wave
             : runFinished ? (currentSession != null && currentSession.waitingForGrowth
                 ? "No patches ready"
@@ -2876,11 +2872,11 @@ final class FarmingHelperPanel extends PluginPanel
                 ? "Partial run · unplanned patches remain"
                 : "Run ended")
             : steps == 0 ? "No planting steps allocated"
-            : wave + " · patch " + (currentStep + 1) + " / " + steps
+            : "Patch " + (currentStep + 1) + " / " + steps
                 + (paused ? " (paused)" : ""), 184));
         inventory.setText(wrapped(!active ? "28 inventory slots available"
             : currentPlan.occupiedSlots + " planned + " + currentPlan.reservedSlots
-                + " reserved / 28 slots", 184));
+                + " reserved / 28 slots (estimate)", 184));
         storage.setText(!active ? "Bank & vault snapshots are checked at Start"
             : "Using observed stock; reopen storage if estimates are stale");
         String actionText;
