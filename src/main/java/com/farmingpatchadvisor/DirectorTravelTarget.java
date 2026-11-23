@@ -28,7 +28,10 @@ final class DirectorTravelTarget
         WorldPoint verified = DirectorWaypoints.exactPoint(patch);
         if (verified != null)
         {
-            return new DirectorTravelTarget(verified, true, "Quest Helper");
+            boolean patchExact = patch.getPatchType() == PatchType.HERB ||
+                DirectorStepEngine.isTreeType(patch.getPatchType());
+            return new DirectorTravelTarget(verified, patchExact,
+                patchExact ? "Quest Helper patch" : "Nearby herb-patch area");
         }
         for (PatchTimer timer : timers.getTimers())
         {
