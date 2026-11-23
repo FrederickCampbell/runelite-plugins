@@ -123,7 +123,7 @@ public class FarmingHelperPlugin extends Plugin
 			.build();
 		clientToolbar.addNavigation(navigationButton);
 		bankChecklistFilter.addButton();
-		log.debug("Farming Patch Advisor started");
+		log.debug("Farming Helper started");
 	}
 
 	@Override
@@ -142,7 +142,7 @@ public class FarmingHelperPlugin extends Plugin
 		patchObjects.clear();
         directorObjects.clear();
 		compostBinManager.unload();
-		log.debug("Farming Patch Advisor stopped");
+		log.debug("Farming Helper stopped");
 	}
 
 	@Subscribe

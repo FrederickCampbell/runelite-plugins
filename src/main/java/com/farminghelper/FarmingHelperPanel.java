@@ -314,33 +314,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private void addFull(JPanel parent, Component child)
     {
-        if (child instanceof javax.swing.JComponent)
-        {
-            javax.swing.JComponent component = (javax.swing.JComponent) child;
-            component.setAlignmentX(Component.LEFT_ALIGNMENT);
-            FarmingHelperTheme.style(child);
-            if (component instanceof JButton)
-            {
-                JButton button = (JButton) component;
-                button.setMargin(new java.awt.Insets(4, 6, 4, 6));
-                if (button.getText() != null && button.getText().length() > 24
-                    && !button.getText().startsWith("<html>"))
-                    button.setText(wrapped(button.getText(), 164));
-            }
-            else if (component instanceof JCheckBox)
-            {
-                JCheckBox check = (JCheckBox) component;
-                if (check.getText() != null && check.getText().length() > 23
-                    && !check.getText().startsWith("<html>"))
-                    check.setText(wrapped(check.getText(), 164));
-            }
-            component.setMaximumSize(new Dimension(Integer.MAX_VALUE,
-                child instanceof JButton ? Math.max(28, component.getPreferredSize().height)
-                    : child instanceof JTextField || child instanceof JComboBox ? 28
-                    : child instanceof javax.swing.JSeparator ? 2 : Integer.MAX_VALUE));
-        }
-        parent.add(child);
-        parent.add(Box.createVerticalStrut(3));
+        FarmingHelperComponents.addFull(parent, child);
     }
 
     private JButton nav(String caption, String page)
@@ -435,12 +409,12 @@ final class FarmingHelperPanel extends PluginPanel
             int iconId = runIcon(mode);
             if (iconId > 0) clientThread.invoke(() ->
             {
-                java.awt.image.BufferedImage image = itemManager.getImage(iconId);
-                if (image != null) SwingUtilities.invokeLater(() ->
+                net.runelite.client.util.AsyncBufferedImage image = itemManager.getImage(iconId);
+                if (image != null) image.onLoaded(() -> SwingUtilities.invokeLater(() ->
                 {
                     runIcons.put(mode, FarmingHelperComponents.sprite(image));
                     fold.setIcon(runIcons.get(mode));
-                });
+                }));
             });
         }
         addFull(list, new javax.swing.JSeparator());
@@ -1436,6 +1410,13 @@ final class FarmingHelperPanel extends PluginPanel
             SwingUtilities.invokeLater(() ->
             {
                 if (!Objects.equals(profile, configManager.getRSProfileKey())) return;
+                boolean changed = patchSettingsLevel != level || patchSettingsLoggedIn != (profile != null) || patchViews.size() != result.size();
+                if (!changed) for (int index = 0; index < result.size(); index++)
+                {
+                    PatchView a = patchViews.get(index), b = result.get(index);
+                    if (!FarmRouteManager.key(a.patch).equals(FarmRouteManager.key(b.patch)) || !a.unlock.equals(b.unlock) || !a.state.equals(b.state)) { changed = true; break; }
+                }
+                if (!changed) return;
                 patchSettingsLevel = level;
                 patchSettingsLoggedIn = profile != null;
                 patchViews.clear();
@@ -1520,8 +1501,8 @@ final class FarmingHelperPanel extends PluginPanel
             {
                 int item = CropCatalog.crops(type).get(0).getItemId();
                 clientThread.invoke(() -> {
-                    java.awt.image.BufferedImage image = itemManager.getImage(item);
-                    SwingUtilities.invokeLater(() -> { if (image != null) { javax.swing.Icon icon = FarmingHelperComponents.sprite(image); patchIcons.put(type, icon); fold.setIcon(icon); } });
+                    net.runelite.client.util.AsyncBufferedImage image = itemManager.getImage(item);
+                    if (image != null) image.onLoaded(() -> SwingUtilities.invokeLater(() -> { javax.swing.Icon icon = FarmingHelperComponents.sprite(image); patchIcons.put(type, icon); fold.setIcon(icon); }));
                 });
             }
             fold.setHorizontalAlignment(JButton.LEFT);
@@ -1638,124 +1619,17 @@ final class FarmingHelperPanel extends PluginPanel
 
     private JPanel patchPriorityEditor(PatchType type)
     {
-        JPanel editor = vertical();
-        editor.setBackground(FarmingHelperTheme.SURFACE);
-        editor.setBorder(BorderFactory.createEmptyBorder(4, 5, 4, 5));
-        List<Crop> catalog = PriorityEditorModel.catalog(t -> t == type);
-        if (catalog.isEmpty()) return editor;
-        PatchPriority pref = priorityStore.get(type);
-        List<Crop> ranked = PriorityEditorModel.selected(catalog, pref.csv);
-        boolean canEdit = configManager.getRSProfileKey() != null;
-        addFull(editor, label("Crop preference", true));
-        if (patchSettingsLoggedIn && PatchPriority.plantingLevel(type) > patchSettingsLevel)
-        {
-            JLabel locked = label("Planting unlocks at " + PatchPriority.plantingLevel(type) + " Farming.", false);
-            locked.setForeground(FarmingHelperTheme.GOLD);
-            addFull(editor, locked);
-        }
-        JComboBox<String> mode = new JComboBox<>(new String[]{"Automatic", "Custom priorities"});
-        mode.setSelectedIndex(pref.custom ? 1 : 0);
-        mode.setEnabled(canEdit);
-        mode.addActionListener(e ->
-        {
-            priorityStore.save(type, mode.getSelectedIndex() == 1, ranked, pref.reserves);
-            SwingUtilities.invokeLater(this::drawPatchRows);
-        });
-        addFull(editor, mode);
-        if (pref.custom)
-        {
-            for (int i = 0; i <= ranked.size() && i < catalog.size(); i++)
+        return PatchPriorityEditor.build(type, priorityStore, configManager.getRSProfileKey() != null,
+            patchSettingsLoggedIn, patchSettingsLevel, advancedPatchTypes, this::drawPatchRows, () ->
             {
-                final int index = i;
-                Crop current = i < ranked.size() ? ranked.get(i) : null;
-                List<Crop> options = new ArrayList<>();
-                options.add(null);
-                for (Crop crop : catalog) if (crop.equals(current) || !ranked.contains(crop)) options.add(crop);
-                JComboBox<Crop> choice = new JComboBox<>(options.toArray(new Crop[0]));
-                choice.setRenderer(new javax.swing.DefaultListCellRenderer()
-                {
-                    @Override public Component getListCellRendererComponent(javax.swing.JList<?> list,
-                        Object value, int row, boolean selected, boolean focus)
-                    {
-                        Crop crop = (Crop)value;
-                        return super.getListCellRendererComponent(list,
-                            crop == null ? "Choose crop…" : crop.getName() + " (" + crop.getLevel() + ")", row, selected, focus);
-                    }
-                });
-                choice.setSelectedItem(current);
-                choice.setEnabled(canEdit);
-                choice.addActionListener(e ->
-                {
-                    Crop selected = (Crop)choice.getSelectedItem();
-                    if (index < ranked.size())
-                    {
-                        if (selected == null) ranked.remove(index);
-                        else ranked.set(index, selected);
-                    }
-                    else if (selected != null) ranked.add(selected);
-                    priorityStore.save(type, true, ranked, pref.reserves);
-                    SwingUtilities.invokeLater(this::drawPatchRows);
-                });
-                JPanel row = new JPanel(new BorderLayout(3, 0));
-                row.setBackground(FarmingHelperTheme.SURFACE);
-                row.add(new JLabel("#" + (i + 1)), BorderLayout.WEST);
-                row.add(choice, BorderLayout.CENTER);
-                if (current != null && i > 0)
-                {
-                    JButton up = new JButton("↑");
-                    up.setToolTipText("Move preference up");
-                    up.setEnabled(canEdit);
-                    up.addActionListener(e ->
-                    {
-                        PriorityEditorModel.move(ranked, index, -1);
-                        priorityStore.save(type, true, ranked, pref.reserves);
-                        drawPatchRows();
-                    });
-                    row.add(up, BorderLayout.EAST);
-                }
-                addFull(editor, row);
-            }
-            addFull(editor, label("First eligible available crop wins.", false));
-        }
-        else addFull(editor, label("Highest eligible crop in stock.", false));
-        JPanel advanced = vertical();
-        advanced.setBackground(FarmingHelperTheme.SURFACE);
-        JButton reservesButton = new JButton("Keep seeds in reserve…");
-        reservesButton.setToolTipText("Keep a minimum stock for contracts or future runs");
-        reservesButton.setEnabled(canEdit);
-        reservesButton.addActionListener(e ->
-        {
-            PriorityDialog.Result result = PriorityDialog.show(this, t -> t == type,
-                pref.csv, pref.reserves, true);
-            if (result != null)
-            {
-                priorityStore.save(type, pref.custom,
-                    PriorityEditorModel.selected(catalog, result.priorities), result.reserves);
-                drawPatchRows();
-            }
-        });
-        addFull(advanced, reservesButton);
-        JButton route = new JButton("Route & teleports…");
-        route.addActionListener(e ->
-        {
-            runType.setSelectedItem(RunSelection.valueOf(individualMode(FarmRunType.forPatchType(type))));
-            showPage("route");
-        });
-        addFull(advanced, route);
-        JButton more = FarmingHelperComponents.row((advancedPatchTypes.contains(type) ? "▾ " : "▸ ") + "Advanced");
-        advanced.setVisible(advancedPatchTypes.contains(type));
-        more.addActionListener(e -> { if (!advancedPatchTypes.add(type)) advancedPatchTypes.remove(type); advanced.setVisible(advancedPatchTypes.contains(type)); more.setText((advanced.isVisible() ? "▾ " : "▸ ") + "Advanced"); editor.revalidate(); });
-        addFull(editor, more);
-        addFull(editor, advanced);
-        return editor;
+                runType.setSelectedItem(RunSelection.valueOf(individualMode(FarmRunType.forPatchType(type))));
+                showPage("route");
+            });
     }
 
     private static JLabel label(String text, boolean strong)
     {
-        JLabel l = new JLabel(wrapped(text, 184));
-        l.setForeground(strong ? FarmingHelperTheme.TEXT : FarmingHelperTheme.MUTED);
-        l.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return l;
+        return FarmingHelperComponents.label(text, strong);
     }
 
     private String profileValue(String key, String fallback)
@@ -2505,6 +2379,7 @@ final class FarmingHelperPanel extends PluginPanel
             observedInteractions.add(visibleAction);
         nearCurrentTarget = near;
         visibleObservation = observation;
+        if (visibleAction != action) diagnostics.record("Interaction: " + visibleAction.name() + " → " + action.name());
         visibleAction = action;
         if (observation.source == QuestFarmingStateReader.Source.LIVE &&
             (observation.state == CropState.HARVESTABLE ||
@@ -2729,6 +2604,7 @@ final class FarmingHelperPanel extends PluginPanel
                 return;
             }
             boolean routable = client.getLocalPlayer() != null && target.routable();
+            diagnostics.record("Navigation: " + (routable ? "verified target" : "unverified target"));
             SwingUtilities.invokeLater(() ->
             {
                 if (generation != routeGeneration) return;

@@ -34,6 +34,7 @@ Extract the Gradle project to the Farming-Helper directory in RuneLite Dev Manag
 - `FarmingHelperPlugin`: lifecycle, game events and stock observations.
 - `FarmingHelperPanel`: sidebar navigation and guide coordination.
 - `FarmingHelperTheme` and `FarmingHelperComponents`: local styling and reusable UI primitives.
+- `PatchPriorityEditor`: independent crop preference UI with explicit controller callbacks.
 - `PatchPriorityStore` and `PatchPreferences`: account-scoped preferences.
 - `RunPlanner`, `WavePlanner`, `StockLedger`, `Supplies`: allocation and inventory planning.
 - `StepEngine`, `WorldGuide`, `QuestTargets`, `WidgetOverlay`: interaction guidance.

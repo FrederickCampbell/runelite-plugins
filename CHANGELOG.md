@@ -6,6 +6,7 @@
 
 - Component-local FlatLaf styles where supported, compact fallback controls, consistent typography and dark narrow scrollbars.
 - Reusable headers, rows, search and normalized item sprites; simplified home, collapsed filters and advanced patch controls.
+- Extract crop priority editor and common layout helpers from the main sidebar; avoid periodic rebuild when observations are unchanged; normalize sprites only after the item image has loaded.
 - Single physical crop priority store; obsolete per-run UI removed. Crop priorities reset for this pre-Hub beta.
 - Remove legacy panel from plugin lifecycle, add opt-in bounded diagnostics and a headless Swing component preview.
 - Existing planning and guidance engines retained. Live client testing required.

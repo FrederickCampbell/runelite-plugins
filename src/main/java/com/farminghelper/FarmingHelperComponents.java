@@ -9,6 +9,53 @@ final class FarmingHelperComponents
 {
     private FarmingHelperComponents() {}
 
+    static void addFull(JPanel parent, Component child)
+    {
+        if (child instanceof javax.swing.JComponent)
+        {
+            javax.swing.JComponent component = (javax.swing.JComponent) child;
+            component.setAlignmentX(Component.LEFT_ALIGNMENT);
+            FarmingHelperTheme.style(child);
+            if (component instanceof JButton)
+            {
+                JButton button = (JButton) component;
+                button.setMargin(new java.awt.Insets(4, 6, 4, 6));
+                if (button.getText() != null && button.getText().length() > 24
+                    && !button.getText().startsWith("<html>"))
+                    button.setText(wrapped(button.getText(), 164));
+            }
+            else if (component instanceof JCheckBox)
+            {
+                JCheckBox check = (JCheckBox) component;
+                if (check.getText() != null && check.getText().length() > 23
+                    && !check.getText().startsWith("<html>"))
+                    check.setText(wrapped(check.getText(), 164));
+            }
+            component.setMaximumSize(new Dimension(Integer.MAX_VALUE,
+                child instanceof JButton ? Math.max(28, component.getPreferredSize().height)
+                    : child instanceof JTextField || child instanceof JComboBox ? 28
+                    : child instanceof javax.swing.JSeparator ? 2 : Integer.MAX_VALUE));
+        }
+        parent.add(child);
+        parent.add(Box.createVerticalStrut(3));
+    }
+
+    static JLabel label(String text, boolean strong)
+    {
+        JLabel l = new JLabel(wrapped(text, 184));
+        l.setFont(strong ? FarmingHelperTheme.HEADING : FarmingHelperTheme.BODY);
+        l.setForeground(strong ? FarmingHelperTheme.TEXT : FarmingHelperTheme.MUTED);
+        l.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return l;
+    }
+
+    private static String wrapped(String value, int width)
+    {
+        return "<html><body style='font-family: sans-serif; width:" + Math.min(width,170) + "px'>"
+            + value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;") + "</body></html>";
+    }
+
+
     static JPanel column(int inset)
     {
         JPanel panel = new JPanel();

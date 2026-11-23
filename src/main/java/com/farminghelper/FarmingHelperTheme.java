@@ -55,7 +55,7 @@ final class FarmingHelperTheme
             {
                 c.putClientProperty(STYLED, true);
                 Font old = c.getFont();
-                c.setFont(old != null && old.getSize() >= 15 && old.isBold() ? TITLE : BODY);
+                c.setFont(HEADING.equals(old) ? HEADING : old != null && old.getSize() >= 15 && old.isBold() ? TITLE : BODY);
                 if (c instanceof JCheckBox)
                 {
                     JCheckBox check = (JCheckBox)c;
