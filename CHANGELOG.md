@@ -1,5 +1,12 @@
 # Farming Helper development history
 
+## v0.11.0-beta.1 — Quest Helper-style execution
+
+- Guide starts immediately and routes without supply confirmation. Plan all eligible patches in one itinerary, even when stock is missing or estimated supplies exceed 28 slots. Banking is discretionary.
+- Retain stock-based priority allocation and explicit overrides; suggest eligible missing stock instead of dropping patches. Show live required and recommended counts and observed storage source hints.
+- Use Quest Helper's auto-weed and Barbarian planting varbits for tool recommendations. Fix cured crop transitions and remove mandatory compost progression; absent gardener payments do not block progression. Add regression coverage.
+- Build and live-client validation required before release.
+
 ## v0.10.0-beta.2 — Smart readiness and simplified controls
 
 - Automatically omit growing, disabled and known inaccessible or level-ineligible patches before allocating supplies; recheck current patch eligibility during execution. Unknown crop state is not treated as growing.
