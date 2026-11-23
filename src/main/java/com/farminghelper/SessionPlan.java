@@ -14,6 +14,7 @@ final class SessionPlan
     final List<String> warnings;
     final int unplanned;
     final int scheduled;
+    final boolean waitingForGrowth;
     final List<Map<RouteTeleport, Integer>> teleports;
     final List<Map<Integer, Integer>> supplies;
     final Map<String, RouteTeleport> teleportByPatch;
@@ -41,6 +42,15 @@ final class SessionPlan
                         List<String> warnings, List<Map<RouteTeleport, Integer>> travel,
                         List<Map<Integer, Integer>> supplies, Map<String, RouteTeleport> teleportByPatch)
     {
+        this(result, stock, warnings, travel, supplies, teleportByPatch, false);
+    }
+
+    SessionPlan(WavePlanner.Result result, StockLedger stock,
+                        List<String> warnings, List<Map<RouteTeleport, Integer>> travel,
+                        List<Map<Integer, Integer>> supplies, Map<String, RouteTeleport> teleportByPatch,
+                        boolean waitingForGrowth)
+    {
+        this.waitingForGrowth = waitingForGrowth;
         this.teleportByPatch = Collections.unmodifiableMap(new LinkedHashMap<>(teleportByPatch));
         List<Map<Integer, Integer>> frozenSupplies = new ArrayList<>();
         for (Map<Integer, Integer> req : supplies)
