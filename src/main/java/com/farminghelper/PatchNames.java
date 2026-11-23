@@ -18,10 +18,8 @@ final class PatchNames
         }
         if (grouped.getPatchCount() > 1)
         {
-            if (names.size() != grouped.getPatchCount())
-            {
-                return Collections.emptyList(); // Never invent missing varbit identities.
-            }
+            // The state registry is authoritative if its physical patch count changes.
+            // Keep every verified identity rather than dropping a whole farm.
             List<FarmRunPatch> split = new ArrayList<>();
             for (String name : names)
             {
