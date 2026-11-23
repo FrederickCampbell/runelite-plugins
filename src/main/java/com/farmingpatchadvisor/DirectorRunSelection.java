@@ -7,7 +7,7 @@ import java.util.Set;
 enum DirectorRunSelection
 {
     HERBS("Herbs", FarmRunFilter.HERB, PatchType.HERB),
-    ALLOTMENTS("Allotments", FarmRunFilter.ALLOTMENT_FLOWER, PatchType.ALLOTMENT),
+    ALLOTMENTS("Allotment & Flower Run", FarmRunFilter.ALLOTMENT_FLOWER, PatchType.ALLOTMENT, PatchType.FLOWER),
     FLOWERS("Flowers", FarmRunFilter.ALLOTMENT_FLOWER, PatchType.FLOWER),
     TREES("Trees", FarmRunFilter.TREE, PatchType.TREE),
     FRUIT_TREES("Fruit trees & calquats", FarmRunFilter.FRUIT_TREE_CALQUAT,

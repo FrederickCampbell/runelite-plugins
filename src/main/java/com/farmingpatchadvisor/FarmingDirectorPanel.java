@@ -85,7 +85,14 @@ final class FarmingDirectorPanel extends PluginPanel
     private final CompostBinManager compostBins;
 
     private final JComboBox<DirectorRunSelection> runType =
-        new JComboBox<>(DirectorRunSelection.values());
+        new JComboBox<>(new DirectorRunSelection[] {
+            DirectorRunSelection.HERBS, DirectorRunSelection.ALLOTMENTS,
+            DirectorRunSelection.TREES, DirectorRunSelection.FRUIT_TREES,
+            DirectorRunSelection.HARDWOODS, DirectorRunSelection.HOPS,
+            DirectorRunSelection.BUSHES, DirectorRunSelection.CACTUS,
+            DirectorRunSelection.SPECIAL, DirectorRunSelection.COMPOST,
+            DirectorRunSelection.MERGED, DirectorRunSelection.ALL
+        });
     private final JCheckBox customPriority = new JCheckBox("Use custom priority");
     private final JCheckBox protectTrees = new JCheckBox("Carry tree protection payments", true);
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
@@ -616,7 +623,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     ? "Unlock: unknown (log in)"
                     : issue != null ? "Locked: " + issue
                     : uncertainLocation(patch.getLocation())
-                        ? "Unlock: unverified" : "No known access restriction";
+                        ? "Unlock: unverified" : "Unlock: unverified (no known restriction)";
                 QuestFarmingStateReader.Observation observation = observePatchState(patch);
                 String state = !observation.known() ? "Ready: unverified"
                     : observation.state == CropState.GROWING ? "Growing"
@@ -768,12 +775,8 @@ final class FarmingDirectorPanel extends PluginPanel
             profileValue("directorCustom" + name, "false")));
         protectTrees.setSelected(Boolean.parseBoolean(
             profileValue("directorProtectTrees", "true")));
-        protectTrees.setVisible(selected == DirectorRunSelection.TREES ||
-            selected == DirectorRunSelection.FRUIT_TREES ||
-            selected == DirectorRunSelection.HARDWOODS ||
-            selected == DirectorRunSelection.TREE_COMBO ||
-            selected == DirectorRunSelection.SPECIAL ||
-            selected == DirectorRunSelection.ALL);
+        // This is a global setting, not a control tied to the visible run choice.
+        protectTrees.setVisible(true);
         autoNext.setSelected(Boolean.parseBoolean(profileValue("directorAutoNext", "true")));
         nearestRoute.setSelected(Boolean.parseBoolean(profileValue("directorNearest", "false")));
         herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
@@ -839,23 +842,31 @@ final class FarmingDirectorPanel extends PluginPanel
         beginRun(false);
     }
 
+    /** Viewing another run in the editor must never change the active checkpoint. */
+    static DirectorRunSelection replanSelection(DirectorRunSelection active,
+                                                DirectorRunSelection viewed)
+    {
+        return active == null ? viewed : active;
+    }
+
     /** Replan keeps completed patch IDs so we can safely refill at a bank. */
     private void beginRun(boolean preserveProgress)
     {
         if (!preserveProgress) savePreferences();
-        final DirectorRunSelection selected = preserveProgress && activeRunSelection != null
-            ? activeRunSelection : (DirectorRunSelection) runType.getSelectedItem();
+        final DirectorRunSelection selected = replanSelection(
+            preserveProgress ? activeRunSelection : null,
+            (DirectorRunSelection) runType.getSelectedItem());
         if (selected == null) return;
         if (selected == DirectorRunSelection.COMPOST)
         {
-            activeRunSelection = selected;
             showPage("compost");
             return;
         }
         final String name = selected.name();
-        final boolean custom = preserveProgress
-            ? Boolean.parseBoolean(profileValue("directorCustom" + name, "false"))
-            : customPriority.isSelected();
+        final boolean custom = selected != DirectorRunSelection.MERGED &&
+            (preserveProgress
+                ? Boolean.parseBoolean(profileValue("directorCustom" + name, "false"))
+                : customPriority.isSelected());
         final String priorityText = preserveProgress
             ? profileValue("directorPriority" + name, "") : priorities.getText();
         final String reserveText = preserveProgress
