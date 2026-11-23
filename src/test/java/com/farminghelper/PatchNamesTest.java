@@ -27,9 +27,12 @@ public class PatchNamesTest
     {
         FarmRunPatch ambiguous = new FarmRunPatch("Kourend", "Grapevines",
             PatchType.GRAPEVINE, 12);
-        assertEquals(2, PatchNames.expand(ambiguous,
-            Arrays.asList("East 1", "East 2")).size());
+        assertTrue(PatchNames.expand(ambiguous,
+            Arrays.asList("East 1", "East 2")).isEmpty());
         assertTrue(PatchNames.expand(ambiguous, Collections.emptyList()).isEmpty());
+        FarmRunPatch pair = new FarmRunPatch("Falador", "Allotments", PatchType.ALLOTMENT, 2);
+        assertTrue(PatchNames.expand(pair, Arrays.asList("North", "North")).isEmpty());
+        assertTrue(PatchNames.expand(pair, Arrays.asList("North", "")).isEmpty());
         assertEquals(1, PatchNames.expand(
             new FarmRunPatch("Ardougne", "", PatchType.HERB),
             Collections.emptyList()).size());
