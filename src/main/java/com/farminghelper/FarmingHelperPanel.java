@@ -57,8 +57,8 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 
 /**
- * Quest Helper-style step-by-step farming sidebar, backed by Advisor's data.
- * The existing Advisor controls remain in the secondary tab for power users.
+ * Quest Helper-style step-by-step farming sidebar with a live supply checklist.
+ * Existing farming data and storage observations remain shared with the planner.
  * All client state is read on the RuneLite client thread.
  */
 @Singleton
@@ -108,7 +108,6 @@ final class FarmingHelperPanel extends PluginPanel
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JCheckBox herbloreFocus = new JCheckBox("Prioritize Herblore supplies (preset)", false);
     private final JCheckBox autoReplanBank = new JCheckBox("Replan after banking", false);
-    private final JSpinner maxStopsPerWave = new JSpinner(new SpinnerNumberModel(28, 1, 28, 1));
     private final JComboBox<BankStops.Bank> bankChoice =
         new JComboBox<>(BankStops.Bank.values());
     private final JButton replan = new JButton("Replan remaining");
@@ -154,6 +153,11 @@ final class FarmingHelperPanel extends PluginPanel
     private List<CompostBinLocation> compostStops = Collections.emptyList();
     private final JPanel statusRows = new JPanel();
     private final JPanel loadoutRows = new JPanel();
+    private final JPanel guideRequirements = new JPanel();
+    private final JButton requirementsToggle = FarmingHelperComponents.row("▾ Supplies");
+    private final JButton beginWithMissing = new JButton("Begin with current supplies");
+    private String requirementsSignature = "";
+    private boolean requirementsExpanded = true;
     private final JButton openLoadout = new JButton("View loadout & withdrawals");
     private final JLabel activeDestination = new JLabel();
     private final JLabel routeStatus = new JLabel();
@@ -343,12 +347,6 @@ final class FarmingHelperPanel extends PluginPanel
         visiblePage = name;
         if ("patches".equals(name)) patchRefresh.start(); else patchRefresh.stop();
         pageLayout.show(pages, name);
-        if ("guide".equals(name) && preparingLoadout)
-        {
-            visiblePage = "loadout";
-            pageLayout.show(pages, "loadout");
-            name = "loadout";
-        }
         if ("patches".equals(name)) refreshPatchManager();
         if ("selection".equals(name)) updateRunCards();
         if ("compost".equals(name)) refreshCompostGuide();
@@ -357,6 +355,7 @@ final class FarmingHelperPanel extends PluginPanel
         publishWorldTarget();
         publishBankChecklist();
         if ("loadout".equals(name)) refreshLoadoutPage();
+        if ("guide".equals(name)) refreshGuideRequirements();
     }
 
     private JPanel createSelection()
@@ -518,6 +517,17 @@ final class FarmingHelperPanel extends PluginPanel
         stepList.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         JPanel content = vertical();
         openLoadout.addActionListener(e -> showPage("loadout"));
+        guideRequirements.setLayout(new BoxLayout(guideRequirements, BoxLayout.Y_AXIS));
+        guideRequirements.setBackground(FarmingHelperTheme.BASE);
+        requirementsToggle.addActionListener(e ->
+        {
+            requirementsExpanded = !requirementsExpanded;
+            refreshGuideRequirements();
+        });
+        addFull(content, requirementsToggle);
+        addFull(content, guideRequirements);
+        beginWithMissing.addActionListener(e -> continueFromLoadout());
+        addFull(content, beginWithMissing);
         addFull(content, openLoadout);
         JButton navigate = new JButton("Route to current patch");
         navigate.addActionListener(e ->
@@ -754,8 +764,6 @@ final class FarmingHelperPanel extends PluginPanel
         addFull(advanced, copyDiagnostics);
         for (JCheckBox toggle : new JCheckBox[]{nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified})
             addFull(advanced, toggle);
-        addFull(advanced, label("Stop limit (28 = inventory decides)", false));
-        addFull(advanced, maxStopsPerWave);
         addFull(advanced, label("Harvest reserve (-1 = automatic)", false));
         addFull(advanced, harvestSlots);
         addFull(advanced, label("Bank between loadouts", false));
@@ -767,7 +775,6 @@ final class FarmingHelperPanel extends PluginPanel
             toggle.addActionListener(e -> autoSavePreferences());
         compostChoice.addActionListener(e -> autoSavePreferences());
         bankChoice.addActionListener(e -> autoSavePreferences());
-        maxStopsPerWave.addChangeListener(e -> autoSavePreferences());
         harvestSlots.addChangeListener(e -> autoSavePreferences());
         addFull(settings, label("Saved automatically per character.", false));
         JPanel page = new JPanel(new BorderLayout());
@@ -1055,7 +1062,7 @@ final class FarmingHelperPanel extends PluginPanel
         }
     }
 
-    private void liveLoadoutRows(List<FarmingLoadout.ChecklistItem> rows)
+    private void liveLoadoutRows(JPanel target, List<FarmingLoadout.ChecklistItem> rows)
     {
         for (FarmingLoadout.ChecklistItem item : rows)
         {
@@ -1069,8 +1076,51 @@ final class FarmingHelperPanel extends PluginPanel
             name.setForeground(color); amount.setForeground(color);
             row.add(name, BorderLayout.CENTER);
             row.add(amount, BorderLayout.EAST);
-            addFull(loadoutRows, row);
+            addFull(target, row);
         }
+    }
+
+    /** Compact, live checklist shared with the detailed bank/loadout page. EDT only. */
+    private void refreshGuideRequirements()
+    {
+        boolean active = currentPlan != null && !currentPlan.steps.isEmpty() && !runFinished && !planningInFlight;
+        requirementsToggle.setVisible(active);
+        beginWithMissing.setVisible(active && preparingLoadout && !paused);
+        guideRequirements.setVisible(active && (requirementsExpanded || preparingLoadout));
+        if (!active)
+        {
+            requirementsSignature = "";
+            guideRequirements.removeAll();
+            return;
+        }
+        List<FarmingLoadout.ChecklistItem> rows = new ArrayList<>(loadout.directorChecklistRows());
+        rows.addAll(loadout.directorTravelRows());
+        long ready = rows.stream().filter(row -> row.getOwned() >= row.getNeeded()).count();
+        requirementsToggle.setText((guideRequirements.isVisible() ? "▾ " : "▸ ") +
+            "Supplies · " + ready + "/" + rows.size() + " ready");
+        StringBuilder signature = new StringBuilder();
+        for (FarmingLoadout.ChecklistItem row : rows)
+            signature.append(row.getName()).append('|').append(row.amount()).append('|').append(row.getNeeded()).append(';');
+        if (signature.toString().equals(requirementsSignature)) return;
+        requirementsSignature = signature.toString();
+        guideRequirements.removeAll();
+        liveLoadoutRows(guideRequirements, rows);
+        FarmingHelperTheme.style(guideRequirements);
+        guideRequirements.revalidate();
+        guideRequirements.repaint();
+    }
+
+    /** Enter the run as soon as the planned checklist is carried. No game actions are automated. */
+    private void startWhenSupplied()
+    {
+        if (!preparingLoadout || paused || planningInFlight || awaitingBank || runFinished ||
+            currentPlan == null || currentPlan.steps.isEmpty() || compostPageOpen ||
+            !Objects.equals(activeProfile, configManager.getRSProfileKey()) || suppliesMissing()) return;
+        preparingLoadout = false;
+        if ("loadout".equals(visiblePage)) showPage("guide");
+        render();
+        requestRoute(currentPlan.steps.get(currentStep));
+        clientThread.invoke(this::onClientTick);
     }
 
     private void refreshLoadoutPage()
@@ -1095,8 +1145,8 @@ final class FarmingHelperPanel extends PluginPanel
             Map<Integer, Integer> kit = index < currentSession.supplies.size()
                 ? currentSession.supplies.get(index) : Collections.emptyMap();
             addFull(loadoutRows, label("WAVE " + (index + 1) + " · " + wave.steps.size() + " stops", true));
-            liveLoadoutRows(loadout.directorChecklistRows());
-            liveLoadoutRows(loadout.directorTravelRows());
+            liveLoadoutRows(loadoutRows, loadout.directorChecklistRows());
+            liveLoadoutRows(loadoutRows, loadout.directorTravelRows());
             if (guideDetails.isSelected())
             {
             addFull(loadoutRows, label(wave.occupiedSlots + " planned slots + " + wave.reservedSlots
@@ -1662,16 +1712,6 @@ final class FarmingHelperPanel extends PluginPanel
         allowUnverified.setSelected(Boolean.parseBoolean(profileValue("directorAllowUnverified",
             Boolean.toString(config.directorIncludeUnverifiedLocations()))));
         worldHints.setSelected(config.directorWorldHints());
-        int cap = 28;
-        try
-        {
-            cap = Integer.parseInt(profileValue("directorWaveStopLimit", "28"));
-        }
-        catch (NumberFormatException ignored)
-        {
-            // Keep safe default for corrupted or old preferences.
-        }
-        maxStopsPerWave.setValue(Math.max(1, Math.min(28, cap)));
         try
         {
             bankChoice.setSelectedItem(BankStops.Bank.valueOf(
@@ -1712,8 +1752,6 @@ final class FarmingHelperPanel extends PluginPanel
             Boolean.toString(shortestPathEnabled.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorAllowUnverified",
             Boolean.toString(allowUnverified.isSelected()));
-        configManager.setRSProfileConfiguration(GROUP, "directorWaveStopLimit",
-            maxStopsPerWave.getValue().toString());
         BankStops.Bank bank = (BankStops.Bank) bankChoice.getSelectedItem();
         configManager.setRSProfileConfiguration(GROUP, "directorBankStop",
             bank == null ? "AUTO" : bank.name());
@@ -1763,7 +1801,7 @@ final class FarmingHelperPanel extends PluginPanel
         final int freeSlots = (Integer) harvestSlots.getValue();
         final boolean proximity = nearestRoute.isSelected();
         final boolean herbPriority = herbloreFocus.isSelected();
-        final int waveCap = (Integer) maxStopsPerWave.getValue();
+        final int waveCap = Integer.MAX_VALUE;
         final Set<String> skip = preserveProgress
             ? new HashSet<>(completedPatchKeys) : Collections.emptySet();
         final long generation = ++planningGeneration;
@@ -1822,7 +1860,8 @@ final class FarmingHelperPanel extends PluginPanel
                 currentPlan = result.firstWave();
                 currentStep = 0;
                 paused = wasPaused;
-                preparingLoadout = !currentPlan.steps.isEmpty() && !paused && !preserveProgress;
+                preparingLoadout = !currentPlan.steps.isEmpty() && !paused;
+                requirementsExpanded = true;
                 runFinished = false;
                 completedSteps.clear();
                 if (!preserveProgress) completedPatchKeys.clear();
@@ -1831,18 +1870,8 @@ final class FarmingHelperPanel extends PluginPanel
                 start.setEnabled(true);
                 replan.setEnabled(true);
                 render();
-                if (!currentPlan.steps.isEmpty() && !paused && (preparingLoadout || suppliesMissing()))
-                {
-                    preparingLoadout = true;
-                    showPage("loadout");
-                }
-                else if (!preserveProgress || "guide".equals(visiblePage) || "selection".equals(visiblePage)
-                    || "loadout".equals(visiblePage)) showPage("guide");
-                if (!currentPlan.steps.isEmpty() && !paused && !preparingLoadout)
-                {
-                    requestRoute(currentPlan.steps.get(0));
-                    clientThread.invoke(this::onClientTick);
-                }
+                showPage("guide");
+                startWhenSupplied();
             });
         });
     }
@@ -2771,7 +2800,12 @@ final class FarmingHelperPanel extends PluginPanel
             {
                 storage.setText("Storage updated. Start a run for a fresh plan.");
             }
-            else if ("loadout".equals(visiblePage)) refreshLoadoutPage();
+            else
+            {
+                if ("loadout".equals(visiblePage)) refreshLoadoutPage();
+                if ("guide".equals(visiblePage)) refreshGuideRequirements();
+                if ("guide".equals(visiblePage) || "loadout".equals(visiblePage)) startWhenSupplied();
+            }
         });
     }
 
@@ -2895,7 +2929,7 @@ final class FarmingHelperPanel extends PluginPanel
             }
         }
         publishWorldTarget();
-        if (active && !runFinished && !awaitingBank && currentStep < steps && !guideDetails.isSelected())
+        if (active && !runFinished && !awaitingBank && currentStep < steps && !preparingLoadout && !guideDetails.isSelected())
         {
             RunPlanner.Step step = currentPlan.steps.get(currentStep);
             actionText = !nearCurrentTarget
@@ -2906,6 +2940,7 @@ final class FarmingHelperPanel extends PluginPanel
         advancedGuideControls.setVisible(guideDetails.isSelected());
         progress.setVisible(guideDetails.isSelected() || awaitingBank || runFinished);
         inventory.setVisible(guideDetails.isSelected() || awaitingBank);
+        if (preparingLoadout) actionText = "Gather the missing supplies below. Guidance starts when the checklist is ready.";
         currentAction.setText(wrapped(actionText, 184));
         activeDestination.setVisible(active && !runFinished && !awaitingBank && currentStep < steps);
         activeDestination.setText(active && currentStep < steps
@@ -2935,8 +2970,8 @@ final class FarmingHelperPanel extends PluginPanel
         selectionStatus.setText(wrapped(active && !runFinished ?
             "Run in progress · " + completedPatchKeys.size() + " completed" :
             "Choose a run to plan your next harvest.", 184));
-        back.setEnabled(active && !runFinished && !paused && !planningInFlight && currentStep > 0);
-        next.setEnabled(active && !paused && !planningInFlight && !runFinished && (awaitingBank || currentStep < steps));
+        back.setEnabled(active && !runFinished && !paused && !preparingLoadout && !planningInFlight && currentStep > 0);
+        next.setEnabled(active && !paused && !preparingLoadout && !planningInFlight && !runFinished && (awaitingBank || currentStep < steps));
         next.setText(awaitingBank ? "Replan" : "Next step");
         next.setToolTipText(awaitingBank
             ? "Continue after banking. No items are withdrawn automatically." : null);
@@ -2953,7 +2988,7 @@ final class FarmingHelperPanel extends PluginPanel
         {
             for (int i = 0; i < steps; i++)
             {
-                if (!guideDetails.isSelected() && (i < currentStep || i > currentStep + 2 || awaitingBank || runFinished)) continue;
+                if (!guideDetails.isSelected() && (awaitingBank || runFinished)) continue;
                 RunPlanner.Step step = currentPlan.steps.get(i);
                 JPanel item = new JPanel();
                 item.setLayout(new BoxLayout(item, BoxLayout.Y_AXIS));
@@ -2989,7 +3024,7 @@ final class FarmingHelperPanel extends PluginPanel
                     stepHeader.add(edit, BorderLayout.EAST);
                 }
                 item.add(stepHeader);
-                item.add(Box.createVerticalStrut(4));
+                if (isCurrent || guideDetails.isSelected()) item.add(Box.createVerticalStrut(4));
                 String instruction = isCurrent
                     ? (step.crop == null ? step.patch.getPatchType().getDisplayName() :
                         step.crop.getName() + " · " + step.patch.getPatchType().getDisplayName())
@@ -2997,7 +3032,7 @@ final class FarmingHelperPanel extends PluginPanel
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
                     : step.harvestOnly ? "Harvest-only: refill before replanting"
                     : "Existing crop: check condition or gardener protection";
-                if (isCurrent && !guideDetails.isSelected())
+                if (isCurrent && !preparingLoadout && !guideDetails.isSelected())
                 {
                     for (StepEngine.Action previous : observedInteractions)
                     {
@@ -3012,7 +3047,7 @@ final class FarmingHelperPanel extends PluginPanel
                     actionLine.setForeground(FarmingHelperTheme.SUCCESS);
                     item.add(actionLine);
                 }
-                else item.add(warning(instruction));
+                else if (isCurrent || guideDetails.isSelected()) item.add(warning(instruction));
                 if (isCurrent && guideDetails.isSelected() && step.protectionPlanned)
                     item.add(warning("Gardener protection planned / verify payment"));
                 if (isCurrent && guideDetails.isSelected())
@@ -3096,6 +3131,7 @@ final class FarmingHelperPanel extends PluginPanel
         stepList.repaint();
         publishWorldTarget();
         publishBankChecklist();
+        refreshGuideRequirements();
         if ("loadout".equals(visiblePage)) refreshLoadoutPage();
     }
 
