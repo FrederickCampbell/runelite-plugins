@@ -48,6 +48,23 @@ final class Supplies
         return items;
     }
 
+    /** Match Quest Helper's unlock-dependent tools without changing the legacy planner API. */
+    static Map<Integer, Integer> guideKit(List<FarmRunPatch> patches, int compostItem,
+                                         boolean magicSecateurs, boolean payRemoval,
+                                         boolean autoWeed, boolean barbarianPlanting)
+    {
+        Map<Integer, Integer> items = required(patches, compostItem, magicSecateurs, payRemoval);
+        if (autoWeed) items.remove(ItemID.RAKE);
+        if (barbarianPlanting) items.remove(ItemID.DIBBER);
+        return items;
+    }
+
+    static boolean recommended(int id)
+    {
+        return id == ItemID.FAIRY_ENCHANTED_SECATEURS ||
+            id == ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED || CompostChoice.isOrdinary(id);
+    }
+
     static int slots(List<FarmRunPatch> patches, Map<Integer, Integer> items,
                      IntPredicate stackable)
     {
