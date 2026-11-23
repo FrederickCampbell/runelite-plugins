@@ -202,4 +202,43 @@ public class DirectorPlannerTest
             java.util.Collections.emptySet(), java.util.Collections.emptySet(), override);
         assertEquals(ranarr, plan.steps.get(0).crop);
     }
+
+    @Test
+    public void herblorePresetPrefersRanarrAndDoesNotRestrictTrees()
+    {
+        Crop ranarr = crop(PatchType.HERB, "ranarr");
+        Crop oak = crop(PatchType.TREE, "oak");
+        Crop snapdragon = crop(PatchType.HERB, "snapdragon");
+        java.util.Map<Integer,Integer> stock = new HashMap<>();
+        stock.put(ranarr.getItemId(), 1);
+        stock.put(snapdragon.getItemId(), 1);
+        stock.put(oak.getItemId(), 1);
+        java.util.List<FarmRunPatch> candidates = Arrays.asList(
+            new FarmRunPatch("Falador", "", PatchType.HERB),
+            new FarmRunPatch("Falador", "", PatchType.TREE));
+        DirectorPlanner.Plan plan = DirectorPlanner.build(null, candidates, 80,
+            stock, false, "", "", 2, 0, 2, false, id -> true,
+            java.util.Collections.emptySet(), java.util.Collections.emptySet(),
+            java.util.Collections.emptyMap(), true);
+        assertEquals(2, plan.steps.size());
+        assertEquals(ranarr, plan.steps.get(0).crop);
+        assertEquals(oak, plan.steps.get(1).crop);
+    }
+
+    @Test
+    public void perPatchOverrideTakesPrecedenceOverGeneralCustomPriority()
+    {
+        Crop ranarr = crop(PatchType.HERB, "ranarr");
+        Crop snapdragon = crop(PatchType.HERB, "snapdragon");
+        FarmRunPatch patch = new FarmRunPatch("Falador", "", PatchType.HERB);
+        java.util.Map<Integer,Integer> stock = new HashMap<>();
+        stock.put(ranarr.getItemId(), 1);
+        stock.put(snapdragon.getItemId(), 1);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(null,
+            java.util.Collections.singletonList(patch), 80, stock, true,
+            "Snapdragon", "", 2, 0, 2, false, id -> true,
+            java.util.Collections.emptySet(), java.util.Collections.emptySet(),
+            java.util.Collections.singletonMap(FarmRouteManager.key(patch), "Ranarr"), false);
+        assertEquals(ranarr, plan.steps.get(0).crop);
+    }
 }

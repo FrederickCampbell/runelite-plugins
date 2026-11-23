@@ -110,11 +110,28 @@ final class DirectorPlanner
                       IntPredicate stackable, Set<String> preplanted,
                       Set<String> harvestOnlyPatches, Map<String, String> cropOverrides)
     {
+        return build(type, patches, farmingLevel, stock, customPriority,
+            priorities, reserves, fixedToolSlots, teleportSlots,
+            freeHarvestSlots, protectTrees, stackable, preplanted,
+            harvestOnlyPatches, cropOverrides, false);
+    }
+
+    static Plan build(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted,
+                      Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
+                      boolean herbloreFocus)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
         Map<String, Integer> rank = priorityRanks(priorities);
+        Map<String, Integer> herbloreRank = priorityRanks(
+            "Ranarr, Snapdragon, Toadflax, Avantoe, Irit, Kwuarm, Cadantine, "
+                + "Lantadyme, Huasca, Torstol, Dwarf weed, Harralander, Guam");
         Map<String, Integer> reservesByName = parseReserves(reserves);
         int budget = Math.max(0, INVENTORY_CAPACITY - freeHarvestSlots);
 
@@ -136,17 +153,23 @@ final class DirectorPlanner
                 }
             }
             eligible.sort(Comparator.comparingInt(Crop::getLevel).reversed());
+            List<Crop> allowedForOverride = new ArrayList<>(eligible);
             if (customPriority)
             {
                 eligible.removeIf(c -> !rank.containsKey(normalize(c.getName())));
                 eligible.sort(Comparator.comparingInt(c -> rank.get(normalize(c.getName()))));
+            }
+            else if (herbloreFocus && patchType == PatchType.HERB)
+            {
+                eligible.sort(Comparator.comparingInt(c ->
+                    herbloreRank.getOrDefault(normalize(c.getName()), 100 + 99 - c.getLevel())));
             }
             int count = Math.max(1, patch.getPatchCount());
             String override = cropOverrides.get(FarmRouteManager.key(patch));
             if (override != null && !override.isEmpty())
             {
                 Crop desired = null;
-                for (Crop candidate : eligible)
+                for (Crop candidate : allowedForOverride)
                 {
                     if (normalize(candidate.getName()).equals(normalize(override)))
                     {
