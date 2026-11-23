@@ -261,12 +261,20 @@ final class FarmingLoadout
         directorChecklist.seeds.forEach((id, count) ->
         {
             Crop crop = CropCatalog.findByItemId(id);
-            rows.add(new ChecklistItem(crop == null ? Supplies.name(id) : crop.getItemName(),
-                inventoryCount(id), count, true));
+            ChecklistItem row = new ChecklistItem(crop == null ? Supplies.name(id) : crop.getItemName(),
+                inventoryCount(id), count, true);
+            row.sourceHint = "Observed bank: " + bankItems.getOrDefault(id, 0) +
+                " | Seed Vault: " + seedVaultItems.getOrDefault(id, 0);
+            rows.add(row);
         });
         directorChecklist.supplies.forEach((id, count) ->
-            rows.add(new ChecklistItem(Supplies.name(id),
-                inventoryCount(id) + equipmentItems.getOrDefault(id, 0), count, false)));
+        {
+            ChecklistItem row = new ChecklistItem(Supplies.name(id),
+                inventoryCount(id) + equipmentItems.getOrDefault(id, 0), count, false);
+            row.recommended = Supplies.recommended(id);
+            row.sourceHint = "Observed bank: " + bankItems.getOrDefault(id, 0);
+            rows.add(row);
+        });
         return rows;
     }
 
@@ -285,6 +293,7 @@ final class FarmingLoadout
             }
             ChecklistItem item = new ChecklistItem(teleport.toString(), owned, count, false);
             item.equipped = equipped;
+            item.recommended = true;
             rows.add(item);
         });
         return rows;
@@ -1043,6 +1052,8 @@ final class FarmingLoadout
 		private final int needed;
 		private final boolean seed;
 		private boolean equipped;
+        private boolean recommended;
+        private String sourceHint = "";
 
 		private ChecklistItem(String name, int owned, int needed, boolean seed)
 		{
@@ -1056,6 +1067,8 @@ final class FarmingLoadout
 		int getOwned() { return owned; }
 		int getNeeded() { return needed; }
 		boolean isSeed() { return seed; }
+        boolean isRecommended() { return recommended; }
+        String sourceHint() { return sourceHint; }
 		String amount() { return equipped && owned >= needed ? "Equipped" : owned + "/" + needed; }
 	}
 
