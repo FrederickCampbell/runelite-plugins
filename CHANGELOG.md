@@ -3,7 +3,7 @@
 ## v0.12.0-beta.1 — Patch coverage and lifecycle reliability
 
 - Published RuneLite farm-area markers extend navigation to all catalogued categories, distinct from exact Quest Helper object tiles.
-- State registry is authoritative for physical patch expansion; regression tests assert 99 distinct non-compost identities and routable areas.
+- State registry supplies canonical physical patch identities; reject incomplete or duplicate grouped identities. Regression tests assert 99 distinct non-compost identities and routable areas.
 - Normalize cactus health checks and depleted perennial crops; preserve established redwoods, spirit trees, bushes and cacti. Respect known spirit-tree planting limits.
 - Prioritize Quest Helper/Time Tracking observations; legacy exact timer fallback only. Remove obsolete compost confirmation checks from live execution.
 - v0.11 CI passed; v0.12 requires a fresh build and in-client validation, particularly specialty/underwater interaction and transport.
