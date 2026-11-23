@@ -1,5 +1,13 @@
 # Farming Helper development history
 
+## v0.10.0-beta.1 — Run execution and inventory-only planning
+
+- Remove the global stop limit from the active planner and settings; slot budgeting remains enforced.
+- Start directly in the active guide with a live, collapsible checklist; automatically enter guidance when ready, or explicitly continue with missing items.
+- Show completed and upcoming stops; update remaining travel item requirements after each completed patch.
+- Use Quest Helper verified navigation targets and explicit player pins, independent of legacy timer coordinates; retain timer/state and resource infrastructure.
+- Preserve current preferences; add regression cases for long stackable and nonstackable loadouts. Live RuneLite verification is still required.
+
 ## v0.9.0-beta.1 — UI and architecture refactor
 
 - Rename the Java source/test packages to `com.farminghelper`, plugin entry point to `FarmingHelperPlugin`, and config group to `farming-helper`. Pre-Hub configuration reset intentionally requires new settings; old group remains untouched.
