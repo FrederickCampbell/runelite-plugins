@@ -444,9 +444,11 @@ final class FarmingDirectorPanel extends PluginPanel
 
         // Advisor is an independent fallback when RuneLite Time Tracking has
         // not yet observed the patch. It NEVER turns missing data into empty.
-        if (!observation.known() && point != null)
+        if (point != null && observation.source != QuestFarmingStateReader.Source.LIVE)
         {
             PatchTimer timer = timerManager.findTimer(point, step.patch.getPatchType(), 9);
+            boolean advisorNewer = timer != null &&
+                timer.getPlantedAt().toEpochMilli() > observation.observedAtMillis + 1500L;
             if (timer != null)
             {
                 CropState state = null;
@@ -465,11 +467,12 @@ final class FarmingDirectorPanel extends PluginPanel
                             ? CropState.UNCHECKED : CropState.HARVESTABLE)
                         : CropState.GROWING;
                 }
-                if (state != null)
+                if (state != null && (!observation.known() || advisorNewer))
                 {
                     observation = new QuestFarmingStateReader.Observation(state,
                         QuestFarmingStateReader.Source.ADVISOR,
-                        timer.getPlantedAt().toEpochMilli(), null, "");
+                        timer.getPlantedAt().toEpochMilli(),
+                        observation.protectedByFarmer, "");
                 }
             }
         }
@@ -695,15 +698,39 @@ final class FarmingDirectorPanel extends PluginPanel
         int steps = active ? currentPlan.steps.size() : 0;
         progress.setText(!active ? "Configure a run and press Start"
             : steps == 0 ? "No planting steps available"
+            : runFinished ? "Run complete: " + steps + " stops visited / skipped"
             : "Step " + (currentStep + 1) + " / " + steps + (paused ? "  (paused)" : ""));
         inventory.setText(!active ? "28 inventory slots available"
             : currentPlan.occupiedSlots + " planned + " + currentPlan.reservedSlots
                 + " reserved / 28 slots");
         storage.setText(!active ? "Bank & vault snapshots are checked at Start"
             : "Using observed stock; reopen storage if estimates are stale");
+        String actionText;
+        if (!active || steps == 0)
+        {
+            actionText = "Start a run to see state-driven instructions.";
+        }
+        else if (runFinished)
+        {
+            actionText = "Run complete. Replan when you are ready for another run.";
+        }
+        else
+        {
+            DirectorPlanner.Step current = currentPlan.steps.get(currentStep);
+            actionText = DirectorStepEngine.instruction(visibleAction, current.crop,
+                current.patch.getPatchType());
+            if (visibleObservation != null)
+            {
+                String source = visibleObservation.source.name().replace('_', ' ');
+                actionText += " (" + source + (visibleObservation.state == null
+                    ? ": unknown)" : ": " + visibleObservation.state.name().toLowerCase() + ")");
+            }
+        }
+        currentAction.setText("<html><body style='width:245px'>"
+            + escape(actionText) + "</body></html>");
         back.setEnabled(active && currentStep > 0);
-        next.setEnabled(active && currentStep < steps - 1);
-        pause.setEnabled(active && steps > 0);
+        next.setEnabled(active && !runFinished && currentStep < steps);
+        pause.setEnabled(active && steps > 0 && !runFinished);
         end.setEnabled(active);
         pause.setText(paused ? "Resume" : "Pause");
 
@@ -720,16 +747,30 @@ final class FarmingDirectorPanel extends PluginPanel
                     BorderFactory.createMatteBorder(0, 0, 1, 0, ColorScheme.BORDER_COLOR),
                     BorderFactory.createEmptyBorder(8, 9, 8, 7)));
                 item.setAlignmentX(Component.LEFT_ALIGNMENT);
-                JLabel place = label((i == currentStep ? "▶ " : "○ ")
-                    + step.patch.getDisplayName(), true);
+                final int index = i;
+                JButton place = new JButton((i == currentStep ? "▶ "
+                    : completedSteps.contains(i) ? "✓ " : "○ ")
+                    + step.patch.getDisplayName());
                 place.setForeground(i == currentStep ? new Color(244, 197, 86) : Color.WHITE);
+                place.setBackground(item.getBackground());
+                place.setBorderPainted(false);
+                place.setContentAreaFilled(false);
+                place.setFocusPainted(false);
+                place.setHorizontalAlignment(JButton.LEFT);
+                place.setAlignmentX(Component.LEFT_ALIGNMENT);
+                place.setToolTipText("Select this destination and navigate there");
+                place.addActionListener(e -> jumpTo(index));
                 item.add(place);
                 item.add(Box.createVerticalStrut(4));
-                item.add(label("Harvest / clear if needed; plant " + step.crop.getName()
-                    + (step.patch.getPatchCount() > 1 ? " x" + step.patch.getPatchCount() : ""), false));
+                String instruction = i == currentStep && !runFinished
+                    ? DirectorStepEngine.instruction(visibleAction, step.crop,
+                        step.patch.getPatchType())
+                    : completedSteps.contains(i) ? "Completed / skipped"
+                    : "Harvest / clear / plant " + step.crop.getName();
+                item.add(warning(instruction));
                 WorldPoint point = DirectorWaypoints.point(step.patch.getPatchType(),
                     step.patch.getLocation());
-                if (i == currentStep && point != null)
+                if (i == currentStep && !runFinished && point != null)
                 {
                     item.add(label("Destination: " + point.getX() + ", " + point.getY()
                         + " · Shortest Path if installed", false));
@@ -758,9 +799,9 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         else
         {
-            stepList.add(warning("Follow the numbered steps once a plan is generated. "
-                + "The Advisor tab retains existing timers, checklists, "
-                + "protection payments and route editing."));
+            stepList.add(warning("Quest Helper's farming-state decoder chooses the next action: "
+                + "harvest, check health, clear, plant, or pay protection. "
+                + "Use the Advisor tab for timers, checklists and route editing."));
         }
         stepList.revalidate();
         stepList.repaint();

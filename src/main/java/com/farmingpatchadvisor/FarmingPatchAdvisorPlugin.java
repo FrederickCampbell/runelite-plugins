@@ -221,6 +221,8 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		{
 			timerManager.onPatchObjectSpawned(object);
 		}
+		// Evaluate Quest Helper farming states after Advisor updates its observations.
+		directorPanel.onClientTick();
 	}
 
 	@Subscribe
