@@ -1,16 +1,13 @@
 # RuneLite Plugin Development — Agent Guidelines
 
-## Ironman Farming Director development-branch overrides
+## Farming Helper development overrides
 
-The original version numbers and local test paths below document Farming Patch
-Advisor's upstream development history. For this repository's **Ironman Farming
-Director** continue the current v0.5.0-beta.1 release lineage on its own
-ironman-farming-director-v0.x branches (and ultimately v1.0), preserving past
-release branches and never pushing to master without an explicit request.
-The developer uses RuneLite Dev Manager's Refresh → Build → Launch workflow.
-Keep the plugin standalone, preserve vendored Quest Helper and Advisor notices,
-test profile-scoped patch exclusions and merged runs, and never represent
-GitHub Actions build success as in-client validation.
+The former Ironman Farming Director project is now Farming Helper. The default
+branch is the consolidated v0.7.0-beta.1 development baseline. Preserve all
+history through normal commits, publish validated release tags, and use short-lived
+branches for future work. Do not change the internal config group or package
+without an explicit migration. Keep the plugin standalone, preserve upstream
+licenses, and never represent CI as live client validation.
 
 
 ## Versioning

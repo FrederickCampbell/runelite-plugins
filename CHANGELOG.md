@@ -1,6 +1,8 @@
-# Ironman Farming Director development history
+# Farming Helper development history
 
 ## v0.7.0-beta.1 — Quest Helper interaction parity pass
+
+- Public name changed to Farming Helper; consolidated release on the default branch. All former development commits are retained. Internal configuration and account-specific preferences are unchanged.
 
 - Imported the original 32 TreeRun/HerbRun patch object IDs and 22 gardener IDs from Quest Helper, preserving its attribution and using the existing DirectorWaypoints coordinates. Event-tracked exact matching precedes the conservative Advisor fallback.
 - Separate tree removal (pay or chop), stump clearing, raking, planting, compost and protection actions. Budget 200 coins per potentially paid removal; manual chopping still needs an axe.

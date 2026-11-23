@@ -1,7 +1,9 @@
-# Ironman Farming Director — v0.7.0-beta.1
+# Farming Helper — v0.7.0-beta.1
 
-A standalone, integration-first RuneLite farming assistant for ironmen. **This is
-a developer beta, not an in-game verified production release.** The v0.6.1 branch
+**Basically, Quest Helper, for farm runs.**
+
+A standalone RuneLite farming assistant, designed for ironmen and useful for any account. **This is
+a developer beta, not an in-game verified production release.** The consolidated default branch
 preserves Advisor's crop, patch, compost, stock and banking infrastructure and
 the vendored Quest Helper farming-state reader, with the unified RuneLite-native multi-page sidebar introduced in v0.4.
 
@@ -29,13 +31,13 @@ the vendored Quest Helper farming-state reader, with the unified RuneLite-native
 
 ## Installation — RuneLite Dev Manager
 
-Download the v0.6.1 branch ZIP:
+[Download the v0.7 beta from GitHub Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.7.0-beta.1) — choose **Source code (zip)**.
 
-https://github.com/FrederickCampbell/runelite-plugins/archive/refs/heads/ironman-farming-director-v0.7.zip
+The release is not a Plugin Hub listing; it is intended for the local development manager.
 
 Extract its Gradle project into:
 
-    C:\_Hub\Projects\Gaming\OSRS\RuneLite\Plugins\Ironman-Farming-Director\
+    C:\_Hub\Projects\Gaming\OSRS\RuneLite\Plugins\Farming-Helper\
 
 Use **Refresh → Build → Launch** in RuneLite Dev Manager. A normal local build
 from the project root uses `gradlew.bat clean test build`. CI uses Java 21 to
@@ -214,7 +216,7 @@ Quest Helper cannot resolve a grouped stop, the manager leaves it grouped and
 the planner conservatively refuses to invent subpatch identities. Global
 exclusions take precedence over run membership and manual route selections.
 
-## v0.6 regression and playtest checklist
+## Regression and playtest checklist
 
 GitHub Actions runs `bash gradlew clean test build --stacktrace`. The tests
 cover patch identity splitting, global exclusion semantics, merged categories,
@@ -327,7 +329,7 @@ optimisation.
   that the external Shortest Path plugin will produce a route.
 - No in-game action automation, macros, mouse control or botting is included.
 
-CI checks `clean test build` on this branch. A green build proves source
+CI checks `clean test build` on the default branch before release publication. A green build proves source
 compatibility with the CI RuneLite dependency, **not** flawless in-game play.
 
 ## Source and licenses

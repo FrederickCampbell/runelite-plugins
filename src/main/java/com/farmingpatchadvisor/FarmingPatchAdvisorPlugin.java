@@ -47,8 +47,8 @@ import net.runelite.client.ui.NavigationButton;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Ironman Farming Director",
-	description = "Quest Helper-style guided farming runs backed by Farming Patch Advisor",
+	name = "Farming Helper",
+	description = "Basically, Quest Helper, for farm runs.",
 	tags = {"farming", "seed", "patch", "bank", "highlight"}
 )
 public class FarmingPatchAdvisorPlugin extends Plugin
@@ -134,7 +134,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		patchPanel.start();
 		directorPanel.requestRefresh();
 		navigationButton = NavigationButton.builder()
-			.tooltip("Ironman Farming Director")
+			.tooltip("Farming Helper")
 			.icon(createNavigationIcon())
 			.priority(8)
 			.panel(directorPanel)

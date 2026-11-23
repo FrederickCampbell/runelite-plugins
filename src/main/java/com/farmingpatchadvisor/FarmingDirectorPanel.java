@@ -377,7 +377,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JLabel title = label("Farming Director", true);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
         addFull(list, title);
-        addFull(list, label("IRONMAN  ·  v0.7 beta", false));
+        addFull(list, label("FARMING HELPER  ·  v0.7 beta", false));
         addFull(list, selectionStatus);
         addFull(list, label("START A RUN", true));
         addFull(list, runType);
@@ -2127,7 +2127,7 @@ final class FarmingDirectorPanel extends PluginPanel
         String[] options = eligible.stream().map(Crop::getName).toArray(String[]::new);
         Object chosen = JOptionPane.showInputDialog(this,
             "Preferred crop at " + patch.getDisplayName() + ":",
-            "Ironman Farming Director — crop override",
+            "Farming Helper — crop override",
             JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
         if (chosen != null)
         {
