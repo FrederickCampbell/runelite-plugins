@@ -549,23 +549,20 @@ final class FarmingDirectorPanel extends PluginPanel
         long bankAt = loadout.directorBankSnapshotAt();
         long vaultAt = loadout.directorVaultSnapshotAt();
         long now = System.currentTimeMillis();
-        Map<Integer, Integer> stock = new HashMap<>(loadout.directorInventory());
-        if (fresh(bankAt, now))
+        boolean bankFresh = fresh(bankAt, now);
+        boolean vaultFresh = fresh(vaultAt, now);
+        DirectorStockLedger stockLedger = new DirectorStockLedger(
+            loadout.directorInventory(), loadout.directorBank(),
+            loadout.directorVault(), bankFresh, vaultFresh);
+        Map<Integer, Integer> stock = stockLedger.available();
+        if (!bankFresh)
         {
-            loadout.directorBank().forEach((id, n) -> stock.merge(id, n, Integer::sum));
-        }
-        else
-        {
-            warnings.add(bankAt == 0 ? "Open your bank to scan seeds."
+            warnings.add(bankAt == 0 ? "Open your bank to scan planting stock."
                 : "Bank snapshot is over 6 hours old: reopen bank to refresh.");
         }
-        if (fresh(vaultAt, now))
+        if (!vaultFresh)
         {
-            loadout.directorVault().forEach((id, n) -> stock.merge(id, n, Integer::sum));
-        }
-        else
-        {
-            warnings.add(vaultAt == 0 ? "Open the Farming Guild Seed Vault to scan its seeds."
+            warnings.add(vaultAt == 0 ? "Open the Farming Guild Seed Vault to scan seeds."
                 : "Seed Vault snapshot is over 6 hours old: reopen it to refresh.");
         }
 
@@ -655,18 +652,21 @@ final class FarmingDirectorPanel extends PluginPanel
             selection == DirectorRunSelection.ALLOTMENTS ? Math.max(14, config.directorHarvestSlots())
                 : config.directorHarvestSlots();
 
-        DirectorPlanner.Plan plan = DirectorPlanner.build(null, candidates, level, stock,
-            custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
+        DirectorWavePlanner.Result wavePlan = DirectorWavePlanner.split(candidates, level,
+            stock, custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
             harvestReserve, protection, id ->
                 itemManager.getItemComposition(id).isStackable(), preplanted,
-                harvestOnly, cropOverrides, herbPriority);
+                harvestOnly, cropOverrides, herbPriority, waveCap);
 
-        for (Map.Entry<Integer, Integer> item : plan.payments.entrySet())
+        // A manifest is calculated per loadout, not across the full itinerary.
+        // Protection and teleport requirements may change as the run progresses.
+        for (DirectorPlanner.Plan wave : wavePlan.waves)
         {
-            if (stock.getOrDefault(item.getKey(), 0) < item.getValue())
+            DirectorStockLedger.Manifest manifest = stockLedger.manifest(wave);
+            if (!manifest.missing.isEmpty())
             {
-                warnings.add("Gardener payment missing: item " + item.getKey() +
-                    ", need " + item.getValue() + ".");
+                warnings.add("Some wave items are not in currently scanned stock: "
+                    + manifest.missing + ". Refresh bank/vault and replan.");
             }
         }
         for (RouteTeleport teleport : distinctTeleports)
@@ -682,9 +682,8 @@ final class FarmingDirectorPanel extends PluginPanel
                 warnings.add("Configured teleport not in scanned supplies: " + teleport + ".");
             }
         }
-        warnings.addAll(plan.warnings);
-        return new DirectorPlanner.Plan(plan.steps, plan.seeds, plan.payments, warnings,
-            plan.occupiedSlots, plan.reservedSlots);
+        warnings.addAll(wavePlan.warnings);
+        return new DirectorSessionPlan(wavePlan, stockLedger, warnings);
     }
 
     private void persistProgress()
