@@ -2327,6 +2327,20 @@ final class FarmingHelperPanel extends PluginPanel
             return;
         }
         RunPlanner.Step step = plan.steps.get(index);
+        int level = plugin.getFarmingLevel();
+        if (!patchPrefs.enabled(step.patch) || !RunReadiness.levelEligible(step.patch.getPatchType(), level) ||
+            Waypoints.accessIssue(client, step.patch.getPatchType(), step.patch.getLocation(), level, true) != null)
+        {
+            final long activation = activatedAtMillis;
+            SwingUtilities.invokeLater(() ->
+            {
+                if (plan == currentPlan && index == currentStep && activation == activatedAtMillis &&
+                    !planningInFlight && !preparingLoadout && !paused && !runFinished && !awaitingBank &&
+                    !compostPageOpen && Objects.equals(activeProfile, configManager.getRSProfileKey()))
+                    moveStep(1, false);
+            });
+            return;
+        }
         QuestFarmingStateReader.Observation observation = observePatchState(step.patch);
         final QuestFarmingStateReader.Observation latest = observation;
         boolean treated = false;
@@ -2367,7 +2381,7 @@ final class FarmingHelperPanel extends PluginPanel
         }
 
         RunPlanner.Step step = plan.steps.get(index);
-        if (RunReadiness.growing(observation) && initiallyGrowing && !sawLiveEmpty && !sawHarvestable)
+        if (RunReadiness.growing(observation) && !sawLiveEmpty && !sawHarvestable)
         {
             moveStep(1, false);
             return;
@@ -2915,7 +2929,7 @@ final class FarmingHelperPanel extends PluginPanel
         {
             RunPlanner.Step step = currentPlan.steps.get(currentStep);
             actionText = !nearCurrentTarget
-                ? (worldTarget == null ? "Travel to " + step.patch.getLocation() : WorldGuide.travelInstruction(worldTarget)) + (navigationEnabled ? " · follow Shortest Path." : ".")
+                ? (worldTarget == null ? "Travel to " + step.patch.getLocation() : WorldGuide.travelInstruction(worldTarget)) + "."
                 : WorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(),
                     plannedCompostItem() >= 0);
         }
@@ -2937,7 +2951,7 @@ final class FarmingHelperPanel extends PluginPanel
         int complete = completedSteps.size();
         progressBar.setMaximum(Math.max(1, steps));
         progressBar.setValue(complete);
-        progressBar.setString(complete + " / " + steps + " stops");
+        progressBar.setString(complete + " / " + steps + " visited or skipped");
         int warningCount = currentSession == null ? 0 : currentSession.warnings.size();
         guideWarning.setVisible((guideDetails.isSelected() && warningCount > 0) || planningInFlight);
         guideWarning.setText(wrapped(planningInFlight ? "Planning…" :
@@ -2975,14 +2989,14 @@ final class FarmingHelperPanel extends PluginPanel
                 item.setBackground(isCurrent ? FarmingHelperTheme.SELECTED : FarmingHelperTheme.SURFACE);
                 item.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(0, 3, 1, 0, isCurrent
-                        ? FarmingHelperTheme.GOLD : isDone ? new Color(120, 173, 113) : ColorScheme.BORDER_COLOR),
+                        ? FarmingHelperTheme.GOLD : isDone && !isSkipped ? new Color(120, 173, 113) : ColorScheme.BORDER_COLOR),
                     BorderFactory.createEmptyBorder(8, 9, 8, 7)));
                 item.setAlignmentX(Component.LEFT_ALIGNMENT);
                 final int index = i;
                 JButton place = new JButton(wrapped((isCurrent ? "▶ "
                     : isSkipped ? "– " : isDone ? "✓ " : "○ ") + step.patch.getDisplayName(), 128));
                 place.setForeground(isCurrent ? FarmingHelperTheme.GOLD :
-                    isDone ? new Color(143, 187, 136) : Color.WHITE);
+                    isSkipped ? FarmingHelperTheme.MUTED : isDone ? new Color(143, 187, 136) : Color.WHITE);
                 place.setBackground(item.getBackground());
                 place.setBorderPainted(false);
                 place.setContentAreaFilled(false);
@@ -3027,7 +3041,7 @@ final class FarmingHelperPanel extends PluginPanel
                     actionLine.setForeground(FarmingHelperTheme.SUCCESS);
                     item.add(actionLine);
                 }
-                else if (isCurrent || guideDetails.isSelected()) item.add(warning(instruction));
+                else if (isCurrent || isSkipped || guideDetails.isSelected()) item.add(warning(instruction));
                 if (isCurrent && guideDetails.isSelected() && step.protectionPlanned)
                     item.add(warning("Gardener protection planned / verify payment"));
                 if (isCurrent && guideDetails.isSelected())
