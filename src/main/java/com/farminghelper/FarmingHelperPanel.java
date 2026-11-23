@@ -152,7 +152,6 @@ final class FarmingHelperPanel extends PluginPanel
     private final JPanel loadoutRows = new JPanel();
     private final JPanel guideRequirements = new JPanel();
     private final JButton requirementsToggle = FarmingHelperComponents.row("▾ Supplies");
-    private final JButton beginWithMissing = new JButton("Begin with current supplies");
     private String requirementsSignature = "";
     private boolean requirementsExpanded = true;
     private final JButton openLoadout = new JButton("View loadout & withdrawals");
@@ -524,8 +523,6 @@ final class FarmingHelperPanel extends PluginPanel
         });
         addFull(content, requirementsToggle);
         addFull(content, guideRequirements);
-        beginWithMissing.addActionListener(e -> continueFromLoadout());
-        addFull(content, beginWithMissing);
         addFull(content, openLoadout);
         JButton navigate = new JButton("Route to current patch");
         navigate.addActionListener(e ->
@@ -1068,8 +1065,6 @@ final class FarmingHelperPanel extends PluginPanel
     {
         boolean active = currentPlan != null && !currentPlan.steps.isEmpty() && !runFinished && !planningInFlight;
         requirementsToggle.setVisible(active);
-        beginWithMissing.setVisible(false);
-        beginWithMissing.setText(awaitingBank ? "Replan after banking" : "Begin with current supplies");
         guideRequirements.setVisible(active && (requirementsExpanded || preparingLoadout));
         if (!active)
         {
@@ -1107,19 +1102,6 @@ final class FarmingHelperPanel extends PluginPanel
         FarmingHelperTheme.style(guideRequirements);
         guideRequirements.revalidate();
         guideRequirements.repaint();
-    }
-
-    /** Enter the run as soon as the planned checklist is carried. No game actions are automated. */
-    private void startWhenSupplied()
-    {
-        if (!preparingLoadout || paused || planningInFlight || awaitingBank || runFinished ||
-            currentPlan == null || currentPlan.steps.isEmpty() || compostPageOpen ||
-            !Objects.equals(activeProfile, configManager.getRSProfileKey())) return;
-        preparingLoadout = false;
-        if ("loadout".equals(visiblePage)) showPage("guide");
-        render();
-        requestRoute(currentPlan.steps.get(currentStep));
-        clientThread.invoke(this::onClientTick);
     }
 
     private void refreshLoadoutPage()
@@ -2204,7 +2186,8 @@ final class FarmingHelperPanel extends PluginPanel
         SwingUtilities.invokeLater(() ->
         {
             if (autoReplanBank.isSelected() && currentPlan != null && !runFinished
-                && !planningInFlight && !compostPageOpen && !paused && loggedIn && Objects.equals(profile, configManager.getRSProfileKey()))
+                && !planningInFlight && !compostPageOpen && !paused && loggedIn &&
+                Objects.equals(profile, configManager.getRSProfileKey()))
             {
                 beginRun(true);
             }
@@ -2428,7 +2411,8 @@ final class FarmingHelperPanel extends PluginPanel
         // Compost is a recommendation, not a prerequisite for continuing.
         if (RunReadiness.growing(observation) && sawHarvestable && !sawLiveEmpty)
             action = StepEngine.Action.COMPLETE;
-        if (action == StepEngine.Action.PROTECT_TREE && !sawLiveEmpty)
+        if (action == StepEngine.Action.PROTECT_TREE &&
+            (!sawLiveEmpty || !Supplies.hasProtectionPayment(step, loadout.directorInventory())))
             action = StepEngine.Action.COMPLETE;
         QuestTargets.Definition def = QuestTargets.get(step.patch);
         action = StepEngine.refine(action, activePayRemoval, def != null && def.gardenerId >= 0, weeds);
@@ -2820,8 +2804,11 @@ final class FarmingHelperPanel extends PluginPanel
             else
             {
                 if ("loadout".equals(visiblePage)) refreshLoadoutPage();
-                if ("guide".equals(visiblePage)) refreshGuideRequirements();
-                if ("guide".equals(visiblePage) || "loadout".equals(visiblePage)) startWhenSupplied();
+                if ("guide".equals(visiblePage))
+                {
+                    publishBankChecklist();
+                    refreshGuideRequirements();
+                }
             }
         });
     }
@@ -2966,7 +2953,7 @@ final class FarmingHelperPanel extends PluginPanel
         advancedGuideControls.setVisible(guideDetails.isSelected());
         progress.setVisible(guideDetails.isSelected() || awaitingBank || runFinished);
         inventory.setVisible(guideDetails.isSelected() || awaitingBank);
-        if (preparingLoadout) actionText = "Gather the missing supplies below. Guidance starts when the checklist is ready.";
+        if (preparingLoadout) actionText = "Review supplies if needed.";
         currentAction.setText(wrapped(actionText, 184));
         activeDestination.setVisible(active && !runFinished && !awaitingBank && currentStep < steps);
         activeDestination.setText(active && currentStep < steps
