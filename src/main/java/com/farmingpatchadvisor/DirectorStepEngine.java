@@ -64,8 +64,8 @@ final class DirectorStepEngine
         switch (action)
         {
             case HARVEST:
-                return "Harvest the herbs, then compost and plant "
-                    + crop.getName() + ".";
+                return "Harvest the " + (type == PatchType.ALLOTMENT ? "allotment" : "herbs") +
+                    ", then compost and plant " + crop.getName() + ".";
             case CHECK_HEALTH:
                 return "Check the tree's health, then remove the tree.";
             case REMOVE_TREE:

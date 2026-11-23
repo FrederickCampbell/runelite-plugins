@@ -157,7 +157,7 @@ final class DirectorPlanner
         for (Map.Entry<Integer, Integer> item : seeds.entrySet())
         {
             // Herb seeds stack; each tree sapling occupies an inventory slot.
-            slots += type == PatchType.HERB ? 1 : item.getValue();
+            slots += type == PatchType.TREE ? item.getValue() : 1;
         }
         for (Map.Entry<Integer, Integer> item : payments.entrySet())
         {
