@@ -1928,9 +1928,8 @@ final class FarmingHelperPanel extends PluginPanel
             {
                 if (skip.contains(FarmRouteManager.key(patch)) || !patchPrefs.enabled(patch))
                     continue;
-                TravelTarget target = TravelTarget.choose(patch,
-                    stateReader, timerManager);
-                if (!target.exact) approximateDestinations++;
+                TravelTarget target = routeTarget(patch);
+                if (!target.routable()) approximateDestinations++;
                 candidates.add(patch);
             }
         }
@@ -2567,7 +2566,7 @@ final class FarmingHelperPanel extends PluginPanel
     private TravelTarget routeTarget(FarmRunPatch patch)
     {
         WorldPoint pinned = WaypointPins.get(configManager, patch);
-        return pinned == null ? TravelTarget.choose(patch, stateReader, timerManager)
+        return pinned == null ? TravelTarget.navigation(patch, stateReader)
             : TravelTarget.playerWaypoint(pinned);
     }
 
