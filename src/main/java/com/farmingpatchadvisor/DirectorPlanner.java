@@ -182,6 +182,23 @@ final class DirectorPlanner
                       ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected,
                       Map<FarmRunType, String> perCategoryPriorities)
     {
+        return build(type, patches, farmingLevel, stock, customPriority, priorities, reserves,
+            fixedToolSlots, teleportSlots, freeHarvestSlots, protectTrees, stackable, preplanted,
+            harvestOnlyPatches, cropOverrides, herbloreFocus, maxStops, teleportSlotsForSelected,
+            perCategoryPriorities, Collections.emptyMap());
+    }
+
+    static Plan build(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted,
+                      Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
+                      boolean herbloreFocus, int maxStops,
+                      ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected,
+                      Map<FarmRunType, String> perCategoryPriorities,
+                      Map<PatchType, DirectorPatchPriority> patchPriorities)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
@@ -193,6 +210,12 @@ final class DirectorPlanner
             "Ranarr, Snapdragon, Toadflax, Avantoe, Irit, Kwuarm, Cadantine, "
                 + "Lantadyme, Huasca, Torstol, Dwarf weed, Harralander, Guam");
         Map<String, Integer> reservesByName = parseReserves(reserves);
+        Map<PatchType, Map<String,Integer>> patchRanks = new java.util.EnumMap<>(PatchType.class);
+        patchPriorities.forEach((patchType, preference) ->
+        {
+            patchRanks.put(patchType, priorityRanks(preference.csv));
+            parseReserves(preference.reserves).forEach((crop, count) -> reservesByName.merge(crop, count, Math::max));
+        });
         int budget = Math.max(0, INVENTORY_CAPACITY - freeHarvestSlots);
 
         for (FarmRunPatch patch : patches)
@@ -230,8 +253,9 @@ final class DirectorPlanner
             }
             eligible.sort(Comparator.comparingInt(Crop::getLevel).reversed());
             List<Crop> allowedForOverride = new ArrayList<>(eligible);
-            Map<String, Integer> activeRank = categoryRanks.getOrDefault(patch.getFarmRunType(), rank);
-            if (categoryRanks.containsKey(patch.getFarmRunType()) || customPriority)
+            DirectorPatchPriority preference = patchPriorities.get(patchType);
+            Map<String, Integer> activeRank = preference != null ? patchRanks.get(patchType) : categoryRanks.getOrDefault(patch.getFarmRunType(), rank);
+            if (preference != null ? preference.custom : categoryRanks.containsKey(patch.getFarmRunType()) || customPriority)
             {
                 eligible.removeIf(c -> !activeRank.containsKey(normalize(c.getName())));
                 eligible.sort(Comparator.comparingInt(c -> activeRank.get(normalize(c.getName()))));

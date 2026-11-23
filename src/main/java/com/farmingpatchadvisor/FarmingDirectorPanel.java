@@ -167,7 +167,10 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox guideDetails = new JCheckBox("Show planning details and warnings");
     private final JComboBox<String> presetChoice = new JComboBox<>();
     private final Map<FarmRunType, JCheckBox> mergedTypes = new EnumMap<>(FarmRunType.class);
-    private final Set<FarmRunType> collapsedTypes = EnumSet.allOf(FarmRunType.class);
+    private final Set<PatchType> collapsedTypes = EnumSet.allOf(PatchType.class);
+    private final Set<PatchType> openPatchLocations = EnumSet.noneOf(PatchType.class);
+    private int patchSettingsLevel;
+    private boolean patchSettingsLoggedIn;
     private final Map<DirectorRunSelection, JPanel> runBodies = new EnumMap<>(DirectorRunSelection.class);
     private final Map<DirectorRunSelection, JButton> runHeaders = new EnumMap<>(DirectorRunSelection.class);
     private final Map<DirectorRunSelection, javax.swing.Icon> runIcons = new EnumMap<>(DirectorRunSelection.class);
@@ -350,7 +353,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void showPage(String name)
     {
-        if ("editor".equals(name)) name = "selection";
+        if ("editor".equals(name)) name = "patches";
         boolean leavingCompost = compostPageOpen && !"compost".equals(name);
         compostPageOpen = "compost".equals(name);
         if (leavingCompost)
@@ -419,7 +422,11 @@ final class FarmingDirectorPanel extends PluginPanel
             JButton fold = new JButton();
             fold.setHorizontalAlignment(JButton.LEFT);
             fold.setToolTipText("Expand " + mode);
-            fold.addActionListener(e -> openRun(mode, true));
+            fold.addActionListener(e ->
+            {
+                if (mode == DirectorRunSelection.MERGED) openRun(mode, true);
+                else { runType.setSelectedItem(mode); beginRun(); }
+            });
             runHeaders.put(mode, fold);
             card.add(fold, BorderLayout.NORTH);
             JPanel body = new JPanel(new BorderLayout());
@@ -440,7 +447,7 @@ final class FarmingDirectorPanel extends PluginPanel
             });
         }
         JPanel footer = new JPanel(new GridLayout(1, 2, 4, 0));
-        footer.add(nav("Patches", "patches"));
+        footer.add(nav("Patch Settings", "patches"));
         footer.add(nav("Timers / contracts", "status"));
         addFull(list, footer);
         updateRunCards();
@@ -488,7 +495,7 @@ final class FarmingDirectorPanel extends PluginPanel
             boolean open = e.getKey() == expandedRun;
             e.getValue().setVisible(open);
             JButton header = runHeaders.get(e.getKey());
-            header.setText(wrapped((open ? "▾ " : "▸ ") + e.getKey(), 117));
+            header.setText(wrapped((e.getKey() == DirectorRunSelection.MERGED ? (open ? "▾ " : "▸ ") : "▶ ") + e.getKey(), 117));
             header.putClientProperty("fh.primary", open);
             header.repaint();
             if (open) e.getValue().add(inlineEditor, BorderLayout.CENTER);
@@ -637,7 +644,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(mergedControls, deleteMerged);
         JButton cropOverride = new JButton("Per-category crop priority override");
         cropOverride.addActionListener(e -> chooseMergedPriorityOverride());
-        addFull(mergedControls, cropOverride);
+        // All merged runs inherit the actual patch-type preferences.
         addFull(mergedControls, label("By default, merged runs inherit each category's saved crop preferences.", false));
         addFull(body, regularControls);
         addFull(body, mergedControls);
@@ -656,7 +663,7 @@ final class FarmingDirectorPanel extends PluginPanel
         boolean merged = runType.getSelectedItem() == DirectorRunSelection.MERGED;
         boolean compost = runType.getSelectedItem() == DirectorRunSelection.COMPOST;
         mergedControls.setVisible(merged);
-        regularControls.setVisible(!merged && !compost);
+        regularControls.setVisible(false);
         if (inlineEditor != null) for (Component c : inlineEditor.getComponents())
             if ("fh.route".equals(c.getName())) c.setVisible(!compost);
         if (merged) reloadPresetNames();
@@ -791,16 +798,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(farming, payRemoval);
         addFull(farming, protectTrees);
         addFull(settings, foldSection("Farming", farming));
-        JPanel runs = vertical();
-        for (int i = 0; i < runType.getItemCount(); i++)
-        {
-            DirectorRunSelection mode = runType.getItemAt(i);
-            if (mode == DirectorRunSelection.COMPOST) continue;
-            JButton edit = new JButton(mode.toString() + "  ›");
-            edit.addActionListener(e -> { openRun(mode, false); showPage("selection"); });
-            addFull(runs, edit);
-        }
-        addFull(settings, foldSection("Crop priorities & routes", runs));
+        addFull(settings, nav("Patch Settings ›", "patches"));
         JPanel guidance = vertical();
         addFull(guidance, autoNext);
         addFull(guidance, shortestPathEnabled);
@@ -1413,7 +1411,7 @@ final class FarmingDirectorPanel extends PluginPanel
         outer.setBackground(FarmingHelperTheme.BASE);
         JPanel header = vertical();
         addFull(header, nav("← Back to runs", "selection"));
-        addFull(header, label("Global Patch Manager", true));
+        addFull(header, label("Patch Settings", true));
         addFull(header, label("Disabled patches are excluded from every run. Bulk actions include hidden matches.", false));
         patchSearch.setToolTipText("Filter patch names and locations");
         addFull(header, patchSearch);
@@ -1472,6 +1470,9 @@ final class FarmingDirectorPanel extends PluginPanel
                     : gate.state == DirectorWaypoints.AccessState.UNKNOWN ? "Unverified: " + gate.detail
                     : gate.detail;
                 QuestFarmingStateReader.Observation observation = observePatchState(patch);
+                int plantLevel = DirectorPatchPriority.plantingLevel(patch.getPatchType());
+                if (plantLevel > level && gate != null && gate.state == DirectorWaypoints.AccessState.AVAILABLE)
+                    access += " Planting requires " + plantLevel + " Farming.";
                 String state = !observation.known() ? "Ready: unverified"
                     : observation.state == CropState.GROWING ? "Growing"
                     : "Needs attention: " + observation.state.name().toLowerCase();
@@ -1480,6 +1481,8 @@ final class FarmingDirectorPanel extends PluginPanel
             SwingUtilities.invokeLater(() ->
             {
                 if (!Objects.equals(profile, configManager.getRSProfileKey())) return;
+                patchSettingsLevel = level;
+                patchSettingsLoggedIn = profile != null;
                 patchViews.clear();
                 patchViews.addAll(result);
                 if ("patches".equals(visiblePage)) drawPatchRows();
@@ -1515,7 +1518,7 @@ final class FarmingDirectorPanel extends PluginPanel
         patchRows.removeAll();
         String query = patchSearch.getText().trim().toLowerCase(java.util.Locale.ROOT);
         boolean onlyOff = disabledOnly.isSelected();
-        Map<FarmRunType, List<PatchView>> byType = new EnumMap<>(FarmRunType.class);
+        Map<PatchType, List<PatchView>> byType = new EnumMap<>(PatchType.class);
         int enabledCount = 0;
         for (PatchView patch : patchViews)
         {
@@ -1526,11 +1529,11 @@ final class FarmingDirectorPanel extends PluginPanel
                 .toLowerCase(java.util.Locale.ROOT).contains(query)
                 && !patch.patch.getPatchType().getDisplayName()
                     .toLowerCase(java.util.Locale.ROOT).contains(query)) continue;
-            byType.computeIfAbsent(patch.patch.getFarmRunType(), t -> new ArrayList<>()).add(patch);
+            byType.computeIfAbsent(patch.patch.getPatchType(), t -> new ArrayList<>()).add(patch);
         }
         patchSummary.setText(wrapped(enabledCount + " / " + patchViews.size() +
             " enabled · " + byType.values().stream().mapToInt(List::size).sum() + " shown", 184));
-        for (Map.Entry<FarmRunType, List<PatchView>> group : byType.entrySet())
+        for (Map.Entry<PatchType, List<PatchView>> group : byType.entrySet())
         {
             JPanel category = new JPanel(new BorderLayout(3, 3));
             category.setBackground(FarmingHelperTheme.SURFACE);
@@ -1542,7 +1545,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 drawPatchRows();
             });
             List<PatchView> entireGroup = new ArrayList<>();
-            for (PatchView patch : patchViews) if (patch.patch.getFarmRunType() == group.getKey()) entireGroup.add(patch);
+            for (PatchView patch : patchViews) if (patch.patch.getPatchType() == group.getKey()) entireGroup.add(patch);
             long groupEnabled = entireGroup.stream().filter(v -> patchPrefs.enabled(v.patch)).count();
             fold.setText(wrapped(fold.getText() + " · " + groupEnabled + "/" + entireGroup.size(), 150));
             category.add(fold, BorderLayout.NORTH);
@@ -1558,6 +1561,17 @@ final class FarmingDirectorPanel extends PluginPanel
             addFull(patchRows, category);
             if (collapsedTypes.contains(group.getKey())) continue;
 
+            addFull(patchRows, patchPriorityEditor(group.getKey()));
+            boolean showLocations = openPatchLocations.contains(group.getKey());
+            JButton locations = new JButton((showLocations ? "▾ " : "▸ ") + "Farming locations");
+            locations.setHorizontalAlignment(JButton.LEFT);
+            locations.addActionListener(e ->
+            {
+                if (!openPatchLocations.add(group.getKey())) openPatchLocations.remove(group.getKey());
+                drawPatchRows();
+            });
+            addFull(patchRows, locations);
+            if (!showLocations) continue;
             Map<String, List<PatchView>> byLocation = new LinkedHashMap<>();
             for (PatchView patch : group.getValue())
                 byLocation.computeIfAbsent(patch.patch.getLocation(),
@@ -1609,7 +1623,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     });
                     addFull(entry, enabled);
                     JLabel info = label(patch.unlock + " · " + patch.state, false);
-                    if (patch.unlock.startsWith("Locked:")) info.setForeground(FarmingHelperTheme.GOLD);
+                    if (patch.unlock.startsWith("Locked:") || patch.unlock.contains("Planting requires")) info.setForeground(FarmingHelperTheme.GOLD);
                     else if (!patchPrefs.enabled(patch.patch)) info.setForeground(FarmingHelperTheme.MUTED);
                     addFull(entry, info);
                     addFull(patchRows, entry);
@@ -1621,6 +1635,136 @@ final class FarmingDirectorPanel extends PluginPanel
         FarmingHelperTheme.style(patchRows);
         patchRows.revalidate();
         patchRows.repaint();
+    }
+
+    private DirectorPatchPriority patchPriority(PatchType type)
+    {
+        String key = "directorPatchCustom_" + type.name();
+        String explicit = profileValue(key, "");
+        if (!explicit.isEmpty())
+            return new DirectorPatchPriority(Boolean.parseBoolean(explicit),
+                profileValue("directorPatchPriority_" + type.name(), ""),
+                profileValue("directorPatchReserve_" + type.name(), ""));
+        String old = individualMode(FarmRunType.forPatchType(type));
+        String defaults = type == PatchType.TREE ? "Magic, Yew, Maple, Willow, Oak"
+            : type == PatchType.ALLOTMENT ? "Snape grass, Watermelon, Strawberry, Sweetcorn"
+            : type == PatchType.HERB ? "Ranarr, Snapdragon, Toadflax, Irit, Avantoe" : "";
+        return DirectorPatchPriority.legacy(type, Boolean.parseBoolean(profileValue("directorCustom" + old, "false")),
+            profileValue("directorPriority" + old, defaults), profileValue("directorReserve" + old, ""));
+    }
+
+    private void savePatchPriority(PatchType type, boolean custom, List<Crop> ranked, String held)
+    {
+        if (configManager.getRSProfileKey() == null) return;
+        configManager.setRSProfileConfiguration(GROUP, "directorPatchCustom_" + type.name(), Boolean.toString(custom));
+        configManager.setRSProfileConfiguration(GROUP, "directorPatchPriority_" + type.name(), DirectorPriorityEditorModel.encode(ranked));
+        configManager.setRSProfileConfiguration(GROUP, "directorPatchReserve_" + type.name(), held);
+    }
+
+    private JPanel patchPriorityEditor(PatchType type)
+    {
+        JPanel editor = vertical();
+        editor.setBackground(FarmingHelperTheme.SURFACE);
+        editor.setBorder(BorderFactory.createEmptyBorder(4, 5, 4, 5));
+        List<Crop> catalog = DirectorPriorityEditorModel.catalog(t -> t == type);
+        if (catalog.isEmpty()) return editor;
+        DirectorPatchPriority pref = patchPriority(type);
+        List<Crop> ranked = DirectorPriorityEditorModel.selected(catalog, pref.csv);
+        boolean canEdit = configManager.getRSProfileKey() != null;
+        addFull(editor, label("Crop preference", true));
+        if (patchSettingsLoggedIn && DirectorPatchPriority.plantingLevel(type) > patchSettingsLevel)
+        {
+            JLabel locked = label("Planting unlocks at " + DirectorPatchPriority.plantingLevel(type) + " Farming.", false);
+            locked.setForeground(FarmingHelperTheme.GOLD);
+            addFull(editor, locked);
+        }
+        JComboBox<String> mode = new JComboBox<>(new String[]{"Automatic", "Custom priorities"});
+        mode.setSelectedIndex(pref.custom ? 1 : 0);
+        mode.setEnabled(canEdit);
+        mode.addActionListener(e ->
+        {
+            savePatchPriority(type, mode.getSelectedIndex() == 1, ranked, pref.reserves);
+            SwingUtilities.invokeLater(this::drawPatchRows);
+        });
+        addFull(editor, mode);
+        if (pref.custom)
+        {
+            for (int i = 0; i <= ranked.size() && i < catalog.size(); i++)
+            {
+                final int index = i;
+                Crop current = i < ranked.size() ? ranked.get(i) : null;
+                List<Crop> options = new ArrayList<>();
+                options.add(null);
+                for (Crop crop : catalog) if (crop.equals(current) || !ranked.contains(crop)) options.add(crop);
+                JComboBox<Crop> choice = new JComboBox<>(options.toArray(new Crop[0]));
+                choice.setRenderer(new javax.swing.DefaultListCellRenderer()
+                {
+                    @Override public Component getListCellRendererComponent(javax.swing.JList<?> list,
+                        Object value, int row, boolean selected, boolean focus)
+                    {
+                        Crop crop = (Crop)value;
+                        return super.getListCellRendererComponent(list,
+                            crop == null ? "Choose crop…" : crop.getName() + " (" + crop.getLevel() + ")", row, selected, focus);
+                    }
+                });
+                choice.setSelectedItem(current);
+                choice.setEnabled(canEdit);
+                choice.addActionListener(e ->
+                {
+                    Crop selected = (Crop)choice.getSelectedItem();
+                    if (index < ranked.size())
+                    {
+                        if (selected == null) ranked.remove(index);
+                        else ranked.set(index, selected);
+                    }
+                    else if (selected != null) ranked.add(selected);
+                    savePatchPriority(type, true, ranked, pref.reserves);
+                    SwingUtilities.invokeLater(this::drawPatchRows);
+                });
+                JPanel row = new JPanel(new BorderLayout(3, 0));
+                row.setBackground(FarmingHelperTheme.SURFACE);
+                row.add(new JLabel("#" + (i + 1)), BorderLayout.WEST);
+                row.add(choice, BorderLayout.CENTER);
+                if (current != null && i > 0)
+                {
+                    JButton up = new JButton("↑");
+                    up.setToolTipText("Move preference up");
+                    up.setEnabled(canEdit);
+                    up.addActionListener(e ->
+                    {
+                        DirectorPriorityEditorModel.move(ranked, index, -1);
+                        savePatchPriority(type, true, ranked, pref.reserves);
+                        drawPatchRows();
+                    });
+                    row.add(up, BorderLayout.EAST);
+                }
+                addFull(editor, row);
+            }
+            addFull(editor, label("First eligible available crop wins.", false));
+        }
+        else addFull(editor, label("Highest eligible crop in stock.", false));
+        JButton reservesButton = new JButton("Stock reserves…");
+        reservesButton.setEnabled(canEdit);
+        reservesButton.addActionListener(e ->
+        {
+            DirectorPriorityDialog.Result result = DirectorPriorityDialog.show(this, t -> t == type,
+                pref.csv, pref.reserves, true);
+            if (result != null)
+            {
+                savePatchPriority(type, pref.custom,
+                    DirectorPriorityEditorModel.selected(catalog, result.priorities), result.reserves);
+                drawPatchRows();
+            }
+        });
+        addFull(editor, reservesButton);
+        JButton route = new JButton("Route & teleports…");
+        route.addActionListener(e ->
+        {
+            runType.setSelectedItem(DirectorRunSelection.valueOf(individualMode(FarmRunType.forPatchType(type))));
+            showPage("route");
+        });
+        addFull(editor, route);
+        return editor;
     }
 
     private static JLabel label(String text, boolean strong)
@@ -2094,33 +2238,13 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         int harvestReserve = DirectorSupplies.harvestReserve(selection, config.directorHarvestSlots(), freeSlots);
 
-        Map<FarmRunType, String> categoryPriority = new EnumMap<>(FarmRunType.class);
-        Map<String, Integer> combinedReserves = DirectorPlanner.parseReserves(reserveText);
-        if (selection == DirectorRunSelection.MERGED || selection == DirectorRunSelection.ALL && !custom)
-        {
-            for (FarmRunType category : FarmRunType.values())
-            {
-                String base = individualMode(category);
-                String saved = profileValue("directorCustom" + base, "false");
-                if (Boolean.parseBoolean(saved))
-                    categoryPriority.put(category, profileValue("directorPriority" + base, ""));
-                DirectorPlanner.parseReserves(profileValue("directorReserve" + base, ""))
-                    .forEach((crop, quantity) -> combinedReserves.merge(crop, quantity, Math::max));
-                if (selection == DirectorRunSelection.MERGED)
-                {
-                    String local = profileValue("directorMergedPriority_" + presetName
-                        + "_" + category.name(), "");
-                    if (!local.isEmpty()) categoryPriority.put(category, local);
-                    DirectorPlanner.parseReserves(profileValue("directorMergedReserve_" + presetName
-                        + "_" + category.name(), ""))
-                        .forEach((crop, quantity) -> combinedReserves.merge(crop, quantity, Math::max));
-                }
-            }
-        }
+        Map<PatchType, DirectorPatchPriority> patchPriorities = new EnumMap<>(PatchType.class);
+        for (PatchType type : PatchType.values())
+            patchPriorities.put(type, patchPriority(type));
 
         Map<Integer, Integer> equippedItems = loadout.directorEquipment();
         DirectorWavePlanner.Result wavePlan = DirectorWavePlanner.split(candidates, level,
-            stock, custom, priorityText, DirectorPriorityEditorModel.encodeReserves(combinedReserves), 0, 0,
+            stock, false, "", "", 0, 0,
             harvestReserve, protection, id ->
                 itemManager.getItemComposition(id).isStackable(), preplanted,
                 harvestOnly, cropOverrides, herbPriority, waveCap,
@@ -2133,7 +2257,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     compostItem, carrySecateurs, payToRemove);
                 return travelSlots + DirectorSupplies.slots(selectedPatches, kit,
                     id -> itemManager.getItemComposition(id).isStackable(), payToRemove);
-            }, categoryPriority);
+            }, Collections.emptyMap(), patchPriorities);
 
         List<Map<RouteTeleport, Integer>> travelRequirements =
             DirectorTeleportPlan.perWave(wavePlan, teleportForPatch);
@@ -2806,7 +2930,8 @@ final class FarmingDirectorPanel extends PluginPanel
             completedPatchKeys.clear();
             temporaryOverrides.clear();
             patchViews.clear();
-            collapsedTypes.clear(); collapsedTypes.addAll(EnumSet.allOf(FarmRunType.class));
+            collapsedTypes.clear(); collapsedTypes.addAll(EnumSet.allOf(PatchType.class));
+            openPatchLocations.clear();
             expandedLocations.clear(); expandedRun = null;
             routeModel.clear();
             start.setEnabled(true);

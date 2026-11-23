@@ -83,6 +83,22 @@ final class DirectorWavePlanner
                         ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected,
                         Map<FarmRunType, String> perCategoryPriorities)
     {
+        return split(patches, farmingLevel, stock, customPriority, priorities, reserves, toolSlots,
+            teleportSlots, harvestSlots, protect, stackable, preplanted, harvestOnly, overrides,
+            herbloreFocus, maxStopsPerWave, teleportSlotsForSelected, perCategoryPriorities,
+            Collections.emptyMap());
+    }
+
+    static Result split(List<FarmRunPatch> patches, int farmingLevel,
+                        Map<Integer, Integer> stock, boolean customPriority,
+                        String priorities, String reserves, int toolSlots,
+                        int teleportSlots, int harvestSlots, boolean protect, IntPredicate stackable,
+                        Set<String> preplanted, Set<String> harvestOnly,
+                        Map<String, String> overrides, boolean herbloreFocus, int maxStopsPerWave,
+                        ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected,
+                        Map<FarmRunType, String> perCategoryPriorities,
+                        Map<PatchType, DirectorPatchPriority> patchPriorities)
+    {
         List<FarmRunPatch> remaining = new ArrayList<>(patches);
         Map<Integer, Integer> available = new HashMap<>(stock);
         List<DirectorPlanner.Plan> waves = new ArrayList<>();
@@ -95,7 +111,7 @@ final class DirectorWavePlanner
                 farmingLevel, available, customPriority, priorities, reserves,
                 toolSlots, teleportSlots, harvestSlots, protect, stackable,
                 preplanted, harvestOnly, overrides, herbloreFocus, maxStops,
-                teleportSlotsForSelected, perCategoryPriorities);
+                teleportSlotsForSelected, perCategoryPriorities, patchPriorities);
             if (wave.steps.isEmpty())
             {
                 warnings.addAll(wave.warnings);
