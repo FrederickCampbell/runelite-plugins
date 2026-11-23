@@ -103,7 +103,7 @@ final class WavePlanner
         Map<Integer, Integer> available = new HashMap<>(stock);
         List<RunPlanner.Plan> waves = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
-        int maxStops = Math.max(1, Math.min(28, maxStopsPerWave));
+        int maxStops = Math.max(1, maxStopsPerWave);
         int guard = patches.size() + 1;
         while (!remaining.isEmpty() && guard-- > 0)
         {
