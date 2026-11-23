@@ -554,18 +554,15 @@ final class FarmingDirectorPanel extends PluginPanel
      */
     private QuestFarmingStateReader.Observation observePatchState(FarmRunPatch patch)
     {
-        WorldPoint point = DirectorWaypoints.point(patch.getPatchType(),
-            patch.getLocation());
-        QuestFarmingStateReader.Observation observation = stateReader.observe(
-            patch.getPatchType() == PatchType.TREE ? Tab.TREE
-                : patch.getPatchType() == PatchType.ALLOTMENT ? Tab.ALLOTMENT : Tab.HERB,
-            patch.getLocation(),
-            patch.getPatchType() == PatchType.ALLOTMENT ? patch.getName() : null,
-            point);
+        DirectorTravelTarget target = DirectorTravelTarget.choose(patch,
+            stateReader, timerManager);
+        WorldPoint point = target.point;
+        QuestFarmingStateReader.Observation observation = stateReader.observeType(
+            patch.getPatchType().name(), patch.getLocation(), patch.getName(), point);
 
         // Advisor is an independent fallback when RuneLite Time Tracking has
         // not yet observed the patch. It NEVER turns missing data into empty.
-        if (point != null && patch.getPatchType() != PatchType.ALLOTMENT &&
+        if (target.exact && point != null &&
             observation.source != QuestFarmingStateReader.Source.LIVE)
         {
             PatchTimer timer = timerManager.findTimer(point, patch.getPatchType(), 9);
@@ -585,7 +582,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 else if (timer.isPlantedTimer() && !timer.isPicked())
                 {
                     state = !Instant.now().isBefore(timer.getReadyAt())
-                        ? (patch.getPatchType() == PatchType.TREE
+                        ? (DirectorStepEngine.isTreeType(patch.getPatchType())
                             ? CropState.UNCHECKED : CropState.HARVESTABLE)
                         : CropState.GROWING;
                 }
@@ -635,7 +632,7 @@ final class FarmingDirectorPanel extends PluginPanel
         DirectorPlanner.Step step = plan.steps.get(index);
         DirectorStepEngine.Action action = DirectorStepEngine.action(
             step.patch.getPatchType(), observation.state,
-            step.patch.getPatchType() == PatchType.TREE && protectTrees.isSelected(),
+            DirectorStepEngine.isTreeType(step.patch.getPatchType()) && protectTrees.isSelected(),
             observation.protectedByFarmer);
         boolean changed = visibleObservation == null ||
             !Objects.equals(visibleObservation.state, observation.state) ||
@@ -680,10 +677,12 @@ final class FarmingDirectorPanel extends PluginPanel
         if (delta > 0)
         {
             completedSteps.add(previous);
+            completedPatchKeys.add(FarmRouteManager.key(currentPlan.steps.get(previous).patch));
         }
         else
         {
             completedSteps.remove(nextIndex);
+            completedPatchKeys.remove(FarmRouteManager.key(currentPlan.steps.get(nextIndex).patch));
         }
         currentStep = nextIndex;
         if (currentStep >= currentPlan.steps.size())
@@ -708,21 +707,25 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             return;
         }
-        WorldPoint destination = DirectorWaypoints.point(step.patch.getPatchType(),
-            step.patch.getLocation());
+        // All path requests use observed or verified destinations. Uncertain
+        // Quest Helper region centres are displayed but not routed to.
         final long generation = ++routeGeneration;
         clientThread.invoke(() ->
         {
             DirectorPlanner.Plan active = currentPlan;
+            DirectorTravelTarget target = DirectorTravelTarget.choose(step.patch,
+                stateReader, timerManager);
             if (generation != routeGeneration || client.getLocalPlayer() == null
-                || destination == null || active == null || paused || runFinished
+                || target.point == null || (!target.exact &&
+                    !target.source.startsWith("Nearby herb")) ||
+                active == null || paused || runFinished
                 || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
             {
                 return;
             }
             Map<String, Object> data = new HashMap<>();
             data.put("start", client.getLocalPlayer().getWorldLocation());
-            data.put("target", destination);
+            data.put("target", target.point);
             // The receiver may not be installed: posting is a safe no-op then.
             eventBus.post(new PluginMessage("shortestpath", "path", data));
             routeIssued = true;
@@ -760,6 +763,7 @@ final class FarmingDirectorPanel extends PluginPanel
         if (targetIndex < previous)
         {
             completedSteps.remove(targetIndex);
+            completedPatchKeys.remove(FarmRouteManager.key(currentPlan.steps.get(targetIndex).patch));
         }
         activateCurrentStep();
         render();
@@ -787,11 +791,13 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void stopRun()
     {
+        ++planningGeneration;
         currentPlan = null;
         paused = false;
         currentStep = 0;
         runFinished = false;
         completedSteps.clear();
+        completedPatchKeys.clear();
         activateCurrentStep();
         clearRoute();
         render();
@@ -806,6 +812,7 @@ final class FarmingDirectorPanel extends PluginPanel
             paused = false;
             runFinished = false;
             completedSteps.clear();
+            completedPatchKeys.clear();
             activateCurrentStep();
             loadPreferences();
             render();
@@ -869,6 +876,7 @@ final class FarmingDirectorPanel extends PluginPanel
         next.setEnabled(active && !runFinished && currentStep < steps);
         pause.setEnabled(active && steps > 0 && !runFinished);
         end.setEnabled(active);
+        replan.setEnabled(active && steps > 0);
         pause.setText(paused ? "Resume" : "Pause");
 
         if (active)
@@ -906,12 +914,22 @@ final class FarmingDirectorPanel extends PluginPanel
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
                     : "Existing tree: verify gardener protection";
                 item.add(warning(instruction));
-                WorldPoint point = DirectorWaypoints.point(step.patch.getPatchType(),
-                    step.patch.getLocation());
-                if (i == currentStep && !runFinished && point != null)
+                if (i == currentStep && !runFinished)
                 {
-                    item.add(label("Destination: " + point.getX() + ", " + point.getY()
-                        + " · Shortest Path if installed", false));
+                    // The panel rendering is on EDT. Use already-known Quest
+                    // Helper exact locations; observed/area hints are loaded by
+                    // the live reader on the client thread and displayed there.
+                    WorldPoint point = DirectorWaypoints.exactPoint(step.patch);
+                    if (point != null)
+                    {
+                        item.add(label("Destination: " + point.getX() + ", " + point.getY()
+                            + " · Quest Helper / Shortest Path", false));
+                    }
+                    else
+                    {
+                        item.add(label("Approximate area or observed patch; "
+                            + "exact navigation may be unavailable.", false));
+                    }
                 }
                 stepList.add(item);
             }
