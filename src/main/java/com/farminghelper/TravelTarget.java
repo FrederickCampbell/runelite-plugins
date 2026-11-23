@@ -28,7 +28,7 @@ final class TravelTarget
 
     boolean routable()
     {
-        return point != null && (exact || source.startsWith("Nearby herb") ||
+        return point != null && (exact || source.startsWith("Nearby herb") || source.equals("RuneLite farm area") ||
             source.equals("Saved player waypoint"));
     }
 
@@ -42,7 +42,12 @@ final class TravelTarget
                                        QuestFarmingStateReader states,
                                        PatchTimerManager timers)
     {
+        WorldPoint area = Waypoints.farmArea(patch);
         WorldPoint verified = Waypoints.exactPoint(patch);
+        // Prefer Quest Helper object points, otherwise use published farm map markers.
+        if (area != null && (verified == null || !StepEngine.isTreeType(patch.getPatchType())
+            && patch.getPatchType() != PatchType.HERB))
+            return new TravelTarget(area, false, "RuneLite farm area");
         if (verified != null)
         {
             boolean patchExact = patch.getPatchType() == PatchType.HERB ||
