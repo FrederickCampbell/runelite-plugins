@@ -17,7 +17,7 @@ The plugin is read-only guidance: every in-game action remains manual. Unknown p
 ## v0.12
 
 - Extend route coverage with RuneLite world-map farming markers, clearly distinguished from Quest Helper exact interaction tiles. Underwater and specialty routes still require in-client validation.
-- Verify catalog identities and area routing across the 99 physical planting plots in the vendored farming registry; use the registry rather than dropping a whole group on count disagreement.
+- Verify catalog identities and area routing across the 99 physical planting plots in the vendored farming registry; use canonical registry identities; keep incomplete groups unresolved rather than guessing.
 - Keep established spirit trees, redwoods, bushes and cacti; handle cactus health checks and depleted perennial regrowth. Respect known spirit tree limits (83/88/93/96/99).
 - Quest Helper / Time Tracking is authoritative; exact legacy observations are fallback only. Remove active guide dependency on legacy compost confirmation. Retain timer and contract features.
 
