@@ -25,17 +25,24 @@ final class DirectorPlanner
         final FarmRunPatch patch;
         final Crop crop;
         final boolean requiresPlanting;
+        final boolean harvestOnly;
 
         Step(FarmRunPatch patch, Crop crop)
         {
-            this(patch, crop, true);
+            this(patch, crop, true, false);
         }
 
         Step(FarmRunPatch patch, Crop crop, boolean requiresPlanting)
         {
+            this(patch, crop, requiresPlanting, false);
+        }
+
+        Step(FarmRunPatch patch, Crop crop, boolean requiresPlanting, boolean harvestOnly)
+        {
             this.patch = patch;
             this.crop = crop;
             this.requiresPlanting = requiresPlanting;
+            this.harvestOnly = harvestOnly;
         }
     }
 
@@ -90,6 +97,19 @@ final class DirectorPlanner
                       int teleportSlots, int freeHarvestSlots, boolean protectTrees,
                       IntPredicate stackable, Set<String> preplanted)
     {
+        return build(type, patches, farmingLevel, stock, customPriority,
+            priorities, reserves, fixedToolSlots, teleportSlots,
+            freeHarvestSlots, protectTrees, stackable, preplanted,
+            Collections.emptySet(), Collections.emptyMap());
+    }
+
+    static Plan build(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted,
+                      Set<String> harvestOnlyPatches, Map<String, String> cropOverrides)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
@@ -122,8 +142,37 @@ final class DirectorPlanner
                 eligible.sort(Comparator.comparingInt(c -> rank.get(normalize(c.getName()))));
             }
             int count = Math.max(1, patch.getPatchCount());
+            String override = cropOverrides.get(FarmRouteManager.key(patch));
+            if (override != null && !override.isEmpty())
+            {
+                Crop desired = null;
+                for (Crop candidate : eligible)
+                {
+                    if (normalize(candidate.getName()).equals(normalize(override)))
+                    {
+                        desired = candidate;
+                        break;
+                    }
+                }
+                if (desired != null)
+                {
+                    int reserve = reservesByName.getOrDefault(normalize(desired.getName()), 0);
+                    int remaining = stock.getOrDefault(desired.getItemId(), 0) - reserve
+                        - used.getOrDefault(desired.getItemId(), 0);
+                    if (remaining >= count * desired.getQuantity())
+                    {
+                        choice = desired;
+                    }
+                }
+                if (choice == null)
+                {
+                    warnings.add("Preferred crop " + override + " unavailable for "
+                        + patch.getDisplayName() + "; trying alternatives.");
+                }
+            }
             for (Crop candidate : eligible)
             {
+                if (choice != null) break;
                 int reserve = reservesByName.getOrDefault(normalize(candidate.getName()), 0);
                 int remaining = stock.getOrDefault(candidate.getItemId(), 0)
                     - reserve - used.getOrDefault(candidate.getItemId(), 0);
@@ -135,7 +184,17 @@ final class DirectorPlanner
             }
             if (choice == null)
             {
-                warnings.add("Insufficient eligible planting stock for " + patch.getDisplayName() + ".");
+                if (harvestOnlyPatches.contains(FarmRouteManager.key(patch)))
+                {
+                    result.add(new Step(patch, null, false, true));
+                    warnings.add("Harvest-only stop at " + patch.getDisplayName() +
+                        ": no replacement planting stock allocated.");
+                }
+                else
+                {
+                    warnings.add("Insufficient eligible planting stock for "
+                        + patch.getDisplayName() + ".");
+                }
                 continue;
             }
 

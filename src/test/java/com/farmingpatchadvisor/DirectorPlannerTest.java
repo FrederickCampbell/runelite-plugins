@@ -167,4 +167,39 @@ public class DirectorPlannerTest
         assertTrue(DirectorStepEngine.isTreeType(PatchType.HARDWOOD_TREE));
         assertFalse(DirectorStepEngine.isTreeType(PatchType.BUSH));
     }
+
+    @Test
+    public void harvestReadyPatchRemainsVisitableWithoutReplacementStock()
+    {
+        FarmRunPatch patch = new FarmRunPatch("Falador", "", PatchType.HERB);
+        java.util.Set<String> ready = java.util.Collections.singleton(
+            FarmRouteManager.key(patch));
+        DirectorPlanner.Plan plan = DirectorPlanner.build(null,
+            java.util.Collections.singletonList(patch), 99,
+            java.util.Collections.emptyMap(), false, "", "", 3, 0, 8,
+            false, id -> true, java.util.Collections.emptySet(), ready,
+            java.util.Collections.emptyMap());
+        assertEquals(1, plan.steps.size());
+        assertTrue(plan.steps.get(0).harvestOnly);
+        assertFalse(plan.steps.get(0).requiresPlanting);
+        assertNull(plan.steps.get(0).crop);
+    }
+
+    @Test
+    public void manualCropOverrideUsesRequestedCropIfAvailable()
+    {
+        Crop ranarr = crop(PatchType.HERB, "ranarr");
+        Crop snapdragon = crop(PatchType.HERB, "snapdragon");
+        FarmRunPatch patch = new FarmRunPatch("Falador", "", PatchType.HERB);
+        java.util.Map<Integer,Integer> stock = new HashMap<>();
+        stock.put(ranarr.getItemId(), 3);
+        stock.put(snapdragon.getItemId(), 3);
+        java.util.Map<String,String> override = java.util.Collections.singletonMap(
+            FarmRouteManager.key(patch), "Ranarr");
+        DirectorPlanner.Plan plan = DirectorPlanner.build(null,
+            java.util.Collections.singletonList(patch), 99, stock, false,
+            "", "", 3, 0, 8, false, id -> true,
+            java.util.Collections.emptySet(), java.util.Collections.emptySet(), override);
+        assertEquals(ranarr, plan.steps.get(0).crop);
+    }
 }
