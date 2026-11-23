@@ -1,5 +1,19 @@
 # Ironman Farming Director development history
 
+## v0.4.0-beta.1 — Unified sidebar and global Patch Manager (2026-11-23)
+
+- Replaced the visible Guide/Advisor tab arrangement with one sidebar and five pages: Run Selection, Active Guide, Run Editor, Patch Manager and Global Settings; added a dedicated Compost Run observation page.
+- Preserved the Advisor backend (crop catalogs, bank/vault stock, timers, contracts, protections, existing overlays) and optional Shortest Path navigation.
+- Added a global per-character patch-enabled registry. Physical patch names are expanded from Quest Helper before exclusions apply, so an individual allotment can be excluded without disabling its neighbor.
+- Implemented collapsible/searchable patch categories, individual switches and bulk location/category choices; displayed known unlock restrictions and independently observed readiness, including unverified states.
+- Added saved, reusable Merged Runs, combining any Advisor farming categories through the existing Director planner and wave splitter.
+- Added per-category priority inheritance with optional per-preset priority overrides. Regular crop selections remain automatic or manually ranked; current-run and permanent single-patch crop overrides now have distinct scope.
+- Moved most planner controls out of the active guide. Added ready-only and include-unverified preferences, a shorter active-guide display with optional diagnostic details, and inline patch-edit actions.
+- Preserved completed steps and active mode while opening editor/settings/patches; banking replans continue with the active run and respect newly disabled patches.
+- Added regression tests for merged priorities, patch expansion/exclusions, saved profile isolation and active-run mode selection.
+- Known limits: patch unlock verification is incomplete; the compost page shows existing observed actions and supplies but not a full step-routed itinerary; some older Advisor controls need equivalent unified UI; no in-game/Windows client acceptance testing has been performed.
+
+
 ## v0.3.0-beta.1 — Intelligent banking and loadout planning (2026-11-23)
 
 - Built a multi-wave planner that preserves unplanned patches instead of dropping the remainder at 28 slots.

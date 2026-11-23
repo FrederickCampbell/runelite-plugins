@@ -1,5 +1,18 @@
 # RuneLite Plugin Development — Agent Guidelines
 
+## Ironman Farming Director development-branch overrides
+
+The original version numbers and local test paths below document Farming Patch
+Advisor's upstream development history. For this repository's **Ironman Farming
+Director** continue the current v0.4.0-beta.1 release lineage on its own
+ironman-farming-director-v0.x branches (and ultimately v1.0), preserving past
+release branches and never pushing to master without an explicit request.
+The developer uses RuneLite Dev Manager's Refresh → Build → Launch workflow.
+Keep the plugin standalone, preserve vendored Quest Helper and Advisor notices,
+test profile-scoped patch exclusions and merged runs, and never represent
+GitHub Actions build success as in-client validation.
+
+
 ## Versioning
 
 - User established the current local baseline as V1.0 on 2026-09-17.
