@@ -1,4 +1,4 @@
-# Farming Helper — v0.10.0-beta.2
+# Farming Helper — v0.11.0-beta.1
 
 **Basically, Quest Helper, for farm runs.**
 
@@ -8,13 +8,19 @@ A standalone RuneLite farming assistant designed for ironmen and useful for any 
 
 1. Log in and open your bank and Seed Vault to observe supplies.
 2. In Patch Settings, choose Automatic or rank crops separately for each patch type. Enable the locations you want. Access and planting requirements are independent.
-3. In Global Settings, choose compost, gardener payments, guidance and banking preferences.
-4. Start a run to open its live guide. Gather missing supplies from the inline checklist; when ready, guidance requests navigation to the first verified destination. You may explicitly continue with missing items. All in-game actions remain manual.
+3. In Global Settings, choose compost, gardener payments and guidance preferences.
+4. Start a run to open its live guide and immediately request navigation to the first verified destination. The inline checklist is advisory; missing supplies never block travel. All in-game actions remain manual.
 5. Skip a patch if needed, or End to clear the active guide. Growing, disabled and known locked/level-ineligible patches are omitted automatically. Timers and contracts remain accessible in the sidebar.
 
 The plugin is read-only guidance: every in-game action remains manual. Unknown patch observations and access are not treated as proven. Optional nearest-stop routing is a heuristic.
 
-## v0.10
+## v0.11
+
+- One uninterrupted itinerary of actionable patches; no required inventory waves or preparation screens.
+- Live required and recommended item counts, conditional rake/dibber requirements, and observed seed-source tooltips. Crop priorities and explicit overrides are preserved even when stock is missing.
+- Cure transitions no longer request post-plant compost. Compost is advisory; absent gardener payments do not hold progression. Inventory estimates are informational.
+
+## v0.10 (historical)
 
 - Runs automatically omit growing, disabled, known locked and level-ineligible patches. Unknown crop state remains inspectable; all eligible patches growing displays **Wait for plants to grow.**
 - Skip and End are the only bottom guide actions. Skips are tracked separately from completed patches and survive a restock/replan. Automatic advancement is always on; Shortest Path is enabled by default and optional.
