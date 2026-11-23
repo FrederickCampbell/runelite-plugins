@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 import java.util.Objects;
 import com.farmingpatchadvisor.queststate.CropState;
 import com.farmingpatchadvisor.queststate.QuestFarmingStateReader;
@@ -54,6 +55,7 @@ import net.runelite.client.ui.PluginPanel;
  * All client state is read on the RuneLite client thread.
  */
 @Singleton
+@Slf4j
 final class FarmingDirectorPanel extends PluginPanel
 {
     private static final String GROUP = "ironman-farming-director";
@@ -383,8 +385,21 @@ final class FarmingDirectorPanel extends PluginPanel
         clearRoute();
         clientThread.invoke(() ->
         {
-            DirectorPlanner.Plan result = compute(selected, custom, priorityText,
-                reserveText, protection, proximity, herbPriority, skip);
+            DirectorPlanner.Plan calculated;
+            try
+            {
+                calculated = compute(selected, custom, priorityText,
+                    reserveText, protection, proximity, herbPriority, skip);
+            }
+            catch (RuntimeException problem)
+            {
+                log.warn("Farming Director could not generate a run", problem);
+                calculated = new DirectorPlanner.Plan(Collections.emptyList(),
+                    Collections.emptyMap(), Collections.emptyMap(),
+                    Collections.singletonList("Could not generate this run. Check RuneLite logs "
+                        + "and reopen storage before retrying."), 0, 0);
+            }
+            final DirectorPlanner.Plan result = calculated;
             SwingUtilities.invokeLater(() ->
             {
                 if (generation != planningGeneration) return;
@@ -575,7 +590,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 if (configuredPatch.getLocation().equals(patch.getLocation()) &&
                     configuredPatch.getPatchType() == patch.getPatchType())
                 {
-                    RouteTeleport teleport = routes.teleport(selection.filter, configuredPatch);
+                    RouteTeleport teleport = routes.teleportPreferred(selection.filter, configuredPatch);
                     if (teleport != RouteTeleport.NONE) distinctTeleports.add(teleport);
                     break;
                 }

@@ -107,6 +107,31 @@ final class FarmRouteManager
 		catch (IllegalArgumentException ex) { return RouteTeleport.NONE; }
 	}
 
+
+    /** A combined run inherits per-type teleports unless an ALL-run value
+     * was explicitly selected (including NONE to turn a teleport off). */
+    RouteTeleport teleportPreferred(FarmRunFilter run, FarmRunPatch patch)
+    {
+        if (run != FarmRunFilter.ALL ||
+            read("routeTeleport_" + run.name() + "_" + key(patch)) != null)
+        {
+            return teleport(run, patch);
+        }
+        switch (patch.getFarmRunType())
+        {
+            case ALLOTMENT_FLOWER: return teleport(FarmRunFilter.ALLOTMENT_FLOWER, patch);
+            case HERB: return teleport(FarmRunFilter.HERB, patch);
+            case TREE: return teleport(FarmRunFilter.TREE, patch);
+            case FRUIT_TREE_CALQUAT: return teleport(FarmRunFilter.FRUIT_TREE_CALQUAT, patch);
+            case HARDWOOD_TREE: return teleport(FarmRunFilter.HARDWOOD_TREE, patch);
+            case HOPS: return teleport(FarmRunFilter.HOPS, patch);
+            case BUSH: return teleport(FarmRunFilter.BUSH, patch);
+            case CACTUS: return teleport(FarmRunFilter.CACTUS, patch);
+            case SPECIALTY: return teleport(FarmRunFilter.SPECIALTY, patch);
+            default: return RouteTeleport.NONE;
+        }
+    }
+
 	boolean save(String profile, FarmRunFilter run, List<FarmRunPatch> patches,
 		Map<String, RouteTeleport> choices, boolean custom)
 	{
