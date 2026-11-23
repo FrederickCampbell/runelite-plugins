@@ -135,7 +135,7 @@ final class StepEngine
                     return crop == null ? "Harvest the bark and leave the tree planted; no replacement allocated."
                         : "Harvest the bark if available, then remove the harvested tree and replant if desired.";
                 if (crop == null && (type == PatchType.FRUIT_TREE || type == PatchType.CALQUAT))
-                    return "Pick the fruit and leave the tree planted. Press Next when done.";
+                    return "Pick the fruit and leave the tree planted. Use Skip if finished and the patch has not advanced.";
                 return crop == null
                     ? "Harvest this patch; no replacement stock allocated. Refill and replan."
                     : "Harvest this " + type.getDisplayName().toLowerCase() +
@@ -163,16 +163,16 @@ final class StepEngine
                     : "Rake if necessary, " +
                         (compost && type.usesCompost() ? "compost, " : "") + "plant " + name + ".";
             case COMPOST:
-                return "Apply compost to this patch. Continue when confirmed, or press Next if already treated.";
+                return "Apply compost to this patch. Continue when confirmed, or use Skip if already treated and the patch has not advanced.";
             case PROTECT_TREE:
                 return "Ask the gardener to protect the tree. Continue automatically "
-                    + "when protection is detected, or press Next to confirm.";
+                    + "when protection is detected, or use Skip if protection was applied but not detected.";
             case COMPLETE:
                 return crop == null && isTreeType(type) ? "Existing tree checked; leave it planted."
                     : "Patch complete. Continue to the next stop.";
             default:
                 return "Patch state unknown. Inspect the patch or visit it to load "
-                    + "live Farming data; use Next as a manual fallback.";
+                    + "live Farming data; use Skip to omit this patch.";
         }
     }
 
