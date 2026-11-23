@@ -196,6 +196,13 @@ final class DirectorPlanner
             }
             if (preplanted.contains(FarmRouteManager.key(patch)))
             {
+                if (!fitsStop(type, result, patch, used, paymentItems, fixedToolSlots,
+                    budget, stackable, teleportSlotsForSelected))
+                {
+                    warnings.add("Inventory limit reached near " + patch.getDisplayName());
+                    if (result.isEmpty()) continue;
+                    break;
+                }
                 result.add(new Step(patch, null, false));
                 continue;
             }
@@ -267,6 +274,13 @@ final class DirectorPlanner
             {
                 if (harvestOnlyPatches.contains(FarmRouteManager.key(patch)))
                 {
+                    if (!fitsStop(type, result, patch, used, paymentItems, fixedToolSlots,
+                        budget, stackable, teleportSlotsForSelected))
+                    {
+                        warnings.add("Inventory limit reached near " + patch.getDisplayName());
+                        if (result.isEmpty()) continue;
+                        break;
+                    }
                     result.add(new Step(patch, null, false, true));
                     warnings.add("Harvest-only stop at " + patch.getDisplayName() +
                         ": no replacement planting stock allocated.");
@@ -300,6 +314,9 @@ final class DirectorPlanner
             {
                 warnings.add("28-slot limit reached near " + patch.getDisplayName()
                     + ". Reduce supplies or bank mid-run.");
+                // An impossible first stop must not prevent other categories
+                // from being planned. It remains explicitly unplanned.
+                if (result.isEmpty()) continue;
                 break;
             }
 
@@ -321,18 +338,29 @@ final class DirectorPlanner
             Math.max(0, freeHarvestSlots));
     }
 
+    private static boolean fitsStop(PatchType type, List<Step> previous,
+                                    FarmRunPatch patch, Map<Integer, Integer> seeds,
+                                    Map<Integer, Integer> payments, int tools, int budget,
+                                    IntPredicate stackable,
+                                    ToIntFunction<List<FarmRunPatch>> teleportSlots)
+    {
+        List<FarmRunPatch> stops = new ArrayList<>();
+        for (Step step : previous) stops.add(step.patch);
+        stops.add(patch);
+        return occupied(type, seeds, payments, tools,
+            teleportSlots.applyAsInt(stops), stackable) <= budget;
+    }
+
     private static int occupied(PatchType type, Map<Integer, Integer> seeds,
                                 Map<Integer, Integer> payments, int tools,
                                 int teleports, IntPredicate stackable)
     {
         int slots = Math.max(0, tools) + Math.max(0, teleports);
-        for (Map.Entry<Integer, Integer> item : seeds.entrySet())
+        Map<Integer, Integer> required = new HashMap<>(seeds);
+        payments.forEach((id, count) -> required.merge(id, count, Integer::sum));
+        for (Map.Entry<Integer, Integer> item : required.entrySet())
         {
-            // Query RuneLite's real item composition for every patch category.
-            slots += stackable.test(item.getKey()) ? 1 : item.getValue();
-        }
-        for (Map.Entry<Integer, Integer> item : payments.entrySet())
-        {
+            // A stackable item used for two purposes still occupies one slot.
             slots += stackable.test(item.getKey()) ? 1 : item.getValue();
         }
         return slots;

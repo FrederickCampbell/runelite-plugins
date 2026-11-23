@@ -102,6 +102,7 @@ final class DirectorWavePlanner
                 break;
             }
             waves.add(wave);
+            warnings.addAll(wave.warnings);
             Set<String> planned = new HashSet<>();
             for (DirectorPlanner.Step step : wave.steps)
             {

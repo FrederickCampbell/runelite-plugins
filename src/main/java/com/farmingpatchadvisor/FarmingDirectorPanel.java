@@ -177,7 +177,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final Set<Integer> completedSteps = new HashSet<>();
     private final Set<String> completedPatchKeys = new HashSet<>();
     private final Map<String, String> temporaryOverrides = new HashMap<>();
-    private long planningGeneration;
+    private volatile long planningGeneration;
     private volatile int lastPlannedFarmingLevel;
     private volatile long routeGeneration;
     private volatile boolean routeIssued;
@@ -1108,6 +1108,13 @@ final class FarmingDirectorPanel extends PluginPanel
         final Set<String> skip = preserveProgress
             ? new HashSet<>(completedPatchKeys) : Collections.emptySet();
         final long generation = ++planningGeneration;
+        final String planningProfile = configManager.getRSProfileKey();
+        final boolean wasPaused = preserveProgress && paused;
+        if (planningProfile == null)
+        {
+            JOptionPane.showMessageDialog(this, "Log in before planning a run.");
+            return;
+        }
         start.setEnabled(false);
         replan.setEnabled(false);
         clearRoute();
@@ -1134,7 +1141,8 @@ final class FarmingDirectorPanel extends PluginPanel
             final DirectorSessionPlan result = calculated;
             SwingUtilities.invokeLater(() ->
             {
-                if (generation != planningGeneration) return;
+                if (generation != planningGeneration ||
+                    !Objects.equals(planningProfile, configManager.getRSProfileKey())) return;
                 currentSession = result;
                 activeRunSelection = selected;
                 activePresetName = presetName == null
@@ -1143,7 +1151,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 awaitingBank = false;
                 currentPlan = result.firstWave();
                 currentStep = 0;
-                paused = false;
+                paused = wasPaused;
                 runFinished = false;
                 completedSteps.clear();
                 if (!preserveProgress) completedPatchKeys.clear();
@@ -1152,8 +1160,9 @@ final class FarmingDirectorPanel extends PluginPanel
                 start.setEnabled(true);
                 replan.setEnabled(true);
                 render();
-                showPage("guide");
-                if (!currentPlan.steps.isEmpty())
+                if (!preserveProgress || "guide".equals(visiblePage)
+                    || "selection".equals(visiblePage)) showPage("guide");
+                if (!currentPlan.steps.isEmpty() && !paused)
                 {
                     requestRoute(currentPlan.steps.get(0));
                     clientThread.invoke(this::onClientTick);
@@ -1478,10 +1487,11 @@ final class FarmingDirectorPanel extends PluginPanel
     void onStorageClosed()
     {
         final boolean loggedIn = client.getGameState() == GameState.LOGGED_IN;
+        final String profile = configManager.getRSProfileKey();
         SwingUtilities.invokeLater(() ->
         {
             if (autoReplanBank.isSelected() && currentPlan != null && !runFinished
-                && loggedIn)
+                && !paused && loggedIn && Objects.equals(profile, configManager.getRSProfileKey()))
             {
                 beginRun(true);
             }
@@ -1627,7 +1637,7 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         DirectorPlanner.Plan plan = currentPlan;
         int index = currentStep;
-        if (plan == null || paused || runFinished || client.getGameState() != GameState.LOGGED_IN
+        if (plan == null || paused || runFinished || awaitingBank || client.getGameState() != GameState.LOGGED_IN
             || index < 0 || index >= plan.steps.size())
         {
             return;
@@ -1642,7 +1652,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private void acceptObservation(DirectorPlanner.Plan plan, int index,
                                    QuestFarmingStateReader.Observation observation)
     {
-        if (plan != currentPlan || index != currentStep || paused || runFinished)
+        if (plan != currentPlan || index != currentStep || paused || runFinished || awaitingBank)
         {
             return;
         }
@@ -1728,7 +1738,9 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         if (currentPlan.steps.isEmpty()) return;
         int previous = currentStep;
-        int nextIndex = Math.max(0, Math.min(currentPlan.steps.size(), currentStep + delta));
+        int nextIndex = delta > 0
+            ? DirectorProgress.nextUnfinished(currentPlan.steps.size(), previous, completedSteps)
+            : Math.max(0, currentStep - 1);
         if (previous == nextIndex) return;
 
         if (delta > 0)
@@ -1776,20 +1788,9 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         if (!awaitingBank || currentSession == null ||
             waveIndex + 1 >= currentSession.waves.size()) return;
-        ++waveIndex;
-        currentPlan = currentSession.waves.get(waveIndex);
-        awaitingBank = false;
-        suggestedBank = null;
-        currentStep = 0;
-        runFinished = false;
-        completedSteps.clear();
-        activateCurrentStep();
-        render();
-        if (!currentPlan.steps.isEmpty())
-        {
-            requestRoute(currentPlan.steps.get(0));
-            clientThread.invoke(this::onClientTick);
-        }
+        // A bank checkpoint is a fresh planning boundary. Reusing the old
+        // wave could include a disabled patch or supplies already consumed.
+        beginRun(true);
     }
 
     private void requestBankRoute()
@@ -1891,7 +1892,7 @@ final class FarmingDirectorPanel extends PluginPanel
         awaitingBank = false;
         currentStep = targetIndex;
         runFinished = false;
-        if (targetIndex < previous)
+        if (completedSteps.contains(targetIndex))
         {
             completedSteps.remove(targetIndex);
             completedPatchKeys.remove(FarmRouteManager.key(currentPlan.steps.get(targetIndex).patch));
@@ -1963,6 +1964,9 @@ final class FarmingDirectorPanel extends PluginPanel
             completedSteps.clear();
             completedPatchKeys.clear();
             temporaryOverrides.clear();
+            patchViews.clear();
+            routeModel.clear();
+            start.setEnabled(true);
             activateCurrentStep();
             loadPreferences();
             reloadPresetNames();
@@ -2025,7 +2029,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 + (suggestedBank == null ? "Choose a bank, or use your preferred teleport."
                     : "Suggested bank area: " + suggestedBank.label + ".")
                 + " Deposit harvested produce, prepare the next supplies, then choose "
-                + "Next wave or Replan remaining after scanning storage.";
+                + "Replan after scanning storage.";
         }
         else
         {
@@ -2046,7 +2050,7 @@ final class FarmingDirectorPanel extends PluginPanel
             + escape(actionText) + "</body></html>");
         back.setEnabled(active && currentStep > 0);
         next.setEnabled(active && !runFinished && (awaitingBank || currentStep < steps));
-        next.setText(awaitingBank ? "Next wave" : "Next step");
+        next.setText(awaitingBank ? "Replan" : "Next step");
         next.setToolTipText(awaitingBank
             ? "Continue after banking. No items are withdrawn automatically." : null);
         pause.setEnabled(active && steps > 0 && !runFinished);
