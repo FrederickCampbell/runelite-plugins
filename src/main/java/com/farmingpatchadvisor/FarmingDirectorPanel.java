@@ -686,6 +686,13 @@ final class FarmingDirectorPanel extends PluginPanel
                 return carriedTeleports.size();
             });
 
+        List<Map<RouteTeleport, Integer>> travelRequirements =
+            DirectorTeleportPlan.perWave(wavePlan, teleportForPatch);
+        Map<Integer, Integer> travelStock = new HashMap<>(stock);
+        equippedItems.forEach((id, amount) -> travelStock.merge(id, amount, Integer::sum));
+        warnings.addAll(DirectorTeleportPlan.missingTravelItems(
+            DirectorTeleportPlan.totalRequirements(travelRequirements), travelStock));
+
         // A manifest is calculated per loadout, not across the full itinerary.
         // Protection and teleport requirements may change as the run progresses.
         for (DirectorPlanner.Plan wave : wavePlan.waves)
@@ -711,7 +718,8 @@ final class FarmingDirectorPanel extends PluginPanel
             }
         }
         warnings.addAll(wavePlan.warnings);
-        return new DirectorSessionPlan(wavePlan, stockLedger, warnings);
+        return new DirectorSessionPlan(wavePlan, stockLedger, warnings,
+            travelRequirements);
     }
 
     private void persistProgress()
@@ -1362,11 +1370,21 @@ final class FarmingDirectorPanel extends PluginPanel
                     stepList.add(warning("Potential gardener payments: "
                         + formatItems(nextWave.payments)));
                 }
+                if (waveIndex + 1 < currentSession.teleports.size())
+                {
+                    stepList.add(warning("Next wave travel items: "
+                        + formatTeleports(currentSession.teleports.get(waveIndex + 1))));
+                }
             }
             if (!currentPlan.payments.isEmpty())
             {
                 stepList.add(warning("Potential gardener payments: "
                     + formatItems(currentPlan.payments)));
+            }
+            if (currentSession != null && waveIndex < currentSession.teleports.size())
+            {
+                stepList.add(warning("Travel items for this wave (configured): "
+                    + formatTeleports(currentSession.teleports.get(waveIndex))));
             }
             if (!currentPlan.seeds.isEmpty())
             {
@@ -1430,6 +1448,18 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         stepList.revalidate();
         stepList.repaint();
+    }
+
+    private static String formatTeleports(Map<RouteTeleport, Integer> items)
+    {
+        if (items == null || items.isEmpty()) return "Use normal routes";
+        StringBuilder details = new StringBuilder();
+        for (Map.Entry<RouteTeleport, Integer> entry : items.entrySet())
+        {
+            if (details.length() > 0) details.append(", ");
+            details.append(entry.getKey()).append(" x").append(entry.getValue());
+        }
+        return details.toString();
     }
 
     private static String formatItems(Map<Integer, Integer> items)
