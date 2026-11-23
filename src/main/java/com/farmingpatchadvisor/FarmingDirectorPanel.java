@@ -198,13 +198,14 @@ final class FarmingDirectorPanel extends PluginPanel
     private int waveIndex;
     private boolean awaitingBank;
     private boolean sawHarvestable;
+    private boolean sawLiveEmpty;
     private DirectorBankStops.Bank suggestedBank;
     private volatile int currentStep;
     private volatile boolean paused;
     private volatile boolean runFinished;
     private boolean observedInitialState;
     private boolean initiallyGrowing;
-    private long activatedAtMillis;
+    private volatile long activatedAtMillis;
     private QuestFarmingStateReader.Observation visibleObservation;
     private DirectorStepEngine.Action visibleAction = DirectorStepEngine.Action.INSPECT;
     private final Set<Integer> completedSteps = new HashSet<>();
@@ -2224,12 +2225,25 @@ final class FarmingDirectorPanel extends PluginPanel
         DirectorPlanner.Step step = plan.steps.get(index);
         QuestFarmingStateReader.Observation observation = observePatchState(step.patch);
         final QuestFarmingStateReader.Observation latest = observation;
-        SwingUtilities.invokeLater(() -> acceptObservation(plan, index, latest));
+        boolean treated = false;
+        if (step.requiresPlanting && observation.source == QuestFarmingStateReader.Source.LIVE &&
+            observation.state == CropState.GROWING && step.crop != null && step.patch.getPatchType().usesCompost())
+        {
+            WorldPoint anchor = plugin.directorPatchAnchor(step.patch);
+            if (anchor != null)
+            {
+                PatchTimer timer = timerManager.findTimer(anchor, step.patch.getPatchType(), 0);
+                treated = timer != null && timer.isCompostApplied() &&
+                    step.crop.equals(timer.getCrop()) && timer.getPlantedAt().toEpochMilli() >= activatedAtMillis;
+            }
+        }
+        final boolean compostConfirmed = treated;
+        SwingUtilities.invokeLater(() -> acceptObservation(plan, index, latest, compostConfirmed));
     }
 
     /** Only the EDT owns live guide state; stale asynchronous ticks are dropped. */
     private void acceptObservation(DirectorPlanner.Plan plan, int index,
-                                   QuestFarmingStateReader.Observation observation)
+                                   QuestFarmingStateReader.Observation observation, boolean compostConfirmed)
     {
         if (plan != currentPlan || index != currentStep || planningInFlight || preparingLoadout || paused || runFinished || awaitingBank
             || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
@@ -2244,8 +2258,12 @@ final class FarmingDirectorPanel extends PluginPanel
         }
 
         DirectorPlanner.Step step = plan.steps.get(index);
+        if (observation.source == QuestFarmingStateReader.Source.LIVE && observation.state == CropState.EMPTY)
+            sawLiveEmpty = true;
         DirectorStepEngine.Action action = DirectorStepEngine.actionForStep(
             step, observation.state, observation.protectedByFarmer);
+        action = DirectorStepEngine.withCompost(action, step, includeCompostForRun.isSelected(),
+            sawLiveEmpty || sawHarvestable && !initiallyGrowing, compostConfirmed);
         boolean changed = visibleObservation == null ||
             !Objects.equals(visibleObservation.state, observation.state) ||
             visibleObservation.source != observation.source ||
@@ -2288,6 +2306,7 @@ final class FarmingDirectorPanel extends PluginPanel
         observedInitialState = false;
         initiallyGrowing = false;
         sawHarvestable = false;
+        sawLiveEmpty = false;
         visibleObservation = null;
         visibleAction = DirectorStepEngine.Action.INSPECT;
     }
@@ -2744,7 +2763,7 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             DirectorPlanner.Step step = currentPlan.steps.get(currentStep);
             actionText = visibleObservation == null || visibleObservation.source != QuestFarmingStateReader.Source.LIVE
-                ? "Travel to " + step.patch.getLocation() + " · follow Shortest Path."
+                ? "Travel to " + step.patch.getLocation() + (navigationEnabled ? " · follow Shortest Path." : ".")
                 : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(),
                     includeCompostForRun.isSelected());
         }
@@ -2921,9 +2940,9 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         stepList.revalidate();
         stepList.repaint();
-        if ("loadout".equals(visiblePage)) refreshLoadoutPage();
         publishWorldTarget();
         publishBankChecklist();
+        if ("loadout".equals(visiblePage)) refreshLoadoutPage();
     }
 
     private static String formatTeleports(Map<RouteTeleport, Integer> items)

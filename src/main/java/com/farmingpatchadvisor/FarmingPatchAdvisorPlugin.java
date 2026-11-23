@@ -347,6 +347,11 @@ public class FarmingPatchAdvisorPlugin extends Plugin
         return directorPanel.directorRunDisplayed();
     }
 
+    WorldPoint directorPatchAnchor(FarmRunPatch patch)
+    {
+        return patchOverlay.directorPatchAnchor(patch);
+    }
+
     PatchType directorPatchType(GameObject object)
     {
         // Explicit Director physical-patch choices supersede legacy area switches.

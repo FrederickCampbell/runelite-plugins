@@ -21,12 +21,14 @@ final class PatchTimerOverlay extends OverlayPanel
 	private static final int MAX_CONTENT_WIDTH = 340;
 	private final PatchTimerManager timerManager;
 	private final FarmingPatchAdvisorConfig config;
+    private final FarmingLoadout loadout;
 
 	@Inject
-	private PatchTimerOverlay(PatchTimerManager timerManager, FarmingPatchAdvisorConfig config)
+	private PatchTimerOverlay(PatchTimerManager timerManager, FarmingPatchAdvisorConfig config, FarmingLoadout loadout)
 	{
 		this.timerManager = timerManager;
 		this.config = config;
+        this.loadout = loadout;
 		setPosition(OverlayPosition.TOP_LEFT);
 		setLayer(OverlayLayer.ABOVE_WIDGETS);
 		setPriority(PRIORITY_LOW);
@@ -35,7 +37,7 @@ final class PatchTimerOverlay extends OverlayPanel
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
-		if (!config.showTimerOverlay() || timerManager.getTimers().isEmpty())
+		if (!config.showTimerOverlay() || loadout.activeDirectorChecklist() != null || timerManager.getTimers().isEmpty())
 		{
 			return null;
 		}

@@ -1,7 +1,7 @@
-# Ironman Farming Director — v0.6.0-beta.1
+# Ironman Farming Director — v0.6.1-beta.1
 
 A standalone, integration-first RuneLite farming assistant for ironmen. **This is
-a developer beta, not an in-game verified production release.** The v0.6 branch
+a developer beta, not an in-game verified production release.** The v0.6.1 branch
 preserves Advisor's crop, patch, compost, stock and banking infrastructure and
 the vendored Quest Helper farming-state reader, with the unified RuneLite-native multi-page sidebar introduced in v0.4.
 
@@ -29,9 +29,9 @@ the vendored Quest Helper farming-state reader, with the unified RuneLite-native
 
 ## Installation — RuneLite Dev Manager
 
-Download the v0.6 branch ZIP:
+Download the v0.6.1 branch ZIP:
 
-https://github.com/FrederickCampbell/runelite-plugins/archive/refs/heads/ironman-farming-director-v0.6.zip
+https://github.com/FrederickCampbell/runelite-plugins/archive/refs/heads/ironman-farming-director-v0.6.1.zip
 
 Extract its Gradle project into:
 
@@ -43,6 +43,29 @@ run Gradle while the source targets Java 11. Neither the Windows launch
 workflow nor in-game behavior has been tested by this CI.
 
 ## Using the sidebar
+
+**Default workflow:** choose a run → withdraw missing supplies (live red/green
+counts) → Begin farming → follow Shortest Path → click the highlighted patch
+or gardener. The guide advances after observed work; Next is a manual fallback.
+Only the active farming target is marked in the world. It uses the existing
+Advisor event-tracked patch objects and patch footprint renderer, with the
+clickbox, downward arrow and required-item icon pattern from Quest Helper's
+`ObjectStep` / `QuestHelperWorldOverlay`. No dependency on Quest Helper's
+plugin runtime, no automated game actions. World guidance can be disabled
+or recolored in RuneLite's Director configuration. Exact coordinates and
+unambiguous loaded patch identity are required; ambiguous numbered grape
+rows and unavailable scene objects do not get guessed highlights.
+The gardener NPC is selected using the vendored Quest Helper farming registry.
+Newly planted crops with observed work and compost enabled wait for compost
+confirmation from Advisor's care tracker before auto-next; manual Next remains
+available when tracking is incomplete. The timer overlay is hidden during
+active loadouts; use Timers & farming contract for additional information.
+
+The default guide shows the current destination, short action, progress and
+next two stops; More options & details reveals the diagnostic/advanced controls.
+Default merged runs visit each farm's patches together unless a saved custom
+order or nearest-stop option applies. All Enabled is grouped by location by
+default. This is stable grouping, not optimal travel-time pathfinding.
 
 1. Log into a character and scan your **bank** and **Farming Guild Seed Vault**
    so the Director can use observed stock. Stale snapshots are not presented

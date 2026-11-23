@@ -44,7 +44,8 @@ final class DirectorWorldGuide
             case CLEAR_DEAD: return "Clear dead crop";
             case CURE: return DirectorStepEngine.isTreeType(type) ? "Prune tree" : "Cure crop";
             case PLANT: return crop == null ? "No replacement — bank or continue" :
-                "Plant " + crop.getName() + (compost && type.usesCompost() ? " · compost" : "");
+                "Plant " + crop.getName();
+            case COMPOST: return "Apply compost";
             case PROTECT_TREE: return "Pay gardener";
             case COMPLETE: return "Done · next patch";
             default: return "Inspect patch";
@@ -56,6 +57,7 @@ final class DirectorWorldGuide
         switch (target.action)
         {
             case PLANT: return target.crop == null ? -1 : target.crop.getItemId();
+            case COMPOST: return ItemID.BUCKET_ULTRACOMPOST;
             case DIG_STUMP: case CLEAR_DEAD: return ItemID.SPADE;
             case CURE: return DirectorStepEngine.isTreeType(target.patch.getPatchType()) ? ItemID.SECATEURS : ItemID.PLANT_CURE;
             case PROTECT_TREE:

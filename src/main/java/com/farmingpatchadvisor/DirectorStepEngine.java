@@ -20,6 +20,7 @@ final class DirectorStepEngine
         CLEAR_DEAD,
         CURE,
         PLANT,
+        COMPOST,
         PROTECT_TREE,
         COMPLETE
     }
@@ -98,6 +99,15 @@ final class DirectorStepEngine
         return action(type, state, step.protectionPlanned, protection);
     }
 
+    static Action withCompost(Action action, DirectorPlanner.Step step,
+                              boolean plannedCompost, boolean sawPlanting, boolean compostConfirmed)
+    {
+        if (plannedCompost && step.requiresPlanting && step.patch.getPatchType().usesCompost() &&
+            sawPlanting && !compostConfirmed && (action == Action.COMPLETE || action == Action.PROTECT_TREE))
+            return Action.COMPOST;
+        return action;
+    }
+
     static String instruction(Action action, Crop crop, PatchType type)
     {
         return instruction(action, crop, type, true);
@@ -139,6 +149,8 @@ final class DirectorStepEngine
                 return crop == null ? "No suitable planting stock allocated. Bank or replan."
                     : "Rake if necessary, " +
                         (compost && type.usesCompost() ? "compost, " : "") + "plant " + name + ".";
+            case COMPOST:
+                return "Apply compost to this patch. Continue when confirmed, or press Next if already treated.";
             case PROTECT_TREE:
                 return "Ask the gardener to protect the tree. Continue automatically "
                     + "when protection is detected, or press Next to confirm.";

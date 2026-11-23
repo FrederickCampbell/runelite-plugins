@@ -221,6 +221,24 @@ final class FarmingPatchOverlay extends Overlay
                 }
             }
         }
+        List<PatchObject> group = resolveDirectorPatch(patch);
+        if (group.isEmpty()) return;
+        GameObject reference = group.get(0).object;
+        Set<PatchTile> tiles = patchTiles(group);
+        Area footprint = canvasArea(tiles, reference);
+        Area clickboxes = new Area();
+        for (PatchObject object : group)
+        {
+            java.awt.Shape clickbox = object.object.getClickbox();
+            if (clickbox != null) clickboxes.add(new Area(clickbox));
+        }
+        if (!footprint.isEmpty()) renderPatchBoundary(graphics, footprint, tiles, reference, color);
+        DirectorWorldGuide.drawHint(graphics, clickboxes.isEmpty() ? footprint : clickboxes, color, text, icon);
+    }
+
+    private List<PatchObject> resolveDirectorPatch(FarmRunPatch patch)
+    {
+        if (client.getLocalPlayer() == null) return java.util.Collections.emptyList();
         List<PatchObject> candidates = new ArrayList<>();
         for (GameObject object : plugin.getPatchObjects())
         {
@@ -228,7 +246,7 @@ final class FarmingPatchOverlay extends Overlay
                 object.getPlane() != client.getLocalPlayer().getWorldLocation().getPlane()) continue;
             if (plugin.directorPatchType(object) == patch.getPatchType() &&
                 patch.getLocation().equals(PatchLocationCatalog.name(object.getWorldLocation())))
-                candidates.add(new PatchObject(object, patch.getPatchType(), target.crop, false));
+                candidates.add(new PatchObject(object, patch.getPatchType(), null, false));
         }
         List<List<PatchObject>> groups = new ArrayList<>();
         List<WorldPoint> positions = new ArrayList<>();
@@ -248,19 +266,16 @@ final class FarmingPatchOverlay extends Overlay
             ? DirectorWaypoints.exactPoint(patch) : null;
         int count = states.patchNamesForType(patch.getPatchType().name(), patch.getLocation()).size();
         int selected = DirectorWorldGuide.select(patch, positions, count, exact);
-        if (selected < 0) return;
-        List<PatchObject> group = groups.get(selected);
-        GameObject reference = group.get(0).object;
-        Set<PatchTile> tiles = patchTiles(group);
-        Area footprint = canvasArea(tiles, reference);
-        Area clickboxes = new Area();
-        for (PatchObject object : group)
-        {
-            java.awt.Shape clickbox = object.object.getClickbox();
-            if (clickbox != null) clickboxes.add(new Area(clickbox));
-        }
-        if (!footprint.isEmpty()) renderPatchBoundary(graphics, footprint, tiles, reference, color);
-        DirectorWorldGuide.drawHint(graphics, clickboxes.isEmpty() ? footprint : clickboxes, color, text, icon);
+        return selected < 0 ? java.util.Collections.emptyList() : groups.get(selected);
+    }
+
+    WorldPoint directorPatchAnchor(FarmRunPatch patch)
+    {
+        List<PatchObject> group = resolveDirectorPatch(patch);
+        if (group.isEmpty()) return null;
+        int x = group.stream().mapToInt(o -> o.object.getWorldLocation().getX()).min().orElse(0);
+        int y = group.stream().mapToInt(o -> o.object.getWorldLocation().getY()).min().orElse(0);
+        return new WorldPoint(x, y, group.get(0).object.getPlane());
     }
 
 	static boolean shouldHighlight(PatchType patchType, Set<ChecklistPatch> selectedPatches,

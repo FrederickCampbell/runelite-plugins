@@ -1,5 +1,16 @@
 # Ironman Farming Director development history
 
+## v0.6.1-beta.1 — In-world guidance and simple workflow
+
+- Reused Advisor's patch-object tracking and footprint overlay; adapted Quest Helper's active ObjectStep clickbox, down-arrow and item-icon presentation to the Director's actual planned step.
+- Highlight the active patch, or its registry-defined gardener during protection, rather than all nearby recommendations. Suppress ambiguous targets instead of guessing; configurable highlight color and visibility.
+- Simplified the default guide to current action, destination, progress, next stops and navigation. Advanced controls and planning details remain available on demand.
+- Live supply checklist with carried quantities; wait at preparation until Begin farming, then request Shortest Path and enable progress tracking. Replan after banking.
+- Group default mixed itineraries by location; preserve explicitly saved merged route order.
+- Newly planted crops awaiting configured compost remain on the compost step until care confirmation or manual Next. Retain previous state readers and planner.
+- Tests cover target matching (exact, unique and directional pairs), ambiguous numbered patches, stable location grouping and compost action transitions. Live RuneLite visual and care-tracking behavior still requires player testing.
+
+
 ## v0.6.0-beta.1 — UI polish and final integration pass (2026-11-23)
 
 - Reworked sidebar spacing and scroll behavior for RuneLite's native panel width; highlighted current/completed stops and added progress bar, active destination, compact navigation and a separate readable loadout page.
