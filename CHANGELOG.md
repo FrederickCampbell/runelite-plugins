@@ -1,5 +1,12 @@
 # Farming Helper development history
 
+## v0.10.0-beta.2 — Smart readiness and simplified controls
+
+- Automatically omit growing, disabled and known inaccessible or level-ineligible patches before allocating supplies; recheck current patch eligibility during execution. Unknown crop state is not treated as growing.
+- Display `Wait for plants to grow.` if all eligible observed patches are growing; missing stock and unknown eligibility remain distinct.
+- Replace bottom Back/Next/Pause/End controls with Skip/End. Skip persists independently from completed patch IDs. End clears the guide and path. Bank replan remains in the supply section.
+- Always advance on observed completion; Shortest Path remains enabled by default with no hard dependency. Add readiness regression coverage. Build and gameplay validation pending.
+
 ## v0.10.0-beta.1 — Run execution and inventory-only planning
 
 - Remove the global stop limit from the active planner and settings; slot budgeting remains enforced.
