@@ -519,6 +519,8 @@ final class FarmingDirectorPanel extends PluginPanel
                 {
                     preplanted.add(FarmRouteManager.key(patch));
                     actionable.add(patch);
+                    warnings.add("Existing " + patch.getDisplayName() +
+                        " needs a gardener-protection check; no new sapling allocated.");
                 }
                 else
                 {
@@ -637,10 +639,11 @@ final class FarmingDirectorPanel extends PluginPanel
     /** Called when a banking or seed-vault interface closes, on the client thread. */
     void onStorageClosed()
     {
+        final boolean loggedIn = client.getGameState() == GameState.LOGGED_IN;
         SwingUtilities.invokeLater(() ->
         {
             if (autoReplanBank.isSelected() && currentPlan != null && !runFinished
-                && client.getGameState() == GameState.LOGGED_IN)
+                && loggedIn)
             {
                 beginRun(true);
             }
@@ -983,6 +986,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     void resetCharacter()
     {
+        ++planningGeneration;
         SwingUtilities.invokeLater(() ->
         {
             currentPlan = null;
