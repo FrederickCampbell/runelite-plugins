@@ -1331,20 +1331,16 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         candidates = actionable;
 
-        // Tool allowance is conservative. Exact per-teleport consumables and
-        // every equipment-slot alternative are not yet modeled.
-        boolean needsDibber = candidates.stream()
-            .anyMatch(p -> p.getPatchType().usesDibber());
-        boolean needsAxe = candidates.stream()
-            .anyMatch(p -> DirectorStepEngine.isTreeType(p.getPatchType()));
-        boolean needsMagicSecateurs = candidates.stream()
-            .anyMatch(p -> p.getPatchType() == PatchType.HERB);
-        int toolSlots = 2 + (needsDibber ? 1 : 0) + (needsAxe ? 1 : 0);
-        if (needsMagicSecateurs && stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
-            && !loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS))
-        {
-            toolSlots++;
-        }
+        // Recalculate tools and compost for the actual selected stops of each wave.
+        // A filled bottomless bucket is observed as an item; its charge count is not known.
+        final boolean compost = config.includeCompost();
+        final boolean bottomless = stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED);
+        final boolean carrySecateurs = stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
+            && !loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS);
+        if (compost && bottomless)
+            warnings.add("Check the bottomless compost bucket has enough charges.");
+        if (candidates.stream().anyMatch(p -> DirectorStepEngine.isTreeType(p.getPatchType())))
+            warnings.add("Bring an appropriate axe or coins for gardener removal; verify tool/equipment space.");
 
         Set<RouteTeleport> distinctTeleports = new HashSet<>();
         Map<String, RouteTeleport> teleportForPatch = new HashMap<>();
@@ -1388,7 +1384,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
         Map<Integer, Integer> equippedItems = loadout.directorEquipment();
         DirectorWavePlanner.Result wavePlan = DirectorWavePlanner.split(candidates, level,
-            stock, custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
+            stock, custom, priorityText, reserveText, 0, 0,
             harvestReserve, protection, id ->
                 itemManager.getItemComposition(id).isStackable(), preplanted,
                 harvestOnly, cropOverrides, herbPriority, waveCap,
@@ -1411,7 +1407,10 @@ final class FarmingDirectorPanel extends PluginPanel
                     }
                     if (!equipped) carriedTeleports.add(teleport);
                 }
-                return carriedTeleports.size();
+                Map<Integer, Integer> kit = DirectorSupplies.required(selectedPatches,
+                    compost, bottomless, carrySecateurs);
+                return carriedTeleports.size() + DirectorSupplies.slots(selectedPatches, kit,
+                    id -> itemManager.getItemComposition(id).isStackable());
             }, categoryPriority);
 
         List<Map<RouteTeleport, Integer>> travelRequirements =
@@ -1423,9 +1422,17 @@ final class FarmingDirectorPanel extends PluginPanel
 
         // A manifest is calculated per loadout, not across the full itinerary.
         // Protection and teleport requirements may change as the run progresses.
+        List<Map<Integer, Integer>> supplyRequirements = new ArrayList<>();
+        int totalCompost = 0;
         for (DirectorPlanner.Plan wave : wavePlan.waves)
         {
-            DirectorStockLedger.Manifest manifest = stockLedger.manifest(wave);
+            List<FarmRunPatch> stops = new ArrayList<>();
+            for (DirectorPlanner.Step step : wave.steps) stops.add(step.patch);
+            Map<Integer, Integer> kit = DirectorSupplies.required(stops,
+                compost, bottomless, carrySecateurs);
+            supplyRequirements.add(kit);
+            totalCompost += kit.getOrDefault(ItemID.BUCKET_ULTRACOMPOST, 0);
+            DirectorStockLedger.Manifest manifest = stockLedger.manifest(wave, kit);
             if (!manifest.missing.isEmpty())
             {
                 warnings.add("Some wave items are not in currently scanned stock: "
@@ -1445,9 +1452,11 @@ final class FarmingDirectorPanel extends PluginPanel
                 warnings.add("Configured teleport not in scanned supplies: " + teleport + ".");
             }
         }
+        if (totalCompost > stock.getOrDefault(ItemID.BUCKET_ULTRACOMPOST, 0))
+            warnings.add("Total planned ultracompost exceeds scanned stock; replenish or change compost settings.");
         warnings.addAll(wavePlan.warnings);
         return new DirectorSessionPlan(wavePlan, stockLedger, warnings,
-            travelRequirements);
+            travelRequirements, supplyRequirements);
     }
 
     private static String individualMode(FarmRunType type)
@@ -2144,6 +2153,9 @@ final class FarmingDirectorPanel extends PluginPanel
                     stepList.add(warning("Potential gardener payments: "
                         + formatItems(nextWave.payments)));
                 }
+                if (waveIndex + 1 < currentSession.supplies.size())
+                    stepList.add(warning("Next tools and compost: " +
+                        formatItems(currentSession.supplies.get(waveIndex + 1))));
                 if (waveIndex + 1 < currentSession.teleports.size())
                 {
                     stepList.add(warning("Next wave travel items: "
@@ -2152,6 +2164,23 @@ final class FarmingDirectorPanel extends PluginPanel
             }
             if (!currentPlan.seeds.isEmpty())
                 stepList.add(warning("Required planting stock: " + formatItems(currentPlan.seeds)));
+            if (currentSession != null && waveIndex < currentSession.supplies.size())
+            {
+                Map<Integer, Integer> kit = currentSession.supplies.get(waveIndex);
+                if (!kit.isEmpty()) stepList.add(warning("Tools and compost: " + formatItems(kit)));
+            }
+            if (currentSession != null && waveIndex == 0)
+            {
+                Map<Integer, Integer> kit = currentSession.supplies.isEmpty()
+                    ? Collections.emptyMap() : currentSession.supplies.get(0);
+                DirectorStockLedger.Manifest supplies = currentSession.observedStock.manifest(currentPlan, kit);
+                if (!supplies.takeFromBank.isEmpty())
+                    stepList.add(warning("Withdraw from bank: " + formatItems(supplies.takeFromBank)));
+                if (!supplies.takeFromVault.isEmpty())
+                    stepList.add(warning("Withdraw from Seed Vault: " + formatItems(supplies.takeFromVault)));
+                if (!supplies.missing.isEmpty())
+                    stepList.add(warning("Missing or unobserved: " + formatItems(supplies.missing)));
+            }
             if (guideDetails.isSelected())
             {
             if (!currentPlan.payments.isEmpty())
@@ -2178,7 +2207,9 @@ final class FarmingDirectorPanel extends PluginPanel
             if (currentSession != null && waveIndex == 0)
             {
                 DirectorStockLedger.Manifest manifest =
-                    currentSession.observedStock.manifest(currentPlan);
+                    currentSession.observedStock.manifest(currentPlan,
+                        currentSession.supplies.isEmpty() ? Collections.emptyMap()
+                            : currentSession.supplies.get(0));
                 if (!manifest.takeFromBank.isEmpty())
                 {
                     stepList.add(warning("Bank withdrawals (last scan): "
@@ -2248,7 +2279,7 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             if (details.length() > 0) details.append(", ");
             Crop crop = CropCatalog.findByItemId(entry.getKey());
-            details.append(crop == null ? "item #" + entry.getKey() : crop.getItemName());
+            details.append(crop == null ? DirectorSupplies.name(entry.getKey()) : crop.getItemName());
             details.append(" x").append(entry.getValue());
         }
         return details.toString();

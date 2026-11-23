@@ -73,8 +73,14 @@ final class DirectorStockLedger
 
     Manifest manifest(DirectorPlanner.Plan wave)
     {
+        return manifest(wave, Collections.emptyMap());
+    }
+
+    Manifest manifest(DirectorPlanner.Plan wave, Map<Integer, Integer> extras)
+    {
         Map<Integer, Integer> required = new LinkedHashMap<>(wave.seeds);
         wave.payments.forEach((id, amount) -> required.merge(id, amount, Integer::sum));
+        extras.forEach((id, amount) -> required.merge(id, amount, Integer::sum));
         Map<Integer, Integer> bag = new LinkedHashMap<>();
         Map<Integer, Integer> fromBank = new LinkedHashMap<>();
         Map<Integer, Integer> fromVault = new LinkedHashMap<>();

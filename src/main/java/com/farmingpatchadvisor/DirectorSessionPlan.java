@@ -15,6 +15,7 @@ final class DirectorSessionPlan
     final int unplanned;
     final int scheduled;
     final List<Map<RouteTeleport, Integer>> teleports;
+    final List<Map<Integer, Integer>> supplies;
 
     DirectorSessionPlan(DirectorWavePlanner.Result result, DirectorStockLedger stock,
                         List<String> warnings)
@@ -25,6 +26,17 @@ final class DirectorSessionPlan
     DirectorSessionPlan(DirectorWavePlanner.Result result, DirectorStockLedger stock,
                         List<String> warnings, List<Map<RouteTeleport, Integer>> travel)
     {
+        this(result, stock, warnings, travel, Collections.emptyList());
+    }
+
+    DirectorSessionPlan(DirectorWavePlanner.Result result, DirectorStockLedger stock,
+                        List<String> warnings, List<Map<RouteTeleport, Integer>> travel,
+                        List<Map<Integer, Integer>> supplies)
+    {
+        List<Map<Integer, Integer>> frozenSupplies = new ArrayList<>();
+        for (Map<Integer, Integer> req : supplies)
+            frozenSupplies.add(Collections.unmodifiableMap(new LinkedHashMap<>(req)));
+        this.supplies = Collections.unmodifiableList(frozenSupplies);
         List<Map<RouteTeleport, Integer>> frozen = new ArrayList<>();
         for (Map<RouteTeleport, Integer> req : travel)
         {
