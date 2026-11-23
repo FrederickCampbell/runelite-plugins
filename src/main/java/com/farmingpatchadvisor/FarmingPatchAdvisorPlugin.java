@@ -90,8 +90,6 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	@Inject
 	private ClientToolbar clientToolbar;
 
-	@Inject
-	private FarmingPatchPanel patchPanel;
 
 	@Inject
 	private FarmingDirectorPanel directorPanel;
@@ -116,7 +114,6 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		overlayManager.add(patchOverlay);
         overlayManager.add(directorWidgetOverlay);
 		overlayManager.add(itemOverlay);
-		patchPanel.start();
 		directorPanel.requestRefresh();
 		navigationButton = NavigationButton.builder()
 			.tooltip("Farming Helper")
@@ -140,7 +137,6 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 			clientToolbar.removeNavigation(navigationButton);
 			navigationButton = null;
 		}
-		patchPanel.stop();
 		directorPanel.shutDown();
 		bankChecklistFilter.removeButton();
 		patchObjects.clear();
@@ -248,7 +244,6 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
 		farmingLoadout.onItemContainerChanged(event);
-		patchPanel.requestRebuild();
 		directorPanel.requestRefresh();
 	}
 
@@ -257,7 +252,6 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	{
 		if ("ironman-farming-director".equals(event.getGroup()))
 		{
-			patchPanel.requestRebuild();
 		}
 	}
 

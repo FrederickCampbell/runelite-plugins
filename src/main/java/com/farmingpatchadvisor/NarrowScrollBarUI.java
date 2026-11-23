@@ -7,13 +7,12 @@ import java.awt.Rectangle;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.plaf.basic.BasicScrollBarUI;
-import net.runelite.client.ui.ColorScheme;
 
 final class NarrowScrollBarUI extends BasicScrollBarUI
 {
 	static final int WIDTH = 8;
-	private static final Color TRACK_COLOR = ColorScheme.MEDIUM_GRAY_COLOR;
-	private static final Color THUMB_COLOR = ColorScheme.LIGHT_GRAY_COLOR;
+	private static final Color TRACK_COLOR = FarmingHelperTheme.BASE;
+	private static final Color THUMB_COLOR = new Color(105, 118, 106);
 
 	@Override
 	protected void paintTrack(Graphics graphics, JComponent component, Rectangle bounds)

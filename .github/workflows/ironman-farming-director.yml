@@ -1,7 +1,7 @@
 name: Farming Helper build and v0.8.1 release
 on:
   push:
-    branches: [master, farming-helper-v0.8.1]
+    branches: [master, farming-helper-v0.9]
   pull_request:
     branches: [master]
   workflow_dispatch:

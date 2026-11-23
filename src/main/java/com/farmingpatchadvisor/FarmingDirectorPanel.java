@@ -134,7 +134,11 @@ final class FarmingDirectorPanel extends PluginPanel
     private final CardLayout pageLayout = new CardLayout();
     private final JPanel pages = new JPanel(pageLayout);
     private final JPanel patchRows = new JPanel();
-    private final JTextField patchSearch = new JTextField();
+    private final JTextField patchSearch = new FarmingHelperComponents.SearchField();
+    private final Set<PatchType> advancedPatchTypes = EnumSet.noneOf(PatchType.class);
+    private final Map<PatchType, javax.swing.Icon> patchIcons = new EnumMap<>(PatchType.class);
+    private JScrollPane patchScroll;
+    private final javax.swing.Timer patchRefresh = new javax.swing.Timer(30000, e -> { if ("patches".equals(visiblePage)) refreshPatchManager(); });
     private final JCheckBox disabledOnly = new JCheckBox("Show disabled only");
     private final JCheckBox actionableOnly = new JCheckBox("Needs attention only");
     private final JLabel patchSummary = new JLabel();
@@ -296,11 +300,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private JPanel vertical()
     {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(FarmingHelperTheme.BASE);
-        panel.setBorder(BorderFactory.createEmptyBorder(7, 7, 7, 7));
-        return panel;
+        return FarmingHelperComponents.column(6);
     }
 
     private JScrollPane scrolling(JPanel content)
@@ -309,6 +309,7 @@ final class FarmingDirectorPanel extends PluginPanel
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.getViewport().setBackground(FarmingHelperTheme.BASE);
+        FarmingHelperTheme.style(scroll);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         return scroll;
     }
@@ -336,17 +337,17 @@ final class FarmingDirectorPanel extends PluginPanel
                     check.setText(wrapped(check.getText(), 164));
             }
             component.setMaximumSize(new Dimension(Integer.MAX_VALUE,
-                child instanceof JButton ? Math.max(32, component.getPreferredSize().height)
+                child instanceof JButton ? Math.max(28, component.getPreferredSize().height)
                     : child instanceof JTextField || child instanceof JComboBox ? 28
                     : child instanceof javax.swing.JSeparator ? 2 : Integer.MAX_VALUE));
         }
         parent.add(child);
-        parent.add(Box.createVerticalStrut(4));
+        parent.add(Box.createVerticalStrut(3));
     }
 
     private JButton nav(String caption, String page)
     {
-        JButton button = new JButton(caption);
+        JButton button = FarmingHelperComponents.row(caption);
         button.addActionListener(e -> showPage(page));
         return button;
     }
@@ -368,6 +369,7 @@ final class FarmingDirectorPanel extends PluginPanel
             }
         }
         visiblePage = name;
+        if ("patches".equals(name)) patchRefresh.start(); else patchRefresh.stop();
         pageLayout.show(pages, name);
         if ("guide".equals(name) && preparingLoadout)
         {
@@ -388,15 +390,12 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createSelection()
     {
         JPanel list = vertical();
-        JPanel heading = new JPanel(new BorderLayout(4, 0));
-        JLabel title = label("Farming Helper", true);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
-        heading.add(title, BorderLayout.CENTER);
+        
         JButton cog = nav("⚙", "settings");
         cog.setToolTipText("Settings for every run");
         cog.setPreferredSize(new Dimension(31, 29));
-        heading.add(cog, BorderLayout.EAST);
-        addFull(list, heading);
+        FarmingHelperTheme.role(cog,"quiet");
+        addFull(list, FarmingHelperComponents.header("Farming Helper", null, cog));
         addFull(list, selectionStatus);
         resume.addActionListener(e -> resumeSavedRun());
         addFull(list, resume);
@@ -411,15 +410,15 @@ final class FarmingDirectorPanel extends PluginPanel
             }
         });
         addFull(list, returnGuide);
-        addFull(list, label("FARMING RUNS", true));
+        addFull(list, FarmingHelperComponents.caption("STANDARD RUNS"));
         inlineEditor = createEditorControls();
         for (int i = 0; i < runType.getItemCount(); i++)
         {
             DirectorRunSelection mode = runType.getItemAt(i);
-            JPanel card = new JPanel(new BorderLayout(0, 2));
+            if (mode == DirectorRunSelection.MERGED) addFull(list, FarmingHelperComponents.caption("COMBINED RUNS"));
+            JPanel card = new JPanel(new BorderLayout(0, 1));
             card.setBackground(FarmingHelperTheme.SURFACE);
-            card.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
-            JButton fold = new JButton();
+            JButton fold = FarmingHelperComponents.row("");
             fold.setHorizontalAlignment(JButton.LEFT);
             fold.setToolTipText((mode == DirectorRunSelection.MERGED ? "Configure " : "Start ") + mode);
             fold.addActionListener(e ->
@@ -441,15 +440,14 @@ final class FarmingDirectorPanel extends PluginPanel
                 java.awt.image.BufferedImage image = itemManager.getImage(iconId);
                 if (image != null) SwingUtilities.invokeLater(() ->
                 {
-                    runIcons.put(mode, new javax.swing.ImageIcon(image));
+                    runIcons.put(mode, FarmingHelperComponents.sprite(image));
                     fold.setIcon(runIcons.get(mode));
                 });
             });
         }
-        JPanel footer = new JPanel(new GridLayout(1, 2, 4, 0));
-        footer.add(nav("Patch Settings", "patches"));
-        footer.add(nav("Timers / contracts", "status"));
-        addFull(list, footer);
+        addFull(list, new javax.swing.JSeparator());
+        addFull(list, nav("Patch Settings", "patches"));
+        addFull(list, nav("Timers & contracts", "status"));
         updateRunCards();
         JPanel page = new JPanel(new BorderLayout());
         page.add(scrolling(list), BorderLayout.CENTER);
@@ -495,9 +493,9 @@ final class FarmingDirectorPanel extends PluginPanel
             boolean open = e.getKey() == expandedRun;
             e.getValue().setVisible(open);
             JButton header = runHeaders.get(e.getKey());
-            header.setText(wrapped((e.getKey() == DirectorRunSelection.MERGED ? (open ? "▾ " : "▸ ") : "▶ ") + e.getKey(), 117));
+            header.setText(e.getKey() == DirectorRunSelection.MERGED ? (open ? "▾ Custom run" : "▸ Custom run") : e.getKey().toString().replace(" Run", ""));
             header.putClientProperty("fh.primary", open);
-            header.repaint();
+            FarmingHelperTheme.role(header, "quiet");
             if (open) e.getValue().add(inlineEditor, BorderLayout.CENTER);
             e.getValue().revalidate();
         }
@@ -1410,30 +1408,34 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel outer = new JPanel(new BorderLayout(0, 6));
         outer.setBackground(FarmingHelperTheme.BASE);
         JPanel header = vertical();
-        addFull(header, nav("← Back to runs", "selection"));
-        addFull(header, label("Patch Settings", true));
-        addFull(header, label("Disabled patches are excluded from every run. Bulk actions include hidden matches.", false));
+        JButton filters = FarmingHelperComponents.row("≡");
+        filters.setToolTipText("Filters and bulk actions");
+        JPanel filterBody = vertical();
+        filterBody.setVisible(false);
+        filters.addActionListener(e -> { filterBody.setVisible(!filterBody.isVisible()); header.revalidate(); });
+        addFull(header, FarmingHelperComponents.header("Patch Settings", nav("‹", "selection"), filters));
+        addFull(header, patchSummary);
         patchSearch.setToolTipText("Filter patch names and locations");
         addFull(header, patchSearch);
         disabledOnly.setBackground(FarmingHelperTheme.BASE);
         disabledOnly.setForeground(Color.WHITE);
-        addFull(header, disabledOnly);
+        addFull(filterBody, disabledOnly);
         actionableOnly.setBackground(FarmingHelperTheme.BASE);
         actionableOnly.setForeground(Color.WHITE);
-        addFull(header, actionableOnly);
+        addFull(filterBody, actionableOnly);
         actionableOnly.addActionListener(e -> drawPatchRows());
-        addFull(header, patchSummary);
         JPanel bulkAll = new JPanel(new GridLayout(1, 2, 4, 0));
         JButton enableAll = new JButton("Enable all"), disableAll = new JButton("Disable all");
         enableAll.addActionListener(e -> setCategoryEnabled(new ArrayList<>(patchViews), true));
         disableAll.addActionListener(e -> setCategoryEnabled(new ArrayList<>(patchViews), false));
         bulkAll.add(enableAll); bulkAll.add(disableAll);
-        addFull(header, bulkAll);
+        addFull(filterBody, bulkAll);
         disableAll.setToolTipText("Disable every registered patch, even when filters are active");
         enableAll.setToolTipText("Enable every registered patch; unlock requirements still apply");
         JButton refresh = new JButton("Refresh patch states");
         refresh.addActionListener(e -> refreshPatchManager());
-        addFull(header, refresh);
+        addFull(filterBody, refresh);
+        addFull(header, filterBody);
         patchSearch.getDocument().addDocumentListener(new DocumentListener()
         {
             public void insertUpdate(DocumentEvent e) { drawPatchRows(); }
@@ -1445,7 +1447,8 @@ final class FarmingDirectorPanel extends PluginPanel
         patchRows.setLayout(new BoxLayout(patchRows, BoxLayout.Y_AXIS));
         patchRows.setBackground(FarmingHelperTheme.BASE);
         patchRows.setBorder(BorderFactory.createEmptyBorder(5, 9, 8, 9));
-        outer.add(scrolling(patchRows), BorderLayout.CENTER);
+        patchScroll = scrolling(patchRows);
+        outer.add(patchScroll, BorderLayout.CENTER);
         return outer;
     }
 
@@ -1515,6 +1518,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void drawPatchRows()
     {
+        int scrollY = patchScroll == null ? 0 : patchScroll.getVerticalScrollBar().getValue();
         patchRows.removeAll();
         String query = patchSearch.getText().trim().toLowerCase(java.util.Locale.ROOT);
         boolean onlyOff = disabledOnly.isSelected();
@@ -1533,8 +1537,9 @@ final class FarmingDirectorPanel extends PluginPanel
             byType.computeIfAbsent(patch.patch.getPatchType(), t -> new ArrayList<>()).add(patch);
         }
         byType.entrySet().removeIf(e -> e.getValue().isEmpty());
-        patchSummary.setText(wrapped(enabledCount + " / " + patchViews.size() +
-            " enabled · " + byType.values().stream().mapToInt(List::size).sum() + " shown", 184));
+        patchSummary.setText(enabledCount + " / " + patchViews.size() + " enabled");
+        patchSummary.setForeground(FarmingHelperTheme.SUCCESS);
+        patchSummary.setToolTipText(byType.values().stream().mapToInt(List::size).sum() + " shown; enabled is independent of access requirements");
         for (Map.Entry<PatchType, List<PatchView>> group : byType.entrySet())
         {
             JPanel category = new JPanel(new BorderLayout(3, 3));
@@ -1549,19 +1554,36 @@ final class FarmingDirectorPanel extends PluginPanel
             List<PatchView> entireGroup = new ArrayList<>();
             for (PatchView patch : patchViews) if (patch.patch.getPatchType() == group.getKey()) entireGroup.add(patch);
             long groupEnabled = entireGroup.stream().filter(v -> patchPrefs.enabled(v.patch)).count();
-            fold.setText(wrapped(fold.getText() + " · " + groupEnabled + "/" + entireGroup.size(), 150));
+            fold.setText(fold.getText());
+            FarmingHelperTheme.role(fold, "quiet");
+            JLabel count = FarmingHelperComponents.caption(groupEnabled + "/" + entireGroup.size());
+            count.setForeground(groupEnabled == 0 ? FarmingHelperTheme.MUTED : FarmingHelperTheme.SUCCESS);
+            JPanel categoryHeader = new JPanel(new BorderLayout(3,0));
+            categoryHeader.setBackground(FarmingHelperTheme.SURFACE);
+            categoryHeader.add(fold, BorderLayout.CENTER);
+            categoryHeader.add(count, BorderLayout.EAST);
+            PatchType type = group.getKey();
+            if (patchIcons.containsKey(type)) fold.setIcon(patchIcons.get(type));
+            else if (!CropCatalog.crops(type).isEmpty())
+            {
+                int item = CropCatalog.crops(type).get(0).getItemId();
+                clientThread.invoke(() -> {
+                    java.awt.image.BufferedImage image = itemManager.getImage(item);
+                    SwingUtilities.invokeLater(() -> { if (image != null) { javax.swing.Icon icon = FarmingHelperComponents.sprite(image); patchIcons.put(type, icon); fold.setIcon(icon); } });
+                });
+            }
             fold.setHorizontalAlignment(JButton.LEFT);
             fold.putClientProperty("fh.primary", !collapsedTypes.contains(group.getKey()));
-            category.add(fold, BorderLayout.NORTH);
+            category.add(categoryHeader, BorderLayout.NORTH);
             JPanel contents = vertical();
             contents.setBackground(FarmingHelperTheme.SURFACE);
             contents.setBorder(BorderFactory.createEmptyBorder(3,5,3,5));
             JPanel bulk = new JPanel(new GridLayout(1, 2, 3, 0));
             bulk.setBackground(FarmingHelperTheme.SURFACE);
-            JButton all = new JButton("Enable group");
+            JButton all = new JButton("Enable all");
             all.addActionListener(e -> setCategoryEnabled(entireGroup, true));
             bulk.add(all);
-            JButton none = new JButton("Disable group");
+            JButton none = new JButton("Disable all");
             none.addActionListener(e -> setCategoryEnabled(entireGroup, false));
             bulk.add(none);
             if (!collapsedTypes.contains(group.getKey())) category.add(contents, BorderLayout.CENTER);
@@ -1589,7 +1611,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 if (location.getValue().size() == 1 && entireGroup.stream().filter(v -> v.patch.getLocation().equals(location.getKey())).count() == 1)
                 {
                     PatchView patch = location.getValue().get(0);
-                    JCheckBox single = new JCheckBox(wrapped(location.getKey(), 130), patchPrefs.enabled(patch.patch));
+                    JCheckBox single = new JCheckBox(location.getKey(), patchPrefs.enabled(patch.patch));
                     single.setEnabled(configManager.getRSProfileKey() != null);
                     single.setToolTipText(patch.unlock + " · " + patch.state);
                     single.addActionListener(e -> { patchPrefs.setEnabled(patch.patch, single.isSelected()); drawPatchRows(); });
@@ -1659,6 +1681,7 @@ final class FarmingDirectorPanel extends PluginPanel
         FarmingHelperTheme.style(patchRows);
         patchRows.revalidate();
         patchRows.repaint();
+        if (patchScroll != null) SwingUtilities.invokeLater(() -> patchScroll.getVerticalScrollBar().setValue(scrollY));
     }
 
     private DirectorPatchPriority patchPriority(PatchType type)
@@ -1768,7 +1791,10 @@ final class FarmingDirectorPanel extends PluginPanel
             addFull(editor, label("First eligible available crop wins.", false));
         }
         else addFull(editor, label("Highest eligible crop in stock.", false));
-        JButton reservesButton = new JButton("Stock reserves…");
+        JPanel advanced = vertical();
+        advanced.setBackground(FarmingHelperTheme.SURFACE);
+        JButton reservesButton = new JButton("Keep seeds in reserve…");
+        reservesButton.setToolTipText("Keep a minimum stock for contracts or future runs");
         reservesButton.setEnabled(canEdit);
         reservesButton.addActionListener(e ->
         {
@@ -1781,21 +1807,26 @@ final class FarmingDirectorPanel extends PluginPanel
                 drawPatchRows();
             }
         });
-        addFull(editor, reservesButton);
+        addFull(advanced, reservesButton);
         JButton route = new JButton("Route & teleports…");
         route.addActionListener(e ->
         {
             runType.setSelectedItem(DirectorRunSelection.valueOf(individualMode(FarmRunType.forPatchType(type))));
             showPage("route");
         });
-        addFull(editor, route);
+        addFull(advanced, route);
+        JButton more = FarmingHelperComponents.row((advancedPatchTypes.contains(type) ? "▾ " : "▸ ") + "Advanced");
+        advanced.setVisible(advancedPatchTypes.contains(type));
+        more.addActionListener(e -> { if (!advancedPatchTypes.add(type)) advancedPatchTypes.remove(type); advanced.setVisible(advancedPatchTypes.contains(type)); more.setText((advanced.isVisible() ? "▾ " : "▸ ") + "Advanced"); editor.revalidate(); });
+        addFull(editor, more);
+        addFull(editor, advanced);
         return editor;
     }
 
     private static JLabel label(String text, boolean strong)
     {
         JLabel l = new JLabel(wrapped(text, 184));
-        l.setForeground(strong ? Color.WHITE : Color.LIGHT_GRAY);
+        l.setForeground(strong ? FarmingHelperTheme.TEXT : FarmingHelperTheme.MUTED);
         l.setAlignmentX(Component.LEFT_ALIGNMENT);
         return l;
     }
@@ -2956,7 +2987,7 @@ final class FarmingDirectorPanel extends PluginPanel
             temporaryOverrides.clear();
             patchViews.clear();
             collapsedTypes.clear(); collapsedTypes.addAll(EnumSet.allOf(PatchType.class));
-            openPatchLocations.clear();
+            openPatchLocations.clear(); advancedPatchTypes.clear();
             expandedLocations.clear(); expandedRun = null;
             routeModel.clear();
             start.setEnabled(true);
@@ -2985,6 +3016,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     void shutDown()
     {
+        SwingUtilities.invokeLater(patchRefresh::stop);
         resetCharacter();
     }
 
@@ -3343,7 +3375,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private static String wrapped(String raw, int width)
     {
-        return "<html><body style='width:" + Math.min(width, 170) + "px'>" + escape(raw) + "</body></html>";
+        return "<html><body style='font-family: sans-serif; width:" + Math.min(width, 170) + "px'>" + escape(raw) + "</body></html>";
     }
 
     private static String escape(String raw)

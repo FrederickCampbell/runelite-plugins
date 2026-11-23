@@ -12,13 +12,39 @@ import javax.swing.plaf.basic.BasicSpinnerUI;
 /** Local component theme. Never changes RuneLite's process-wide LookAndFeel. */
 final class FarmingHelperTheme
 {
-    static final Color BASE = new Color(34,40,36), SURFACE = new Color(48,58,48),
-        SELECTED = new Color(53,75,53), BORDER = new Color(66,82,65),
-        PRIMARY = new Color(88,125,66), TEXT = new Color(226,235,220),
-        MUTED = new Color(170,185,163), SUCCESS = new Color(165,209,154),
+    static final Color BASE = new Color(30,33,32), SURFACE = new Color(40,45,42),
+        SELECTED = new Color(52,59,54), BORDER = new Color(59,69,61),
+        PRIMARY = new Color(86,123,70), TEXT = new Color(228,232,227),
+        MUTED = new Color(160,170,161), SUCCESS = new Color(165,209,154),
         GOLD = new Color(212,179,107);
     private static final String STYLED = "fh.styled";
+    static final Font BODY = new Font(Font.DIALOG, Font.PLAIN, 12);
+    static final Font HEADING = BODY.deriveFont(Font.BOLD, 13f);
+    static final Font TITLE = BODY.deriveFont(Font.BOLD, 17f);
     private FarmingHelperTheme() {}
+
+    private static boolean nativeFlat(JComponent c)
+    {
+        String name = c.getUI() == null ? "" : c.getUI().getClass().getName();
+        return name.startsWith("com.formdev.flatlaf.") || name.startsWith("net.runelite.client.ui.laf.");
+    }
+
+    static void role(JButton button, String role)
+    {
+        button.putClientProperty("fh.role", role);
+        if (nativeFlat(button)) nativeButton(button);
+        button.repaint();
+    }
+
+    private static void nativeButton(JButton button)
+    {
+        boolean primary = Boolean.TRUE.equals(button.getClientProperty("fh.primary"));
+        boolean quiet = "quiet".equals(button.getClientProperty("fh.role"));
+        button.setBackground(primary ? PRIMARY : SURFACE);
+        button.putClientProperty("FlatLaf.style", "arc: 6; margin: 4,6,4,6; minimumWidth: 0; borderWidth: "
+            + (quiet ? "0" : "1") + "; focusWidth: 1; background: " + (primary ? "#567B46" : "#282D2A")
+            + "; foreground: #E4E8E3; hoverBackground: #343B36; pressedBackground: #40543A; borderColor: #3B453D");
+    }
 
     static void style(Component component)
     {
@@ -28,30 +54,41 @@ final class FarmingHelperTheme
             if (c.getClientProperty(STYLED) == null)
             {
                 c.putClientProperty(STYLED, true);
+                Font old = c.getFont();
+                c.setFont(old != null && old.getSize() >= 15 && old.isBold() ? TITLE : BODY);
                 if (c instanceof JCheckBox)
                 {
                     JCheckBox check = (JCheckBox)c;
-                    check.setUI(new javax.swing.plaf.basic.BasicCheckBoxUI());
-                    check.setIcon(new CheckIcon());
-                    check.setSelectedIcon(check.getIcon());
-                    check.setDisabledIcon(check.getIcon());
-                    check.setDisabledSelectedIcon(check.getIcon());
+                    if (nativeFlat(check))
+                        check.putClientProperty("FlatLaf.style", "icon.size: 15; icon.arc: 4; icon.selectedBackground: #567B46; icon.selectedBorderColor: #A5D19A; icon.borderColor: #788378");
+                    else
+                    {
+                        check.setUI(new javax.swing.plaf.basic.BasicCheckBoxUI());
+                        check.setIcon(new CheckIcon());
+                        check.setSelectedIcon(check.getIcon());
+                        check.setDisabledIcon(check.getIcon());
+                        check.setDisabledSelectedIcon(check.getIcon());
+                    }
                     check.setBackground(BASE);
                     check.setForeground(TEXT);
                     check.setOpaque(false);
-                    check.setFocusPainted(false);
+                    check.setFocusPainted(true);
                     check.setIconTextGap(7);
                 }
                 else if (c instanceof JButton && !(c instanceof BasicArrowButton))
                 {
                     JButton button = (JButton)c;
-                    button.setUI(new ButtonUI());
-                    button.setOpaque(false);
-                    button.setContentAreaFilled(false);
-                    button.setBorder(new EmptyBorder(6, 8, 6, 8));
-                    button.setBackground(SURFACE);
+                    if (nativeFlat(button)) nativeButton(button);
+                    else
+                    {
+                        button.setUI(new ButtonUI());
+                        button.setOpaque(false);
+                        button.setContentAreaFilled(false);
+                        button.setBorder(new EmptyBorder(4, 6, 4, 6));
+                    }
+                    button.setBackground(Boolean.TRUE.equals(button.getClientProperty("fh.primary")) ? PRIMARY : SURFACE);
                     button.setForeground(TEXT);
-                    button.setFocusPainted(false);
+                    button.setFocusPainted(true);
                     button.setRolloverEnabled(true);
                     button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 }
@@ -59,14 +96,15 @@ final class FarmingHelperTheme
                 {
                     JComboBox<?> combo = (JComboBox<?>)c;
                     combo.setBackground(SURFACE); combo.setForeground(TEXT);
-                    combo.setUI(new ComboUI());
-                    combo.setBorder(BorderFactory.createLineBorder(BORDER));
+                    if (nativeFlat(combo)) combo.putClientProperty("FlatLaf.style", "arc: 6; minimumWidth: 0; borderColor: #3B453D; buttonBackground: #282D2A");
+                    else { combo.setUI(new ComboUI()); combo.setBorder(BorderFactory.createLineBorder(BORDER)); }
                     themeRenderer(combo);
                 }
                 else if (c instanceof JSpinner)
                 {
                     JSpinner spinner = (JSpinner)c;
-                    spinner.setUI(new SpinnerUI());
+                    if (nativeFlat(spinner)) spinner.putClientProperty("FlatLaf.style", "arc: 6; borderColor: #3B453D");
+                    else spinner.setUI(new SpinnerUI());
                     spinner.setBackground(SURFACE); spinner.setForeground(TEXT);
                     spinner.setBorder(BorderFactory.createLineBorder(BORDER));
                 }
@@ -75,7 +113,8 @@ final class FarmingHelperTheme
                     JTextField field = (JTextField)c;
                     field.setBackground(SURFACE); field.setForeground(TEXT); field.setCaretColor(TEXT);
                     field.setSelectionColor(SELECTED); field.setSelectedTextColor(TEXT);
-                    field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER), new EmptyBorder(3,5,3,5)));
+                    if (nativeFlat(field)) field.putClientProperty("FlatLaf.style", "arc: 6; borderColor: #3B453D; minimumWidth: 0");
+                    else field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER), new EmptyBorder(3,5,3,5)));
                 }
                 else if (c instanceof JLabel)
                 {
@@ -101,6 +140,10 @@ final class FarmingHelperTheme
                 }
                 else if (c instanceof JScrollBar)
                 {
+                    JScrollBar bar = (JScrollBar)c;
+                    if (nativeFlat(bar)) bar.putClientProperty("FlatLaf.style", "width: 7; track: #1E2120; thumb: #69766A; showButtons: false");
+                    else bar.setUI(new NarrowScrollBarUI());
+                    bar.setPreferredSize(new Dimension(8, 8));
                     c.setBackground(BASE); c.setForeground(BORDER);
                 }
                 else if (c instanceof JSeparator) c.setForeground(BORDER);
@@ -119,6 +162,7 @@ final class FarmingHelperTheme
         combo.setRenderer((list, value, index, selected, focus) ->
         {
             Component cell = delegate.getListCellRendererComponent(list,value,index,selected,focus);
+            cell.setFont(BODY);
             cell.setBackground(selected ? SELECTED : SURFACE);
             cell.setForeground(TEXT);
             if (cell instanceof JComponent) ((JComponent)cell).setOpaque(true);
@@ -141,7 +185,8 @@ final class FarmingHelperTheme
                     : primary ? PRIMARY : SURFACE;
                 g.setColor(fill); g.fillRoundRect(0,0,b.getWidth()-1,b.getHeight()-1,7,7);
                 g.setColor(b.hasFocus() ? SUCCESS : BORDER);
-                g.drawRoundRect(0,0,b.getWidth()-1,b.getHeight()-1,7,7);
+                if (b.hasFocus() || !"quiet".equals(b.getClientProperty("fh.role")))
+                    g.drawRoundRect(0,0,b.getWidth()-1,b.getHeight()-1,7,7);
             }
             finally { g.dispose(); }
             super.paint(graphics, component);
