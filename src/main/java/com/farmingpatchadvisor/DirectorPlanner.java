@@ -24,11 +24,18 @@ final class DirectorPlanner
     {
         final FarmRunPatch patch;
         final Crop crop;
+        final boolean requiresPlanting;
 
         Step(FarmRunPatch patch, Crop crop)
         {
+            this(patch, crop, true);
+        }
+
+        Step(FarmRunPatch patch, Crop crop, boolean requiresPlanting)
+        {
             this.patch = patch;
             this.crop = crop;
+            this.requiresPlanting = requiresPlanting;
         }
     }
 
@@ -68,6 +75,21 @@ final class DirectorPlanner
                       int teleportSlots, int freeHarvestSlots, boolean protectTrees,
                       IntPredicate stackable)
     {
+        return build(type, patches, farmingLevel, stock, customPriority, priorities,
+            reserves, fixedToolSlots, teleportSlots, freeHarvestSlots,
+            protectTrees, stackable, Collections.emptySet());
+    }
+
+    /**
+     * A preplanted patch can still need gardener protection, but must not
+     * consume a sapling that is already in the ground.
+     */
+    static Plan build(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
@@ -97,6 +119,11 @@ final class DirectorPlanner
 
         for (FarmRunPatch patch : patches)
         {
+            if (preplanted.contains(FarmRouteManager.key(patch)))
+            {
+                result.add(new Step(patch, null, false));
+                continue;
+            }
             Crop choice = null;
             int count = Math.max(1, patch.getPatchCount());
             for (Crop candidate : eligible)

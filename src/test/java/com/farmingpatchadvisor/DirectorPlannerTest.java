@@ -113,6 +113,23 @@ public class DirectorPlannerTest
     }
 
     @Test
+    public void alreadyGrowingTreeCanRequestProtectionWithoutAnotherSapling()
+    {
+        List<FarmRunPatch> stops = patches(PatchType.TREE, 2);
+        java.util.Set<String> preplanted = java.util.Collections.singleton(
+            FarmRouteManager.key(stops.get(0)));
+        Crop oak = crop(PatchType.TREE, "oak");
+        java.util.Map<Integer, Integer> stock = new HashMap<>();
+        stock.put(oak.getItemId(), 1);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.TREE, stops, 30,
+            stock, false, "", "", 3, 0, 2, false, id -> false, preplanted);
+        assertEquals(2, plan.steps.size());
+        assertFalse(plan.steps.get(0).requiresPlanting);
+        assertNull(plan.steps.get(0).crop);
+        assertEquals(1, plan.seeds.get(oak.getItemId()).intValue());
+    }
+
+    @Test
     public void malformedReserveValuesAreIgnored()
     {
         assertEquals(5, DirectorPlanner.parseReserves("ranarr=5,snapdragon=abc")
