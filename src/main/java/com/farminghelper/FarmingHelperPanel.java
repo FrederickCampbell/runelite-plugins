@@ -2405,15 +2405,9 @@ final class FarmingHelperPanel extends PluginPanel
         }
         if (observation.source == QuestFarmingStateReader.Source.LIVE && observation.state == CropState.EMPTY)
             sawLiveEmpty = true;
-        StepEngine.Action action = StepEngine.actionForStep(
-            step, observation.state, observation.protectedByFarmer);
-        // An empty-to-growing transition is evidence of planting; curing a crop is not.
-        // Compost is a recommendation, not a prerequisite for continuing.
-        if (RunReadiness.growing(observation) && sawHarvestable && !sawLiveEmpty)
-            action = StepEngine.Action.COMPLETE;
-        if (action == StepEngine.Action.PROTECT_TREE &&
-            (!sawLiveEmpty || !Supplies.hasProtectionPayment(step, loadout.directorInventory())))
-            action = StepEngine.Action.COMPLETE;
+        StepEngine.Action action = StepEngine.guideAction(step, observation.state,
+            observation.protectedByFarmer, sawLiveEmpty, sawHarvestable,
+            Supplies.hasProtectionPayment(step, loadout.directorInventory()));
         QuestTargets.Definition def = QuestTargets.get(step.patch);
         action = StepEngine.refine(action, activePayRemoval, def != null && def.gardenerId >= 0, weeds);
         if (action == StepEngine.Action.CHOP_TREE && step.patch.getPatchType() == PatchType.CALQUAT)
