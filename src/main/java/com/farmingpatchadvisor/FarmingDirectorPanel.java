@@ -37,6 +37,7 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.events.PluginMessage;
 import net.runelite.client.ui.ColorScheme;
@@ -58,6 +59,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final ClientThread clientThread;
     private final EventBus eventBus;
     private final ConfigManager configManager;
+    private final ItemManager itemManager;
     private final FarmingLoadout loadout;
     private final FarmingPatchAdvisorPlugin plugin;
     private final FarmingPatchAdvisorConfig config;
@@ -85,7 +87,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     @Inject
     FarmingDirectorPanel(Client client, ClientThread clientThread, EventBus eventBus,
-                         ConfigManager configManager, FarmingLoadout loadout,
+                         ConfigManager configManager, ItemManager itemManager, FarmingLoadout loadout,
                          FarmingPatchAdvisorPlugin plugin, FarmingPatchAdvisorConfig config,
                          FarmRouteManager routes, FarmingPatchPanel advisorPanel)
     {
@@ -94,6 +96,7 @@ final class FarmingDirectorPanel extends PluginPanel
         this.clientThread = clientThread;
         this.eventBus = eventBus;
         this.configManager = configManager;
+        this.itemManager = itemManager;
         this.loadout = loadout;
         this.plugin = plugin;
         this.config = config;
@@ -340,7 +343,7 @@ final class FarmingDirectorPanel extends PluginPanel
         int harvestReserve = type == PatchType.HERB ? config.directorHarvestSlots() : 2;
         DirectorPlanner.Plan plan = DirectorPlanner.build(type, candidates, level, stock,
             custom, priorityText, reserveText, toolSlots, teleportSlots, harvestReserve,
-            protection, id -> client.getItemComposition(id).isStackable());
+            protection, id -> itemManager.getItemComposition(id).isStackable());
 
         if (type == PatchType.TREE && plan.steps.isEmpty())
         {
