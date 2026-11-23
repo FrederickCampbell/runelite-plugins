@@ -54,10 +54,18 @@ public final class QuestFarmingStateReader
         public final long observedAtMillis;
         @Nullable public final Boolean protectedByFarmer;
         public final String patchName;
+        public final int rawValue;
 
         public Observation(@Nullable CropState state, Source source, long time,
                            @Nullable Boolean protection, String patchName)
         {
+            this(state, source, time, protection, patchName, -1);
+        }
+
+        public Observation(@Nullable CropState state, Source source, long time,
+                           @Nullable Boolean protection, String patchName, int rawValue)
+        {
+            this.rawValue = rawValue;
             this.state = state;
             this.source = source;
             this.observedAtMillis = time;
@@ -187,7 +195,7 @@ public final class QuestFarmingStateReader
             {
                 CropState state = normalizedState(match.getImplementation(), value, raw);
                 return new Observation(state, Source.LIVE, System.currentTimeMillis(),
-                    protection, match.getName());
+                    protection, match.getName(), value);
             }
         }
 
@@ -219,8 +227,18 @@ public final class QuestFarmingStateReader
         if (implementation == PatchImplementation.SPIRIT_TREE && value == 44 ||
             implementation == PatchImplementation.REDWOOD && value == 37 ||
             implementation == PatchImplementation.CELASTRUS && value == 13 ||
-            implementation == PatchImplementation.CRYSTAL_TREE && value == 14)
+            implementation == PatchImplementation.CRYSTAL_TREE && value == 14 ||
+            implementation == PatchImplementation.CACTUS && (value == 31 || value == 58))
             return CropState.UNCHECKED;
+        // Mature redwoods and harvested celastrus are distinct from harvestable fruit.
+        // Leave permanent woodcutting trees in place; celastrus can be removed after bark harvest.
+        if (implementation == PatchImplementation.REDWOOD && raw.getCropState() == CropState.HARVESTABLE)
+            return CropState.GROWING;
+        if (implementation == PatchImplementation.CELASTRUS && value == 17)
+            return CropState.HARVESTABLE;
+        if ((implementation == PatchImplementation.BUSH || implementation == PatchImplementation.CACTUS)
+            && raw.getCropState() == CropState.HARVESTABLE && raw.getStage() == 0)
+            return CropState.GROWING; // No produce left; regrowth is not a new planting.
         return raw.getCropState();
     }
 
