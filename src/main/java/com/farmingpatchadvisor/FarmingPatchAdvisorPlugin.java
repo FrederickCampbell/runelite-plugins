@@ -126,11 +126,6 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		overlayManager.add(patchOverlay);
         overlayManager.add(directorWidgetOverlay);
 		overlayManager.add(itemOverlay);
-		overlayManager.add(timerOverlay);
-		overlayManager.add(checklistOverlay);
-		overlayManager.add(bankFarmRunOverlay);
-		overlayManager.add(storageScanReminderOverlay);
-		overlayManager.add(compostBinOverlay);
 		patchPanel.start();
 		directorPanel.requestRefresh();
 		navigationButton = NavigationButton.builder()
@@ -150,11 +145,6 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		overlayManager.remove(patchOverlay);
         overlayManager.remove(directorWidgetOverlay);
 		overlayManager.remove(itemOverlay);
-		overlayManager.remove(timerOverlay);
-		overlayManager.remove(checklistOverlay);
-		overlayManager.remove(bankFarmRunOverlay);
-		overlayManager.remove(storageScanReminderOverlay);
-		overlayManager.remove(compostBinOverlay);
 		if (navigationButton != null)
 		{
 			clientToolbar.removeNavigation(navigationButton);

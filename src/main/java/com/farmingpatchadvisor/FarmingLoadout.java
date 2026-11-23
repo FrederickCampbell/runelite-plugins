@@ -240,7 +240,18 @@ final class FarmingLoadout
         return true;
     }
 
+    private volatile boolean directorBankGuidance;
+
     synchronized DirectorBankChecklist activeDirectorChecklist() { return directorChecklist; }
+
+    boolean directorBankGuidance() { return directorBankGuidance; }
+
+    boolean setDirectorBankGuidance(boolean visible)
+    {
+        boolean changed = directorBankGuidance != visible;
+        directorBankGuidance = visible;
+        return changed;
+    }
 
     synchronized List<ChecklistItem> directorChecklistRows()
     {

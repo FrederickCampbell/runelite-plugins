@@ -1874,7 +1874,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 render();
                 if (!preserveProgress || "guide".equals(visiblePage)
                     || "selection".equals(visiblePage)) showPage("guide");
-                if (!currentPlan.steps.isEmpty() && !paused && suppliesMissing())
+                if (!currentPlan.steps.isEmpty() && !paused && (!preserveProgress || suppliesMissing()))
                 {
                     preparingLoadout = true;
                     showPage("loadout");
@@ -2786,6 +2786,8 @@ final class FarmingDirectorPanel extends PluginPanel
         worldTarget = null;
         preparingLoadout = false;
         directorRunDisplayed = false;
+        loadout.setDirectorBankGuidance(false);
+        plugin.refreshDirectorBankFilter();
         planningInFlight = false;
         SwingUtilities.invokeLater(() ->
         {
@@ -2841,7 +2843,7 @@ final class FarmingDirectorPanel extends PluginPanel
     DirectorWorldGuide.Target activeWorldTarget()
     {
         DirectorWorldGuide.Target target = worldTarget;
-        return target != null && !paused && !preparingLoadout && !planningInFlight && !runFinished && !compostPageOpen
+        return target != null && DirectorOverlayPolicy.world(paused, preparingLoadout, planningInFlight, runFinished, compostPageOpen)
             && Objects.equals(target.profile, configManager.getRSProfileKey()) ? target : null;
     }
 
@@ -2886,7 +2888,10 @@ final class FarmingDirectorPanel extends PluginPanel
             next = DirectorBankChecklist.remaining(wave, kit, travel,
                 awaitingBank ? Collections.emptySet() : completedSteps);
         }
-        if (loadout.publishDirectorChecklist(next)) plugin.refreshDirectorBankFilter();
+        boolean changed = loadout.publishDirectorChecklist(next);
+        boolean bankGuidance = DirectorOverlayPolicy.bank(next != null, preparingLoadout, awaitingBank,
+            paused, runFinished, planningInFlight, compostPageOpen);
+        if (loadout.setDirectorBankGuidance(bankGuidance) || changed) plugin.refreshDirectorBankFilter();
     }
 
     private void render()

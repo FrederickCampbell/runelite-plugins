@@ -42,6 +42,7 @@ final class BankChecklistFilter
 
 	void addButton()
 	{
+        if (!farmingLoadout.directorBankGuidance()) { removeButton(); return; }
 		Widget bankRoot = client.getWidget(InterfaceID.Bankmain.UNIVERSE);
 		Widget itemsContainer = client.getWidget(InterfaceID.Bankmain.ITEMS_CONTAINER);
 		if (bankRoot == null || itemsContainer == null)
@@ -132,7 +133,7 @@ final class BankChecklistFilter
 
 	void filterBankItem()
 	{
-		if (!active)
+		if (!active || !farmingLoadout.directorBankGuidance())
 		{
 			return;
 		}
@@ -143,20 +144,26 @@ final class BankChecklistFilter
 			return;
 		}
 		int itemId = stack[size - 1];
-		Set<Integer> checklistIds = farmingLoadout.bankChecklistItemIds(
-			config.includeCompost(), config.checklistTools(), config.checklistPayments(),
-			ChecklistPatch.selected(config));
+		DirectorBankChecklist checklist = farmingLoadout.activeDirectorChecklist();
+        if (checklist == null) return;
+        Set<Integer> checklistIds = checklist.ids();
 		stack[size - 2] = checklistIds.contains(itemId) ? 1 : 0;
 	}
 
     void refreshDirectorFilter()
     {
         Widget bank = client.getWidget(InterfaceID.Bankmain.UNIVERSE);
-        if (active && bank != null && !bank.isHidden()) bankSearch.layoutBank();
+        if (!farmingLoadout.directorBankGuidance()) { removeButton(); return; }
+        if (bank != null && !bank.isHidden())
+        {
+            addButton();
+            if (active) bankSearch.layoutBank();
+        }
     }
 
 	private void toggle()
 	{
+        if (!farmingLoadout.directorBankGuidance()) { removeButton(); return; }
 		active = !active;
 		if (button != null)
 		{

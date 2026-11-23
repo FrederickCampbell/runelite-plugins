@@ -11,7 +11,7 @@ import net.runelite.client.config.ConfigSection;
 public interface FarmingPatchAdvisorConfig extends Config
 {
     @ConfigSection(name = "Director", description = "Guided run and conservative planning settings",
-        position = 5)
+        position = 5, closedByDefault = true)
     String directorSection = "directorSection";
 
     @ConfigItem(keyName = "directorHarvestSlots", name = "Herb harvest slots",
@@ -36,28 +36,28 @@ public interface FarmingPatchAdvisorConfig extends Config
     @ConfigSection(name = "Crop overrides", description = "Override automatic seed recommendations by patch type", position = 16, closedByDefault = true)
 	String cropOverridesSection = "cropOverridesSection";
 
-	@ConfigSection(name = "Allotment, flower & herb run", description = "Patch types used on the frequent crop run", position = 17)
+	@ConfigSection(name = "Allotment, flower & herb run", description = "Patch types used on the frequent crop run", position = 17, closedByDefault = true)
 	String cropRunSection = "cropRunSection";
 
-	@ConfigSection(name = "Tree run", description = "Regular tree patches", position = 18)
+	@ConfigSection(name = "Tree run", description = "Regular tree patches", position = 18, closedByDefault = true)
 	String treeRunSection = "treeRunSection";
 
-	@ConfigSection(name = "Fruit tree & calquat run", description = "Fruit-tree and calquat patches", position = 19)
+	@ConfigSection(name = "Fruit tree & calquat run", description = "Fruit-tree and calquat patches", position = 19, closedByDefault = true)
 	String fruitTreeRunSection = "fruitTreeRunSection";
 
-	@ConfigSection(name = "Hardwood tree run", description = "Hardwood-tree patches", position = 20)
+	@ConfigSection(name = "Hardwood tree run", description = "Hardwood-tree patches", position = 20, closedByDefault = true)
 	String hardwoodRunSection = "hardwoodRunSection";
 
-	@ConfigSection(name = "Hops run", description = "Hops patches", position = 21)
+	@ConfigSection(name = "Hops run", description = "Hops patches", position = 21, closedByDefault = true)
 	String hopsRunSection = "hopsRunSection";
 
-	@ConfigSection(name = "Bush run", description = "Bush patches", position = 22)
+	@ConfigSection(name = "Bush run", description = "Bush patches", position = 22, closedByDefault = true)
 	String bushRunSection = "bushRunSection";
 
-	@ConfigSection(name = "Cactus run", description = "Cactus patches", position = 23)
+	@ConfigSection(name = "Cactus run", description = "Cactus patches", position = 23, closedByDefault = true)
 	String cactusRunSection = "cactusRunSection";
 
-	@ConfigSection(name = "Specialty patch run", description = "Special-purpose and unique farming patches", position = 24)
+	@ConfigSection(name = "Specialty patch run", description = "Special-purpose and unique farming patches", position = 24, closedByDefault = true)
 	String specialtyRunSection = "specialtyRunSection";
 
 	@ConfigSection(name = "Compost bins", description = "Configure compost-bin tracking and run supplies", position = 25, closedByDefault = true)
