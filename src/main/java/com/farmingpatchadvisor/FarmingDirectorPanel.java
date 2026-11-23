@@ -124,6 +124,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JTextField patchSearch = new JTextField();
     private final JCheckBox disabledOnly = new JCheckBox("Show disabled only");
     private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
+    private final JCheckBox allowUnverified = new JCheckBox("Include unverified-access locations");
     private final JPanel compostRows = new JPanel();
     private final JCheckBox guideDetails = new JCheckBox("Show planning details and warnings");
     private final JComboBox<String> presetChoice = new JComboBox<>();
@@ -165,6 +166,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private DirectorStepEngine.Action visibleAction = DirectorStepEngine.Action.INSPECT;
     private final Set<Integer> completedSteps = new HashSet<>();
     private final Set<String> completedPatchKeys = new HashSet<>();
+    private final Map<String, String> temporaryOverrides = new HashMap<>();
     private long planningGeneration;
     private volatile int lastPlannedFarmingLevel;
     private volatile long routeGeneration;
@@ -290,8 +292,8 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(list, nav("Edit selected run", "editor"));
         addFull(list, nav("Manage farming patches", "patches"));
         addFull(list, nav("Global settings", "settings"));
-        JButton guide = nav("Return to active guide", "guide");
-        guide.addActionListener(e -> guide.setEnabled(currentPlan != null));
+        JButton guide = new JButton("Return to active guide");
+        guide.addActionListener(e -> { if (currentPlan != null) showPage("guide"); });
         addFull(list, guide);
         addFull(list, label("Routes, crops and bank supplies are planned from your saved choices.", false));
         return new JPanel(new BorderLayout())
@@ -506,7 +508,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(settings, nav("← Back to runs", "selection"));
         addFull(settings, label("Global Settings", true));
         for (JCheckBox toggle : new JCheckBox[] {protectTrees, autoNext,
-            nearestRoute, herbloreFocus, autoReplanBank, readyOnly})
+            nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified})
         {
             toggle.setBackground(ColorScheme.DARK_GRAY_COLOR);
             toggle.setForeground(Color.WHITE);
@@ -782,6 +784,8 @@ final class FarmingDirectorPanel extends PluginPanel
         herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
         autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "false")));
         readyOnly.setSelected(Boolean.parseBoolean(profileValue("directorReadyOnly", "false")));
+        allowUnverified.setSelected(Boolean.parseBoolean(profileValue("directorAllowUnverified",
+            Boolean.toString(config.directorIncludeUnverifiedLocations()))));
         int cap = 8;
         try
         {
@@ -830,6 +834,8 @@ final class FarmingDirectorPanel extends PluginPanel
             Boolean.toString(autoReplanBank.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorReadyOnly",
             Boolean.toString(readyOnly.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorAllowUnverified",
+            Boolean.toString(allowUnverified.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorWaveStopLimit",
             maxStopsPerWave.getValue().toString());
         DirectorBankStops.Bank bank = (DirectorBankStops.Bank) bankChoice.getSelectedItem();
@@ -874,6 +880,9 @@ final class FarmingDirectorPanel extends PluginPanel
         final String presetName = preserveProgress ? activePresetName
             : (String) presetChoice.getSelectedItem();
         final boolean onlyActionable = readyOnly.isSelected();
+        final boolean includeUnverified = allowUnverified.isSelected();
+        if (!preserveProgress) temporaryOverrides.clear();
+        final Map<String, String> localOverrides = new HashMap<>(temporaryOverrides);
         final boolean protection = protectTrees.isSelected();
         final boolean proximity = nearestRoute.isSelected();
         final boolean herbPriority = herbloreFocus.isSelected();
@@ -891,7 +900,7 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 calculated = compute(selected, custom, priorityText,
                     reserveText, protection, proximity, herbPriority, waveCap, skip,
-                    presetName, onlyActionable);
+                    presetName, onlyActionable, includeUnverified, localOverrides);
             }
             catch (RuntimeException problem)
             {
@@ -938,7 +947,8 @@ final class FarmingDirectorPanel extends PluginPanel
     private DirectorSessionPlan compute(DirectorRunSelection selection,
         boolean custom, String priorityText, String reserveText,
         boolean protection, boolean proximity, boolean herbPriority, int waveCap,
-        Set<String> skip, String presetName, boolean onlyActionable)
+        Set<String> skip, String presetName, boolean onlyActionable,
+        boolean includeUnverified, Map<String, String> localOverrides)
     {
         List<String> warnings = new ArrayList<>();
         if (client.getGameState() != GameState.LOGGED_IN)
@@ -967,7 +977,7 @@ final class FarmingDirectorPanel extends PluginPanel
             PatchType type = grouped.getPatchType();
             if (!selection.includes(type)) continue;
             String access = DirectorWaypoints.accessIssue(client, type, grouped.getLocation(),
-                level, config.directorIncludeUnverifiedLocations());
+                level, includeUnverified);
             if (access != null)
             {
                 warnings.add(access);
@@ -1079,7 +1089,8 @@ final class FarmingDirectorPanel extends PluginPanel
                     harvestOnly.add(FarmRouteManager.key(patch));
                 }
             }
-            String override = profileValue("directorCrop_" + FarmRouteManager.key(patch), "");
+            String override = localOverrides.getOrDefault(FarmRouteManager.key(patch),
+                profileValue("directorCrop_" + FarmRouteManager.key(patch), ""));
             if (!override.isEmpty())
             {
                 cropOverrides.put(FarmRouteManager.key(patch), override);
@@ -1295,10 +1306,26 @@ final class FarmingDirectorPanel extends PluginPanel
             "Preferred crop at " + patch.getDisplayName() + ":",
             "Ironman Farming Director — crop override",
             JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-        if (chosen != null && configManager.getRSProfileKey() != null)
+        if (chosen != null)
         {
-            configManager.setRSProfileConfiguration(GROUP,
-                "directorCrop_" + FarmRouteManager.key(patch), chosen.toString());
+            Object persistence = JOptionPane.showInputDialog(this,
+                "Apply this crop override:", "Crop preference scope",
+                JOptionPane.PLAIN_MESSAGE, null,
+                new String[]{"Current run only", "Save for future runs"},
+                "Current run only");
+            if (persistence == null) return;
+            String key = FarmRouteManager.key(patch);
+            if ("Current run only".equals(persistence))
+            {
+                temporaryOverrides.put(key, chosen.toString());
+            }
+            else if (configManager.getRSProfileKey() != null)
+            {
+                temporaryOverrides.remove(key);
+                configManager.setRSProfileConfiguration(GROUP,
+                    "directorCrop_" + key, chosen.toString());
+            }
+            else return;
             beginRun(true);
         }
     }
@@ -1307,12 +1334,11 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         if (currentPlan == null || runFinished || currentStep >= currentPlan.steps.size()) return;
         FarmRunPatch patch = currentPlan.steps.get(currentStep).patch;
+        temporaryOverrides.remove(FarmRouteManager.key(patch));
         if (configManager.getRSProfileKey() != null)
-        {
             configManager.unsetRSProfileConfiguration(GROUP,
                 "directorCrop_" + FarmRouteManager.key(patch));
-            beginRun(true);
-        }
+        beginRun(true);
     }
 
     private static boolean fresh(long scannedAt, long now)
@@ -1691,6 +1717,7 @@ final class FarmingDirectorPanel extends PluginPanel
         runFinished = false;
         completedSteps.clear();
         completedPatchKeys.clear();
+        temporaryOverrides.clear();
         clearSavedRun();
         activateCurrentStep();
         clearRoute();
@@ -1713,6 +1740,7 @@ final class FarmingDirectorPanel extends PluginPanel
             runFinished = false;
             completedSteps.clear();
             completedPatchKeys.clear();
+            temporaryOverrides.clear();
             activateCurrentStep();
             loadPreferences();
             reloadPresetNames();
