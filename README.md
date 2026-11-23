@@ -1,1 +1,95 @@
-This repository contains Adam's RuneLite plugins. Each plugin is on a different branch. Use the branches menu above to switch branches.
+# Farming Patch Advisor
+
+Current version: **V1.11**. See [version history](CHANGELOG.md).
+
+### Compost runs
+
+Choose **Compost Run** in the **Farm Run** dropdown to track every enabled compost
+bin in an efficient route. The panel shows each bin's contents, fill amount, processing
+countdown, readiness, and next action. Visible bins receive one clean ground outline,
+with gray for empty or unknown, orange for filling, white for processing, and green
+when ready to collect.
+
+The movable checklist and bank-side checklist include the selected compost ingredient,
+volcanic ash, compost-potion doses, and buckets when needed. A bottomless compost bucket
+replaces ordinary buckets when the player owns one. Configure the target product,
+checklist supplies, highlights, and individual locations under **Compost bins**. Bin
+states are saved separately for each character and are refreshed from RuneLite's live
+farming varbits whenever the location is visited.
+
+### Custom routes and teleports
+
+Choose your run in **Farm Run**, then open **Route & Teleports**. The pop-out's
+**Farm run** dropdown can switch among every currently enabled crop run without
+closing the editor. Select a patch
+and choose its teleport. Drag stops or use **Move up / Move down**, then **Save route**.
+Locations containing both allotment and flower patches appear as one stop using
+only the location name and one shared teleport choice.
+Use **New custom route**, **Add patches**, and **Remove selected** to build a
+route from the enabled patches in that run. Each patch only offers teleports that
+reasonably serve its area; `None / no item needed` is always available.
+Use **Reset selected run** to restore that run's default stops and clear its
+teleport choices; the reset is applied only after **Save route**.
+Choose **Default** to reset the order, or **Cancel** to discard edits.
+Changes made to multiple runs are kept as drafts until **Save route** is selected.
+Orders and teleport choices are saved separately for each character and run selection.
+Only enabled patches and locations appear. Custom order controls panel and ground-label
+patch numbers, including combined runs.
+
+Chosen supplies appear under **Teleports** in the main and bank checklists and are
+included in **Farm Run Filter**. Equipped teleport items count as carried. The Seed
+Vault checklist stays seed-focused. Choose **None / no item needed** for walking,
+portals, or travel you do not want included. Tablet choices require the actual tablets,
+not spell runes. Charged jewellery accepts its charged variants; check remaining charges
+and daily teleport limits yourself. Reusable items count once, while consumables count
+once per visit (consecutive patches at the same location with the same teleport share a visit).
+
+All things Farming in one place: plan and track every farming patch, Farming Guild contracts, persistent timers, customizable settings, patch highlights, crop recommendations, bank and Seed Vault support, protection payments, and patch-care reminders.
+
+## How to use
+
+1. **Configure settings.** Choose a **Seed recommendation**, set any **Crop overrides**, configure **Compost bins**, select the patch types for each run, and disable locked areas under **Patch locations**.
+2. **Set up overlays.** Enable **Show timer overlay** and **Show run checklist**, then hold `Alt` in RuneLite to move them. Enable **Bank-side checklist** and choose its side and height for a compact checklist beside the bank or Seed Vault.
+3. **Scan your storage.** Open your bank and the Farming Guild Seed Vault once so recommendations and checklist quantities reflect the seeds, saplings, tools, compost, and payments you own.
+4. **Choose a run.** Open the **Farm Run** side panel and select a run from the dropdown. Patch highlights, timers, checklists, and the bank filter follow that selection.
+5. **Plant and inspect.** Follow the highlighted patches and checklist. Planting starts persistent timers, while inspecting an existing crop updates its crop, stage, health, and estimated time remaining.
+6. **Care for patches.** Follow the compost and water reminders above supported patches. Diseased and dead patches receive colored outlines and remedy guidance.
+7. **Use the bank filter.** Open a bank or the Seed Vault and select **Farm Run Filter** to show only the items needed for the selected run and active Farming Guild contract.
+
+## Features
+
+- Labels recognized empty or weedy farming patches with one outline around the complete patch and displays the recommended crop, quantity, and Farming level.
+- Highlights recommended seeds and saplings in the bank, inventory, and Farming Guild seed vault.
+- Selects either the highest available crop or the highest crop unlocked by the player's Farming level.
+- Provides a crop override dropdown for every patch category, allowing choices such as Ranarr instead of the automatic herb recommendation.
+- Highlights the standard planting kit (rake, seed dibber, spade, and optionally ultracompost) in blue.
+- Starts a persistent per-patch countdown when a seed or sapling is used on a patch. The movable timer overlay pulses red when a crop is ready and clears harvested patches.
+- Adds a Farm Run side panel with patch location, patch type, planted crop, planting time, growth stage, and live countdown, grouped into efficient run categories.
+- Inspecting an already-planted patch reads its `x/x` growth stage and creates a conservative maximum-time estimate for that stage. A timer captured at planting always takes precedence.
+- Automatically advances inspected growth-stage estimates as time elapses.
+- Provides a movable, configurable full-run checklist using `inventory / still needed` quantities. Planting reduces the required seed or sapling count, and reusable tools disappear once they are in the inventory.
+- Includes exact gardener protection payments, including filled sacks and baskets, and counts noted payment items through RuneLite's item-variation mapping.
+- The side panel has a one-click checklist control and per-patch right-click reset actions. Settings can include or exclude individual patch types, inaccessible locations, tools, compost, and protection payments.
+- Tracks the current Farming Guild contract from Guildmaster Jane (with RuneLite Time Tracking fallback), shows its crop, patch, seed, payment, inventory count, and timer in the Farm Run panel, and highlights the matching guild patch and required items.
+- Adds a `Farm Run` button above the bank incinerator controls that filters the bank to the current checklist.
+- Shows a compact missing-items checklist beside the bank or seed vault, with configurable side and vertical alignment, while temporarily hiding the primary movable checklist.
+- Supports allotment, flower, herb, hops, bush, tree, fruit tree, hardwood, cactus, mushroom, belladonna, calquat, spirit tree, seaweed, grapevine, celastrus, redwood, Hespori, anima, crystal tree, and coral patches.
+- Works offline and uses RuneLite `gameval` item constants rather than hard-coded item IDs.
+- Adds a dedicated **Compost Run** for standard and Farming Guild big compost bins, with live state decoding, persistent timers, whole-bin highlights, per-location controls, and bank/checklist supplies.
+
+Automatic recommendations do not attempt to optimize Grand Exchange profit. Use the per-category crop overrides when a specific crop is preferred.
+
+## Development
+
+Requires Java 11.
+
+```text
+./gradlew test
+./gradlew run
+```
+
+For Jagex-account login in the development client, follow RuneLite's [Using Jagex Accounts](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts) guide.
+
+## License
+
+BSD 2-Clause. See `LICENSE`.
