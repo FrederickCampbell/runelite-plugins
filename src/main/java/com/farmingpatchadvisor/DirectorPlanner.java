@@ -124,6 +124,20 @@ final class DirectorPlanner
                       Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
                       boolean herbloreFocus)
     {
+        return build(type, patches, farmingLevel, stock, customPriority,
+            priorities, reserves, fixedToolSlots, teleportSlots, freeHarvestSlots,
+            protectTrees, stackable, preplanted, harvestOnlyPatches,
+            cropOverrides, herbloreFocus, Integer.MAX_VALUE);
+    }
+
+    static Plan build(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted,
+                      Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
+                      boolean herbloreFocus, int maxStops)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
@@ -137,6 +151,11 @@ final class DirectorPlanner
 
         for (FarmRunPatch patch : patches)
         {
+            if (result.size() >= Math.max(1, maxStops))
+            {
+                warnings.add("Wave stop limit reached; remaining stops require another loadout.");
+                break;
+            }
             if (preplanted.contains(FarmRouteManager.key(patch)))
             {
                 result.add(new Step(patch, null, false));
