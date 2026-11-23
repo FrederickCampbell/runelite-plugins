@@ -1,0 +1,122 @@
+package com.farmingpatchadvisor;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+public class DirectorPlannerTest
+{
+    private static List<FarmRunPatch> patches(PatchType type, int count)
+    {
+        java.util.ArrayList<FarmRunPatch> list = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++)
+        {
+            list.add(new FarmRunPatch("Test " + i, "", type));
+        }
+        return list;
+    }
+
+    private static Crop crop(PatchType type, String name)
+    {
+        return CropCatalog.crops(type).stream()
+            .filter(c -> DirectorPlanner.normalize(c.getName()).equalsIgnoreCase(name))
+            .findFirst().orElseThrow(AssertionError::new);
+    }
+
+    @Test
+    public void customPriorityUsesNextSeedWhenFirstRunsOut()
+    {
+        Crop ranarr = crop(PatchType.HERB, "ranarr");
+        Crop snapdragon = crop(PatchType.HERB, "snapdragon");
+        Map<Integer, Integer> stock = new HashMap<>();
+        stock.put(ranarr.getItemId(), 2);
+        stock.put(snapdragon.getItemId(), 4);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.HERB,
+            patches(PatchType.HERB, 6), 80, stock, true,
+            "Ranarr,Snapdragon", "", 3, 0, 8, false, id -> true);
+        assertEquals(6, plan.steps.size());
+        assertEquals(2, plan.seeds.get(ranarr.getItemId()).intValue());
+        assertEquals(4, plan.seeds.get(snapdragon.getItemId()).intValue());
+        assertEquals(ranarr, plan.steps.get(0).crop);
+        assertEquals(snapdragon, plan.steps.get(2).crop);
+    }
+
+    @Test
+    public void reservesAreNeverSpent()
+    {
+        Crop ranarr = crop(PatchType.HERB, "ranarr");
+        Crop snapdragon = crop(PatchType.HERB, "snapdragon");
+        Map<Integer, Integer> stock = new HashMap<>();
+        stock.put(ranarr.getItemId(), 4);
+        stock.put(snapdragon.getItemId(), 5);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.HERB,
+            patches(PatchType.HERB, 4), 80, stock, true,
+            "Ranarr,Snapdragon", "ranarr=3", 3, 0, 8, false, id -> true);
+        assertEquals(1, plan.seeds.get(ranarr.getItemId()).intValue());
+        assertEquals(3, plan.seeds.get(snapdragon.getItemId()).intValue());
+    }
+
+    @Test
+    public void lowestEligibleFallbackHonorsFarmingLevel()
+    {
+        Crop guam = crop(PatchType.HERB, "guam");
+        Crop ranarr = crop(PatchType.HERB, "ranarr");
+        Map<Integer, Integer> stock = new HashMap<>();
+        stock.put(guam.getItemId(), 3);
+        stock.put(ranarr.getItemId(), 3);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.HERB,
+            patches(PatchType.HERB, 3), 20, stock, false,
+            "", "", 3, 0, 8, false, id -> true);
+        assertEquals(3, plan.steps.size());
+        assertEquals(guam, plan.steps.get(0).crop);
+    }
+
+    @Test
+    public void doesNotInventInventoryWhenSeedsAreMissing()
+    {
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.HERB,
+            patches(PatchType.HERB, 2), 99, new HashMap<>(), false,
+            "", "", 3, 0, 8, false, id -> true);
+        assertTrue(plan.steps.isEmpty());
+        assertFalse(plan.warnings.isEmpty());
+    }
+
+    @Test
+    public void treesRespectNonStackingAndTwentyEightSlotLimit()
+    {
+        Crop oak = crop(PatchType.TREE, "oak");
+        Map<Integer, Integer> stock = new HashMap<>();
+        stock.put(oak.getItemId(), 10);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.TREE,
+            patches(PatchType.TREE, 7), 60, stock, false,
+            "", "", 3, 0, 22, false, id -> false);
+        assertEquals(3, plan.steps.size());
+        assertEquals(6, plan.occupiedSlots);
+        assertTrue(plan.occupiedSlots + plan.reservedSlots <= 28);
+    }
+
+    @Test
+    public void treeSeedsCannotPretendToBeSaplings()
+    {
+        Crop oak = crop(PatchType.TREE, "oak");
+        Map<Integer, Integer> stock = new HashMap<>();
+        // Nothing in the sapling ID; planner never confuses the raw seed with it.
+        stock.put(999999, 100);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.TREE,
+            patches(PatchType.TREE, 1), 99, stock, false,
+            "", "", 3, 0, 2, false, id -> true);
+        assertTrue(plan.steps.isEmpty());
+        assertNotEquals(999999, oak.getItemId());
+    }
+
+    @Test
+    public void malformedReserveValuesAreIgnored()
+    {
+        assertEquals(5, DirectorPlanner.parseReserves("ranarr=5,snapdragon=abc")
+            .get("ranarr").intValue());
+        assertFalse(DirectorPlanner.parseReserves("snapdragon=abc").containsKey("snapdragon"));
+    }
+}

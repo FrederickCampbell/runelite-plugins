@@ -37,6 +37,8 @@ final class FarmingLoadout
 	private int cachedPaymentSelectionHash;
 	private int cachedPaymentFarmingLevel;
 	private long cachedPaymentAtMillis;
+	private long lastBankSnapshotAt;
+	private long lastVaultSnapshotAt;
 	private boolean bankScanned;
 	private boolean seedVaultScanned;
 
@@ -59,6 +61,7 @@ final class FarmingLoadout
 		if (event.getContainerId() == InventoryID.BANK.getId())
 		{
 			copyItems(event.getItemContainer().getItems(), bankItems);
+			lastBankSnapshotAt = System.currentTimeMillis();
 			bankScanned = true;
 		}
 		else if (event.getContainerId() == InventoryID.INVENTORY.getId())
@@ -72,6 +75,7 @@ final class FarmingLoadout
 		else if (event.getContainerId() == InventoryID.SEED_VAULT.getId())
 		{
 			copyItems(event.getItemContainer().getItems(), seedVaultItems);
+			lastVaultSnapshotAt = System.currentTimeMillis();
 			seedVaultScanned = true;
 		}
 		cachedPaymentAtMillis = 0;
@@ -97,7 +101,42 @@ final class FarmingLoadout
 		return seedVaultScanned;
 	}
 
-	synchronized Map<Integer, Crop> bestAvailableByItemId()
+	/**
+     * Last-observed storage is separate from current inventory. No hidden bank
+     * inspection is attempted. Counts are character-local and reset on logout.
+     */
+    synchronized Map<Integer, Integer> directorKnownStock()
+    {
+        Map<Integer, Integer> known = new HashMap<>(inventoryItems);
+        bankItems.forEach((id, amount) -> known.merge(id, amount, Integer::sum));
+        seedVaultItems.forEach((id, amount) -> known.merge(id, amount, Integer::sum));
+        return known;
+    }
+
+    synchronized long directorBankSnapshotAt() { return lastBankSnapshotAt; }
+    synchronized long directorVaultSnapshotAt() { return lastVaultSnapshotAt; }
+
+    synchronized Map<Integer, Integer> directorInventory()
+    {
+        return new HashMap<>(inventoryItems);
+    }
+
+    synchronized Map<Integer, Integer> directorEquipment()
+    {
+        return new HashMap<>(equipmentItems);
+    }
+
+    synchronized Map<Integer, Integer> directorBank()
+    {
+        return new HashMap<>(bankItems);
+    }
+
+    synchronized Map<Integer, Integer> directorVault()
+    {
+        return new HashMap<>(seedVaultItems);
+    }
+
+    synchronized Map<Integer, Crop> bestAvailableByItemId()
 	{
 		Map<Integer, Crop> selected = new HashMap<>();
 		Map<PatchType, Integer> patchCounts = buildPatchCounts();
@@ -164,6 +203,8 @@ final class FarmingLoadout
 		seedRunBaselines.clear();
 		bankScanned = false;
 		seedVaultScanned = false;
+		lastBankSnapshotAt = 0;
+		lastVaultSnapshotAt = 0;
 		cachedPaymentAtMillis = 0;
 	}
 
