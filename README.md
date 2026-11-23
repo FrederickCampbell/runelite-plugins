@@ -1,95 +1,69 @@
-# Farming Patch Advisor
+# Ironman Farming Director — v0.1
 
-Current version: **V1.11**. See [version history](CHANGELOG.md).
+A standalone RuneLite plugin with a Quest Helper-style guided Farming sidebar powered by Farming Patch Advisor's existing codebase. The Advisor's crop catalogs, bank and Seed Vault scanning, timers, compost, protection payments, checklists, overlays and route editor are retained.
 
-### Compost runs
+The new Guide tab adds ordered seed priorities, stock reserves, a 28-slot inventory budget, progress controls and optional Shortest Path destinations. The existing Advisor is available in its own tab.
 
-Choose **Compost Run** in the **Farm Run** dropdown to track every enabled compost
-bin in an efficient route. The panel shows each bin's contents, fill amount, processing
-countdown, readiness, and next action. Visible bins receive one clean ground outline,
-with gray for empty or unknown, orange for filling, white for processing, and green
-when ready to collect.
+## Install with RuneLite Dev Manager
 
-The movable checklist and bank-side checklist include the selected compost ingredient,
-volcanic ash, compost-potion doses, and buckets when needed. A bottomless compost bucket
-replaces ordinary buckets when the player owns one. Configure the target product,
-checklist supplies, highlights, and individual locations under **Compost bins**. Bin
-states are saved separately for each character and are refreshed from RuneLite's live
-farming varbits whenever the location is visited.
+Download the ironman-farming-director-v0.1 branch or clone it:
 
-### Custom routes and teleports
+    git clone --branch ironman-farming-director-v0.1 --single-branch https://github.com/FrederickCampbell/runelite-plugins.git Ironman-Farming-Director
 
-Choose your run in **Farm Run**, then open **Route & Teleports**. The pop-out's
-**Farm run** dropdown can switch among every currently enabled crop run without
-closing the editor. Select a patch
-and choose its teleport. Drag stops or use **Move up / Move down**, then **Save route**.
-Locations containing both allotment and flower patches appear as one stop using
-only the location name and one shared teleport choice.
-Use **New custom route**, **Add patches**, and **Remove selected** to build a
-route from the enabled patches in that run. Each patch only offers teleports that
-reasonably serve its area; `None / no item needed` is always available.
-Use **Reset selected run** to restore that run's default stops and clear its
-teleport choices; the reset is applied only after **Save route**.
-Choose **Default** to reset the order, or **Cancel** to discard edits.
-Changes made to multiple runs are kept as drafts until **Save route** is selected.
-Orders and teleport choices are saved separately for each character and run selection.
-Only enabled patches and locations appear. Custom order controls panel and ground-label
-patch numbers, including combined runs.
+Move the Ironman-Farming-Director project folder into:
 
-Chosen supplies appear under **Teleports** in the main and bank checklists and are
-included in **Farm Run Filter**. Equipped teleport items count as carried. The Seed
-Vault checklist stays seed-focused. Choose **None / no item needed** for walking,
-portals, or travel you do not want included. Tablet choices require the actual tablets,
-not spell runes. Charged jewellery accepts its charged variants; check remaining charges
-and daily teleport limits yourself. Reusable items count once, while consumables count
-once per visit (consecutive patches at the same location with the same teleport share a visit).
+    C:\_Hub\Projects\Gaming\OSRS\RuneLite\Plugins\Ironman-Farming-Director\
 
-All things Farming in one place: plan and track every farming patch, Farming Guild contracts, persistent timers, customizable settings, patch highlights, crop recommendations, bank and Seed Vault support, protection payments, and patch-care reminders.
+Open your installed RuneLite Dev Manager, click Refresh, select Ironman-Farming-Director, click Build and then Launch. Do not overwrite any other project or modify Dev Manager.
 
-## How to use
+This is a standard Gradle project targeting Java 11. The RuneLite developer build uses Gradle and downloads its dependencies on first run. The local Dev Manager has NOT been accessible or verified from this session.
 
-1. **Configure settings.** Choose a **Seed recommendation**, set any **Crop overrides**, configure **Compost bins**, select the patch types for each run, and disable locked areas under **Patch locations**.
-2. **Set up overlays.** Enable **Show timer overlay** and **Show run checklist**, then hold `Alt` in RuneLite to move them. Enable **Bank-side checklist** and choose its side and height for a compact checklist beside the bank or Seed Vault.
-3. **Scan your storage.** Open your bank and the Farming Guild Seed Vault once so recommendations and checklist quantities reflect the seeds, saplings, tools, compost, and payments you own.
-4. **Choose a run.** Open the **Farm Run** side panel and select a run from the dropdown. Patch highlights, timers, checklists, and the bank filter follow that selection.
-5. **Plant and inspect.** Follow the highlighted patches and checklist. Planting starts persistent timers, while inspecting an existing crop updates its crop, stage, health, and estimated time remaining.
-6. **Care for patches.** Follow the compost and water reminders above supported patches. Diseased and dead patches receive colored outlines and remedy guidance.
-7. **Use the bank filter.** Open a bank or the Seed Vault and select **Farm Run Filter** to show only the items needed for the selected run and active Farming Guild contract.
+## How to use the Guide
 
-## Features
+1. Open your bank and Farming Guild Seed Vault after logging in. The plugin never reads unopened storage. A snapshot older than six hours is treated as stale and is excluded from the plan.
+2. Open the Ironman Farming Director navigation button. Select HERB or TREE.
+3. Choose the Highest Available mode or enable Use custom priority. Enter ordered crop names such as Ranarr, Snapdragon, Toadflax, Irit, Avantoe.
+4. Enter reserves such as Ranarr=10, Snapdragon=3. The planner will preserve those quantities and allocate another crop when necessary.
+5. Select tree protection payments if desired and press Start / Replan.
+6. Follow numbered steps and use Next step, Back, Pause and End. If Shortest Path is installed, path requests target the current patch. If absent, you still have the named destination and coordinates.
+7. Use the Advisor tab for the original timers, custom routes and teleport choices, checklists and overlays.
 
-- Labels recognized empty or weedy farming patches with one outline around the complete patch and displays the recommended crop, quantity, and Farming level.
-- Highlights recommended seeds and saplings in the bank, inventory, and Farming Guild seed vault.
-- Selects either the highest available crop or the highest crop unlocked by the player's Farming level.
-- Provides a crop override dropdown for every patch category, allowing choices such as Ranarr instead of the automatic herb recommendation.
-- Highlights the standard planting kit (rake, seed dibber, spade, and optionally ultracompost) in blue.
-- Starts a persistent per-patch countdown when a seed or sapling is used on a patch. The movable timer overlay pulses red when a crop is ready and clears harvested patches.
-- Adds a Farm Run side panel with patch location, patch type, planted crop, planting time, growth stage, and live countdown, grouped into efficient run categories.
-- Inspecting an already-planted patch reads its `x/x` growth stage and creates a conservative maximum-time estimate for that stage. A timer captured at planting always takes precedence.
-- Automatically advances inspected growth-stage estimates as time elapses.
-- Provides a movable, configurable full-run checklist using `inventory / still needed` quantities. Planting reduces the required seed or sapling count, and reusable tools disappear once they are in the inventory.
-- Includes exact gardener protection payments, including filled sacks and baskets, and counts noted payment items through RuneLite's item-variation mapping.
-- The side panel has a one-click checklist control and per-patch right-click reset actions. Settings can include or exclude individual patch types, inaccessible locations, tools, compost, and protection payments.
-- Tracks the current Farming Guild contract from Guildmaster Jane (with RuneLite Time Tracking fallback), shows its crop, patch, seed, payment, inventory count, and timer in the Farm Run panel, and highlights the matching guild patch and required items.
-- Adds a `Farm Run` button above the bank incinerator controls that filters the bank to the current checklist.
-- Shows a compact missing-items checklist beside the bank or seed vault, with configurable side and vertical alignment, while temporarily hiding the primary movable checklist.
-- Supports allotment, flower, herb, hops, bush, tree, fruit tree, hardwood, cactus, mushroom, belladonna, calquat, spirit tree, seaweed, grapevine, celastrus, redwood, Hespori, anima, crystal tree, and coral patches.
-- Works offline and uses RuneLite `gameval` item constants rather than hard-coded item IDs.
-- Adds a dedicated **Compost Run** for standard and Farming Guild big compost bins, with live state decoding, persistent timers, whole-bin highlights, per-location controls, and bank/checklist supplies.
+Each character has separate stored Guide priorities (RuneLite RS-profile configuration). A distinct ironman-farming-director configuration group prevents clashing with the original Farming Patch Advisor.
 
-Automatic recommendations do not attempt to optimize Grand Exchange profit. Use the per-category crop overrides when a specific crop is preferred.
+## Implemented constraints
 
-## Development
+- Guided runs currently cover herbs and regular trees.
+- Uses stock quantities from observed inventory, fresh bank and fresh Seed Vault; missing storage yields visible warnings.
+- Regular-tree crops are plantable saplings, not raw seeds; raw seeds trigger a preparation warning when no suitable saplings are available.
+- Custom priorities, insufficient stock, reserved stock and Farming-level limits are handled by an explicit allocation algorithm.
+- Planned seeds, unstackable saplings, payment items and configurable harvest reserve are counted against 28 inventory slots. Impossible full runs are shortened, with a banking warning.
+- Basic quest checks cover Morytania, Troll Stronghold and Weiss. Farming Guild has separate level gates (45 for regular trees, 65 for herbs). Some new/unverified areas are opt-in, never silently assumed accessible.
+- Advisor's route order can be edited in its Route & Teleports control; no global optimization in v0.1.
+- Protection-payment requirements may be missing from available stock, and the sidebar warns.
+- No game actions are automated. Manual step completion is intentional for first validation.
 
-Requires Java 11.
+## Build and test
 
-```text
-./gradlew test
-./gradlew run
-```
+    gradlew.bat clean test build
 
-For Jagex-account login in the development client, follow RuneLite's [Using Jagex Accounts](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts) guide.
+Optional developer harness:
 
-## License
+    gradlew.bat run
 
-BSD 2-Clause. See `LICENSE`.
+The existing Dev Manager is the normal route for testing. Tests include priority fallback, reserve quantities, insufficient seeds, level eligibility, raw tree seed vs sapling handling and inventory-slot capacity. A real RuneLite account is still needed to verify live patch states, storage events, profile switching, sidebar geometry and Shortest Path rendering.
+
+## Source and attribution
+
+Primary upstream: Seadeadmeat / Farming Patch Advisor, BSD-2-Clause:
+https://github.com/Seadeadmeat/farming-patch-advisor
+
+The original source (snapshot tree fb0aa6115dd0a7dc71b146b42870b7c19b1ca10d) is included with modifications. Original LICENSE is retained.
+
+Quest Helper: Zoinkwiz, BSD-2-Clause:
+https://github.com/Zoinkwiz/quest-helper
+
+The guide draws on Quest Helper's step-oriented sidebar patterns, farm-run waypoints and its public Shortest Path message mechanism. It does not import Quest Helper private implementation classes. Its license is included as LICENSE-QUEST-HELPER.
+
+## Remaining verification and next milestone
+
+This branch is an engineering build, not a declared production-ready plugin until both automated tests and in-game checks pass. After verification, add reliable automatic patch progression, bank-stop optimization, fruit/hardwood trees and allotments using the existing Advisor catalogs.
