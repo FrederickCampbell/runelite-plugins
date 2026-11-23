@@ -42,6 +42,27 @@ final class DirectorTeleportPlan
         return result;
     }
 
+    static Map<RouteTeleport, Integer> totalRequirements(
+        List<Map<RouteTeleport, Integer>> waves)
+    {
+        Map<RouteTeleport, Integer> totals = new LinkedHashMap<>();
+        for (Map<RouteTeleport, Integer> wave : waves)
+        {
+            for (Map.Entry<RouteTeleport, Integer> e : wave.entrySet())
+            {
+                if (e.getKey().consumable)
+                {
+                    totals.merge(e.getKey(), e.getValue(), Integer::sum);
+                }
+                else
+                {
+                    totals.merge(e.getKey(), 1, Math::max);
+                }
+            }
+        }
+        return totals;
+    }
+
     static List<String> missingTravelItems(
         Map<RouteTeleport, Integer> uses, Map<Integer, Integer> available)
     {
