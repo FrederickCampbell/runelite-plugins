@@ -84,4 +84,19 @@ public class DirectorWavePlannerTest
         assertEquals(1, result.unplanned.size());
         assertFalse(result.waves.get(0).steps.get(0).requiresPlanting);
     }
+
+    @Test
+    public void teleportBudgetIsPerWaveNotEntireRoute()
+    {
+        Crop oak = CropCatalog.findByName(PatchType.TREE, "Oak sapling");
+        Map<Integer, Integer> stock = new HashMap<>();
+        stock.put(oak.getItemId(), 4);
+        DirectorWavePlanner.Result result = DirectorWavePlanner.split(
+            patches(PatchType.TREE, 4), 80, stock, false, "", "", 2, 20, 2,
+            false, id -> false, Collections.emptySet(), Collections.emptySet(),
+            Collections.emptyMap(), false, 4, selected -> 1);
+        assertEquals(4, result.totalStops);
+        assertTrue(result.unplanned.isEmpty());
+        assertEquals(7, result.waves.get(0).occupiedSlots);
+    }
 }

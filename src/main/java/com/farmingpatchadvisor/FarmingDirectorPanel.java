@@ -637,6 +637,7 @@ final class FarmingDirectorPanel extends PluginPanel
         }
 
         Set<RouteTeleport> distinctTeleports = new HashSet<>();
+        Map<String, RouteTeleport> teleportForPatch = new HashMap<>();
         for (FarmRunPatch patch : candidates)
         {
             for (FarmRunPatch configuredPatch : configured)
@@ -645,6 +646,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     configuredPatch.getPatchType() == patch.getPatchType())
                 {
                     RouteTeleport teleport = routes.teleportPreferred(selection.filter, configuredPatch);
+                    teleportForPatch.put(FarmRouteManager.key(patch), teleport);
                     if (teleport != RouteTeleport.NONE) distinctTeleports.add(teleport);
                     break;
                 }
@@ -656,11 +658,33 @@ final class FarmingDirectorPanel extends PluginPanel
             selection == DirectorRunSelection.ALLOTMENTS ? Math.max(14, config.directorHarvestSlots())
                 : config.directorHarvestSlots();
 
+        Map<Integer, Integer> equippedItems = loadout.directorEquipment();
         DirectorWavePlanner.Result wavePlan = DirectorWavePlanner.split(candidates, level,
             stock, custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
             harvestReserve, protection, id ->
                 itemManager.getItemComposition(id).isStackable(), preplanted,
-                harvestOnly, cropOverrides, herbPriority, waveCap);
+                harvestOnly, cropOverrides, herbPriority, waveCap,
+            selectedPatches ->
+            {
+                Set<RouteTeleport> carriedTeleports = new HashSet<>();
+                for (FarmRunPatch selectedPatch : selectedPatches)
+                {
+                    RouteTeleport teleport = teleportForPatch.getOrDefault(
+                        FarmRouteManager.key(selectedPatch), RouteTeleport.NONE);
+                    if (teleport == RouteTeleport.NONE) continue;
+                    boolean equipped = false;
+                    for (int id : teleport.itemIds())
+                    {
+                        if (equippedItems.getOrDefault(id, 0) > 0)
+                        {
+                            equipped = true;
+                            break;
+                        }
+                    }
+                    if (!equipped) carriedTeleports.add(teleport);
+                }
+                return carriedTeleports.size();
+            });
 
         // A manifest is calculated per loadout, not across the full itinerary.
         // Protection and teleport requirements may change as the run progresses.
