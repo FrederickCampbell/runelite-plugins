@@ -1,6 +1,7 @@
 package com.farmingpatchadvisor;
 
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -11,6 +12,8 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -38,6 +41,8 @@ import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.SwingUtilities;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -75,6 +80,9 @@ final class FarmingDirectorPanel extends PluginPanel
     private final FarmRouteManager routes;
     private final QuestFarmingStateReader stateReader;
     private final PatchTimerManager timerManager;
+    private final DirectorPatchPreferences patchPrefs;
+    private final DirectorMergedPresets presets;
+    private final CompostBinManager compostBins;
 
     private final JComboBox<DirectorRunSelection> runType =
         new JComboBox<>(DirectorRunSelection.values());
@@ -103,6 +111,36 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JButton next = new JButton("Next step");
     private final JButton pause = new JButton("Pause");
     private final JButton end = new JButton("End");
+    private final CardLayout pageLayout = new CardLayout();
+    private final JPanel pages = new JPanel(pageLayout);
+    private final JPanel patchRows = new JPanel();
+    private final JTextField patchSearch = new JTextField();
+    private final JCheckBox disabledOnly = new JCheckBox("Show disabled only");
+    private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
+    private final JCheckBox guideDetails = new JCheckBox("Show planning details and warnings");
+    private final JComboBox<String> presetChoice = new JComboBox<>();
+    private final Map<FarmRunType, JCheckBox> mergedTypes = new EnumMap<>(FarmRunType.class);
+    private final Set<FarmRunType> collapsedTypes = EnumSet.noneOf(FarmRunType.class);
+    private final JPanel mergedControls = new JPanel();
+    private final JPanel regularControls = new JPanel();
+    private final List<PatchView> patchViews = new ArrayList<>();
+    private DirectorRunSelection activeRunSelection;
+    private String activePresetName = DirectorMergedPresets.DEFAULT_NAME;
+    private boolean loadingPresets;
+    private String visiblePage = "selection";
+
+    private static final class PatchView
+    {
+        final FarmRunPatch patch;
+        final String unlock;
+        final String state;
+        PatchView(FarmRunPatch patch, String unlock, String state)
+        {
+            this.patch = patch;
+            this.unlock = unlock;
+            this.state = state;
+        }
+    }
     private volatile DirectorPlanner.Plan currentPlan;
     private DirectorSessionPlan currentSession;
     private int waveIndex;
@@ -130,7 +168,8 @@ final class FarmingDirectorPanel extends PluginPanel
                          ConfigManager configManager, ItemManager itemManager, FarmingLoadout loadout,
                          FarmingPatchAdvisorPlugin plugin, FarmingPatchAdvisorConfig config,
                          FarmRouteManager routes, QuestFarmingStateReader stateReader, PatchTimerManager timerManager,
-                         FarmingPatchPanel advisorPanel)
+                         DirectorPatchPreferences patchPrefs, DirectorMergedPresets presets,
+                         CompostBinManager compostBins)
     {
         super(false);
         this.client = client;
@@ -144,168 +183,506 @@ final class FarmingDirectorPanel extends PluginPanel
         this.routes = routes;
         this.stateReader = stateReader;
         this.timerManager = timerManager;
+        this.patchPrefs = patchPrefs;
+        this.presets = presets;
+        this.compostBins = compostBins;
 
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
-        JTabbedPane tabs = new JTabbedPane();
-        tabs.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        tabs.setForeground(Color.WHITE);
-        tabs.addTab("Guide", createGuide());
-        tabs.addTab("Advisor", advisorPanel);
-        add(tabs, BorderLayout.CENTER);
-        runType.addActionListener(e -> {
+        buildPages();
+        add(pages, BorderLayout.CENTER);
+        runType.addActionListener(e ->
+        {
             if (!loadingPreferences)
             {
-                stopRun();
                 loadPreferences();
+                showEditorMode();
             }
         });
+        presetChoice.addActionListener(e -> { if (!loadingPresets) loadPreset(); });
         loadPreferences();
+        reloadPresetNames();
         render();
+        showPage("selection");
+    }
+
+    /** A single RuneLite-native sidebar with persistent navigation between pages. */
+    private void buildPages()
+    {
+        pages.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        pages.add(createSelection(), "selection");
+        pages.add(createGuide(), "guide");
+        pages.add(createEditor(), "editor");
+        pages.add(createPatchManager(), "patches");
+        pages.add(createSettings(), "settings");
+    }
+
+    private JPanel vertical()
+    {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 9, 10, 9));
+        return panel;
+    }
+
+    private JScrollPane scrolling(JPanel content)
+    {
+        JScrollPane scroll = new JScrollPane(content);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        return scroll;
+    }
+
+    private void addFull(JPanel parent, Component child)
+    {
+        if (child instanceof javax.swing.JComponent)
+        {
+            javax.swing.JComponent component = (javax.swing.JComponent) child;
+            component.setAlignmentX(Component.LEFT_ALIGNMENT);
+            component.setMaximumSize(new Dimension(Integer.MAX_VALUE,
+                child instanceof JButton ? 32 : child instanceof JTextField
+                    || child instanceof JComboBox ? 28 : 1000));
+        }
+        parent.add(child);
+        parent.add(Box.createVerticalStrut(7));
+    }
+
+    private JButton nav(String caption, String page)
+    {
+        JButton button = new JButton(caption);
+        button.addActionListener(e -> showPage(page));
+        return button;
+    }
+
+    private void showPage(String name)
+    {
+        visiblePage = name;
+        pageLayout.show(pages, name);
+        if ("patches".equals(name)) refreshPatchManager();
+        if ("editor".equals(name)) showEditorMode();
+    }
+
+    private JPanel createSelection()
+    {
+        JPanel list = vertical();
+        JLabel title = label("Ironman Farming Director", true);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
+        addFull(list, title);
+        addFull(list, label("Choose a run", false));
+        addFull(list, runType);
+        start.setText("Start farming run");
+        start.addActionListener(e -> beginRun());
+        addFull(list, start);
+        resume.addActionListener(e -> resumeSavedRun());
+        addFull(list, resume);
+        addFull(list, nav("Edit selected run", "editor"));
+        addFull(list, nav("Manage farming patches", "patches"));
+        addFull(list, nav("Global settings", "settings"));
+        JButton guide = nav("Return to active guide", "guide");
+        guide.addActionListener(e -> guide.setEnabled(currentPlan != null));
+        addFull(list, guide);
+        addFull(list, label("Routes, crops and bank supplies are planned from your saved choices.", false));
+        return new JPanel(new BorderLayout())
+        {{
+            setBackground(ColorScheme.DARK_GRAY_COLOR);
+            add(scrolling(list), BorderLayout.CENTER);
+        }};
     }
 
     private JPanel createGuide()
     {
-        JPanel guide = new JPanel(new BorderLayout(0, 8));
+        JPanel guide = new JPanel(new BorderLayout(0, 7));
         guide.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        JPanel controls = new JPanel();
-        controls.setLayout(new BoxLayout(controls, BoxLayout.Y_AXIS));
-        controls.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        controls.setBorder(BorderFactory.createEmptyBorder(12, 10, 10, 10));
-        JLabel title = label("Ironman Farming Director", true);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 16f));
-        controls.add(title);
-        controls.add(Box.createVerticalStrut(9));
-
-        runType.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
-        runType.setAlignmentX(Component.LEFT_ALIGNMENT);
-        controls.add(runType);
-        controls.add(Box.createVerticalStrut(5));
-
-        JPanel advanced = new JPanel();
-        advanced.setLayout(new BoxLayout(advanced, BoxLayout.Y_AXIS));
-        advanced.setAlignmentX(Component.LEFT_ALIGNMENT);
-        advanced.setMaximumSize(new Dimension(Integer.MAX_VALUE, 220));
-        advanced.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        customPriority.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        customPriority.setForeground(Color.WHITE);
-        advanced.add(customPriority);
-        advanced.add(label("Crop priorities (comma-separated)", false));
-        priorities.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
-        priorities.setAlignmentX(Component.LEFT_ALIGNMENT);
-        priorities.setToolTipText("Example: Ranarr, Snapdragon, Toadflax");
-        advanced.add(priorities);
-        advanced.add(Box.createVerticalStrut(5));
-        advanced.add(label("Reserved stock (Ranarr=10, Snapdragon=3)", false));
-        reserves.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
-        reserves.setAlignmentX(Component.LEFT_ALIGNMENT);
-        reserves.setToolTipText("Reserved quantities will not be allocated to a run.");
-        advanced.add(reserves);
-        advanced.add(Box.createVerticalStrut(5));
-        protectTrees.setForeground(Color.WHITE);
-        protectTrees.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        advanced.add(protectTrees);
-        autoNext.setForeground(Color.WHITE);
-        autoNext.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        advanced.add(autoNext);
-        nearestRoute.setForeground(Color.WHITE);
-        nearestRoute.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        advanced.add(nearestRoute);
-        herbloreFocus.setForeground(Color.WHITE);
-        herbloreFocus.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        advanced.add(herbloreFocus);
-        autoReplanBank.setForeground(Color.WHITE);
-        autoReplanBank.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        advanced.add(autoReplanBank);
-        advanced.add(label("Maximum patch stops per loadout", false));
-        maxStopsPerWave.setMaximumSize(new Dimension(Integer.MAX_VALUE, 25));
-        maxStopsPerWave.setAlignmentX(Component.LEFT_ALIGNMENT);
-        advanced.add(maxStopsPerWave);
-        advanced.add(label("Bank between waves", false));
-        bankChoice.setMaximumSize(new Dimension(Integer.MAX_VALUE, 25));
-        bankChoice.setAlignmentX(Component.LEFT_ALIGNMENT);
-        bankChoice.addActionListener(e ->
-        {
-            if (awaitingBank && !paused) requestBankRoute();
-        });
-        advanced.add(bankChoice);
-        advanced.setVisible(false);
-
-        JButton advancedToggle = new JButton("Planner options ▸");
-        advancedToggle.setAlignmentX(Component.LEFT_ALIGNMENT);
-        advancedToggle.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
-        advancedToggle.addActionListener(e ->
-        {
-            advanced.setVisible(!advanced.isVisible());
-            advancedToggle.setText(advanced.isVisible() ? "Planner options ▾" : "Planner options ▸");
-            controls.revalidate();
-            controls.repaint();
-        });
-        controls.add(advancedToggle);
-        controls.add(advanced);
-        controls.add(Box.createVerticalStrut(7));
+        JPanel header = vertical();
+        JPanel menu = new JPanel(new GridLayout(1, 3, 3, 0));
+        menu.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        menu.add(nav("Runs", "selection"));
+        menu.add(nav("Patches", "patches"));
+        menu.add(nav("Settings", "settings"));
+        addFull(header, menu);
         currentAction.setForeground(new Color(120, 205, 238));
-        currentAction.setAlignmentX(Component.LEFT_ALIGNMENT);
-        controls.add(currentAction);
-        controls.add(Box.createVerticalStrut(8));
-        start.addActionListener(e -> beginRun());
-        start.setAlignmentX(Component.LEFT_ALIGNMENT);
-        start.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        controls.add(start);
+        progress.setForeground(new Color(244, 197, 86));
+        addFull(header, progress);
+        addFull(header, currentAction);
+        addFull(header, storage);
+        addFull(header, inventory);
         replan.addActionListener(e -> beginRun(true));
-        replan.setAlignmentX(Component.LEFT_ALIGNMENT);
-        replan.setMaximumSize(new Dimension(Integer.MAX_VALUE, 27));
-        controls.add(replan);
-        resume.addActionListener(e -> resumeSavedRun());
-        resume.setAlignmentX(Component.LEFT_ALIGNMENT);
-        resume.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
-        controls.add(resume);
+        addFull(header, replan);
         JPanel overrides = new JPanel(new GridLayout(1, 2, 3, 0));
-        overrides.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        overrides.setAlignmentX(Component.LEFT_ALIGNMENT);
-        overrides.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        overrides.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        overrideCrop.setText("Edit crop");
         overrideCrop.addActionListener(e -> chooseCropOverride());
         clearOverride.addActionListener(e -> clearCropOverride());
         overrides.add(overrideCrop);
         overrides.add(clearOverride);
-        controls.add(overrides);
-        controls.add(Box.createVerticalStrut(7));
-        progress.setForeground(new Color(244, 197, 86));
-        progress.setAlignmentX(Component.LEFT_ALIGNMENT);
-        controls.add(progress);
-        controls.add(Box.createVerticalStrut(4));
-        storage.setForeground(Color.LIGHT_GRAY);
-        storage.setAlignmentX(Component.LEFT_ALIGNMENT);
-        controls.add(storage);
-        controls.add(Box.createVerticalStrut(4));
-        inventory.setForeground(Color.LIGHT_GRAY);
-        inventory.setAlignmentX(Component.LEFT_ALIGNMENT);
-        controls.add(inventory);
-        guide.add(controls, BorderLayout.NORTH);
-
+        addFull(header, overrides);
+        guideDetails.setForeground(Color.LIGHT_GRAY);
+        guideDetails.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        guideDetails.addActionListener(e -> render());
+        addFull(header, guideDetails);
+        guide.add(header, BorderLayout.NORTH);
         stepList.setLayout(new BoxLayout(stepList, BoxLayout.Y_AXIS));
         stepList.setBackground(ColorScheme.DARK_GRAY_COLOR);
         stepList.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        JScrollPane scroller = new JScrollPane(stepList);
-        scroller.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
-        scroller.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scroller.setBorder(BorderFactory.createEmptyBorder());
-        guide.add(scroller, BorderLayout.CENTER);
-
+        guide.add(scrolling(stepList), BorderLayout.CENTER);
         JPanel actions = new JPanel(new GridLayout(1, 4, 3, 0));
         actions.setBorder(BorderFactory.createEmptyBorder(6, 7, 7, 7));
         actions.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         back.addActionListener(e -> advance(-1));
         next.addActionListener(e -> advance(1));
         pause.addActionListener(e -> togglePause());
-        end.addActionListener(e -> stopRun());
+        end.addActionListener(e -> { stopRun(); showPage("selection"); });
         actions.add(back);
         actions.add(next);
         actions.add(pause);
         actions.add(end);
         guide.add(actions, BorderLayout.SOUTH);
         return guide;
+    }
+
+    private JPanel createEditor()
+    {
+        JPanel body = vertical();
+        addFull(body, nav("← Back to runs", "selection"));
+        addFull(body, label("Run Editor", true));
+        regularControls.setLayout(new BoxLayout(regularControls, BoxLayout.Y_AXIS));
+        regularControls.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        customPriority.setForeground(Color.WHITE);
+        customPriority.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        addFull(regularControls, customPriority);
+        addFull(regularControls, label("Crop priority list (first available wins)", false));
+        priorities.setToolTipText("Example: Ranarr, Snapdragon, Toadflax");
+        addFull(regularControls, priorities);
+        addFull(regularControls, label("Reserved stock, e.g. Ranarr=10, Snapdragon=3", false));
+        addFull(regularControls, reserves);
+        JButton save = new JButton("Save this run's choices");
+        save.addActionListener(e -> { savePreferences(); showPage("selection"); });
+        addFull(regularControls, save);
+
+        mergedControls.setLayout(new BoxLayout(mergedControls, BoxLayout.Y_AXIS));
+        mergedControls.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        addFull(mergedControls, label("Reusable merged-run preset", false));
+        addFull(mergedControls, presetChoice);
+        for (FarmRunType type : FarmRunType.values())
+        {
+            JCheckBox check = new JCheckBox(type.getDisplayName());
+            check.setBackground(ColorScheme.DARK_GRAY_COLOR);
+            check.setForeground(Color.WHITE);
+            mergedTypes.put(type, check);
+            addFull(mergedControls, check);
+        }
+        JButton saveMerged = new JButton("Save merged preset");
+        saveMerged.addActionListener(e -> saveMergedPreset());
+        addFull(mergedControls, saveMerged);
+        JButton newMerged = new JButton("Create new preset");
+        newMerged.addActionListener(e -> createMergedPreset());
+        addFull(mergedControls, newMerged);
+        JButton cropOverride = new JButton("Per-category crop priority override");
+        cropOverride.addActionListener(e -> chooseMergedPriorityOverride());
+        addFull(mergedControls, cropOverride);
+        addFull(mergedControls, label("By default, merged runs inherit each category's saved crop preferences.", false));
+        addFull(body, regularControls);
+        addFull(body, mergedControls);
+        JButton route = new JButton("Edit patch order and teleport choices");
+        route.addActionListener(e -> FarmRouteEditor.open(this, routes,
+            runType.getSelectedItem() == DirectorRunSelection.MERGED
+                ? FarmRunFilter.ALL : ((DirectorRunSelection) runType.getSelectedItem()).filter));
+        addFull(body, route);
+        return new JPanel(new BorderLayout())
+        {{
+            setBackground(ColorScheme.DARK_GRAY_COLOR);
+            add(scrolling(body), BorderLayout.CENTER);
+        }};
+    }
+
+    private void showEditorMode()
+    {
+        boolean merged = runType.getSelectedItem() == DirectorRunSelection.MERGED;
+        mergedControls.setVisible(merged);
+        regularControls.setVisible(!merged);
+        if (merged) reloadPresetNames();
+        mergedControls.revalidate();
+    }
+
+    private void reloadPresetNames()
+    {
+        String previous = (String) presetChoice.getSelectedItem();
+        if (previous == null) previous = profileValue("directorLastPreset",
+            DirectorMergedPresets.DEFAULT_NAME);
+        loadingPresets = true;
+        presetChoice.removeAllItems();
+        for (String name : presets.names()) presetChoice.addItem(name);
+        presetChoice.setSelectedItem(previous);
+        if (presetChoice.getSelectedIndex() < 0 && presetChoice.getItemCount() > 0)
+            presetChoice.setSelectedIndex(0);
+        loadingPresets = false;
+        loadPreset();
+    }
+
+    private void loadPreset()
+    {
+        String name = (String) presetChoice.getSelectedItem();
+        if (name == null) return;
+        Set<FarmRunType> types = presets.categories(name);
+        for (Map.Entry<FarmRunType, JCheckBox> row : mergedTypes.entrySet())
+            row.getValue().setSelected(types.contains(row.getKey()));
+    }
+
+    private void saveMergedPreset()
+    {
+        String name = (String) presetChoice.getSelectedItem();
+        EnumSet<FarmRunType> types = EnumSet.noneOf(FarmRunType.class);
+        for (Map.Entry<FarmRunType, JCheckBox> row : mergedTypes.entrySet())
+            if (row.getValue().isSelected()) types.add(row.getKey());
+        if (types.isEmpty() || !presets.save(name, types))
+        {
+            JOptionPane.showMessageDialog(this,
+                "Select at least one category and log into a character to save.");
+            return;
+        }
+        configManager.setRSProfileConfiguration(GROUP, "directorLastPreset", name);
+        showPage("selection");
+    }
+
+    private void createMergedPreset()
+    {
+        Object input = JOptionPane.showInputDialog(this,
+            "Preset name (letters, numbers, spaces, _ or -):",
+            "Create merged run", JOptionPane.PLAIN_MESSAGE);
+        if (input == null) return;
+        String name = input.toString().trim();
+        if (!DirectorMergedPresets.validName(name))
+        {
+            JOptionPane.showMessageDialog(this, "Choose a name of 1–40 safe characters.");
+            return;
+        }
+        EnumSet<FarmRunType> selected = EnumSet.noneOf(FarmRunType.class);
+        for (Map.Entry<FarmRunType, JCheckBox> entry : mergedTypes.entrySet())
+            if (entry.getValue().isSelected()) selected.add(entry.getKey());
+        if (!presets.save(name, selected))
+        {
+            JOptionPane.showMessageDialog(this, "Log in before saving presets.");
+            return;
+        }
+        reloadPresetNames();
+        presetChoice.setSelectedItem(name);
+    }
+
+    private void chooseMergedPriorityOverride()
+    {
+        String name = (String) presetChoice.getSelectedItem();
+        if (name == null || configManager.getRSProfileKey() == null) return;
+        Object category = JOptionPane.showInputDialog(this, "Choose a category:",
+            "Merged-run crop override", JOptionPane.PLAIN_MESSAGE, null,
+            FarmRunType.values(), FarmRunType.HERB);
+        if (!(category instanceof FarmRunType)) return;
+        String key = "directorMergedPriority_" + name + "_" + ((FarmRunType)category).name();
+        String prior = profileValue(key, "");
+        String value = JOptionPane.showInputDialog(this,
+            "Comma-separated crops. Leave blank to inherit this category's usual preferences.",
+            prior);
+        if (value == null) return;
+        if (value.trim().isEmpty())
+            configManager.unsetRSProfileConfiguration(GROUP, key);
+        else
+            configManager.setRSProfileConfiguration(GROUP, key, value.trim());
+    }
+
+    private JPanel createSettings()
+    {
+        JPanel settings = vertical();
+        addFull(settings, nav("← Back to runs", "selection"));
+        addFull(settings, label("Global Settings", true));
+        for (JCheckBox toggle : new JCheckBox[] {protectTrees, autoNext,
+            nearestRoute, herbloreFocus, autoReplanBank, readyOnly})
+        {
+            toggle.setBackground(ColorScheme.DARK_GRAY_COLOR);
+            toggle.setForeground(Color.WHITE);
+            addFull(settings, toggle);
+        }
+        addFull(settings, label("Maximum stops per loadout", false));
+        addFull(settings, maxStopsPerWave);
+        addFull(settings, label("Bank between loadouts", false));
+        bankChoice.addActionListener(e ->
+        {
+            if (awaitingBank && !paused) requestBankRoute();
+        });
+        addFull(settings, bankChoice);
+        JButton save = new JButton("Save settings");
+        save.addActionListener(e -> { savePreferences(); showPage("selection"); });
+        addFull(settings, save);
+        addFull(settings, label("Nearest-stop ordering is approximate; Shortest Path handles travel to each stop.", false));
+        return new JPanel(new BorderLayout())
+        {{
+            setBackground(ColorScheme.DARK_GRAY_COLOR);
+            add(scrolling(settings), BorderLayout.CENTER);
+        }};
+    }
+
+    private JPanel createPatchManager()
+    {
+        JPanel outer = new JPanel(new BorderLayout(0, 6));
+        outer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        JPanel header = vertical();
+        addFull(header, nav("← Back to runs", "selection"));
+        addFull(header, label("Global Patch Manager", true));
+        addFull(header, label("Disabled patches are excluded from every run.", false));
+        patchSearch.setToolTipText("Filter patch names and locations");
+        addFull(header, patchSearch);
+        disabledOnly.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        disabledOnly.setForeground(Color.WHITE);
+        addFull(header, disabledOnly);
+        patchSearch.getDocument().addDocumentListener(new DocumentListener()
+        {
+            public void insertUpdate(DocumentEvent e) { drawPatchRows(); }
+            public void removeUpdate(DocumentEvent e) { drawPatchRows(); }
+            public void changedUpdate(DocumentEvent e) { drawPatchRows(); }
+        });
+        disabledOnly.addActionListener(e -> drawPatchRows());
+        outer.add(header, BorderLayout.NORTH);
+        patchRows.setLayout(new BoxLayout(patchRows, BoxLayout.Y_AXIS));
+        patchRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        patchRows.setBorder(BorderFactory.createEmptyBorder(5, 9, 8, 9));
+        outer.add(scrolling(patchRows), BorderLayout.CENTER);
+        return outer;
+    }
+
+    private void refreshPatchManager()
+    {
+        clientThread.invoke(() ->
+        {
+            List<PatchView> result = new ArrayList<>();
+            int level = client.getGameState() == GameState.LOGGED_IN
+                ? plugin.getFarmingLevel() : 1;
+            List<FarmRunPatch> individual = DirectorPatchPreferences.expand(
+                FarmRunCatalog.patches(),
+                patch -> stateReader.patchNamesForType(patch.getPatchType().name(), patch.getLocation()));
+            for (FarmRunPatch patch : individual)
+            {
+                String issue = client.getGameState() == GameState.LOGGED_IN
+                    ? DirectorWaypoints.accessIssue(client, patch.getPatchType(),
+                        patch.getLocation(), level, true) : null;
+                String access = client.getGameState() != GameState.LOGGED_IN
+                    ? "Unlock: unknown (log in)"
+                    : issue != null ? "Locked: " + issue
+                    : uncertainLocation(patch.getLocation())
+                        ? "Unlock: unverified" : "No known access restriction";
+                QuestFarmingStateReader.Observation observation = observePatchState(patch);
+                String state = !observation.known() ? "Ready: unverified"
+                    : observation.state == CropState.GROWING ? "Growing"
+                    : "Needs attention: " + observation.state.name().toLowerCase();
+                result.add(new PatchView(patch, access, state));
+            }
+            SwingUtilities.invokeLater(() ->
+            {
+                patchViews.clear();
+                patchViews.addAll(result);
+                if ("patches".equals(visiblePage)) drawPatchRows();
+            });
+        });
+    }
+
+    private static boolean uncertainLocation(String location)
+    {
+        switch (location)
+        {
+            case "Harmony Island":
+            case "Civitas illa Fortis":
+            case "Auburnvale":
+            case "Kastori":
+            case "Great Conch":
+            case "Avium Savannah":
+            case "Anglers' Retreat":
+                return true;
+            default: return false;
+        }
+    }
+
+    private void setCategoryEnabled(List<PatchView> rows, boolean enabled)
+    {
+        for (PatchView row : rows) patchPrefs.setEnabled(row.patch, enabled);
+        drawPatchRows();
+    }
+
+    private void drawPatchRows()
+    {
+        patchRows.removeAll();
+        String query = patchSearch.getText().trim().toLowerCase(java.util.Locale.ROOT);
+        boolean onlyOff = disabledOnly.isSelected();
+        Map<FarmRunType, List<PatchView>> byType = new EnumMap<>(FarmRunType.class);
+        for (PatchView patch : patchViews)
+        {
+            if (onlyOff && patchPrefs.enabled(patch.patch)) continue;
+            if (!query.isEmpty() && !patch.patch.getDisplayName()
+                .toLowerCase(java.util.Locale.ROOT).contains(query)
+                && !patch.patch.getPatchType().getDisplayName()
+                    .toLowerCase(java.util.Locale.ROOT).contains(query)) continue;
+            byType.computeIfAbsent(patch.patch.getFarmRunType(), t -> new ArrayList<>()).add(patch);
+        }
+        for (Map.Entry<FarmRunType, List<PatchView>> group : byType.entrySet())
+        {
+            JPanel category = new JPanel(new GridLayout(1, 3, 3, 0));
+            category.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            JButton fold = new JButton((collapsedTypes.contains(group.getKey()) ? "▸ " : "▾ ")
+                + group.getKey().getDisplayName());
+            fold.addActionListener(e ->
+            {
+                if (!collapsedTypes.add(group.getKey())) collapsedTypes.remove(group.getKey());
+                drawPatchRows();
+            });
+            category.add(fold);
+            JButton all = new JButton("All");
+            all.addActionListener(e -> setCategoryEnabled(group.getValue(), true));
+            category.add(all);
+            JButton none = new JButton("None");
+            none.addActionListener(e -> setCategoryEnabled(group.getValue(), false));
+            category.add(none);
+            addFull(patchRows, category);
+            if (collapsedTypes.contains(group.getKey())) continue;
+
+            Map<String, List<PatchView>> byLocation = new LinkedHashMap<>();
+            for (PatchView patch : group.getValue())
+                byLocation.computeIfAbsent(patch.patch.getLocation(),
+                    loc -> new ArrayList<>()).add(patch);
+            for (Map.Entry<String, List<PatchView>> location : byLocation.entrySet())
+            {
+                JPanel locationBar = new JPanel(new GridLayout(1, 3, 3, 0));
+                locationBar.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                locationBar.add(label(location.getKey(), true));
+                JButton enable = new JButton("+");
+                enable.setToolTipText("Enable all patches at this location in this category");
+                enable.addActionListener(e -> setCategoryEnabled(location.getValue(), true));
+                locationBar.add(enable);
+                JButton disable = new JButton("−");
+                disable.setToolTipText("Disable all patches at this location in this category");
+                disable.addActionListener(e -> setCategoryEnabled(location.getValue(), false));
+                locationBar.add(disable);
+                addFull(patchRows, locationBar);
+                for (PatchView patch : location.getValue())
+                {
+                    JPanel entry = vertical();
+                    entry.setBorder(BorderFactory.createEmptyBorder(1, 8, 7, 2));
+                    JCheckBox enabled = new JCheckBox(patch.patch.getName().isEmpty()
+                        ? patch.patch.getPatchType().getDisplayName()
+                        : patch.patch.getName() + " · " + patch.patch.getPatchType().getDisplayName(),
+                        patchPrefs.enabled(patch.patch));
+                    enabled.setForeground(Color.WHITE);
+                    enabled.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                    enabled.setEnabled(configManager.getRSProfileKey() != null);
+                    enabled.addActionListener(e -> patchPrefs.setEnabled(patch.patch,
+                        enabled.isSelected()));
+                    addFull(entry, enabled);
+                    addFull(entry, label(patch.unlock + " · " + patch.state, false));
+                    addFull(patchRows, entry);
+                }
+            }
+        }
+        if (patchViews.isEmpty()) patchRows.add(warning("Loading patch observations..."));
+        else if (byType.isEmpty()) patchRows.add(warning("No patches match your filters."));
+        patchRows.revalidate();
+        patchRows.repaint();
     }
 
     private static JLabel label(String text, boolean strong)
