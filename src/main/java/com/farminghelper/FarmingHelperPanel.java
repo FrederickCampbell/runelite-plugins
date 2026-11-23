@@ -1860,7 +1860,7 @@ final class FarmingHelperPanel extends PluginPanel
                 currentPlan = result.firstWave();
                 currentStep = 0;
                 paused = wasPaused;
-                preparingLoadout = !currentPlan.steps.isEmpty() && !paused;
+                preparingLoadout = !currentPlan.steps.isEmpty();
                 requirementsExpanded = true;
                 runFinished = false;
                 completedSteps.clear();
@@ -2615,7 +2615,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private void requestRoute(RunPlanner.Step step)
     {
-        if (!navigationEnabled || preparingLoadout || paused || compostPageOpen)
+        if (!navigationEnabled || preparingLoadout || paused || compostPageOpen || awaitingBank || runFinished || planningInFlight)
         {
             return;
         }
@@ -2627,8 +2627,8 @@ final class FarmingHelperPanel extends PluginPanel
             RunPlanner.Plan active = currentPlan;
             TravelTarget target = routeTarget(step.patch);
             if (!navigationEnabled || generation != routeGeneration || active == null || paused || runFinished
-                || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey())
-                || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
+                || compostPageOpen || preparingLoadout || awaitingBank || planningInFlight || !Objects.equals(activeProfile, configManager.getRSProfileKey())
+                || currentStep < 0 || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
             {
                 return;
             }
@@ -2713,6 +2713,10 @@ final class FarmingHelperPanel extends PluginPanel
         else if (awaitingBank)
         {
             requestBankRoute();
+        }
+        else if (preparingLoadout)
+        {
+            startWhenSupplied();
         }
         else if (currentStep < currentPlan.steps.size())
         {
@@ -2859,9 +2863,12 @@ final class FarmingHelperPanel extends PluginPanel
             int index = awaitingBank && waveIndex + 1 < currentSession.waves.size() ? waveIndex + 1 : waveIndex;
             RunPlanner.Plan wave = index < currentSession.waves.size() ? currentSession.waves.get(index) : currentPlan;
             Map<Integer, Integer> kit = index < currentSession.supplies.size() ? currentSession.supplies.get(index) : Collections.emptyMap();
-            Map<RouteTeleport, Integer> travel = index < currentSession.teleports.size() ? currentSession.teleports.get(index) : Collections.emptyMap();
-            next = BankChecklist.remaining(wave, kit, travel,
-                awaitingBank ? Collections.emptySet() : completedSteps);
+            Set<Integer> done = awaitingBank ? Collections.emptySet() : completedSteps;
+            List<FarmRunPatch> remaining = new ArrayList<>();
+            for (int i = 0; i < wave.steps.size(); i++)
+                if (!done.contains(i)) remaining.add(wave.steps.get(i).patch);
+            Map<RouteTeleport, Integer> travel = FarmRouteManager.requirements(remaining, currentSession.teleportByPatch);
+            next = BankChecklist.remaining(wave, kit, travel, done);
         }
         boolean changed = loadout.publishDirectorChecklist(next);
         boolean bankGuidance = OverlayPolicy.bank(next != null, preparingLoadout, awaitingBank,
@@ -3032,7 +3039,8 @@ final class FarmingHelperPanel extends PluginPanel
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
                     : step.harvestOnly ? "Harvest-only: refill before replanting"
                     : "Existing crop: check condition or gardener protection";
-                if (isCurrent && !preparingLoadout && !guideDetails.isSelected())
+                if (isCurrent && preparingLoadout) item.add(warning("Gather supplies before travelling."));
+                else if (isCurrent && !guideDetails.isSelected())
                 {
                     for (StepEngine.Action previous : observedInteractions)
                     {
