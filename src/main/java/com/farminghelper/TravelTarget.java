@@ -32,6 +32,12 @@ final class TravelTarget
             source.equals("Saved player waypoint"));
     }
 
+    /** Navigation must not inherit Advisor timer coordinates. */
+    static TravelTarget navigation(FarmRunPatch patch, QuestFarmingStateReader states)
+    {
+        return choose(patch, states, null);
+    }
+
     static TravelTarget choose(FarmRunPatch patch,
                                        QuestFarmingStateReader states,
                                        PatchTimerManager timers)
@@ -56,7 +62,8 @@ final class TravelTarget
             return new TravelTarget(hint, false,
                 "Approximate area (multi-patch region)");
         }
-        for (PatchTimer timer : timers.getTimers())
+        // Timer coordinates are available only to the independent observation path.
+        if (timers != null) for (PatchTimer timer : timers.getTimers())
         {
             if (timer.getPatchType() == patch.getPatchType() &&
                 patch.getLocation().equals(PatchLocationCatalog.name(timer.getPatchLocation())))
