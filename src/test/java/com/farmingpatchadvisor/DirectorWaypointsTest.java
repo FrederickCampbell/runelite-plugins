@@ -26,6 +26,30 @@ public class DirectorWaypointsTest
     }
 
     @Test
+    public void guildWingAccessIsSeparateFromCropLevel()
+    {
+        assertEquals(45, DirectorWaypoints.guildAccessLevel(PatchType.BUSH));
+        assertEquals(45, DirectorWaypoints.guildAccessLevel(PatchType.CACTUS));
+        assertEquals(65, DirectorWaypoints.guildAccessLevel(PatchType.ANIMA));
+        assertEquals(85, DirectorWaypoints.guildAccessLevel(PatchType.SPIRIT_TREE));
+        assertEquals(85, DirectorWaypoints.guildAccessLevel(PatchType.CELASTRUS));
+        assertEquals(85, DirectorWaypoints.guildAccessLevel(PatchType.REDWOOD));
+    }
+
+    @Test
+    public void missingAccountStateIsNotAnUnlock()
+    {
+        assertEquals(DirectorWaypoints.AccessState.UNKNOWN,
+            DirectorWaypoints.access(null, PatchType.TREE, "Auburnvale", 99).state);
+        assertEquals(DirectorWaypoints.AccessState.UNKNOWN,
+            DirectorWaypoints.access(null, PatchType.FRUIT_TREE, "Lletya", 99).state);
+        assertNotNull(DirectorWaypoints.access(null, PatchType.HERB,
+            "Harmony Island", 99).issue(false));
+        assertNull(DirectorWaypoints.access(null, PatchType.HERB,
+            "Harmony Island", 99).issue(true));
+    }
+
+    @Test
     public void standardWaypointsHaveCoordinates()
     {
         assertNotNull(DirectorWaypoints.point(PatchType.HERB, "Falador"));

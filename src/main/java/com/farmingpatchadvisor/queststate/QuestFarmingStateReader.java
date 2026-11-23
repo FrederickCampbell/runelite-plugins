@@ -191,7 +191,7 @@ public final class QuestFarmingStateReader
             return new Observation(null, Source.NONE, 0, protection, match.getName());
         }
         long observedAtMillis = timestampMillis(raw);
-        if (observedAtMillis <= 0)
+        if (observedAtMillis <= 0 || observedAtMillis > System.currentTimeMillis())
         {
             return new Observation(null, Source.NONE, 0, protection, match.getName());
         }

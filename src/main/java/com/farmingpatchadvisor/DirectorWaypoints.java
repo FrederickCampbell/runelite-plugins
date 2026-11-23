@@ -5,6 +5,8 @@ import java.util.Map;
 import net.runelite.api.Client;
 import net.runelite.api.Quest;
 import net.runelite.api.QuestState;
+import net.runelite.api.Skill;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.coords.WorldPoint;
 
 /**
@@ -93,41 +95,104 @@ final class DirectorWaypoints
         return point(patch.getPatchType(), patch.getLocation());
     }
 
+    enum AccessState { AVAILABLE, LOCKED, UNKNOWN }
+
+    static final class Access
+    {
+        final AccessState state;
+        final String detail;
+        Access(AccessState state, String detail)
+        {
+            this.state = state;
+            this.detail = detail;
+        }
+        String issue(boolean acceptUnverified)
+        {
+            return state == AccessState.LOCKED ||
+                state == AccessState.UNKNOWN && !acceptUnverified ? detail : null;
+        }
+    }
+
+    static int guildAccessLevel(PatchType type)
+    {
+        switch (type)
+        {
+            case ALLOTMENT: case FLOWER: case BUSH: case CACTUS: return 45;
+            case FRUIT_TREE: case CELASTRUS: case SPIRIT_TREE: case REDWOOD: return 85;
+            default: return 65;
+        }
+    }
+
+    private static Access available(String detail) { return new Access(AccessState.AVAILABLE, detail); }
+    private static Access locked(String detail) { return new Access(AccessState.LOCKED, detail); }
+    private static Access unknown(String detail) { return new Access(AccessState.UNKNOWN, detail); }
+
+    private static Access quest(Client client, Quest quest, String description, boolean partial)
+    {
+        if (client == null) return unknown(description + " not verified.");
+        QuestState state = quest.getState(client);
+        if (state == QuestState.FINISHED) return available(description + " completed.");
+        if (partial && state == QuestState.IN_PROGRESS)
+            return unknown(description + " started; exact access progress is unverified.");
+        return locked(description + " required.");
+    }
+
+    /**
+     * Known conditions from the upstream Quest Helper HerbRun / TreeRun
+     * and Farming Guild tier access. Partial quest progress and unmapped
+     * gates are not silently reported as unlocked.
+     */
+    static Access access(Client client, PatchType type, String location, int farmingLevel)
+    {
+        switch (location)
+        {
+            case "Farming Guild":
+                int min = guildAccessLevel(type);
+                return farmingLevel < min
+                    ? locked("Farming Guild " + type.getDisplayName() + " requires level " + min + " Farming (unboosted).")
+                    : available("Farming Guild tier: " + min + " Farming.");
+            case "Morytania":
+                return quest(client, Quest.PRIEST_IN_PERIL, "Priest in Peril", false);
+            case "Troll Stronghold":
+                return quest(client, Quest.MY_ARMS_BIG_ADVENTURE, "My Arm's Big Adventure", false);
+            case "Weiss":
+                return quest(client, Quest.MAKING_FRIENDS_WITH_MY_ARM, "Making Friends with My Arm", false);
+            case "Harmony Island":
+                if (type == PatchType.HERB)
+                {
+                    if (client == null) return unknown("Elite Morytania Diary not verified.");
+                    return client.getVarbitValue(VarbitID.MORYTANIA_DIARY_ELITE_COMPLETE) > 0
+                        ? available("Elite Morytania Diary completed.")
+                        : locked("Elite Morytania Diary required.");
+                }
+                return quest(client, Quest.THE_GREAT_BRAIN_ROBBERY, "The Great Brain Robbery", true);
+            case "Civitas illa Fortis": case "Auburnvale": case "Kastori": case "Aldarin":
+                return quest(client, Quest.CHILDREN_OF_THE_SUN, "Children of the Sun", false);
+            case "Avium Savannah":
+                return quest(client, Quest.THE_RIBBITING_TALE_OF_A_LILY_PAD_LABOUR_DISPUTE,
+                    "The Ribbiting Tale of a Lily Pad Labour Dispute", false);
+            case "Great Conch":
+                return quest(client, Quest.TROUBLED_TORTUGANS, "Troubled Tortugans", false);
+            case "Anglers' Retreat":
+                if (client == null) return unknown("51 Sailing requirement unverified.");
+                return client.getRealSkillLevel(Skill.SAILING) >= 51
+                    ? available("51 Sailing requirement met.") : locked("51 Sailing required.");
+            case "Fossil Island": case "Seaweed":
+                return quest(client, Quest.BONE_VOYAGE, "Bone Voyage", false);
+            case "Prifddinas":
+                return quest(client, Quest.SONG_OF_THE_ELVES, "Song of the Elves", false);
+            case "Lletya":
+                return quest(client, Quest.MOURNINGS_END_PART_I, "Mourning's End Part I", true);
+            case "Etceteria":
+                return quest(client, Quest.THE_FREMENNIK_TRIALS, "The Fremennik Trials", false);
+            default:
+                return available("No special access gate in the catalog; transport still unverified.");
+        }
+    }
+
     static String accessIssue(Client client, PatchType type, String location,
                               int farmingLevel, boolean acceptUnverified)
     {
-        if ("Farming Guild".equals(location))
-        {
-            int min = (type == PatchType.ALLOTMENT || type == PatchType.FLOWER) ? 45
-                : type == PatchType.FRUIT_TREE ? 85
-                : type == PatchType.REDWOOD ? 90 : 65;
-            return farmingLevel < min ? "Farming Guild " + type.getDisplayName()
-                + " requires level " + min + " Farming (unboosted)." : null;
-        }
-        if ("Morytania".equals(location) &&
-            Quest.PRIEST_IN_PERIL.getState(client) != QuestState.FINISHED)
-        {
-            return "Morytania requires Priest in Peril.";
-        }
-        if ("Troll Stronghold".equals(location) &&
-            Quest.MY_ARMS_BIG_ADVENTURE.getState(client) != QuestState.FINISHED)
-        {
-            return "Troll Stronghold requires My Arm's Big Adventure.";
-        }
-        if ("Weiss".equals(location) &&
-            Quest.MAKING_FRIENDS_WITH_MY_ARM.getState(client) != QuestState.FINISHED)
-        {
-            return "Weiss requires Making Friends with My Arm.";
-        }
-        if (!acceptUnverified &&
-            ("Harmony Island".equals(location) || "Civitas illa Fortis".equals(location) ||
-                "Auburnvale".equals(location) || "Kastori".equals(location) ||
-                "Great Conch".equals(location) || "Avium Savannah".equals(location) ||
-                "Anglers' Retreat".equals(location)))
-        {
-            return location + " access is not verified; enable unverified locations "
-                + "in settings if you know you have access.";
-        }
-        return null;
+        return access(client, type, location, farmingLevel).issue(acceptUnverified);
     }
 }

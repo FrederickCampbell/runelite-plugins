@@ -108,12 +108,13 @@ public class FarmingHandler
 			tickrate /= 5;
 		}
 
-		long doneEstimate = 0;
-		if (tickrate > 0)
+		// Unknown or malformed stage timing must not predict instant maturity.
+		if (tickrate <= 0 || stages <= 0 || stage < 0 || stage >= stages)
 		{
-			long tickTime = getTickTime(tickrate, 0, unixTime, profile);
-			doneEstimate = getTickTime(tickrate, stages - 1 - stage, tickTime, profile);
+			return null;
 		}
+		long tickTime = getTickTime(tickrate, 0, unixTime, profile);
+		long doneEstimate = getTickTime(tickrate, stages - 1 - stage, tickTime, profile);
 
 		if (unixNow >= doneEstimate)
 		{

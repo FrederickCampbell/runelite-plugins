@@ -826,6 +826,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void refreshPatchManager()
     {
+        final String profile = configManager.getRSProfileKey();
         clientThread.invoke(() ->
         {
             List<PatchView> result = new ArrayList<>();
@@ -836,14 +837,13 @@ final class FarmingDirectorPanel extends PluginPanel
                 patch -> stateReader.patchNamesForType(patch.getPatchType().name(), patch.getLocation()));
             for (FarmRunPatch patch : individual)
             {
-                String issue = client.getGameState() == GameState.LOGGED_IN
-                    ? DirectorWaypoints.accessIssue(client, patch.getPatchType(),
-                        patch.getLocation(), level, true) : null;
-                String access = client.getGameState() != GameState.LOGGED_IN
-                    ? "Unlock: unknown (log in)"
-                    : issue != null ? "Locked: " + issue
-                    : uncertainLocation(patch.getLocation())
-                        ? "Unlock: unverified" : "Unlock: unverified (no known restriction)";
+                DirectorWaypoints.Access gate = client.getGameState() == GameState.LOGGED_IN
+                    ? DirectorWaypoints.access(client, patch.getPatchType(),
+                        patch.getLocation(), level) : null;
+                String access = gate == null ? "Unlock: unknown (log in)"
+                    : gate.state == DirectorWaypoints.AccessState.LOCKED ? "Locked: " + gate.detail
+                    : gate.state == DirectorWaypoints.AccessState.UNKNOWN ? "Unverified: " + gate.detail
+                    : gate.detail;
                 QuestFarmingStateReader.Observation observation = observePatchState(patch);
                 String state = !observation.known() ? "Ready: unverified"
                     : observation.state == CropState.GROWING ? "Growing"
@@ -852,6 +852,7 @@ final class FarmingDirectorPanel extends PluginPanel
             }
             SwingUtilities.invokeLater(() ->
             {
+                if (!Objects.equals(profile, configManager.getRSProfileKey())) return;
                 patchViews.clear();
                 patchViews.addAll(result);
                 if ("patches".equals(visiblePage)) drawPatchRows();
