@@ -73,7 +73,13 @@ final class DirectorWaypoints
             case FRUIT_TREE: return FRUITS.get(location);
             case CALQUAT: return CALQUATS.get(location);
             case HARDWOOD_TREE: return HARDWOODS.get(location);
-            default: return HERBS.get(location);
+            case HERB:
+            case ALLOTMENT:
+            case FLOWER:
+                return HERBS.get(location); // Same farming area, not the precise subpatch tile.
+            default:
+                return null; // Never send a bush/mushroom/specialty run to an unrelated herb patch.
+
         }
     }
 

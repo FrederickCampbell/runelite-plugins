@@ -1108,8 +1108,11 @@ final class FarmingDirectorPanel extends PluginPanel
                     WorldPoint point = DirectorWaypoints.exactPoint(step.patch);
                     if (point != null)
                     {
-                        item.add(label("Destination: " + point.getX() + ", " + point.getY()
-                            + " · Quest Helper / Shortest Path", false));
+                        boolean exactTile = step.patch.getPatchType() == PatchType.HERB ||
+                            DirectorStepEngine.isTreeType(step.patch.getPatchType());
+                        item.add(label((exactTile ? "Patch: " : "Nearby farming area: ")
+                            + point.getX() + ", " + point.getY()
+                            + " · Shortest Path if installed", false));
                     }
                     else
                     {
