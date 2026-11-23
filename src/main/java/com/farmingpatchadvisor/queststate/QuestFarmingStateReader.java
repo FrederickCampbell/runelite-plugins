@@ -39,7 +39,7 @@ public final class QuestFarmingStateReader
 
     public enum Source
     {
-        LIVE, TIME_TRACKING, NONE
+        LIVE, TIME_TRACKING, ADVISOR, NONE
     }
 
     public static final class Observation

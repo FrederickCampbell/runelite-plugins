@@ -98,7 +98,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private QuestFarmingStateReader.Observation visibleObservation;
     private DirectorStepEngine.Action visibleAction = DirectorStepEngine.Action.INSPECT;
     private final Set<Integer> completedSteps = new HashSet<>();
-    private long routeGeneration;
+    private volatile long routeGeneration;
     private volatile boolean routeIssued;
     private boolean loadingPreferences;
 
@@ -286,11 +286,15 @@ final class FarmingDirectorPanel extends PluginPanel
                 currentPlan = result;
                 currentStep = 0;
                 paused = false;
+                runFinished = false;
+                completedSteps.clear();
+                activateCurrentStep();
                 start.setEnabled(true);
                 render();
                 if (!currentPlan.steps.isEmpty())
                 {
                     requestRoute(currentPlan.steps.get(0));
+                    clientThread.invoke(this::onClientTick);
                 }
             });
         });
@@ -420,6 +424,144 @@ final class FarmingDirectorPanel extends PluginPanel
         return scannedAt > 0 && scannedAt <= now && now - scannedAt < FRESH_MILLIS;
     }
 
+
+    /** Called by the plugin every game tick, strictly on the RuneLite client thread. */
+    void onClientTick()
+    {
+        DirectorPlanner.Plan plan = currentPlan;
+        int index = currentStep;
+        if (plan == null || paused || runFinished || client.getGameState() != GameState.LOGGED_IN
+            || index < 0 || index >= plan.steps.size())
+        {
+            return;
+        }
+        DirectorPlanner.Step step = plan.steps.get(index);
+        WorldPoint point = DirectorWaypoints.point(step.patch.getPatchType(),
+            step.patch.getLocation());
+        QuestFarmingStateReader.Observation observation = stateReader.observe(
+            step.patch.getPatchType() == PatchType.TREE ? Tab.TREE : Tab.HERB,
+            step.patch.getLocation(), point);
+
+        // Advisor is an independent fallback when RuneLite Time Tracking has
+        // not yet observed the patch. It NEVER turns missing data into empty.
+        if (!observation.known() && point != null)
+        {
+            PatchTimer timer = timerManager.findTimer(point, step.patch.getPatchType(), 9);
+            if (timer != null)
+            {
+                CropState state = null;
+                if (timer.isDead())
+                {
+                    state = CropState.DEAD;
+                }
+                else if (timer.isDiseased())
+                {
+                    state = CropState.DISEASED;
+                }
+                else if (timer.isPlantedTimer() && !timer.isPicked())
+                {
+                    state = !Instant.now().isBefore(timer.getReadyAt())
+                        ? (step.patch.getPatchType() == PatchType.TREE
+                            ? CropState.UNCHECKED : CropState.HARVESTABLE)
+                        : CropState.GROWING;
+                }
+                if (state != null)
+                {
+                    observation = new QuestFarmingStateReader.Observation(state,
+                        QuestFarmingStateReader.Source.ADVISOR,
+                        timer.getPlantedAt().toEpochMilli(), null, "");
+                }
+            }
+        }
+        final QuestFarmingStateReader.Observation latest = observation;
+        SwingUtilities.invokeLater(() -> acceptObservation(plan, index, latest));
+    }
+
+    /** Only the EDT owns live guide state; stale asynchronous ticks are dropped. */
+    private void acceptObservation(DirectorPlanner.Plan plan, int index,
+                                   QuestFarmingStateReader.Observation observation)
+    {
+        if (plan != currentPlan || index != currentStep || paused || runFinished)
+        {
+            return;
+        }
+        boolean fresh = observation.isFreshSince(activatedAtMillis);
+        if (!observedInitialState)
+        {
+            observedInitialState = true;
+            initiallyGrowing = observation.known() && observation.state == CropState.GROWING;
+        }
+
+        DirectorPlanner.Step step = plan.steps.get(index);
+        DirectorStepEngine.Action action = DirectorStepEngine.action(
+            step.patch.getPatchType(), observation.state,
+            step.patch.getPatchType() == PatchType.TREE && protectTrees.isSelected(),
+            observation.protectedByFarmer);
+        boolean changed = visibleObservation == null ||
+            !Objects.equals(visibleObservation.state, observation.state) ||
+            visibleObservation.source != observation.source ||
+            !Objects.equals(visibleObservation.protectedByFarmer, observation.protectedByFarmer) ||
+            action != visibleAction;
+        visibleObservation = observation;
+        visibleAction = action;
+        if (autoNext.isSelected() && DirectorStepEngine.canAutoAdvance(
+            action, observation.known(), fresh, initiallyGrowing))
+        {
+            moveStep(1, true);
+            return;
+        }
+        if (changed)
+        {
+            render();
+        }
+    }
+
+    private void activateCurrentStep()
+    {
+        activatedAtMillis = System.currentTimeMillis();
+        observedInitialState = false;
+        initiallyGrowing = false;
+        visibleObservation = null;
+        visibleAction = DirectorStepEngine.Action.INSPECT;
+    }
+
+    private void moveStep(int delta, boolean automatic)
+    {
+        if (currentPlan == null || currentPlan.steps.isEmpty() || paused)
+        {
+            return;
+        }
+        int previous = currentStep;
+        int nextIndex = Math.max(0, Math.min(currentPlan.steps.size(), currentStep + delta));
+        if (previous == nextIndex)
+        {
+            return;
+        }
+        if (delta > 0)
+        {
+            completedSteps.add(previous);
+        }
+        else
+        {
+            completedSteps.remove(nextIndex);
+        }
+        currentStep = nextIndex;
+        if (currentStep >= currentPlan.steps.size())
+        {
+            runFinished = true;
+            clearRoute();
+            render();
+            return;
+        }
+        runFinished = false;
+        activateCurrentStep();
+        render();
+        requestRoute(currentPlan.steps.get(currentStep));
+        // First read resolves already-growing patches without the user
+        // needing to click Next at every location.
+        clientThread.invoke(this::onClientTick);
+    }
+
     private void requestRoute(DirectorPlanner.Step step)
     {
         if (paused)
@@ -428,9 +570,13 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         WorldPoint destination = DirectorWaypoints.point(step.patch.getPatchType(),
             step.patch.getLocation());
+        final long generation = ++routeGeneration;
         clientThread.invoke(() ->
         {
-            if (client.getLocalPlayer() == null || destination == null)
+            DirectorPlanner.Plan active = currentPlan;
+            if (generation != routeGeneration || client.getLocalPlayer() == null
+                || destination == null || active == null || paused || runFinished
+                || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
             {
                 return;
             }
@@ -445,13 +591,10 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void clearRoute()
     {
-        if (!routeIssued)
-        {
-            return;
-        }
+        final long generation = ++routeGeneration;
         clientThread.invoke(() ->
         {
-            if (routeIssued)
+            if (generation == routeGeneration && routeIssued)
             {
                 eventBus.post(new PluginMessage("shortestpath", "clear"));
                 routeIssued = false;
@@ -461,13 +604,27 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void advance(int delta)
     {
-        if (currentPlan == null || currentPlan.steps.isEmpty())
+        moveStep(delta, false);
+    }
+
+    private void jumpTo(int targetIndex)
+    {
+        if (currentPlan == null || paused || targetIndex < 0
+            || targetIndex >= currentPlan.steps.size())
         {
             return;
         }
-        currentStep = Math.max(0, Math.min(currentPlan.steps.size() - 1, currentStep + delta));
+        int previous = currentStep;
+        currentStep = targetIndex;
+        runFinished = false;
+        if (targetIndex < previous)
+        {
+            completedSteps.remove(targetIndex);
+        }
+        activateCurrentStep();
         render();
         requestRoute(currentPlan.steps.get(currentStep));
+        clientThread.invoke(this::onClientTick);
     }
 
     private void togglePause()
@@ -493,6 +650,9 @@ final class FarmingDirectorPanel extends PluginPanel
         currentPlan = null;
         paused = false;
         currentStep = 0;
+        runFinished = false;
+        completedSteps.clear();
+        activateCurrentStep();
         clearRoute();
         render();
     }
@@ -504,6 +664,9 @@ final class FarmingDirectorPanel extends PluginPanel
             currentPlan = null;
             currentStep = 0;
             paused = false;
+            runFinished = false;
+            completedSteps.clear();
+            activateCurrentStep();
             loadPreferences();
             render();
         });
