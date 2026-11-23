@@ -199,6 +199,35 @@ final class RunPlanner
                       Map<FarmRunType, String> perCategoryPriorities,
                       Map<PatchType, PatchPriority> patchPriorities)
     {
+        return buildInternal(type, patches, farmingLevel, stock, customPriority, priorities, reserves,
+            fixedToolSlots, teleportSlots, freeHarvestSlots, protectTrees, stackable, preplanted,
+            harvestOnlyPatches, cropOverrides, herbloreFocus, maxStops, teleportSlotsForSelected,
+            perCategoryPriorities, patchPriorities, false);
+    }
+
+    /** Guidance only: every eligible patch stays in the itinerary even if its supplies are absent. */
+    static Plan guide(List<FarmRunPatch> patches, int farmingLevel, Map<Integer, Integer> stock,
+                      int freeHarvestSlots, boolean protectTrees, IntPredicate stackable,
+                      Set<String> preplanted, Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
+                      boolean herbloreFocus, ToIntFunction<List<FarmRunPatch>> supplySlots,
+                      Map<PatchType, PatchPriority> patchPriorities)
+    {
+        return buildInternal(null, patches, farmingLevel, stock, false, "", "", 0, 0,
+            freeHarvestSlots, protectTrees, stackable, preplanted, harvestOnlyPatches, cropOverrides,
+            herbloreFocus, Integer.MAX_VALUE, supplySlots, Collections.emptyMap(), patchPriorities, true);
+    }
+
+    private static Plan buildInternal(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted,
+                      Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
+                      boolean herbloreFocus, int maxStops,
+                      ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected,
+                      Map<FarmRunType, String> perCategoryPriorities,
+                      Map<PatchType, PatchPriority> patchPriorities, boolean advisory)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
@@ -216,7 +245,7 @@ final class RunPlanner
             patchRanks.put(patchType, priorityRanks(preference.csv));
             parseReserves(preference.reserves).forEach((crop, count) -> reservesByName.merge(crop, count, Math::max));
         });
-        int budget = Math.max(0, INVENTORY_CAPACITY - freeHarvestSlots);
+        int budget = advisory ? Integer.MAX_VALUE : Math.max(0, INVENTORY_CAPACITY - freeHarvestSlots);
 
         for (FarmRunPatch patch : patches)
         {
@@ -283,7 +312,7 @@ final class RunPlanner
                     int reserve = reservesByName.getOrDefault(normalize(desired.getName()), 0);
                     int remaining = stock.getOrDefault(desired.getItemId(), 0) - reserve
                         - used.getOrDefault(desired.getItemId(), 0);
-                    if (remaining >= count * desired.getQuantity())
+                    if (advisory || remaining >= count * desired.getQuantity())
                     {
                         choice = desired;
                     }
@@ -305,6 +334,18 @@ final class RunPlanner
                     choice = candidate;
                     break;
                 }
+            }
+            if (advisory && choice == null && !eligible.isEmpty())
+            {
+                choice = eligible.get(0);
+                warnings.add("No unreserved stock for " + patch.getDisplayName() +
+                    "; suggesting " + choice.getName() + " (obtain or override).");
+            }
+            if (advisory && choice == null)
+            {
+                result.add(new Step(patch, null, false, harvestOnlyPatches.contains(FarmRouteManager.key(patch))));
+                warnings.add("No selected eligible crop for " + patch.getDisplayName() + "; choose a crop manually.");
+                continue;
             }
             if (choice == null)
             {
@@ -350,7 +391,7 @@ final class RunPlanner
                     int id = payment.getKey();
                     int required = payment.getValue() + paymentItems.getOrDefault(id, 0) +
                         nextSeeds.getOrDefault(id, 0);
-                    if (stock.getOrDefault(id, 0) < required) paymentFits = false;
+                    if (!advisory && stock.getOrDefault(id, 0) < required) paymentFits = false;
                 }
                 if (paymentFits)
                     stopPayments.forEach((id, amount) -> nextPayments.merge(id, amount, Integer::sum));
@@ -389,6 +430,8 @@ final class RunPlanner
             teleportSlotsForSelected.applyAsInt(selectedStops));
         int occupied = occupied(type, used, paymentItems, fixedToolSlots,
             selectedTeleportSlots, stackable);
+        if (advisory && occupied + Math.max(0, freeHarvestSlots) > INVENTORY_CAPACITY)
+            warnings.add("Full-run supplies may exceed 28 slots. Restock or use alternatives at your discretion.");
         return new Plan(result, used, paymentItems, warnings, occupied,
             Math.max(0, freeHarvestSlots));
     }
