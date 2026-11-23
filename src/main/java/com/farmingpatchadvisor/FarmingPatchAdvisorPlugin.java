@@ -44,8 +44,8 @@ import net.runelite.client.ui.NavigationButton;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Farming Patch Advisor",
-	description = "Recommends crops and highlights the seeds, saplings, and farming items needed to plant them",
+	name = "Ironman Farming Director",
+	description = "Quest Helper-style guided farming runs backed by Farming Patch Advisor",
 	tags = {"farming", "seed", "patch", "bank", "highlight"}
 )
 public class FarmingPatchAdvisorPlugin extends Plugin
@@ -96,6 +96,9 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	private FarmingPatchPanel patchPanel;
 
 	@Inject
+	private FarmingDirectorPanel directorPanel;
+
+	@Inject
 	private FarmingPatchAdvisorConfig config;
 
 	@Inject
@@ -119,11 +122,12 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		overlayManager.add(storageScanReminderOverlay);
 		overlayManager.add(compostBinOverlay);
 		patchPanel.start();
+		directorPanel.requestRefresh();
 		navigationButton = NavigationButton.builder()
-			.tooltip("Farming Patch Advisor")
+			.tooltip("Ironman Farming Director")
 			.icon(createNavigationIcon())
 			.priority(8)
-			.panel(patchPanel)
+			.panel(directorPanel)
 			.build();
 		clientToolbar.addNavigation(navigationButton);
 		bankChecklistFilter.addButton();
@@ -146,6 +150,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 			navigationButton = null;
 		}
 		patchPanel.stop();
+		directorPanel.shutDown();
 		bankChecklistFilter.removeButton();
 		patchObjects.clear();
 		compostBinManager.unload();
@@ -232,6 +237,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 
 	private void reloadCharacterData()
 	{
+		directorPanel.resetCharacter();
 		patchObjects.clear();
 		farmingLoadout.clearStorageSnapshots();
 		contractManager.load();
@@ -244,12 +250,13 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	{
 		farmingLoadout.onItemContainerChanged(event);
 		patchPanel.requestRebuild();
+		directorPanel.requestRefresh();
 	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if ("farming-patch-advisor".equals(event.getGroup()))
+		if ("ironman-farming-director".equals(event.getGroup()))
 		{
 			patchPanel.requestRebuild();
 		}

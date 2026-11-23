@@ -7,10 +7,24 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 
-@ConfigGroup("farming-patch-advisor")
+@ConfigGroup("ironman-farming-director")
 public interface FarmingPatchAdvisorConfig extends Config
 {
-	@ConfigSection(name = "Crop overrides", description = "Override automatic seed recommendations by patch type", position = 16, closedByDefault = true)
+    @ConfigSection(name = "Director", description = "Guided run and conservative planning settings",
+        position = 5)
+    String directorSection = "directorSection";
+
+    @ConfigItem(keyName = "directorHarvestSlots", name = "Herb harvest slots",
+        description = "Inventory slots kept empty for harvested herbs", position = 0,
+        section = directorSection)
+    default int directorHarvestSlots() { return 8; }
+
+    @ConfigItem(keyName = "directorIncludeUnverifiedLocations", name = "Include unverified access",
+        description = "Include Harmony Island and Varlamore stops when access cannot be confirmed",
+        position = 1, section = directorSection)
+    default boolean directorIncludeUnverifiedLocations() { return false; }
+
+    @ConfigSection(name = "Crop overrides", description = "Override automatic seed recommendations by patch type", position = 16, closedByDefault = true)
 	String cropOverridesSection = "cropOverridesSection";
 
 	@ConfigSection(name = "Allotment, flower & herb run", description = "Patch types used on the frequent crop run", position = 17)

@@ -16,7 +16,7 @@ import net.runelite.client.config.ConfigManager;
 @Singleton
 final class FarmRouteManager
 {
-	private static final String GROUP = "farming-patch-advisor";
+	private static final String GROUP = "ironman-farming-director";
 	private final ConfigManager configManager;
 	private final FarmingPatchAdvisorConfig config;
 	private final FarmRunFilterState filter;
