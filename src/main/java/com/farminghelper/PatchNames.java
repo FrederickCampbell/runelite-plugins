@@ -18,8 +18,11 @@ final class PatchNames
         }
         if (grouped.getPatchCount() > 1)
         {
-            // The state registry is authoritative if its physical patch count changes.
-            // Keep every verified identity rather than dropping a whole farm.
+            // An incomplete identity list is ambiguous, not evidence that the farm shrank.
+            // Retain the grouped entry for inspection rather than misassigning varbits.
+            if (names.size() != grouped.getPatchCount() || new java.util.HashSet<>(names).size() != names.size()
+                || names.stream().anyMatch(name -> name == null || name.trim().isEmpty()))
+                return Collections.emptyList();
             List<FarmRunPatch> split = new ArrayList<>();
             for (String name : names)
             {
