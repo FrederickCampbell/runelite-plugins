@@ -64,6 +64,8 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 
 	@Inject
 	private FarmingPatchOverlay patchOverlay;
+    @Inject
+    private DirectorWidgetOverlay directorWidgetOverlay;
 
 	@Inject
 	private FarmingItemOverlay itemOverlay;
@@ -122,6 +124,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		timerManager.load();
 		compostBinManager.load();
 		overlayManager.add(patchOverlay);
+        overlayManager.add(directorWidgetOverlay);
 		overlayManager.add(itemOverlay);
 		overlayManager.add(timerOverlay);
 		overlayManager.add(checklistOverlay);
@@ -145,6 +148,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	protected void shutDown()
 	{
 		overlayManager.remove(patchOverlay);
+        overlayManager.remove(directorWidgetOverlay);
 		overlayManager.remove(itemOverlay);
 		overlayManager.remove(timerOverlay);
 		overlayManager.remove(checklistOverlay);

@@ -24,8 +24,17 @@ final class DirectorWorldGuide
         final String profile;
         final boolean compost;
         final int compostItem;
+        final RouteTeleport travel;
+        final boolean travelling;
         Target(DirectorPlanner.Step step, DirectorStepEngine.Action action, String profile, boolean compost, int compostItem)
         {
+            this(step, action, profile, compost, compostItem, RouteTeleport.NONE, false);
+        }
+        Target(DirectorPlanner.Step step, DirectorStepEngine.Action action, String profile, boolean compost,
+               int compostItem, RouteTeleport travel, boolean travelling)
+        {
+            this.travel = travel;
+            this.travelling = travelling;
             this.patch = step.patch;
             this.crop = step.crop;
             this.action = action;
@@ -59,6 +68,7 @@ final class DirectorWorldGuide
 
     static int itemId(Target target)
     {
+        if (target.travelling && target.travel.itemIds().length > 0) return target.travel.itemIds()[0];
         switch (target.action)
         {
             case PLANT: return target.crop == null ? -1 : target.crop.getItemId();
@@ -76,11 +86,40 @@ final class DirectorWorldGuide
 
     static boolean matchesInventoryItem(Target target, int id)
     {
+        if (target.travelling)
+        {
+            for (int item : target.travel.itemIds()) if (id == item) return true;
+            return false;
+        }
         if (target.action == DirectorStepEngine.Action.PROTECT_TREE)
             return ProtectionPaymentCatalog.forCrop(target.crop).stream().anyMatch(p -> p.getItemId() == id);
         if (target.action == DirectorStepEngine.Action.CURE && DirectorStepEngine.isTreeType(target.patch.getPatchType()))
             return id == ItemID.SECATEURS || id == ItemID.FAIRY_ENCHANTED_SECATEURS;
         return id == itemId(target);
+    }
+
+    /** The selected route item is authoritative; spells are alternatives only
+     * where the corresponding spell is actually visible. */
+    static String spellName(Target target)
+    {
+        switch (target.travel)
+        {
+            case LUMBRIDGE: return "Lumbridge Teleport";
+            case VARROCK: return "Varrock Teleport";
+            case FALADOR: return "Falador Teleport";
+            case CAMELOT: return "Camelot Teleport";
+            case CATHERBY: return "Catherby Teleport";
+            case ARDOUGNE: return "Ardougne Teleport";
+            case HOUSE: return "Teleport to House";
+            case FORTIS: return "Civitas illa Fortis Teleport";
+            default: return "";
+        }
+    }
+
+    static String travelInstruction(Target target)
+    {
+        return target.travel == RouteTeleport.NONE ? "Travel to " + target.patch.getLocation()
+            : "Use " + target.travel.toString() + " → " + target.patch.getLocation();
     }
 
     /** Exact positions win. For named compass pairs, only resolve when BOTH

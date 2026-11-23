@@ -2029,7 +2029,7 @@ final class FarmingDirectorPanel extends PluginPanel
             warnings.add("Total planned ultracompost exceeds scanned stock; replenish or change compost settings.");
         warnings.addAll(wavePlan.warnings);
         return new DirectorSessionPlan(wavePlan, stockLedger, warnings,
-            travelRequirements, supplyRequirements);
+            travelRequirements, supplyRequirements, teleportForPatch);
     }
 
     private static String individualMode(FarmRunType type)
@@ -2695,7 +2695,10 @@ final class FarmingDirectorPanel extends PluginPanel
                 activeProfile, includeCompostForRun.isSelected(),
                 currentSession != null && waveIndex < currentSession.supplies.size() &&
                     currentSession.supplies.get(waveIndex).containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)
-                    ? ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED : ItemID.BUCKET_ULTRACOMPOST) : null;
+                    ? ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED : ItemID.BUCKET_ULTRACOMPOST,
+                currentSession == null ? RouteTeleport.NONE : currentSession.teleportByPatch.getOrDefault(
+                    FarmRouteManager.key(currentPlan.steps.get(currentStep).patch), RouteTeleport.NONE),
+                visibleObservation == null || visibleObservation.source != QuestFarmingStateReader.Source.LIVE) : null;
     }
 
     private void publishBankChecklist()
@@ -2773,11 +2776,12 @@ final class FarmingDirectorPanel extends PluginPanel
                     ? ": unknown)" : ": " + visibleObservation.state.name().toLowerCase() + ")");
             }
         }
+        publishWorldTarget();
         if (active && !runFinished && !awaitingBank && currentStep < steps && !guideDetails.isSelected())
         {
             DirectorPlanner.Step step = currentPlan.steps.get(currentStep);
             actionText = visibleObservation == null || visibleObservation.source != QuestFarmingStateReader.Source.LIVE
-                ? "Travel to " + step.patch.getLocation() + (navigationEnabled ? " · follow Shortest Path." : ".")
+                ? (worldTarget == null ? "Travel to " + step.patch.getLocation() : DirectorWorldGuide.travelInstruction(worldTarget)) + (navigationEnabled ? " · follow Shortest Path." : ".")
                 : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(),
                     includeCompostForRun.isSelected());
         }
@@ -2857,7 +2861,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 JPanel stepHeader = new JPanel(new BorderLayout());
                 stepHeader.setBackground(item.getBackground());
                 stepHeader.add(place, BorderLayout.CENTER);
-                if (isCurrent)
+                if (isCurrent && guideDetails.isSelected())
                 {
                     JButton edit = new JButton("✎");
                     edit.setToolTipText("Set a permanent crop preference for this patch");
@@ -2873,8 +2877,16 @@ final class FarmingDirectorPanel extends PluginPanel
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
                     : step.harvestOnly ? "Harvest-only: refill before replanting"
                     : "Existing crop: check condition or gardener protection";
-                item.add(warning(instruction));
-                if (isCurrent && step.protectionPlanned)
+                if (isCurrent && !guideDetails.isSelected())
+                {
+                    JLabel actionLine = new JLabel(wrapped("▶ " + (worldTarget != null && worldTarget.travelling
+                        ? DirectorWorldGuide.travelInstruction(worldTarget)
+                        : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(), includeCompostForRun.isSelected())), 157));
+                    actionLine.setForeground(new Color(150, 218, 239));
+                    item.add(actionLine);
+                }
+                else item.add(warning(instruction));
+                if (isCurrent && guideDetails.isSelected() && step.protectionPlanned)
                     item.add(warning("Gardener protection planned / verify payment"));
                 if (isCurrent && guideDetails.isSelected())
                 {

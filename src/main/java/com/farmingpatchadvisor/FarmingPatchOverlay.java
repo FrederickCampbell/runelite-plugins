@@ -202,6 +202,7 @@ final class FarmingPatchOverlay extends Overlay
     {
         if (client.getGameState() != net.runelite.api.GameState.LOGGED_IN || client.getLocalPlayer() == null) return;
         FarmRunPatch patch = target.patch;
+        if (target.travelling) return;
         Color color = config.directorTargetColor();
         String text = DirectorWorldGuide.instruction(target.action, target.crop, patch.getPatchType(), target.compost);
         int iconId = DirectorWorldGuide.itemId(target);

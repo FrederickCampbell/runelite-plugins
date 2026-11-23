@@ -46,6 +46,7 @@ final class DirectorQuestTargets
         Definition(int objectId, int gardenerId) { this.objectId = objectId; this.gardenerId = gardenerId; }
     }
     private static final Map<WorldPoint, Definition> BY_POINT = new HashMap<>();
+    private static final java.util.Set<Integer> OBJECT_IDS = new java.util.HashSet<>();
     static
     {
         add(3193, 3231, 0, ObjectID.FARMING_TREE_PATCH_4, NpcID.FARMING_GARDENER_TREE_4);
@@ -84,6 +85,7 @@ final class DirectorQuestTargets
     private static void add(int x, int y, int plane, int object, int gardener)
     {
         BY_POINT.put(new WorldPoint(x,y,plane), new Definition(object,gardener));
+        OBJECT_IDS.add(object);
     }
     static Definition get(FarmRunPatch patch)
     {
@@ -100,8 +102,9 @@ final class DirectorQuestTargets
     }
     static boolean knownObject(Client client, GameObject object)
     {
-        for (Definition d : BY_POINT.values()) if (matches(client, object, d)) return true;
-        return false;
+        if (OBJECT_IDS.contains(object.getId())) return true;
+        ObjectComposition c = client.getObjectDefinition(object.getId());
+        return c != null && c.getImpostorIds() != null && c.getImpostor() != null && OBJECT_IDS.contains(c.getImpostor().getId());
     }
     static boolean atPoint(GameObject object, WorldPoint point)
     {
