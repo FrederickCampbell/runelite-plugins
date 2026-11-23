@@ -165,10 +165,12 @@ public final class QuestFarmingStateReader
 
         WorldPoint player = client.getLocalPlayer() == null ? null
             : client.getLocalPlayer().getWorldLocation();
-        boolean near = player != null && worldPoint != null &&
-            player.getPlane() == worldPoint.getPlane() &&
-            player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS &&
-            world.getRegionsForLocation(player).contains(match.getRegion());
+        boolean near = player != null && world.getRegionsForLocation(player)
+            .contains(match.getRegion()) &&
+            (worldPoint == null
+                ? player.getRegionID() == match.getRegion().getRegionID()
+                : player.getPlane() == worldPoint.getPlane() &&
+                    player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS);
         if (near)
         {
             PatchState raw = match.getImplementation()

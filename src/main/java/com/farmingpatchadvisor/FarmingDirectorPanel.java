@@ -491,7 +491,7 @@ final class FarmingDirectorPanel extends PluginPanel
             QuestFarmingStateReader.Observation observation = observePatchState(patch);
             if (observation.known() && observation.state == CropState.GROWING)
             {
-                if (DirectorStepEngine.isTreeType(patch.getPatchType())
+                if (DirectorStepEngine.supportsProtection(patch.getPatchType())
                     && protection && !Boolean.TRUE.equals(observation.protectedByFarmer))
                 {
                     preplanted.add(FarmRouteManager.key(patch));
@@ -647,7 +647,8 @@ final class FarmingDirectorPanel extends PluginPanel
             stateReader, timerManager);
         WorldPoint point = target.point;
         QuestFarmingStateReader.Observation observation = stateReader.observeType(
-            patch.getPatchType().name(), patch.getLocation(), patch.getName(), point);
+            patch.getPatchType().name(), patch.getLocation(), patch.getName(),
+            target.exact ? point : null);
 
         // Advisor is an independent fallback when RuneLite Time Tracking has
         // not yet observed the patch. It NEVER turns missing data into empty.
@@ -721,7 +722,7 @@ final class FarmingDirectorPanel extends PluginPanel
         DirectorPlanner.Step step = plan.steps.get(index);
         DirectorStepEngine.Action action = DirectorStepEngine.action(
             step.patch.getPatchType(), observation.state,
-            DirectorStepEngine.isTreeType(step.patch.getPatchType()) && protectTrees.isSelected(),
+            DirectorStepEngine.supportsProtection(step.patch.getPatchType()) && protectTrees.isSelected(),
             observation.protectedByFarmer);
         boolean changed = visibleObservation == null ||
             !Objects.equals(visibleObservation.state, observation.state) ||

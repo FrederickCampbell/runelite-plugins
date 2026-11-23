@@ -33,6 +33,18 @@ final class DirectorTravelTarget
             return new DirectorTravelTarget(verified, patchExact,
                 patchExact ? "Quest Helper patch" : "Nearby herb-patch area");
         }
+        if (patch.getPatchType() == PatchType.ALLOTMENT ||
+            patch.getPatchType() == PatchType.SEAWEED ||
+            patch.getPatchType() == PatchType.GRAPEVINE ||
+            patch.getPatchType() == PatchType.CORAL)
+        {
+            // Multiple identical patch types in one region cannot be
+            // identified by Advisor's region name alone.
+            WorldPoint hint = states.regionHint(patch.getPatchType().name(),
+                patch.getLocation());
+            return new DirectorTravelTarget(hint, false,
+                "Approximate area (multi-patch region)");
+        }
         for (PatchTimer timer : timers.getTimers())
         {
             if (timer.getPatchType() == patch.getPatchType() &&

@@ -26,6 +26,12 @@ final class DirectorStepEngine
 
     private DirectorStepEngine() {}
 
+    static boolean supportsProtection(PatchType type)
+    {
+        return type == PatchType.TREE || type == PatchType.FRUIT_TREE ||
+            type == PatchType.CALQUAT || type == PatchType.HARDWOOD_TREE;
+    }
+
     static boolean isTreeType(PatchType type)
     {
         switch (type)
@@ -66,7 +72,7 @@ final class DirectorStepEngine
             case HARVESTABLE:
                 return isTreeType(type) ? Action.REMOVE_TREE : Action.HARVEST;
             case GROWING:
-                if (isTreeType(type) && requireProtection
+                if (supportsProtection(type) && requireProtection
                     && !Boolean.TRUE.equals(protectedByFarmer))
                 {
                     return Action.PROTECT_TREE;
