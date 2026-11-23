@@ -26,6 +26,7 @@ public class PatchCoverageTest
                 assertTrue(patch.getDisplayName(), TravelTarget.navigation(patch, reader).routable());
             }
         }
+        assertEquals("All non-compost physical plots in the vendored farming registry", 99, keys.size());
     }
 
     @Test public void mapMarkersAreNotExactObjectTargets()
