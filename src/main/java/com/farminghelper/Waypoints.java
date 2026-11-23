@@ -20,6 +20,7 @@ final class Waypoints
     private static final Map<String, WorldPoint> FRUITS = new HashMap<>();
     private static final Map<String, WorldPoint> CALQUATS = new HashMap<>();
     private static final Map<String, WorldPoint> HARDWOODS = new HashMap<>();
+    private static final Map<String, WorldPoint> FARM_AREAS = new HashMap<>();
 
     static
     {
@@ -58,6 +59,43 @@ final class Waypoints
         at(HARDWOODS, "Fossil Island~East", 3715, 3835);
         at(HARDWOODS, "Avium Savannah", 1687, 2972);
         at(HARDWOODS, "Anglers' Retreat", 2470, 2704);
+
+        // RuneLite FarmingPatchLocation map markers (not exact object tiles).
+        // https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/worldmap/FarmingPatchLocation.java
+        area(PatchType.ALLOTMENT, "Prifddinas", 3289, 6100);
+        area(PatchType.FLOWER, "Prifddinas", 3289, 6100);
+        area(PatchType.ALLOTMENT, "Farming Guild", 1269, 3730);
+        area(PatchType.FLOWER, "Farming Guild", 1259, 3729);
+        area(PatchType.FLOWER, "Kastori", 1352, 3025);
+        area(PatchType.HOPS, "Yanille", 2572, 3102);
+        area(PatchType.HOPS, "Seers' Village", 2661, 3523);
+        area(PatchType.HOPS, "Lumbridge", 3224, 3313);
+        area(PatchType.HOPS, "Entrana", 2812, 3334);
+        area(PatchType.HOPS, "Aldarin", 1367, 2938);
+        area(PatchType.BUSH, "Rimmington", 2938, 3223);
+        area(PatchType.BUSH, "Etceteria", 2589, 3862);
+        area(PatchType.BUSH, "Champions' Guild", 3182, 3356);
+        area(PatchType.BUSH, "Ardougne", 2615, 3224);
+        area(PatchType.BUSH, "Farming Guild", 1259, 3729);
+        area(PatchType.CACTUS, "Al Kharid", 3313, 3201);
+        area(PatchType.CACTUS, "Farming Guild", 1264, 3745);
+        area(PatchType.BELLADONNA, "Draynor Manor", 3084, 3356);
+        area(PatchType.BELLADONNA, "Auburnvale", 1449, 3354);
+        area(PatchType.MUSHROOM, "Morytania", 3449, 3471);
+        area(PatchType.GRAPEVINE, "Kourend", 1807, 3555);
+        area(PatchType.ANIMA, "Farming Guild", 1235, 3724);
+        area(PatchType.CELASTRUS, "Farming Guild", 1242, 3755);
+        area(PatchType.REDWOOD, "Farming Guild", 1233, 3754);
+        area(PatchType.HESPORI, "Farming Guild", 1182, 10068);
+        area(PatchType.CRYSTAL_TREE, "Prifddinas", 3292, 6120);
+        area(PatchType.SEAWEED, "Seaweed", 3730, 10271);
+        area(PatchType.CORAL, "Great Conch", 3296, 8861);
+        area(PatchType.SPIRIT_TREE, "Port Sarim", 3056, 3259);
+        area(PatchType.SPIRIT_TREE, "Kourend", 1690, 3540);
+        // The Etceteria map marker disagrees with the region registry; use the verified local bush area.
+        area(PatchType.SPIRIT_TREE, "Etceteria", 2589, 3862);
+        area(PatchType.SPIRIT_TREE, "Brimhaven", 2799, 3205);
+        area(PatchType.SPIRIT_TREE, "Farming Guild", 1254, 3753);
     }
 
     private Waypoints() {}
@@ -65,6 +103,16 @@ final class Waypoints
     private static void at(Map<String, WorldPoint> map, String name, int x, int y)
     {
         map.put(name, new WorldPoint(x, y, 0));
+    }
+
+    private static void area(PatchType type, String location, int x, int y)
+    {
+        at(FARM_AREAS, type.name() + "~" + location, x, y);
+    }
+
+    static WorldPoint farmArea(FarmRunPatch patch)
+    {
+        return FARM_AREAS.get(patch.getPatchType().name() + "~" + patch.getLocation());
     }
 
     static WorldPoint point(PatchType type, String location)
