@@ -376,6 +376,42 @@ final class FarmingDirectorPanel extends PluginPanel
                 : "Seed Vault snapshot is over 6 hours old: reopen it to refresh.");
         }
 
+        // A growing crop already has its planting stock in the ground. It must
+        // not consume another seed in the loadout calculation. The exception is
+        // an existing tree that still needs (or may need) gardener protection.
+        List<FarmRunPatch> actionable = new ArrayList<>();
+        Set<String> preplanted = new HashSet<>();
+        int alreadyGrowing = 0;
+        for (FarmRunPatch patch : candidates)
+        {
+            QuestFarmingStateReader.Observation observation = observePatchState(patch);
+            if (observation.known() && observation.state == CropState.GROWING)
+            {
+                if (type == PatchType.TREE && protection
+                    && !Boolean.TRUE.equals(observation.protectedByFarmer))
+                {
+                    preplanted.add(FarmRouteManager.key(patch));
+                    actionable.add(patch);
+                    warnings.add("Existing tree at " + patch.getLocation() +
+                        ": protection not verified; no extra sapling allocated.");
+                }
+                else
+                {
+                    alreadyGrowing++;
+                }
+            }
+            else
+            {
+                actionable.add(patch);
+            }
+        }
+        candidates = actionable;
+        if (alreadyGrowing > 0)
+        {
+            warnings.add("Skipped " + alreadyGrowing + " already-growing "
+                + (type == PatchType.TREE ? "trees" : "patches") + " in the run.");
+        }
+
         int toolSlots = type == PatchType.TREE ? 2 : 3; // Rake, spade, plus herb seed dibber.
         if (type == PatchType.HERB && stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
             && !loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS))
@@ -397,7 +433,7 @@ final class FarmingDirectorPanel extends PluginPanel
             : config.directorHarvestSlots();
         DirectorPlanner.Plan plan = DirectorPlanner.build(type, candidates, level, stock,
             custom, priorityText, reserveText, toolSlots, teleportSlots, harvestReserve,
-            protection, id -> itemManager.getItemComposition(id).isStackable());
+            protection, id -> itemManager.getItemComposition(id).isStackable(), preplanted);
 
         if (type == PatchType.TREE && plan.steps.isEmpty())
         {
@@ -446,31 +482,29 @@ final class FarmingDirectorPanel extends PluginPanel
     }
 
 
-    /** Called by the plugin every game tick, strictly on the RuneLite client thread. */
-    void onClientTick()
+    /**
+     * Use Quest Helper's live patch varbits first, falling back to its Time
+     * Tracking prediction and then Advisor's observed timers. Never assume an
+     * unobserved patch is empty. Do not map grouped allotments to an adjacent
+     * Advisor timer because their individual tile positions differ.
+     */
+    private QuestFarmingStateReader.Observation observePatchState(FarmRunPatch patch)
     {
-        DirectorPlanner.Plan plan = currentPlan;
-        int index = currentStep;
-        if (plan == null || paused || runFinished || client.getGameState() != GameState.LOGGED_IN
-            || index < 0 || index >= plan.steps.size())
-        {
-            return;
-        }
-        DirectorPlanner.Step step = plan.steps.get(index);
-        WorldPoint point = DirectorWaypoints.point(step.patch.getPatchType(),
-            step.patch.getLocation());
+        WorldPoint point = DirectorWaypoints.point(patch.getPatchType(),
+            patch.getLocation());
         QuestFarmingStateReader.Observation observation = stateReader.observe(
-            step.patch.getPatchType() == PatchType.TREE ? Tab.TREE
-                : step.patch.getPatchType() == PatchType.ALLOTMENT ? Tab.ALLOTMENT : Tab.HERB,
-            step.patch.getLocation(),
-            step.patch.getPatchType() == PatchType.ALLOTMENT ? step.patch.getName() : null,
+            patch.getPatchType() == PatchType.TREE ? Tab.TREE
+                : patch.getPatchType() == PatchType.ALLOTMENT ? Tab.ALLOTMENT : Tab.HERB,
+            patch.getLocation(),
+            patch.getPatchType() == PatchType.ALLOTMENT ? patch.getName() : null,
             point);
 
         // Advisor is an independent fallback when RuneLite Time Tracking has
         // not yet observed the patch. It NEVER turns missing data into empty.
-        if (point != null && observation.source != QuestFarmingStateReader.Source.LIVE)
+        if (point != null && patch.getPatchType() != PatchType.ALLOTMENT &&
+            observation.source != QuestFarmingStateReader.Source.LIVE)
         {
-            PatchTimer timer = timerManager.findTimer(point, step.patch.getPatchType(), 9);
+            PatchTimer timer = timerManager.findTimer(point, patch.getPatchType(), 9);
             boolean advisorNewer = timer != null &&
                 timer.getPlantedAt().toEpochMilli() > observation.observedAtMillis + 1500L;
             if (timer != null)
@@ -487,7 +521,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 else if (timer.isPlantedTimer() && !timer.isPicked())
                 {
                     state = !Instant.now().isBefore(timer.getReadyAt())
-                        ? (step.patch.getPatchType() == PatchType.TREE
+                        ? (patch.getPatchType() == PatchType.TREE
                             ? CropState.UNCHECKED : CropState.HARVESTABLE)
                         : CropState.GROWING;
                 }
@@ -500,6 +534,21 @@ final class FarmingDirectorPanel extends PluginPanel
                 }
             }
         }
+        return observation;
+    }
+
+    /** Called by the plugin every game tick, strictly on the RuneLite client thread. */
+    void onClientTick()
+    {
+        DirectorPlanner.Plan plan = currentPlan;
+        int index = currentStep;
+        if (plan == null || paused || runFinished || client.getGameState() != GameState.LOGGED_IN
+            || index < 0 || index >= plan.steps.size())
+        {
+            return;
+        }
+        DirectorPlanner.Step step = plan.steps.get(index);
+        QuestFarmingStateReader.Observation observation = observePatchState(step.patch);
         final QuestFarmingStateReader.Observation latest = observation;
         SwingUtilities.invokeLater(() -> acceptObservation(plan, index, latest));
     }
@@ -790,7 +839,8 @@ final class FarmingDirectorPanel extends PluginPanel
                     ? DirectorStepEngine.instruction(visibleAction, step.crop,
                         step.patch.getPatchType())
                     : completedSteps.contains(i) ? "Completed / skipped"
-                    : "Harvest / clear / plant " + step.crop.getName();
+                    : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
+                    : "Existing tree: verify gardener protection";
                 item.add(warning(instruction));
                 WorldPoint point = DirectorWaypoints.point(step.patch.getPatchType(),
                     step.patch.getLocation());

@@ -61,11 +61,12 @@ final class DirectorStepEngine
 
     static String instruction(Action action, Crop crop, PatchType type)
     {
+        String name = crop == null ? "a suitable replacement crop" : crop.getName();
         switch (action)
         {
             case HARVEST:
                 return "Harvest the " + (type == PatchType.ALLOTMENT ? "allotment" : "herbs") +
-                    ", then compost and plant " + crop.getName() + ".";
+                    ", then compost and plant " + name + ".";
             case CHECK_HEALTH:
                 return "Check the tree's health, then remove the tree.";
             case REMOVE_TREE:
@@ -73,14 +74,14 @@ final class DirectorStepEngine
             case DIG_STUMP:
                 return "Dig out the tree stump with a spade.";
             case CLEAR_DEAD:
-                return "Clear the dead crop, then plant " + crop.getName() + ".";
+                return "Clear the dead crop, then plant " + name + ".";
             case CURE:
                 return "Cure the diseased crop before harvesting.";
             case PLANT:
                 return type == PatchType.TREE
                     ? "Rake if necessary, compost and plant " + crop.getName() + "."
                     : "Rake if necessary, harvest if needed, compost and plant "
-                        + crop.getName() + ".";
+                        + name + ".";
             case PROTECT_TREE:
                 return "Ask the gardener to protect the tree. Continue automatically "
                     + "when protection is detected, or press Next to confirm.";
