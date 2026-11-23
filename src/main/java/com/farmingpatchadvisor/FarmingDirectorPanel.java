@@ -72,7 +72,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final PatchTimerManager timerManager;
 
     private final JComboBox<PatchType> runType =
-        new JComboBox<>(new PatchType[]{PatchType.HERB, PatchType.TREE});
+        new JComboBox<>(new PatchType[]{PatchType.HERB, PatchType.TREE, PatchType.ALLOTMENT});
     private final JCheckBox customPriority = new JCheckBox("Use custom priority");
     private final JCheckBox protectTrees = new JCheckBox("Carry tree protection payments", true);
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
@@ -240,9 +240,11 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         loadingPreferences = true;
         PatchType type = (PatchType) runType.getSelectedItem();
-        String name = type == PatchType.TREE ? "Tree" : "Herb";
+        String name = type == PatchType.TREE ? "Tree" : type == PatchType.ALLOTMENT
+            ? "Allotment" : "Herb";
         priorities.setText(profileValue("directorPriority" + name,
             type == PatchType.TREE ? "Magic, Yew, Maple, Willow, Oak"
+                : type == PatchType.ALLOTMENT ? "Snape grass, Watermelon, Strawberry, Sweetcorn"
                 : "Ranarr, Snapdragon, Toadflax, Irit, Avantoe"));
         reserves.setText(profileValue("directorReserve" + name, ""));
         customPriority.setSelected(Boolean.parseBoolean(profileValue("directorCustom" + name, "false")));
@@ -258,7 +260,8 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             return;
         }
-        String name = runType.getSelectedItem() == PatchType.TREE ? "Tree" : "Herb";
+        String name = runType.getSelectedItem() == PatchType.TREE ? "Tree"
+            : runType.getSelectedItem() == PatchType.ALLOTMENT ? "Allotment" : "Herb";
         configManager.setRSProfileConfiguration(GROUP, "directorPriority" + name, priorities.getText());
         configManager.setRSProfileConfiguration(GROUP, "directorReserve" + name, reserves.getText());
         configManager.setRSProfileConfiguration(GROUP, "directorCustom" + name,
@@ -312,7 +315,8 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         int level = plugin.getFarmingLevel();
         List<FarmRunPatch> candidates = new ArrayList<>();
-        FarmRunFilter filter = type == PatchType.TREE ? FarmRunFilter.TREE : FarmRunFilter.HERB;
+        FarmRunFilter filter = type == PatchType.TREE ? FarmRunFilter.TREE
+            : type == PatchType.ALLOTMENT ? FarmRunFilter.ALLOTMENT_FLOWER : FarmRunFilter.HERB;
         for (FarmRunPatch patch : routes.activePatches(filter))
         {
             if (patch.getPatchType() != type)
@@ -331,7 +335,22 @@ final class FarmingDirectorPanel extends PluginPanel
                 warnings.add(access);
                 continue;
             }
-            candidates.add(patch);
+            if (type == PatchType.ALLOTMENT)
+            {
+                List<FarmRunPatch> split = DirectorAllotments.split(patch,
+                    stateReader.patchNames(Tab.ALLOTMENT, patch.getLocation()));
+                if (split.isEmpty())
+                {
+                    warnings.add("Quest Helper has no matching allotment varbits for "
+                        + patch.getLocation() + "; skipping rather than guessing.");
+                    continue;
+                }
+                candidates.addAll(split);
+            }
+            else
+            {
+                candidates.add(patch);
+            }
         }
 
         long bankAt = loadout.directorBankSnapshotAt();
@@ -373,7 +392,9 @@ final class FarmingDirectorPanel extends PluginPanel
             }
         }
         int teleportSlots = distinctTeleports.size();
-        int harvestReserve = type == PatchType.HERB ? config.directorHarvestSlots() : 2;
+        int harvestReserve = type == PatchType.TREE ? 2
+            : type == PatchType.ALLOTMENT ? Math.max(14, config.directorHarvestSlots())
+            : config.directorHarvestSlots();
         DirectorPlanner.Plan plan = DirectorPlanner.build(type, candidates, level, stock,
             custom, priorityText, reserveText, toolSlots, teleportSlots, harvestReserve,
             protection, id -> itemManager.getItemComposition(id).isStackable());
@@ -439,8 +460,11 @@ final class FarmingDirectorPanel extends PluginPanel
         WorldPoint point = DirectorWaypoints.point(step.patch.getPatchType(),
             step.patch.getLocation());
         QuestFarmingStateReader.Observation observation = stateReader.observe(
-            step.patch.getPatchType() == PatchType.TREE ? Tab.TREE : Tab.HERB,
-            step.patch.getLocation(), point);
+            step.patch.getPatchType() == PatchType.TREE ? Tab.TREE
+                : step.patch.getPatchType() == PatchType.ALLOTMENT ? Tab.ALLOTMENT : Tab.HERB,
+            step.patch.getLocation(),
+            step.patch.getPatchType() == PatchType.ALLOTMENT ? step.patch.getName() : null,
+            point);
 
         // Advisor is an independent fallback when RuneLite Time Tracking has
         // not yet observed the patch. It NEVER turns missing data into empty.
