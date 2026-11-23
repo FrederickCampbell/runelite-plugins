@@ -241,4 +241,20 @@ public class DirectorPlannerTest
             java.util.Collections.singletonMap(FarmRouteManager.key(patch), "Ranarr"), false);
         assertEquals(ranarr, plan.steps.get(0).crop);
     }
+
+    @Test
+    public void teleportSlotsAreCountedOnlyForSelectedStops()
+    {
+        Crop oak = crop(PatchType.TREE, "oak");
+        Map<Integer,Integer> stock = new HashMap<>();
+        stock.put(oak.getItemId(), 10);
+        List<FarmRunPatch> candidates = patches(PatchType.TREE, 10);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(PatchType.TREE,
+            candidates, 75, stock, false, "", "", 2, 0, 23,
+            false, id -> false, java.util.Collections.emptySet(),
+            java.util.Collections.emptySet(), java.util.Collections.emptyMap(),
+            false, 10, selected -> selected.isEmpty() ? 0 : 1);
+        assertEquals(2, plan.steps.size()); // 28-23-2 tools-1 teleport = 2
+        assertEquals(5, plan.occupiedSlots);
+    }
 }

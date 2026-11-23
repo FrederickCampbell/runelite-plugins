@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.IntPredicate;
+import java.util.function.ToIntFunction;
 
 /**
  * Small quantity-aware planning layer over Farming Patch Advisor's existing crop,
@@ -138,6 +139,21 @@ final class DirectorPlanner
                       Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
                       boolean herbloreFocus, int maxStops)
     {
+        return build(type, patches, farmingLevel, stock, customPriority,
+            priorities, reserves, fixedToolSlots, teleportSlots, freeHarvestSlots,
+            protectTrees, stackable, preplanted, harvestOnlyPatches,
+            cropOverrides, herbloreFocus, maxStops, selected -> teleportSlots);
+    }
+
+    static Plan build(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted,
+                      Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
+                      boolean herbloreFocus, int maxStops,
+                      ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
@@ -250,8 +266,13 @@ final class DirectorPlanner
                     nextPayments.merge(payment.getItemId(), count * payment.getQuantity(), Integer::sum);
                 }
             }
+            List<FarmRunPatch> selectedStops = new ArrayList<>();
+            for (Step planned : result) selectedStops.add(planned.patch);
+            selectedStops.add(patch);
+            int selectedTeleportSlots = Math.max(0,
+                teleportSlotsForSelected.applyAsInt(selectedStops));
             int occupied = occupied(type, nextSeeds, nextPayments, fixedToolSlots,
-                teleportSlots, stackable);
+                selectedTeleportSlots, stackable);
             if (occupied > budget)
             {
                 warnings.add("28-slot limit reached near " + patch.getDisplayName()
@@ -267,8 +288,12 @@ final class DirectorPlanner
         {
             warnings.add("No eligible planting steps found.");
         }
+        List<FarmRunPatch> selectedStops = new ArrayList<>();
+        for (Step planned : result) selectedStops.add(planned.patch);
+        int selectedTeleportSlots = Math.max(0,
+            teleportSlotsForSelected.applyAsInt(selectedStops));
         int occupied = occupied(type, used, paymentItems, fixedToolSlots,
-            teleportSlots, stackable);
+            selectedTeleportSlots, stackable);
         return new Plan(result, used, paymentItems, warnings, occupied,
             Math.max(0, freeHarvestSlots));
     }
