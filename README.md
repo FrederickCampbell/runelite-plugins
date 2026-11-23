@@ -10,21 +10,21 @@ interactive RuneLite behavior still needs verification.
   selected/enabled locations, route/teleport preferences, observed inventory,
   bank and Seed Vault, timers, contracts, payments, compost and existing overlays.
 - **Quest Helper farming code** is vendored into
-  \`com.farmingpatchadvisor.queststate\`: \`FarmingWorld\`, \`FarmingRegion\`,
-  \`FarmingPatch\`, \`PatchImplementation\`, \`PatchState\`, \`CropState\`,
-  \`FarmingHandler\`, and \`PaymentTracker\`. Individual Quest Helper patch
+  `com.farmingpatchadvisor.queststate`: `FarmingWorld`, `FarmingRegion`,
+  `FarmingPatch`, `PatchImplementation`, `PatchState`, `CropState`,
+  `FarmingHandler`, and `PaymentTracker`. Individual Quest Helper patch
   varbits and RuneLite Time Tracking predictions drive the guide's conditions.
 - **The Guide UI** is a custom, compact Swing sidebar inspired by Quest Helper.
   It does **not** embed the entire original Quest Helper panel framework.
 - **Shortest Path** remains a separate optional plugin. The Director sends the
-  same \`shortestpath/path\` and \`shortestpath/clear\` event messages that Quest
+  same `shortestpath/path` and `shortestpath/clear` event messages that Quest
   Helper uses; it never attempts to implement its own movement pathfinder.
 
 ## Installation via RuneLite Dev Manager
 
 Download this branch:
 
-    git clone --branch ironman-farming-director-v0.1 --single-branch https://github.com/FrederickCampbell/runelite-plugins.git Ironman-Farming-Director
+    git clone --branch ironman-farming-director-v0.2 --single-branch https://github.com/FrederickCampbell/runelite-plugins.git Ironman-Farming-Director
 
 Place the Gradle project at:
 
@@ -111,7 +111,7 @@ optimisation.
   remain future work. Large combined runs may require replan-and-bank waves.
 - No in-game action automation, macros, mouse control or botting is included.
 
-CI checks \`clean test build\` on this branch. A green build proves source
+CI checks `clean test build` on this branch. A green build proves source
 compatibility with the CI RuneLite dependency, **not** flawless in-game play.
 
 ## Source and licenses
@@ -122,5 +122,5 @@ https://github.com/Seadeadmeat/farming-patch-advisor
 Quest Helper by Zoinkwiz and contributors (BSD-2-Clause):
 https://github.com/Zoinkwiz/quest-helper
 
-Original imported licenses and attribution headers are preserved as \`LICENSE\`
-and \`LICENSE-QUEST-HELPER\`. Their names, UI and code ownership remain credited.
+Original imported licenses and attribution headers are preserved as `LICENSE`
+and `LICENSE-QUEST-HELPER`. Their names, UI and code ownership remain credited.
