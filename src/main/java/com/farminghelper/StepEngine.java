@@ -73,7 +73,7 @@ final class StepEngine
             case STUMP:
                 return Action.DIG_STUMP;
             case UNCHECKED:
-                return isTreeType(type) ? Action.CHECK_HEALTH : Action.HARVEST;
+                return isTreeType(type) || type == PatchType.CACTUS ? Action.CHECK_HEALTH : Action.HARVEST;
             case HARVESTABLE:
                 if (type == PatchType.SPIRIT_TREE) return Action.INSPECT;
                 if (type == PatchType.CELASTRUS) return Action.HARVEST;
@@ -93,8 +93,8 @@ final class StepEngine
     static Action actionForStep(RunPlanner.Step step, CropState state, Boolean protection)
     {
         PatchType type = step.patch.getPatchType();
-        if (type == PatchType.SPIRIT_TREE && state == CropState.HARVESTABLE)
-            return Action.COMPLETE; // Mature transport tree must remain planted.
+        if ((type == PatchType.SPIRIT_TREE || type == PatchType.REDWOOD) && state == CropState.HARVESTABLE)
+            return Action.COMPLETE; // Keep permanent transport/woodcutting trees.
         if (step.harvestOnly && state == CropState.HARVESTABLE && isTreeType(type))
         {
             if (type == PatchType.FRUIT_TREE || type == PatchType.CALQUAT || type == PatchType.CELASTRUS)
@@ -114,6 +114,14 @@ final class StepEngine
         if (action == Action.PROTECT_TREE && (!sawEmpty || !hasPayment))
             return Action.COMPLETE;
         return action;
+    }
+
+    static boolean keepExisting(PatchType type, CropState state)
+    {
+        if (state != CropState.UNCHECKED && state != CropState.HARVESTABLE && state != CropState.DISEASED)
+            return false;
+        return type == PatchType.SPIRIT_TREE || type == PatchType.REDWOOD ||
+            type == PatchType.BUSH || type == PatchType.CACTUS;
     }
 
     static Action refine(Action action, boolean payRemoval, boolean knownGardener, boolean weeds)
