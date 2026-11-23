@@ -1,4 +1,19 @@
-# Version history
+# Ironman Farming Director development history
+
+## v0.1 — Quest Helper farming-guidance integration (2026-11-23)
+
+- Preserved Farming Patch Advisor's implementation as the main engine, with a separate plugin name and configuration.
+- Ported Quest Helper's actual FarmingWorld region/patch mapping, varbit decoder, crop states and Time Tracking prediction logic under a standalone package with BSD attribution.
+- Added live condition-based instructions for herb and tree runs: harvest, check health, clear, cure, dig, plant and gardener protection.
+- Added automatic move-to-next after observed growing/protected states, click-to-jump destination list, Pause/Resume and manual fallback. Shortest Path receives the same message structure as Quest Helper.
+- Added allotment runs, splitting Advisor's grouped allotments into Quest Helper's independently tracked patches. Allotment seeds count as stackable in the loadout.
+- Improved quantity planning to skip known already-growing patches and retain existing trees requiring protection without consuming another sapling.
+- Added tests for patch access and Quest Helper state decoding, step behavior, seed priorities, reserves and inventory limits.
+- Gradle build and tests run in GitHub Actions; interactive RuneLite testing still required.
+
+---
+
+# Farming Patch Advisor upstream version history (imported without reinterpretation)
 
 ## V1.11 — 2026-09-26
 
