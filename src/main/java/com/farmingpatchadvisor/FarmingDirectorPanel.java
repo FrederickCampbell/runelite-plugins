@@ -126,6 +126,8 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox disabledOnly = new JCheckBox("Show disabled only");
     private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
     private final JCheckBox allowUnverified = new JCheckBox("Include unverified-access locations");
+    private final JCheckBox shortestPathEnabled = new JCheckBox("Send navigation to Shortest Path", true);
+    private volatile boolean navigationEnabled = true;
     private final JPanel compostRows = new JPanel();
     private final JLabel compostProgress = new JLabel("Compost Run");
     private final JLabel compostAction = new JLabel("Inspect a bin to begin.");
@@ -542,12 +544,17 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(settings, nav("← Back to runs", "selection"));
         addFull(settings, label("Global Settings", true));
         for (JCheckBox toggle : new JCheckBox[] {protectTrees, autoNext,
-            nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified})
+            nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified, shortestPathEnabled})
         {
             toggle.setBackground(ColorScheme.DARK_GRAY_COLOR);
             toggle.setForeground(Color.WHITE);
             addFull(settings, toggle);
         }
+        shortestPathEnabled.addActionListener(e ->
+        {
+            navigationEnabled = shortestPathEnabled.isSelected();
+            if (!navigationEnabled) clearRoute();
+        });
         addFull(settings, label("Maximum stops per loadout", false));
         addFull(settings, maxStopsPerWave);
         addFull(settings, label("Bank between loadouts", false));
@@ -870,13 +877,13 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void requestCompostRoute()
     {
-        if (!compostPageOpen || compostIndex >= compostStops.size()) return;
+        if (!navigationEnabled || !compostPageOpen || compostIndex >= compostStops.size()) return;
         CompostBinLocation location = compostStops.get(compostIndex);
         final long generation = ++routeGeneration;
         final String profile = configManager.getRSProfileKey();
         clientThread.invoke(() ->
         {
-            if (generation != routeGeneration || !compostPageOpen ||
+            if (!navigationEnabled || generation != routeGeneration || !compostPageOpen ||
                 !Objects.equals(profile, configManager.getRSProfileKey()) ||
                 client.getLocalPlayer() == null) return;
             WorldPoint target = null;
@@ -1117,6 +1124,8 @@ final class FarmingDirectorPanel extends PluginPanel
         herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
         autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "false")));
         readyOnly.setSelected(Boolean.parseBoolean(profileValue("directorReadyOnly", "false")));
+        navigationEnabled = Boolean.parseBoolean(profileValue("directorNavigationEnabled", "true"));
+        shortestPathEnabled.setSelected(navigationEnabled);
         allowUnverified.setSelected(Boolean.parseBoolean(profileValue("directorAllowUnverified",
             Boolean.toString(config.directorIncludeUnverifiedLocations()))));
         int cap = 8;
@@ -1167,6 +1176,8 @@ final class FarmingDirectorPanel extends PluginPanel
             Boolean.toString(autoReplanBank.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorReadyOnly",
             Boolean.toString(readyOnly.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorNavigationEnabled",
+            Boolean.toString(shortestPathEnabled.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorAllowUnverified",
             Boolean.toString(allowUnverified.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorWaveStopLimit",
@@ -1405,6 +1416,14 @@ final class FarmingDirectorPanel extends PluginPanel
             if (onlyActionable && !observation.known())
             {
                 warnings.add("Ready-only: omitted unverified " + patch.getDisplayName() + ".");
+                continue;
+            }
+            if (patch.getPatchType() == PatchType.SPIRIT_TREE && observation.known()
+                && observation.state == CropState.UNCHECKED)
+            {
+                // Do not reserve another sapling simply to check an existing tree.
+                preplanted.add(FarmRouteManager.key(patch));
+                actionable.add(patch);
                 continue;
             }
             if (observation.known() && observation.state == CropState.GROWING)
@@ -1932,7 +1951,7 @@ final class FarmingDirectorPanel extends PluginPanel
             (DirectorBankStops.Bank) bankChoice.getSelectedItem();
         clientThread.invoke(() ->
         {
-            if (generation != routeGeneration || !awaitingBank || paused || compostPageOpen ||
+            if (!navigationEnabled || generation != routeGeneration || !awaitingBank || paused || compostPageOpen ||
                 !Objects.equals(activeProfile, configManager.getRSProfileKey()) ||
                 client.getLocalPlayer() == null) return;
             WorldPoint player = client.getLocalPlayer().getWorldLocation();
@@ -1959,7 +1978,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void requestRoute(DirectorPlanner.Step step)
     {
-        if (paused || compostPageOpen)
+        if (!navigationEnabled || paused || compostPageOpen)
         {
             return;
         }
@@ -1971,7 +1990,7 @@ final class FarmingDirectorPanel extends PluginPanel
             DirectorPlanner.Plan active = currentPlan;
             DirectorTravelTarget target = DirectorTravelTarget.choose(step.patch,
                 stateReader, timerManager);
-            if (generation != routeGeneration || active == null || paused || runFinished
+            if (!navigationEnabled || generation != routeGeneration || active == null || paused || runFinished
                 || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey())
                 || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
             {
@@ -2247,7 +2266,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     : completedSteps.contains(i) ? "Completed / skipped"
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
                     : step.harvestOnly ? "Harvest-only: refill before replanting"
-                    : "Existing tree: verify gardener protection";
+                    : "Existing crop: check condition or gardener protection";
                 item.add(warning(instruction));
                 if (i == currentStep && !runFinished)
                 {

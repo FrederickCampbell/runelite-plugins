@@ -13,7 +13,8 @@ final class DirectorPatchNames
     {
         if (names == null || names.isEmpty())
         {
-            return Collections.singletonList(grouped);
+            return grouped.getPatchCount() > 1 ? Collections.emptyList()
+                : Collections.singletonList(grouped);
         }
         if (grouped.getPatchCount() > 1)
         {

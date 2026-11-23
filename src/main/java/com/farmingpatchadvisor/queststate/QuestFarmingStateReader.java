@@ -34,7 +34,7 @@ public final class QuestFarmingStateReader
     private final FarmingHandler handler;
 
     @Inject
-    QuestFarmingStateReader(Client client, ConfigManager config)
+    public QuestFarmingStateReader(Client client, ConfigManager config)
     {
         this.client = client;
         this.config = config;
@@ -173,12 +173,11 @@ public final class QuestFarmingStateReader
                     player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS);
         if (near)
         {
-            PatchState raw = match.getImplementation()
-                .forVarbitValue(client.getVarbitValue(match.getVarbit()));
+            int value = client.getVarbitValue(match.getVarbit());
+            PatchState raw = match.getImplementation().forVarbitValue(value);
             if (raw != null)
             {
-                CropState state = raw.getProduce() == Produce.WEEDS
-                    ? CropState.EMPTY : raw.getCropState();
+                CropState state = normalizedState(match.getImplementation(), value, raw);
                 return new Observation(state, Source.LIVE, System.currentTimeMillis(),
                     protection, match.getName());
             }
@@ -198,6 +197,23 @@ public final class QuestFarmingStateReader
         CropState state = handler.predictPatch(match);
         return new Observation(state, state == null ? Source.NONE : Source.TIME_TRACKING,
             observedAtMillis, protection, match.getName());
+    }
+
+    /** Some upstream special patches intentionally use GROWING for their
+     * final stage. The Director needs their actionable state, not just their
+     * presence. Values come from the vendored decoder's documented actions. */
+    static CropState normalizedState(PatchImplementation implementation, int value, PatchState raw)
+    {
+        if (raw == null) return null;
+        if (raw.getProduce() == Produce.WEEDS) return CropState.EMPTY;
+        if (implementation == PatchImplementation.ANIMA &&
+            (value == 16 || value == 25 || value == 34)) return CropState.DEAD;
+        if (implementation == PatchImplementation.SPIRIT_TREE && value == 44 ||
+            implementation == PatchImplementation.REDWOOD && value == 37 ||
+            implementation == PatchImplementation.CELASTRUS && value == 13 ||
+            implementation == PatchImplementation.CRYSTAL_TREE && value == 14)
+            return CropState.UNCHECKED;
+        return raw.getCropState();
     }
 
     /** The RuneLite tracker stores: varbit-value:unix-seconds. */

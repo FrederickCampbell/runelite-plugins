@@ -70,6 +70,8 @@ final class DirectorStepEngine
             case UNCHECKED:
                 return isTreeType(type) ? Action.CHECK_HEALTH : Action.HARVEST;
             case HARVESTABLE:
+                if (type == PatchType.SPIRIT_TREE) return Action.INSPECT;
+                if (type == PatchType.CELASTRUS) return Action.HARVEST;
                 return isTreeType(type) ? Action.REMOVE_TREE : Action.HARVEST;
             case GROWING:
                 if (supportsProtection(type) && requireProtection
@@ -89,12 +91,18 @@ final class DirectorStepEngine
         switch (action)
         {
             case HARVEST:
+                if (type == PatchType.HESPORI)
+                    return "Prepare for Hespori combat if alive; harvest only after defeating it. Replant manually when appropriate.";
+                if (type == PatchType.CELASTRUS)
+                    return "Harvest the bark if available, then remove the harvested tree and replant if desired.";
                 return crop == null
                     ? "Harvest this patch; no replacement stock allocated. Refill and replan."
                     : "Harvest this " + type.getDisplayName().toLowerCase() +
                         " patch, then replant " + name + " if appropriate.";
             case CHECK_HEALTH:
-                return "Check the tree's health, then remove the tree.";
+                if (type == PatchType.SPIRIT_TREE) return "Check health and leave the spirit tree planted for travel.";
+                if (type == PatchType.CELASTRUS) return "Check health, then harvest the bark before removing the tree.";
+                return "Check the tree's health, then remove the tree if replanting.";
             case REMOVE_TREE:
                 return "Chop the tree or pay the gardener to remove it.";
             case DIG_STUMP:
@@ -102,7 +110,8 @@ final class DirectorStepEngine
             case CLEAR_DEAD:
                 return "Clear the dead crop, then plant " + name + ".";
             case CURE:
-                return "Cure the diseased crop before harvesting.";
+                return isTreeType(type) ? "Prune the diseased tree with secateurs."
+                    : "Cure the diseased crop before harvesting.";
             case PLANT:
                 return crop == null ? "No suitable planting stock allocated. Bank or replan."
                     : isTreeType(type)

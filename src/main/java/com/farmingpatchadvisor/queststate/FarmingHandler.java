@@ -81,15 +81,12 @@ public class FarmingHandler
 
 		PatchState state = patch.getImplementation().forVarbitValue(value);
 		if (state == null) return null;
-		if (state.getCropState() == CropState.EMPTY) return CropState.EMPTY;
-		if (state.getProduce() == Produce.WEEDS) return CropState.EMPTY;
-		if (state.getCropState() == CropState.DEAD) return CropState.DEAD;
-		if (state.getCropState() == CropState.DISEASED) return CropState.DISEASED;
-		if (state.getCropState() == CropState.UNCHECKED) return CropState.UNCHECKED;
-		if (state.getCropState() == CropState.STUMP) return CropState.STUMP;
-		if (state.getCropState() == CropState.HARVESTABLE)
+		CropState normalized = QuestFarmingStateReader.normalizedState(patch.getImplementation(), value, state);
+		if (normalized != CropState.GROWING) return normalized;
+		// A mature spirit tree is a permanent transport, not an expiring crop.
+		if (patch.getImplementation() == PatchImplementation.SPIRIT_TREE && value == 20)
 		{
-			return CropState.HARVESTABLE;
+			return CropState.GROWING;
 		}
 
 		if (unixTime <= 0)
@@ -118,7 +115,10 @@ public class FarmingHandler
 
 		if (unixNow >= doneEstimate)
 		{
-			return CropState.UNCHECKED;
+			// Anima expires rather than becoming a health-check or harvest stop.
+			// Revisit before deciding whether to clear the plant.
+			return patch.getImplementation() == PatchImplementation.ANIMA
+				? null : CropState.UNCHECKED;
 		}
 
 		return CropState.GROWING;
