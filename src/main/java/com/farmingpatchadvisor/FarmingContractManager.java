@@ -12,7 +12,7 @@ import net.runelite.client.util.Text;
 @Singleton
 final class FarmingContractManager
 {
-	private static final String CONFIG_GROUP = "farming-patch-advisor";
+	private static final String CONFIG_GROUP = "ironman-farming-director";
 	private static final String CONTRACT_KEY = "farmingContractSeed";
 	private static final String NO_CONTRACT = "none";
 	private static final String TIME_TRACKING_GROUP = "timetracking";

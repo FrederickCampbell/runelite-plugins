@@ -24,7 +24,7 @@ import net.runelite.client.config.ConfigManager;
 @Singleton
 final class CompostBinManager
 {
-	private static final String CONFIG_GROUP = "farming-patch-advisor";
+	private static final String CONFIG_GROUP = "ironman-farming-director";
 	private static final String CONFIG_KEY = "compostBinStates";
 	private static final Duration COMPOST_STAGE = Duration.ofMinutes(40);
 	private final Client client;

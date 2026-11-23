@@ -30,7 +30,7 @@ import net.runelite.client.eventbus.Subscribe;
 @Singleton
 final class PatchTimerManager
 {
-	private static final String CONFIG_GROUP = "farming-patch-advisor";
+	private static final String CONFIG_GROUP = "ironman-farming-director";
 	private static final String CONFIG_KEY = "patchTimers";
 	private static final Pattern GROWTH_STAGE = Pattern.compile(
 		"(?i)(?:growth\\s+stage\\s*)?(?<!\\d)(\\d+)\\s*(?:/|of)\\s*(\\d+)(?!\\d)");

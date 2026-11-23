@@ -654,7 +654,7 @@ final class FarmingPatchPanel extends PluginPanel
 
 	private void toggleChecklist()
 	{
-		configManager.setConfiguration("farming-patch-advisor", "showChecklistOverlay",
+		configManager.setConfiguration("ironman-farming-director", "showChecklistOverlay",
 			!config.showChecklistOverlay());
 		updateChecklistButton();
 	}
