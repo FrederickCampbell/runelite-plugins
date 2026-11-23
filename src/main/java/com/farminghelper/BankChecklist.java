@@ -31,6 +31,12 @@ final class BankChecklist
     static BankChecklist remaining(RunPlanner.Plan wave, Map<Integer, Integer> kit,
                                            Map<RouteTeleport, Integer> travel, Set<Integer> done)
     {
+        return remaining(wave, kit, travel, done, -1);
+    }
+
+    static BankChecklist remaining(RunPlanner.Plan wave, Map<Integer, Integer> kit,
+                                   Map<RouteTeleport, Integer> travel, Set<Integer> done, int planted)
+    {
         Map<Integer, Integer> seeds = new LinkedHashMap<>();
         Map<Integer, Integer> supplies = new LinkedHashMap<>(kit);
         int compost = 0;
@@ -46,7 +52,8 @@ final class BankChecklist
             if (def != null && def.gardenerId >= 0) coins += 200 * count;
             if (step.patch.getPatchType().usesCompost()) compost += count;
             if (step.crop == null || !step.requiresPlanting) continue;
-            seeds.merge(step.crop.getItemId(), count * step.crop.getQuantity(), Integer::sum);
+            if (i != planted)
+                seeds.merge(step.crop.getItemId(), count * step.crop.getQuantity(), Integer::sum);
             if (step.protectionPlanned)
                 for (ProtectionPayment payment : ProtectionPaymentCatalog.forCrop(step.crop))
                     supplies.merge(payment.getItemId(), count * payment.getQuantity(), Integer::sum);
