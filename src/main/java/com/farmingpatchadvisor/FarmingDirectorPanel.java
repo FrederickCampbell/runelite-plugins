@@ -71,11 +71,13 @@ final class FarmingDirectorPanel extends PluginPanel
     private final QuestFarmingStateReader stateReader;
     private final PatchTimerManager timerManager;
 
-    private final JComboBox<PatchType> runType =
-        new JComboBox<>(new PatchType[]{PatchType.HERB, PatchType.TREE, PatchType.ALLOTMENT});
+    private final JComboBox<DirectorRunSelection> runType =
+        new JComboBox<>(DirectorRunSelection.values());
     private final JCheckBox customPriority = new JCheckBox("Use custom priority");
     private final JCheckBox protectTrees = new JCheckBox("Carry tree protection payments", true);
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
+    private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
+    private final JButton replan = new JButton("Replan remaining");
     private final JLabel currentAction = new JLabel("Start a run to see context-aware steps");
     private final JTextField priorities = new JTextField();
     private final JTextField reserves = new JTextField();
@@ -98,6 +100,8 @@ final class FarmingDirectorPanel extends PluginPanel
     private QuestFarmingStateReader.Observation visibleObservation;
     private DirectorStepEngine.Action visibleAction = DirectorStepEngine.Action.INSPECT;
     private final Set<Integer> completedSteps = new HashSet<>();
+    private final Set<String> completedPatchKeys = new HashSet<>();
+    private long planningGeneration;
     private volatile long routeGeneration;
     private volatile boolean routeIssued;
     private boolean loadingPreferences;
@@ -176,6 +180,9 @@ final class FarmingDirectorPanel extends PluginPanel
         autoNext.setForeground(Color.WHITE);
         autoNext.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         controls.add(autoNext);
+        nearestRoute.setForeground(Color.WHITE);
+        nearestRoute.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        controls.add(nearestRoute);
         currentAction.setForeground(new Color(120, 205, 238));
         currentAction.setAlignmentX(Component.LEFT_ALIGNMENT);
         controls.add(currentAction);
@@ -184,6 +191,10 @@ final class FarmingDirectorPanel extends PluginPanel
         start.setAlignmentX(Component.LEFT_ALIGNMENT);
         start.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         controls.add(start);
+        replan.addActionListener(e -> beginRun(true));
+        replan.setAlignmentX(Component.LEFT_ALIGNMENT);
+        replan.setMaximumSize(new Dimension(Integer.MAX_VALUE, 27));
+        controls.add(replan);
         controls.add(Box.createVerticalStrut(7));
         progress.setForeground(new Color(244, 197, 86));
         progress.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -239,18 +250,32 @@ final class FarmingDirectorPanel extends PluginPanel
     private void loadPreferences()
     {
         loadingPreferences = true;
-        PatchType type = (PatchType) runType.getSelectedItem();
-        String name = type == PatchType.TREE ? "Tree" : type == PatchType.ALLOTMENT
-            ? "Allotment" : "Herb";
-        priorities.setText(profileValue("directorPriority" + name,
-            type == PatchType.TREE ? "Magic, Yew, Maple, Willow, Oak"
-                : type == PatchType.ALLOTMENT ? "Snape grass, Watermelon, Strawberry, Sweetcorn"
-                : "Ranarr, Snapdragon, Toadflax, Irit, Avantoe"));
+        DirectorRunSelection selected = (DirectorRunSelection) runType.getSelectedItem();
+        if (selected == null)
+        {
+            selected = DirectorRunSelection.HERBS;
+        }
+        String name = selected.name();
+        String defaults = selected == DirectorRunSelection.TREES
+            ? "Magic, Yew, Maple, Willow, Oak"
+            : selected == DirectorRunSelection.ALLOTMENTS
+                ? "Snape grass, Watermelon, Strawberry, Sweetcorn"
+                : selected == DirectorRunSelection.HERBS
+                    ? "Ranarr, Snapdragon, Toadflax, Irit, Avantoe" : "";
+        priorities.setText(profileValue("directorPriority" + name, defaults));
         reserves.setText(profileValue("directorReserve" + name, ""));
-        customPriority.setSelected(Boolean.parseBoolean(profileValue("directorCustom" + name, "false")));
-        protectTrees.setSelected(Boolean.parseBoolean(profileValue("directorProtectTrees", "true")));
-        protectTrees.setVisible(type == PatchType.TREE);
+        customPriority.setSelected(Boolean.parseBoolean(
+            profileValue("directorCustom" + name, "false")));
+        protectTrees.setSelected(Boolean.parseBoolean(
+            profileValue("directorProtectTrees", "true")));
+        protectTrees.setVisible(selected == DirectorRunSelection.TREES ||
+            selected == DirectorRunSelection.FRUIT_TREES ||
+            selected == DirectorRunSelection.HARDWOODS ||
+            selected == DirectorRunSelection.TREE_COMBO ||
+            selected == DirectorRunSelection.SPECIAL ||
+            selected == DirectorRunSelection.ALL);
         autoNext.setSelected(Boolean.parseBoolean(profileValue("directorAutoNext", "true")));
+        nearestRoute.setSelected(Boolean.parseBoolean(profileValue("directorNearest", "false")));
         loadingPreferences = false;
     }
 
@@ -260,16 +285,20 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             return;
         }
-        String name = runType.getSelectedItem() == PatchType.TREE ? "Tree"
-            : runType.getSelectedItem() == PatchType.ALLOTMENT ? "Allotment" : "Herb";
-        configManager.setRSProfileConfiguration(GROUP, "directorPriority" + name, priorities.getText());
-        configManager.setRSProfileConfiguration(GROUP, "directorReserve" + name, reserves.getText());
+        DirectorRunSelection selected = (DirectorRunSelection) runType.getSelectedItem();
+        String name = selected == null ? "HERBS" : selected.name();
+        configManager.setRSProfileConfiguration(GROUP, "directorPriority" + name,
+            priorities.getText());
+        configManager.setRSProfileConfiguration(GROUP, "directorReserve" + name,
+            reserves.getText());
         configManager.setRSProfileConfiguration(GROUP, "directorCustom" + name,
             Boolean.toString(customPriority.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorProtectTrees",
             Boolean.toString(protectTrees.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorAutoNext",
             Boolean.toString(autoNext.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorNearest",
+            Boolean.toString(nearestRoute.isSelected()));
     }
 
     private void beginRun()
