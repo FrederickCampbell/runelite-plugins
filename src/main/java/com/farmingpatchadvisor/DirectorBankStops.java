@@ -12,6 +12,8 @@ final class DirectorBankStops
     enum Bank
     {
         AUTO("Nearest listed bank", null),
+        FARMING_GUILD("Farming Guild chest area (45 Farming)",
+            new WorldPoint(1247, 3726, 0)),
         CATHERBY("Catherby bank", new WorldPoint(2808, 3442, 0)),
         FALADOR_WEST("Falador west bank", new WorldPoint(2946, 3368, 0)),
         VARROCK_WEST("Varrock west bank", new WorldPoint(3185, 3438, 0)),
@@ -34,15 +36,22 @@ final class DirectorBankStops
 
     static Bank choose(Bank preference, WorldPoint from)
     {
+        return choose(preference, from, 99);
+    }
+
+    static Bank choose(Bank preference, WorldPoint from, int farmingLevel)
+    {
         if (preference != null && preference != Bank.AUTO)
         {
-            return preference;
+            return preference == Bank.FARMING_GUILD && farmingLevel < 45
+                ? choose(Bank.AUTO, from, farmingLevel) : preference;
         }
         Bank result = null;
         long best = Long.MAX_VALUE;
         for (Bank candidate : Bank.values())
         {
-            if (candidate.point == null) continue;
+            if (candidate.point == null ||
+                candidate == Bank.FARMING_GUILD && farmingLevel < 45) continue;
             long distance = DirectorNearestRoute.estimate(from, candidate.point);
             if (distance < best)
             {

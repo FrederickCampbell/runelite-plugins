@@ -1017,7 +1017,8 @@ final class FarmingDirectorPanel extends PluginPanel
             if (generation != routeGeneration || !awaitingBank || paused ||
                 client.getLocalPlayer() == null) return;
             WorldPoint player = client.getLocalPlayer().getWorldLocation();
-            DirectorBankStops.Bank bank = DirectorBankStops.choose(preferred, player);
+            DirectorBankStops.Bank bank = DirectorBankStops.choose(
+                preferred, player, plugin.getFarmingLevel());
             SwingUtilities.invokeLater(() ->
             {
                 if (generation == routeGeneration && awaitingBank)
