@@ -104,7 +104,6 @@ final class FarmingHelperPanel extends PluginPanel
     private final java.util.LinkedHashSet<StepEngine.Action> observedInteractions = new java.util.LinkedHashSet<>();
     private boolean nearCurrentTarget;
     private final JSpinner harvestSlots = new JSpinner(new SpinnerNumberModel(-1, -1, 26, 1));
-    private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JCheckBox herbloreFocus = new JCheckBox("Prioritize Herblore supplies (preset)", false);
     private final JCheckBox autoReplanBank = new JCheckBox("Replan after banking", false);
@@ -124,9 +123,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final JLabel inventory = new JLabel("Inventory plan appears here");
     private final JPanel stepList = new JPanel();
     private final JButton start = new JButton("Start / Replan");
-    private final JButton back = new JButton("Back");
-    private final JButton next = new JButton("Next step");
-    private final JButton pause = new JButton("Pause");
+    private final JButton next = new JButton("Skip");
     private final JButton end = new JButton("End");
     private final CardLayout pageLayout = new CardLayout();
     private final JPanel pages = new JPanel(pageLayout);
@@ -140,7 +137,6 @@ final class FarmingHelperPanel extends PluginPanel
     private final JCheckBox actionableOnly = new JCheckBox("Needs attention only");
     private final JLabel patchSummary = new JLabel();
     private final JLabel guideWarning = new JLabel();
-    private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
     private final JCheckBox allowUnverified = new JCheckBox("Include unverified-access locations");
     private final JCheckBox shortestPathEnabled = new JCheckBox("Send navigation to Shortest Path", true);
     private volatile boolean navigationEnabled = true;
@@ -229,6 +225,7 @@ final class FarmingHelperPanel extends PluginPanel
     private StepEngine.Action visibleAction = StepEngine.Action.INSPECT;
     private final Set<Integer> completedSteps = new HashSet<>();
     private final Set<String> completedPatchKeys = new HashSet<>();
+    private final Set<String> skippedPatchKeys = new HashSet<>();
     private final Map<String, String> temporaryOverrides = new HashMap<>();
     private volatile long planningGeneration;
     private volatile boolean planningInFlight;
@@ -549,24 +546,12 @@ final class FarmingHelperPanel extends PluginPanel
         addFull(content, advancedGuideControls);
         addFull(content, stepList);
         guide.add(scrolling(content), BorderLayout.CENTER);
-        JPanel actions = new JPanel(new GridLayout(2, 2, 4, 4));
+        JPanel actions = new JPanel(new GridLayout(1, 2, 4, 4));
         actions.setBorder(BorderFactory.createEmptyBorder(6, 7, 7, 7));
         actions.setBackground(FarmingHelperTheme.SURFACE);
-        back.addActionListener(e -> advance(-1));
-        next.addActionListener(e -> advance(1));
-        pause.addActionListener(e -> togglePause());
-        end.addActionListener(e ->
-        {
-            if (runFinished || JOptionPane.showConfirmDialog(this,
-                "End this run and discard its saved checkpoint?", "End run",
-                JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION)
-            {
-                stopRun(); showPage("selection");
-            }
-        });
-        actions.add(back);
+        next.addActionListener(e -> skipCurrentPatch());
+        end.addActionListener(e -> { stopRun(); showPage("selection"); });
         actions.add(next);
-        actions.add(pause);
         actions.add(end);
         guide.add(actions, BorderLayout.SOUTH);
         return guide;
@@ -725,8 +710,6 @@ final class FarmingHelperPanel extends PluginPanel
         addFull(settings, foldSection("Farming", farming));
         addFull(settings, nav("Patch Settings ›", "patches"));
         JPanel guidance = vertical();
-        addFull(guidance, autoNext);
-        addFull(guidance, shortestPathEnabled);
         addFull(guidance, worldHints);
         JButton targetColor = new JButton("Highlight color…");
         targetColor.addActionListener(e ->
@@ -762,7 +745,8 @@ final class FarmingHelperPanel extends PluginPanel
             catch (IllegalStateException ex) { JOptionPane.showMessageDialog(this, "Clipboard busy; try again."); }
         });
         addFull(advanced, copyDiagnostics);
-        for (JCheckBox toggle : new JCheckBox[]{nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified})
+        addFull(advanced, shortestPathEnabled);
+        for (JCheckBox toggle : new JCheckBox[]{nearestRoute, herbloreFocus, autoReplanBank, allowUnverified})
             addFull(advanced, toggle);
         addFull(advanced, label("Harvest reserve (-1 = automatic)", false));
         addFull(advanced, harvestSlots);
@@ -770,8 +754,8 @@ final class FarmingHelperPanel extends PluginPanel
         addFull(advanced, bankChoice);
         bankChoice.addActionListener(e -> { if (settingsReady && !loadingPreferences && awaitingBank && !paused) requestBankRoute(); });
         addFull(settings, foldSection("Advanced", advanced));
-        for (JCheckBox toggle : new JCheckBox[]{payRemoval, protectTrees, autoNext, nearestRoute,
-            herbloreFocus, autoReplanBank, readyOnly, allowUnverified, shortestPathEnabled})
+        for (JCheckBox toggle : new JCheckBox[]{payRemoval, protectTrees, nearestRoute,
+            herbloreFocus, autoReplanBank, allowUnverified, shortestPathEnabled})
             toggle.addActionListener(e -> autoSavePreferences());
         compostChoice.addActionListener(e -> autoSavePreferences());
         bankChoice.addActionListener(e -> autoSavePreferences());
@@ -1085,7 +1069,8 @@ final class FarmingHelperPanel extends PluginPanel
     {
         boolean active = currentPlan != null && !currentPlan.steps.isEmpty() && !runFinished && !planningInFlight;
         requirementsToggle.setVisible(active);
-        beginWithMissing.setVisible(active && preparingLoadout && !paused);
+        beginWithMissing.setVisible(active && (preparingLoadout || awaitingBank) && !paused);
+        beginWithMissing.setText(awaitingBank ? "Replan after banking" : "Begin with current supplies");
         guideRequirements.setVisible(active && (requirementsExpanded || preparingLoadout));
         if (!active)
         {
@@ -1702,11 +1687,9 @@ final class FarmingHelperPanel extends PluginPanel
         harvestSlots.setValue(Math.max(-1, Math.min(26, reserve)));
         // This is a global setting, not a control tied to the visible run choice.
         protectTrees.setVisible(true);
-        autoNext.setSelected(Boolean.parseBoolean(profileValue("directorAutoNext", "true")));
         nearestRoute.setSelected(Boolean.parseBoolean(profileValue("directorNearest", "false")));
         herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
         autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "false")));
-        readyOnly.setSelected(Boolean.parseBoolean(profileValue("directorReadyOnly", "false")));
         navigationEnabled = Boolean.parseBoolean(profileValue("directorNavigationEnabled", "true"));
         shortestPathEnabled.setSelected(navigationEnabled);
         allowUnverified.setSelected(Boolean.parseBoolean(profileValue("directorAllowUnverified",
@@ -1738,16 +1721,12 @@ final class FarmingHelperPanel extends PluginPanel
         configManager.setRSProfileConfiguration(GROUP, "directorCompostChoice", compost.name());
         configManager.setRSProfileConfiguration(GROUP, "directorUseCompost", Boolean.toString(compost != CompostChoice.NONE));
         configManager.setRSProfileConfiguration(GROUP, "directorFreeSlots", harvestSlots.getValue().toString());
-        configManager.setRSProfileConfiguration(GROUP, "directorAutoNext",
-            Boolean.toString(autoNext.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorNearest",
             Boolean.toString(nearestRoute.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorHerblore",
             Boolean.toString(herbloreFocus.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorAutoReplanBank",
             Boolean.toString(autoReplanBank.isSelected()));
-        configManager.setRSProfileConfiguration(GROUP, "directorReadyOnly",
-            Boolean.toString(readyOnly.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorNavigationEnabled",
             Boolean.toString(shortestPathEnabled.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorAllowUnverified",
@@ -1791,7 +1770,6 @@ final class FarmingHelperPanel extends PluginPanel
         }
         final String presetName = preserveProgress ? activePresetName
             : (String) presetChoice.getSelectedItem();
-        final boolean onlyActionable = readyOnly.isSelected();
         final boolean includeUnverified = allowUnverified.isSelected();
         if (!preserveProgress) temporaryOverrides.clear();
         final Map<String, String> localOverrides = new HashMap<>(temporaryOverrides);
@@ -1802,8 +1780,12 @@ final class FarmingHelperPanel extends PluginPanel
         final boolean proximity = nearestRoute.isSelected();
         final boolean herbPriority = herbloreFocus.isSelected();
         final int waveCap = Integer.MAX_VALUE;
-        final Set<String> skip = preserveProgress
-            ? new HashSet<>(completedPatchKeys) : Collections.emptySet();
+        final Set<String> skip = new HashSet<>();
+        if (preserveProgress)
+        {
+            skip.addAll(completedPatchKeys);
+            skip.addAll(skippedPatchKeys);
+        }
         final long generation = ++planningGeneration;
         final String planningProfile = configManager.getRSProfileKey();
         final boolean wasPaused = preserveProgress && paused;
@@ -1828,7 +1810,7 @@ final class FarmingHelperPanel extends PluginPanel
             try
             {
                 calculated = compute(selected, protection, proximity, herbPriority, waveCap, skip,
-                    presetName, onlyActionable, includeUnverified, localOverrides, useCompost, freeSlots, payToRemove);
+                    presetName, includeUnverified, localOverrides, useCompost, freeSlots, payToRemove);
             }
             catch (RuntimeException problem)
             {
@@ -1862,10 +1844,15 @@ final class FarmingHelperPanel extends PluginPanel
                 paused = wasPaused;
                 preparingLoadout = !currentPlan.steps.isEmpty();
                 requirementsExpanded = true;
-                runFinished = false;
+                runFinished = currentPlan.steps.isEmpty();
                 completedSteps.clear();
-                if (!preserveProgress) completedPatchKeys.clear();
-                persistProgress();
+                if (!preserveProgress)
+                {
+                    completedPatchKeys.clear();
+                    skippedPatchKeys.clear();
+                }
+                if (runFinished && result.unplanned == 0) clearSavedRun();
+                else persistProgress();
                 activateCurrentStep();
                 start.setEnabled(true);
                 replan.setEnabled(true);
@@ -1878,7 +1865,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private SessionPlan compute(RunSelection selection,
         boolean protection, boolean proximity, boolean herbPriority, int waveCap,
-        Set<String> skip, String presetName, boolean onlyActionable,
+        Set<String> skip, String presetName,
         boolean includeUnverified, Map<String, String> localOverrides, CompostChoice useCompost,
         int freeSlots, boolean payToRemove)
     {
@@ -1909,6 +1896,11 @@ final class FarmingHelperPanel extends PluginPanel
         {
             PatchType type = grouped.getPatchType();
             if (!selection.includes(type)) continue;
+            if (!RunReadiness.levelEligible(type, level))
+            {
+                warnings.add("Farming level too low for " + type.getDisplayName() + ".");
+                continue;
+            }
             String access = Waypoints.accessIssue(client, type, grouped.getLocation(),
                 level, includeUnverified);
             if (access != null)
@@ -1984,9 +1976,7 @@ final class FarmingHelperPanel extends PluginPanel
                 : "Seed Vault snapshot is over 6 hours old: reopen it to refresh.");
         }
 
-        // Existing crops require neither a duplicate sapling nor a visit to
-        // plant. Growing trees without observed protection remain eligible
-        // protection stops; unknown patches remain unknown.
+        // Growing crops do not need a visit. Unknown patches remain eligible for inspection.
         List<FarmRunPatch> actionable = new ArrayList<>();
         Set<String> preplanted = new HashSet<>();
         Set<String> harvestOnly = new HashSet<>();
@@ -1995,11 +1985,6 @@ final class FarmingHelperPanel extends PluginPanel
         for (FarmRunPatch patch : candidates)
         {
             QuestFarmingStateReader.Observation observation = observePatchState(patch);
-            if (onlyActionable && !observation.known())
-            {
-                warnings.add("Ready-only: omitted unverified " + patch.getDisplayName() + ".");
-                continue;
-            }
             if (patch.getPatchType() == PatchType.SPIRIT_TREE && observation.known()
                 && observation.state == CropState.UNCHECKED)
             {
@@ -2008,20 +1993,10 @@ final class FarmingHelperPanel extends PluginPanel
                 actionable.add(patch);
                 continue;
             }
-            if (observation.known() && observation.state == CropState.GROWING)
+            if (RunReadiness.growing(observation))
             {
-                if (StepEngine.supportsProtection(patch.getPatchType())
-                    && protection && !Boolean.TRUE.equals(observation.protectedByFarmer))
-                {
-                    preplanted.add(FarmRouteManager.key(patch));
-                    actionable.add(patch);
-                    warnings.add("Existing " + patch.getDisplayName() +
-                        " needs a gardener-protection check; no new sapling allocated.");
-                }
-                else
-                {
-                    alreadyGrowing++;
-                }
+                alreadyGrowing++;
+                continue;
             }
             else
             {
@@ -2047,6 +2022,7 @@ final class FarmingHelperPanel extends PluginPanel
         {
             warnings.add("Omitted " + alreadyGrowing + " already-growing patches.");
         }
+        boolean waitingForGrowth = RunReadiness.waitingForGrowth(alreadyGrowing, candidates.size());
         candidates = actionable;
 
         // Recalculate tools and compost for the actual selected stops of each wave.
@@ -2145,7 +2121,7 @@ final class FarmingHelperPanel extends PluginPanel
             warnings.add("Total planned compost exceeds scanned stock; replenish or change compost settings.");
         warnings.addAll(wavePlan.warnings);
         return new SessionPlan(wavePlan, stockLedger, warnings,
-            travelRequirements, supplyRequirements, teleportForPatch);
+            travelRequirements, supplyRequirements, teleportForPatch, waitingForGrowth);
     }
 
     private static String individualMode(FarmRunType type)
@@ -2173,6 +2149,8 @@ final class FarmingHelperPanel extends PluginPanel
         configManager.setRSProfileConfiguration(GROUP, "directorSavedPreset", activePresetName);
         configManager.setRSProfileConfiguration(GROUP, "directorCompletedKeys",
             RunPersistence.encode(completedPatchKeys));
+        configManager.setRSProfileConfiguration(GROUP, "directorSkippedKeys",
+            RunPersistence.encode(skippedPatchKeys));
     }
 
     private void clearSavedRun()
@@ -2181,6 +2159,7 @@ final class FarmingHelperPanel extends PluginPanel
         configManager.unsetRSProfileConfiguration(GROUP, "directorSavedMode");
         configManager.unsetRSProfileConfiguration(GROUP, "directorSavedPreset");
         configManager.unsetRSProfileConfiguration(GROUP, "directorCompletedKeys");
+        configManager.unsetRSProfileConfiguration(GROUP, "directorSkippedKeys");
     }
 
     /** Called when a banking or seed-vault interface closes, on the client thread. */
@@ -2216,6 +2195,8 @@ final class FarmingHelperPanel extends PluginPanel
             completedPatchKeys.clear();
             completedPatchKeys.addAll(RunPersistence.decode(
                 profileValue("directorCompletedKeys", "")));
+            skippedPatchKeys.clear();
+            skippedPatchKeys.addAll(RunPersistence.decode(profileValue("directorSkippedKeys", "")));
             beginRun(true);
         }
         catch (IllegalArgumentException ignored)
@@ -2386,6 +2367,11 @@ final class FarmingHelperPanel extends PluginPanel
         }
 
         RunPlanner.Step step = plan.steps.get(index);
+        if (RunReadiness.growing(observation) && initiallyGrowing && !sawLiveEmpty && !sawHarvestable)
+        {
+            moveStep(1, false);
+            return;
+        }
         if (observation.source == QuestFarmingStateReader.Source.LIVE && observation.state == CropState.EMPTY)
             sawLiveEmpty = true;
         StepEngine.Action action = StepEngine.actionForStep(
@@ -2418,14 +2404,14 @@ final class FarmingHelperPanel extends PluginPanel
         {
             sawHarvestable = true;
         }
-        if (autoNext.isSelected() && StepEngine.canFinishHarvestOnly(
+        if (StepEngine.canFinishHarvestOnly(
             step.harvestOnly, sawHarvestable, observation.state,
             observation.source == QuestFarmingStateReader.Source.LIVE))
         {
             moveStep(1, true);
             return;
         }
-        if (autoNext.isSelected() && StepEngine.canAutoAdvance(
+        if (StepEngine.canAutoAdvance(
             action, observation.known(), fresh, initiallyGrowing))
         {
             moveStep(1, true);
@@ -2484,7 +2470,9 @@ final class FarmingHelperPanel extends PluginPanel
         if (delta > 0)
         {
             completedSteps.add(previous);
-            completedPatchKeys.add(FarmRouteManager.key(currentPlan.steps.get(previous).patch));
+            String resolvedKey = FarmRouteManager.key(currentPlan.steps.get(previous).patch);
+            if (automatic) completedPatchKeys.add(resolvedKey);
+            else skippedPatchKeys.add(resolvedKey);
             persistProgress();
         }
         else
@@ -2670,15 +2658,23 @@ final class FarmingHelperPanel extends PluginPanel
         });
     }
 
-    private void advance(int delta)
+    private void skipCurrentPatch()
     {
-        moveStep(delta, false);
+        if (currentPlan == null || planningInFlight || runFinished || awaitingBank ||
+            currentStep < 0 || currentStep >= currentPlan.steps.size()) return;
+        if (preparingLoadout)
+        {
+            skippedPatchKeys.add(FarmRouteManager.key(currentPlan.steps.get(currentStep).patch));
+            persistProgress();
+            beginRun(true);
+        }
+        else moveStep(1, false);
     }
 
     private void jumpTo(int targetIndex)
     {
-        if (currentPlan == null || planningInFlight || preparingLoadout || paused || targetIndex < 0
-            || targetIndex >= currentPlan.steps.size())
+        if (currentPlan == null || planningInFlight || preparingLoadout || paused || runFinished || awaitingBank || targetIndex < 0
+            || targetIndex >= currentPlan.steps.size() || completedSteps.contains(targetIndex))
         {
             return;
         }
@@ -2696,32 +2692,6 @@ final class FarmingHelperPanel extends PluginPanel
         render();
         requestRoute(currentPlan.steps.get(currentStep));
         clientThread.invoke(this::onClientTick);
-    }
-
-    private void togglePause()
-    {
-        if (currentPlan == null)
-        {
-            return;
-        }
-        paused = !paused;
-        if (paused)
-        {
-            clearRoute();
-        }
-        else if (awaitingBank)
-        {
-            requestBankRoute();
-        }
-        else if (preparingLoadout)
-        {
-            startWhenSupplied();
-        }
-        else if (currentStep < currentPlan.steps.size())
-        {
-            requestRoute(currentPlan.steps.get(currentStep));
-        }
-        render();
     }
 
     private void stopRun()
@@ -2742,6 +2712,7 @@ final class FarmingHelperPanel extends PluginPanel
         runFinished = false;
         completedSteps.clear();
         completedPatchKeys.clear();
+        skippedPatchKeys.clear();
         temporaryOverrides.clear();
         if (stoppedProfile != null && Objects.equals(stoppedProfile, configManager.getRSProfileKey()))
             clearSavedRun();
@@ -2777,6 +2748,7 @@ final class FarmingHelperPanel extends PluginPanel
             runFinished = false;
             completedSteps.clear();
             completedPatchKeys.clear();
+            skippedPatchKeys.clear();
             temporaryOverrides.clear();
             patchViews.clear();
             collapsedTypes.clear(); collapsedTypes.addAll(EnumSet.allOf(PatchType.class));
@@ -2884,9 +2856,11 @@ final class FarmingHelperPanel extends PluginPanel
         String wave = waveCount > 0 ? "Wave " + (waveIndex + 1) + " / " + waveCount : "No wave";
         progress.setText(wrapped(!active ? "Configure a run and press Start"
             : awaitingBank ? "Bank checkpoint · " + wave
-            : runFinished ? (currentSession != null && currentSession.unplanned > 0
+            : runFinished ? (currentSession != null && currentSession.waitingForGrowth
+                ? "No patches ready"
+                : currentSession != null && currentSession.unplanned > 0
                 ? "Partial run · unplanned patches remain"
-                : "All planned patches completed")
+                : "Run ended")
             : steps == 0 ? "No planting steps allocated"
             : wave + " · patch " + (currentStep + 1) + " / " + steps
                 + (paused ? " (paused)" : ""), 184));
@@ -2902,14 +2876,16 @@ final class FarmingHelperPanel extends PluginPanel
         }
         else if (steps == 0)
         {
-            actionText = "No actionable stops planned. Check planning details, scan storage or change your patch and crop choices.";
+            actionText = currentSession != null && currentSession.waitingForGrowth
+                ? "Wait for plants to grow."
+                : "No actionable stops planned. Check patch settings, access and supplies.";
         }
         else if (runFinished)
         {
             actionText = currentSession != null && currentSession.unplanned > 0
                 ? "The last loadout is finished, but " + currentSession.unplanned
                     + " patch(es) could not be planned. Restock and choose Replan remaining."
-                : "All planned patches completed. Choose Start for another run.";
+                : "Run finished. Choose another run.";
         }
         else if (awaitingBank)
         {
@@ -2924,7 +2900,7 @@ final class FarmingHelperPanel extends PluginPanel
             RunPlanner.Step current = currentPlan.steps.get(currentStep);
             actionText = current.harvestOnly && visibleAction == StepEngine.Action.PLANT
                 ? "Harvest/clearing complete or patch empty. No replacement seed "
-                    + "allocated; press Next, or restock and Replan remaining."
+                    + "allocated; use Skip, or restock and Replan remaining."
                 : StepEngine.instruction(visibleAction, current.crop,
                     current.patch.getPatchType(), plannedCompostItem() >= 0);
             if (visibleObservation != null)
@@ -2974,21 +2950,16 @@ final class FarmingHelperPanel extends PluginPanel
         returnGuide.setEnabled(active && !runFinished);
         returnGuide.setVisible(active && !runFinished);
         selectionStatus.setText(wrapped(active && !runFinished ?
-            "Run in progress · " + completedPatchKeys.size() + " completed" :
+            "Run in progress · " + completedPatchKeys.size() + " completed · " + skippedPatchKeys.size() + " skipped" :
             "Choose a run to plan your next harvest.", 184));
-        back.setEnabled(active && !runFinished && !paused && !preparingLoadout && !planningInFlight && currentStep > 0);
-        next.setEnabled(active && !paused && !preparingLoadout && !planningInFlight && !runFinished && (awaitingBank || currentStep < steps));
-        next.setText(awaitingBank ? "Replan" : "Next step");
-        next.setToolTipText(awaitingBank
-            ? "Continue after banking. No items are withdrawn automatically." : null);
-        pause.setEnabled(active && !planningInFlight && steps > 0 && !runFinished);
+        next.setEnabled(active && !paused && !planningInFlight && !runFinished && !awaitingBank && currentStep < steps);
+        next.setToolTipText("Skip this patch for the current run without marking it completed.");
         end.setEnabled(active);
         replan.setEnabled(active && !planningInFlight && currentSession != null);
         resume.setEnabled(!profileValue("directorSavedMode", "").isEmpty());
         resume.setVisible(resume.isEnabled() && !(active && !runFinished));
         overrideCrop.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && steps > 0);
         clearOverride.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && steps > 0);
-        pause.setText(paused ? "Resume" : "Pause");
 
         if (active)
         {
@@ -3000,6 +2971,7 @@ final class FarmingHelperPanel extends PluginPanel
                 item.setLayout(new BoxLayout(item, BoxLayout.Y_AXIS));
                 boolean isCurrent = i == currentStep && !runFinished && !awaitingBank;
                 boolean isDone = completedSteps.contains(i);
+                boolean isSkipped = skippedPatchKeys.contains(FarmRouteManager.key(step.patch));
                 item.setBackground(isCurrent ? FarmingHelperTheme.SELECTED : FarmingHelperTheme.SURFACE);
                 item.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(0, 3, 1, 0, isCurrent
@@ -3008,7 +2980,7 @@ final class FarmingHelperPanel extends PluginPanel
                 item.setAlignmentX(Component.LEFT_ALIGNMENT);
                 final int index = i;
                 JButton place = new JButton(wrapped((isCurrent ? "▶ "
-                    : isDone ? "✓ " : "○ ") + step.patch.getDisplayName(), 128));
+                    : isSkipped ? "– " : isDone ? "✓ " : "○ ") + step.patch.getDisplayName(), 128));
                 place.setForeground(isCurrent ? FarmingHelperTheme.GOLD :
                     isDone ? new Color(143, 187, 136) : Color.WHITE);
                 place.setBackground(item.getBackground());
@@ -3018,6 +2990,7 @@ final class FarmingHelperPanel extends PluginPanel
                 place.setHorizontalAlignment(JButton.LEFT);
                 place.setAlignmentX(Component.LEFT_ALIGNMENT);
                 place.setToolTipText("Select this destination and navigate there");
+                place.setEnabled(!isDone && !runFinished && !awaitingBank);
                 place.addActionListener(e -> jumpTo(index));
                 JPanel stepHeader = new JPanel(new BorderLayout());
                 stepHeader.setBackground(item.getBackground());
@@ -3034,7 +3007,7 @@ final class FarmingHelperPanel extends PluginPanel
                 String instruction = isCurrent
                     ? (step.crop == null ? step.patch.getPatchType().getDisplayName() :
                         step.crop.getName() + " · " + step.patch.getPatchType().getDisplayName())
-                    : isDone ? "Completed / skipped"
+                    : isSkipped ? "Skipped" : isDone ? "Completed"
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
                     : step.harvestOnly ? "Harvest-only: refill before replanting"
                     : "Existing crop: check condition or gardener protection";
