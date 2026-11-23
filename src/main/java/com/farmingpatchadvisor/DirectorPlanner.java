@@ -154,11 +154,33 @@ final class DirectorPlanner
                       boolean herbloreFocus, int maxStops,
                       ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected)
     {
+        return build(type, patches, farmingLevel, stock, customPriority, priorities,
+            reserves, fixedToolSlots, teleportSlots, freeHarvestSlots, protectTrees,
+            stackable, preplanted, harvestOnlyPatches, cropOverrides, herbloreFocus,
+            maxStops, teleportSlotsForSelected, Collections.emptyMap());
+    }
+
+    /**
+     * Per-category ordering is used for merged runs; unspecified categories
+     * retain highest-eligible automatic selection rather than being rejected.
+     */
+    static Plan build(PatchType type, List<FarmRunPatch> patches, int farmingLevel,
+                      Map<Integer, Integer> stock, boolean customPriority,
+                      String priorities, String reserves, int fixedToolSlots,
+                      int teleportSlots, int freeHarvestSlots, boolean protectTrees,
+                      IntPredicate stackable, Set<String> preplanted,
+                      Set<String> harvestOnlyPatches, Map<String, String> cropOverrides,
+                      boolean herbloreFocus, int maxStops,
+                      ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected,
+                      Map<FarmRunType, String> perCategoryPriorities)
+    {
         List<Step> result = new ArrayList<>();
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
         Map<String, Integer> rank = priorityRanks(priorities);
+        Map<FarmRunType, Map<String, Integer>> categoryRanks = new HashMap<>();
+        perCategoryPriorities.forEach((category, csv) -> categoryRanks.put(category, priorityRanks(csv)));
         Map<String, Integer> herbloreRank = priorityRanks(
             "Ranarr, Snapdragon, Toadflax, Avantoe, Irit, Kwuarm, Cadantine, "
                 + "Lantadyme, Huasca, Torstol, Dwarf weed, Harralander, Guam");
@@ -189,10 +211,11 @@ final class DirectorPlanner
             }
             eligible.sort(Comparator.comparingInt(Crop::getLevel).reversed());
             List<Crop> allowedForOverride = new ArrayList<>(eligible);
-            if (customPriority)
+            Map<String, Integer> activeRank = categoryRanks.getOrDefault(patch.getFarmRunType(), rank);
+            if (categoryRanks.containsKey(patch.getFarmRunType()) || customPriority)
             {
-                eligible.removeIf(c -> !rank.containsKey(normalize(c.getName())));
-                eligible.sort(Comparator.comparingInt(c -> rank.get(normalize(c.getName()))));
+                eligible.removeIf(c -> !activeRank.containsKey(normalize(c.getName())));
+                eligible.sort(Comparator.comparingInt(c -> activeRank.get(normalize(c.getName()))));
             }
             else if (herbloreFocus && patchType == PatchType.HERB)
             {

@@ -56,7 +56,7 @@ final class FarmRouteManager
 
 	List<FarmRunPatch> availablePatches()
 	{
-		List<FarmRunPatch> patches = new ArrayList<>(FarmRunCatalog.patches(config));
+		List<FarmRunPatch> patches = new ArrayList<>(FarmRunCatalog.patches());
 		Set<ChecklistPatch> selected = ChecklistPatch.selected(config);
 		patches.removeIf(p -> !ChecklistPatch.includes(selected, p.getPatchType()));
 		return patches;

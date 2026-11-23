@@ -27,7 +27,9 @@ enum DirectorRunSelection
         PatchType.TREE, PatchType.FRUIT_TREE, PatchType.CALQUAT,
         PatchType.HARDWOOD_TREE, PatchType.SPIRIT_TREE, PatchType.CELASTRUS,
         PatchType.REDWOOD, PatchType.CRYSTAL_TREE),
-    ALL("All enabled patches", FarmRunFilter.ALL, PatchType.values());
+    ALL("All enabled patches", FarmRunFilter.ALL, PatchType.values()),
+    MERGED("Merged Run", FarmRunFilter.ALL, PatchType.values()),
+    COMPOST("Compost Run", FarmRunFilter.COMPOST);
 
     private final String label;
     final FarmRunFilter filter;
