@@ -68,4 +68,14 @@ public class GuidePlannerTest
         assertTrue(Supplies.recommended(ItemID.BUCKET_ULTRACOMPOST));
         assertTrue(Supplies.recommended(ItemID.FAIRY_ENCHANTED_SECATEURS));
     }
+    @Test public void curedCropAndMissingProtectionDoNotTrapGuide()
+    {
+        Crop oak = CropCatalog.findByName(PatchType.TREE, "Oak sapling");
+        RunPlanner.Step tree = new RunPlanner.Step(new FarmRunPatch("Varrock", "", PatchType.TREE),
+            oak, true, false, true);
+        com.farminghelper.queststate.CropState growing = com.farminghelper.queststate.CropState.GROWING;
+        assertEquals(StepEngine.Action.COMPLETE, StepEngine.guideAction(tree, growing, false, false, true, true));
+        assertEquals(StepEngine.Action.COMPLETE, StepEngine.guideAction(tree, growing, false, true, true, false));
+        assertEquals(StepEngine.Action.PROTECT_TREE, StepEngine.guideAction(tree, growing, false, true, true, true));
+    }
 }
