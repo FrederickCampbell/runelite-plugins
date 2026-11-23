@@ -48,6 +48,30 @@ public class DirectorProfilePersistenceTest
         assertTrue(presets.names().contains("Herbs and trees"));
     }
 
+    @Test public void deletedPresetDoesNotLeakTravelAndPriorityOverrides()
+    {
+        ConfigManager config = mock(ConfigManager.class);
+        Map<String, String> stored = new HashMap<>();
+        when(config.getRSProfileKey()).thenReturn("account");
+        when(config.getRSProfileConfiguration(anyString(), anyString())).thenAnswer(inv -> stored.get(inv.getArgument(1)));
+        doAnswer(inv -> { stored.put(inv.getArgument(1), inv.getArgument(2)); return null; })
+            .when(config).setRSProfileConfiguration(anyString(), anyString(), anyString());
+        doAnswer(inv -> { stored.remove(inv.getArgument(1)); return null; })
+            .when(config).unsetRSProfileConfiguration(anyString(), anyString());
+        DirectorMergedPresets presets = new DirectorMergedPresets(config);
+        FarmRunPatch herb = new FarmRunPatch("Falador", "", PatchType.HERB);
+        assertTrue(presets.save("Test", EnumSet.of(FarmRunType.HERB)));
+        assertTrue(presets.saveRoute("Test", java.util.Collections.singletonList(herb),
+            java.util.Collections.singletonMap(FarmRouteManager.key(herb), RouteTeleport.FALADOR)));
+        stored.put("directorMergedPriority_Test_HERB", "Ranarr");
+        stored.put("directorMergedReserve_Test_HERB", "ranarr=10");
+        assertTrue(presets.delete("Test"));
+        assertFalse(presets.names().contains("Test"));
+        assertNull(stored.get("directorMergedPriority_Test_HERB"));
+        assertNull(stored.get("directorMergedReserve_Test_HERB"));
+        assertEquals(RouteTeleport.NONE, presets.teleport("Test", herb, RouteTeleport.NONE));
+    }
+
     @Test public void savedMergedRouteDoesNotChangeOtherNamedPresets()
     {
         ConfigManager config = mock(ConfigManager.class);

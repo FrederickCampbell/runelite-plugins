@@ -13,6 +13,7 @@ final class DirectorBankChecklist
     final Map<Integer, Integer> seeds;
     final Map<Integer, Integer> supplies;
     final Map<RouteTeleport, Integer> travel;
+    private final Set<Integer> itemIds;
 
     private DirectorBankChecklist(Map<Integer, Integer> seeds, Map<Integer, Integer> supplies,
                                   Map<RouteTeleport, Integer> travel)
@@ -20,6 +21,11 @@ final class DirectorBankChecklist
         this.seeds = Collections.unmodifiableMap(new LinkedHashMap<>(seeds));
         this.supplies = Collections.unmodifiableMap(new LinkedHashMap<>(supplies));
         this.travel = Collections.unmodifiableMap(new LinkedHashMap<>(travel));
+        Set<Integer> ids = new LinkedHashSet<>(seeds.keySet());
+        ids.addAll(supplies.keySet());
+        for (RouteTeleport teleport : travel.keySet())
+            for (int id : teleport.itemIds()) ids.add(id);
+        itemIds = Collections.unmodifiableSet(ids);
     }
 
     static DirectorBankChecklist remaining(DirectorPlanner.Plan wave, Map<Integer, Integer> kit,
@@ -54,11 +60,7 @@ final class DirectorBankChecklist
 
     Set<Integer> ids()
     {
-        Set<Integer> ids = new LinkedHashSet<>(seeds.keySet());
-        ids.addAll(supplies.keySet());
-        for (RouteTeleport teleport : travel.keySet())
-            for (int id : teleport.itemIds()) ids.add(id);
-        return ids;
+        return itemIds;
     }
 
     boolean sameAs(DirectorBankChecklist other)

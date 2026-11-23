@@ -1,5 +1,18 @@
 # Ironman Farming Director development history
 
+## v0.6.0-beta.1 — UI polish and final integration pass (2026-11-23)
+
+- Reworked sidebar spacing and scroll behavior for RuneLite's native panel width; highlighted current/completed stops and added progress bar, active destination, compact navigation and a separate readable loadout page.
+- Added visual crop ranking and stock reserve controls, retaining the previous profile encoding and the existing Planner/CropCatalog.
+- Added a home-screen merged preset picker, deletion and cleanup, per-preset/category reservations, omitted-route-stop restoration, and patch counts/attention filter.
+- Connected existing Advisor bank filter, bank and gameplay checklist overlays and item outlines to the active remaining Director wave. Kept the legacy fallback and independent contract checklist.
+- Calculated configured travel slot costs using actual consumable item stackability; added player-pinned per-patch waypoint navigation, explicitly separate from crop state.
+- Improved payment handling: available and feasible tree payments are allocated, infeasible/missing payments are reported while allowing the preferred crop; harvest-only checked trees are retained.
+- Exposed per-character compost preference and harvest space reserve; filtered known locked compost destinations; improved profile-safe status refresh and new-run confirmation.
+- Added regression coverage for priority controls, reserve serialization, travel costs, player waypoints, narrow viewport policy, protection feasibility and active-bank checklist projection.
+- **Beta:** automated builds are not a substitute for RuneLite/Windows playtests. Exact specialist routes, remaining transport eligibility/charge rules, actual harvest capacity, live overlays and GUI behavior still require verification.
+
+
 ## v0.5.0-beta.1 — Functional integration and hardening (2026-11-23)
 
 - Reused the existing planner and wave splitter; applied slot limits to harvest-only and protection-only stops and allowed planning to continue past an impossible first stop.
