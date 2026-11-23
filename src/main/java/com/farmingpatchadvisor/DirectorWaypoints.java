@@ -15,6 +15,9 @@ final class DirectorWaypoints
 {
     private static final Map<String, WorldPoint> HERBS = new HashMap<>();
     private static final Map<String, WorldPoint> TREES = new HashMap<>();
+    private static final Map<String, WorldPoint> FRUITS = new HashMap<>();
+    private static final Map<String, WorldPoint> CALQUATS = new HashMap<>();
+    private static final Map<String, WorldPoint> HARDWOODS = new HashMap<>();
 
     static
     {
@@ -36,6 +39,23 @@ final class DirectorWaypoints
         at(TREES, "Gnome Stronghold", 2436, 3415);
         at(TREES, "Farming Guild", 1232, 3736);
         at(TREES, "Auburnvale", 1367, 3322);
+
+        // Exact Quest Helper TreeRun ObjectStep coordinates, not estimated locations.
+        at(FRUITS, "Gnome Stronghold", 2476, 3446);
+        at(FRUITS, "Tree Gnome Village", 2490, 3180);
+        at(FRUITS, "Brimhaven", 2765, 3213);
+        at(FRUITS, "Catherby", 2860, 3433);
+        at(FRUITS, "Lletya", 2347, 3162);
+        at(FRUITS, "Farming Guild", 1242, 3758);
+        at(FRUITS, "Kastori", 1350, 3057);
+        at(CALQUATS, "Tai Bwo Wannai", 2795, 3102);
+        at(CALQUATS, "Kastori", 1366, 3033);
+        at(CALQUATS, "Great Conch", 3129, 2406);
+        at(HARDWOODS, "Fossil Island~West", 3702, 3837);
+        at(HARDWOODS, "Fossil Island~Middle", 3708, 3833);
+        at(HARDWOODS, "Fossil Island~East", 3715, 3835);
+        at(HARDWOODS, "Avium Savannah", 1687, 2972);
+        at(HARDWOODS, "Anglers' Retreat", 2470, 2704);
     }
 
     private DirectorWaypoints() {}
@@ -47,7 +67,24 @@ final class DirectorWaypoints
 
     static WorldPoint point(PatchType type, String location)
     {
-        return (type == PatchType.TREE ? TREES : HERBS).get(location);
+        switch (type)
+        {
+            case TREE: return TREES.get(location);
+            case FRUIT_TREE: return FRUITS.get(location);
+            case CALQUAT: return CALQUATS.get(location);
+            case HARDWOOD_TREE: return HARDWOODS.get(location);
+            default: return HERBS.get(location);
+        }
+    }
+
+    static WorldPoint exactPoint(FarmRunPatch patch)
+    {
+        if (patch.getPatchType() == PatchType.HARDWOOD_TREE)
+        {
+            WorldPoint specific = HARDWOODS.get(patch.getLocation() + "~" + patch.getName());
+            return specific != null ? specific : HARDWOODS.get(patch.getLocation());
+        }
+        return point(patch.getPatchType(), patch.getLocation());
     }
 
     static String accessIssue(Client client, PatchType type, String location,
@@ -55,7 +92,9 @@ final class DirectorWaypoints
     {
         if ("Farming Guild".equals(location))
         {
-            int min = type == PatchType.ALLOTMENT ? 45 : 65;
+            int min = (type == PatchType.ALLOTMENT || type == PatchType.FLOWER) ? 45
+                : type == PatchType.FRUIT_TREE ? 85
+                : type == PatchType.REDWOOD ? 90 : 65;
             return farmingLevel < min ? "Farming Guild " + type.getDisplayName()
                 + " requires level " + min + " Farming (unboosted)." : null;
         }
@@ -76,7 +115,9 @@ final class DirectorWaypoints
         }
         if (!acceptUnverified &&
             ("Harmony Island".equals(location) || "Civitas illa Fortis".equals(location) ||
-                "Auburnvale".equals(location)))
+                "Auburnvale".equals(location) || "Kastori".equals(location) ||
+                "Great Conch".equals(location) || "Avium Savannah".equals(location) ||
+                "Anglers' Retreat".equals(location)))
         {
             return location + " access is not verified; enable unverified locations "
                 + "in settings if you know you have access.";
