@@ -58,6 +58,11 @@ final class DirectorPriorityDialog
                     " · lvl " + crop.getLevel(), index, selected, focused);
             }
         });
+        list.addListSelectionListener(e ->
+        {
+            if (!e.getValueIsAdjusting() && list.getSelectedValue() != null)
+                available.setSelectedItem(list.getSelectedValue());
+        });
         Runnable redraw = () ->
         {
             int index = list.getSelectedIndex();

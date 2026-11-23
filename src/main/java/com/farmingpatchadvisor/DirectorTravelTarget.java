@@ -21,6 +21,17 @@ final class DirectorTravelTarget
         this.source = source;
     }
 
+    static DirectorTravelTarget playerWaypoint(WorldPoint point)
+    {
+        return new DirectorTravelTarget(point, false, "Saved player waypoint");
+    }
+
+    boolean routable()
+    {
+        return point != null && (exact || source.startsWith("Nearby herb") ||
+            source.equals("Saved player waypoint"));
+    }
+
     static DirectorTravelTarget choose(FarmRunPatch patch,
                                        QuestFarmingStateReader states,
                                        PatchTimerManager timers)

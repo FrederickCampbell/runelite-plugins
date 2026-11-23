@@ -148,6 +148,10 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JPanel loadoutRows = new JPanel();
     private final JButton openLoadout = new JButton("View loadout & withdrawals");
     private final JLabel activeDestination = new JLabel();
+    private final JLabel routeStatus = new JLabel();
+    private final JButton routeOptions = new JButton("Navigation…");
+    private final JComboBox<String> homePresetChoice = new JComboBox<>();
+    private boolean syncingHomePreset;
     private final javax.swing.DefaultListModel<FarmRunPatch> routeModel =
         new javax.swing.DefaultListModel<>();
     private final javax.swing.JList<FarmRunPatch> routeList =
@@ -276,7 +280,8 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private JScrollPane scrolling(JPanel content)
     {
-        JScrollPane scroll = new JScrollPane(content);
+        JScrollPane scroll = new JScrollPane(new DirectorSidebarViewport(content));
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
         scroll.setBorder(BorderFactory.createEmptyBorder());
@@ -289,9 +294,25 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             javax.swing.JComponent component = (javax.swing.JComponent) child;
             component.setAlignmentX(Component.LEFT_ALIGNMENT);
+            if (component instanceof JButton)
+            {
+                JButton button = (JButton) component;
+                button.setMargin(new java.awt.Insets(4, 6, 4, 6));
+                if (button.getText() != null && button.getText().length() > 24
+                    && !button.getText().startsWith("<html>"))
+                    button.setText(wrapped(button.getText(), 164));
+            }
+            else if (component instanceof JCheckBox)
+            {
+                JCheckBox check = (JCheckBox) component;
+                if (check.getText() != null && check.getText().length() > 23
+                    && !check.getText().startsWith("<html>"))
+                    check.setText(wrapped(check.getText(), 164));
+            }
             component.setMaximumSize(new Dimension(Integer.MAX_VALUE,
-                child instanceof JButton ? 32 : child instanceof JTextField
-                    || child instanceof JComboBox ? 28 : 1000));
+                child instanceof JButton ? Math.max(32, component.getPreferredSize().height)
+                    : child instanceof JTextField || child instanceof JComboBox ? 28
+                    : child instanceof javax.swing.JSeparator ? 2 : Integer.MAX_VALUE));
         }
         parent.add(child);
         parent.add(Box.createVerticalStrut(7));
@@ -339,12 +360,33 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(list, selectionStatus);
         addFull(list, label("START A RUN", true));
         addFull(list, runType);
+        homePresetChoice.setVisible(false);
+        homePresetChoice.addActionListener(e ->
+        {
+            if (!syncingHomePreset && homePresetChoice.getSelectedItem() != null)
+            {
+                presetChoice.setSelectedItem(homePresetChoice.getSelectedItem());
+                if (configManager.getRSProfileKey() != null)
+                    configManager.setRSProfileConfiguration(GROUP, "directorLastPreset",
+                        (String) homePresetChoice.getSelectedItem());
+            }
+        });
+        addFull(list, homePresetChoice);
         start.setText("Start farming run");
         start.addActionListener(e -> beginRun());
         addFull(list, start);
         resume.addActionListener(e -> resumeSavedRun());
         addFull(list, resume);
-        returnGuide.addActionListener(e -> { if (currentPlan != null) showPage("guide"); });
+        returnGuide.addActionListener(e ->
+        {
+            if (currentPlan == null) return;
+            showPage("guide");
+            if (!paused && !runFinished)
+            {
+                if (awaitingBank) requestBankRoute();
+                else if (currentStep < currentPlan.steps.size()) requestRoute(currentPlan.steps.get(currentStep));
+            }
+        });
         addFull(list, returnGuide);
         addFull(list, new javax.swing.JSeparator());
         addFull(list, label("CONFIGURATION", true));
@@ -404,6 +446,9 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel content = vertical();
         openLoadout.addActionListener(e -> showPage("loadout"));
         addFull(content, openLoadout);
+        routeOptions.addActionListener(e -> chooseRouteOption());
+        addFull(content, routeOptions);
+        addFull(content, routeStatus);
         addFull(content, replan);
         addFull(content, overrides);
         addFull(content, guideDetails);
@@ -508,6 +553,8 @@ final class FarmingDirectorPanel extends PluginPanel
         mergedControls.setVisible(merged);
         regularControls.setVisible(!merged);
         if (merged) reloadPresetNames();
+        homePresetChoice.setVisible(merged);
+        syncHomePresets();
         mergedControls.revalidate();
     }
 
@@ -524,6 +571,17 @@ final class FarmingDirectorPanel extends PluginPanel
             presetChoice.setSelectedIndex(0);
         loadingPresets = false;
         loadPreset();
+        syncHomePresets();
+    }
+
+    private void syncHomePresets()
+    {
+        syncingHomePreset = true;
+        homePresetChoice.removeAllItems();
+        for (int i = 0; i < presetChoice.getItemCount(); i++)
+            homePresetChoice.addItem(presetChoice.getItemAt(i));
+        homePresetChoice.setSelectedItem(presetChoice.getSelectedItem());
+        syncingHomePreset = false;
     }
 
     private void loadPreset()
@@ -533,6 +591,7 @@ final class FarmingDirectorPanel extends PluginPanel
         Set<FarmRunType> types = presets.categories(name);
         for (Map.Entry<FarmRunType, JCheckBox> row : mergedTypes.entrySet())
             row.getValue().setSelected(types.contains(row.getKey()));
+        if (!syncingHomePreset) syncHomePresets();
     }
 
     private void saveMergedPreset()
@@ -1028,6 +1087,12 @@ final class FarmingDirectorPanel extends PluginPanel
         clientThread.invoke(() ->
         {
             List<CompostBinLocation> locations = new ArrayList<>(compostBins.enabledLocations());
+            int farming = plugin.getFarmingLevel();
+            boolean loggedIn = client.getGameState() == GameState.LOGGED_IN;
+            if (loggedIn)
+                locations.removeIf(location -> DirectorWaypoints.accessIssue(client, PatchType.ALLOTMENT,
+                    location.getDisplayName(), farming, false) != null);
+            else locations.clear();
             List<String> instructions = new ArrayList<>();
             for (CompostBinLocation location : locations)
             {
@@ -1050,7 +1115,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     : compostIndex == locations.size() ? "Compost itinerary complete"
                     : "Compost Run · " + (compostIndex + 1) + " / " + locations.size());
                 compostAction.setText(compostIndex < instructions.size()
-                    ? "<html>" + escape(instructions.get(compostIndex)) + "</html>"
+                    ? wrapped(instructions.get(compostIndex), 184)
                     : "Choose Back or start another run.");
                 compostRows.removeAll();
                 if (compostIndex < locations.size())
@@ -1627,8 +1692,7 @@ final class FarmingDirectorPanel extends PluginPanel
             candidates = DirectorNearestRoute.order(candidates,
                 client.getLocalPlayer().getWorldLocation(), patch ->
                 {
-                    DirectorTravelTarget target = DirectorTravelTarget.choose(patch,
-                        stateReader, timerManager);
+                    DirectorTravelTarget target = routeTarget(patch);
                     return target.point;
                 });
             warnings.add("Nearest-stop order is a tile-distance heuristic, not "
@@ -2105,6 +2169,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private void activateCurrentStep()
     {
         activatedAtMillis = System.currentTimeMillis();
+        routeStatus.setText(wrapped(navigationEnabled ? "Route not yet requested" : "Navigation disabled", 184));
         observedInitialState = false;
         initiallyGrowing = false;
         sawHarvestable = false;
@@ -2224,6 +2289,55 @@ final class FarmingDirectorPanel extends PluginPanel
         });
     }
 
+    private DirectorTravelTarget routeTarget(FarmRunPatch patch)
+    {
+        WorldPoint pinned = DirectorWaypointPins.get(configManager, patch);
+        return pinned == null ? DirectorTravelTarget.choose(patch, stateReader, timerManager)
+            : DirectorTravelTarget.playerWaypoint(pinned);
+    }
+
+    private void chooseRouteOption()
+    {
+        if (currentPlan == null || runFinished || awaitingBank ||
+            currentStep < 0 || currentStep >= currentPlan.steps.size() || planningInFlight) return;
+        DirectorPlanner.Step step = currentPlan.steps.get(currentStep);
+        String profile = configManager.getRSProfileKey();
+        if (profile == null || !Objects.equals(profile, activeProfile)) return;
+        Object choice = JOptionPane.showInputDialog(this,
+            "Choose a navigation action for " + step.patch.getDisplayName() + ":",
+            "Patch navigation", JOptionPane.PLAIN_MESSAGE, null,
+            new String[]{"Request route again", "Save my current tile as waypoint", "Remove saved waypoint"},
+            "Request route again");
+        if (choice == null || !Objects.equals(profile, configManager.getRSProfileKey())) return;
+        if ("Request route again".equals(choice)) requestRoute(step);
+        else if ("Remove saved waypoint".equals(choice))
+        {
+            DirectorWaypointPins.clear(configManager, step.patch);
+            requestRoute(step);
+        }
+        else
+        {
+            clientThread.invoke(() ->
+            {
+                if (!Objects.equals(profile, configManager.getRSProfileKey()) ||
+                    client.getGameState() != GameState.LOGGED_IN || client.getLocalPlayer() == null) return;
+                boolean saved = DirectorWaypointPins.save(configManager, step.patch,
+                    client.getLocalPlayer().getWorldLocation());
+                SwingUtilities.invokeLater(() ->
+                {
+                    if (!Objects.equals(profile, configManager.getRSProfileKey())) return;
+                    if (saved)
+                    {
+                        routeStatus.setText(wrapped("Saved your waypoint for this patch.", 184));
+                        requestRoute(step);
+                    }
+                    else JOptionPane.showMessageDialog(this,
+                        "Stand in the patch's farming area before saving a waypoint.");
+                });
+            });
+        }
+    }
+
     private void requestRoute(DirectorPlanner.Step step)
     {
         if (!navigationEnabled || paused || compostPageOpen)
@@ -2236,16 +2350,20 @@ final class FarmingDirectorPanel extends PluginPanel
         clientThread.invoke(() ->
         {
             DirectorPlanner.Plan active = currentPlan;
-            DirectorTravelTarget target = DirectorTravelTarget.choose(step.patch,
-                stateReader, timerManager);
+            DirectorTravelTarget target = routeTarget(step.patch);
             if (!navigationEnabled || generation != routeGeneration || active == null || paused || runFinished
                 || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey())
                 || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
             {
                 return;
             }
-            boolean routable = client.getLocalPlayer() != null && target.point != null
-                && (target.exact || target.source.startsWith("Nearby herb"));
+            boolean routable = client.getLocalPlayer() != null && target.routable();
+            SwingUtilities.invokeLater(() ->
+            {
+                if (generation != routeGeneration) return;
+                routeStatus.setText(wrapped(routable ? target.source + " · route requested" :
+                    "No verified route tile. Visit and save a waypoint, or navigate manually.", 184));
+            });
             if (!routable)
             {
                 if (routeIssued)
@@ -2469,6 +2587,9 @@ final class FarmingDirectorPanel extends PluginPanel
         activeDestination.setText(active && currentStep < steps
             ? wrapped(currentPlan.steps.get(currentStep).patch.getDisplayName(), 184) : "");
         openLoadout.setEnabled(active);
+        routeOptions.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && currentStep < steps);
+        routeStatus.setVisible(active && !runFinished && !awaitingBank && currentStep < steps);
+        if (!navigationEnabled) routeStatus.setText(wrapped("Shortest Path navigation disabled.", 184));
         activeTitle.setText(wrapped(activeRunSelection == null ? "Active guide" :
             activeRunSelection == DirectorRunSelection.MERGED ? activePresetName :
             activeRunSelection.toString(), 184));
