@@ -79,6 +79,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JButton replan = new JButton("Replan remaining");
+    private final JButton resume = new JButton("Resume saved run");
     private final JButton overrideCrop = new JButton("Override this patch");
     private final JButton clearOverride = new JButton("Clear override");
     private final JLabel currentAction = new JLabel("Start a run to see context-aware steps");
@@ -223,6 +224,10 @@ final class FarmingDirectorPanel extends PluginPanel
         replan.setAlignmentX(Component.LEFT_ALIGNMENT);
         replan.setMaximumSize(new Dimension(Integer.MAX_VALUE, 27));
         controls.add(replan);
+        resume.addActionListener(e -> resumeSavedRun());
+        resume.setAlignmentX(Component.LEFT_ALIGNMENT);
+        resume.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
+        controls.add(resume);
         JPanel overrides = new JPanel(new GridLayout(1, 2, 3, 0));
         overrides.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         overrides.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -373,6 +378,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 runFinished = false;
                 completedSteps.clear();
                 if (!preserveProgress) completedPatchKeys.clear();
+                persistProgress();
                 activateCurrentStep();
                 start.setEnabled(true);
                 replan.setEnabled(true);
@@ -594,6 +600,45 @@ final class FarmingDirectorPanel extends PluginPanel
             plan.occupiedSlots, plan.reservedSlots);
     }
 
+    private void persistProgress()
+    {
+        if (configManager.getRSProfileKey() == null) return;
+        DirectorRunSelection mode = (DirectorRunSelection) runType.getSelectedItem();
+        if (mode == null) return;
+        configManager.setRSProfileConfiguration(GROUP, "directorSavedMode", mode.name());
+        configManager.setRSProfileConfiguration(GROUP, "directorCompletedKeys",
+            DirectorRunPersistence.encode(completedPatchKeys));
+    }
+
+    private void clearSavedRun()
+    {
+        if (configManager.getRSProfileKey() == null) return;
+        configManager.unsetRSProfileConfiguration(GROUP, "directorSavedMode");
+        configManager.unsetRSProfileConfiguration(GROUP, "directorCompletedKeys");
+    }
+
+    private void resumeSavedRun()
+    {
+        String mode = profileValue("directorSavedMode", "");
+        if (mode.isEmpty()) return;
+        try
+        {
+            DirectorRunSelection selected = DirectorRunSelection.valueOf(mode);
+            loadingPreferences = true;
+            runType.setSelectedItem(selected);
+            loadingPreferences = false;
+            loadPreferences();
+            completedPatchKeys.clear();
+            completedPatchKeys.addAll(DirectorRunPersistence.decode(
+                profileValue("directorCompletedKeys", "")));
+            beginRun(true);
+        }
+        catch (IllegalArgumentException ignored)
+        {
+            clearSavedRun();
+        }
+    }
+
     private void chooseCropOverride()
     {
         if (currentPlan == null || runFinished || currentStep >= currentPlan.steps.size()) return;
@@ -768,16 +813,19 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             completedSteps.add(previous);
             completedPatchKeys.add(FarmRouteManager.key(currentPlan.steps.get(previous).patch));
+            persistProgress();
         }
         else
         {
             completedSteps.remove(nextIndex);
             completedPatchKeys.remove(FarmRouteManager.key(currentPlan.steps.get(nextIndex).patch));
+            persistProgress();
         }
         currentStep = nextIndex;
         if (currentStep >= currentPlan.steps.size())
         {
             runFinished = true;
+            clearSavedRun();
             clearRoute();
             render();
             return;
@@ -862,6 +910,7 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             completedSteps.remove(targetIndex);
             completedPatchKeys.remove(FarmRouteManager.key(currentPlan.steps.get(targetIndex).patch));
+            persistProgress();
         }
         activateCurrentStep();
         render();
@@ -896,6 +945,7 @@ final class FarmingDirectorPanel extends PluginPanel
         runFinished = false;
         completedSteps.clear();
         completedPatchKeys.clear();
+        clearSavedRun();
         activateCurrentStep();
         clearRoute();
         render();
@@ -975,6 +1025,7 @@ final class FarmingDirectorPanel extends PluginPanel
         pause.setEnabled(active && steps > 0 && !runFinished);
         end.setEnabled(active);
         replan.setEnabled(active && steps > 0);
+        resume.setEnabled(!profileValue("directorSavedMode", "").isEmpty());
         overrideCrop.setEnabled(active && !runFinished && steps > 0);
         clearOverride.setEnabled(active && !runFinished && steps > 0);
         pause.setText(paused ? "Resume" : "Pause");
