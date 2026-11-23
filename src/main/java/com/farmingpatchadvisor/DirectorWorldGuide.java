@@ -23,13 +23,15 @@ final class DirectorWorldGuide
         final DirectorStepEngine.Action action;
         final String profile;
         final boolean compost;
-        Target(DirectorPlanner.Step step, DirectorStepEngine.Action action, String profile, boolean compost)
+        final int compostItem;
+        Target(DirectorPlanner.Step step, DirectorStepEngine.Action action, String profile, boolean compost, int compostItem)
         {
             this.patch = step.patch;
             this.crop = step.crop;
             this.action = action;
             this.profile = profile;
             this.compost = compost;
+            this.compostItem = compostItem;
         }
     }
 
@@ -57,7 +59,7 @@ final class DirectorWorldGuide
         switch (target.action)
         {
             case PLANT: return target.crop == null ? -1 : target.crop.getItemId();
-            case COMPOST: return ItemID.BUCKET_ULTRACOMPOST;
+            case COMPOST: return target.compostItem;
             case DIG_STUMP: case CLEAR_DEAD: return ItemID.SPADE;
             case CURE: return DirectorStepEngine.isTreeType(target.patch.getPatchType()) ? ItemID.SECATEURS : ItemID.PLANT_CURE;
             case PROTECT_TREE:
@@ -65,6 +67,15 @@ final class DirectorWorldGuide
                 return payments.isEmpty() ? -1 : payments.get(0).getItemId();
             default: return -1;
         }
+    }
+
+    static boolean matchesInventoryItem(Target target, int id)
+    {
+        if (target.action == DirectorStepEngine.Action.PROTECT_TREE)
+            return ProtectionPaymentCatalog.forCrop(target.crop).stream().anyMatch(p -> p.getItemId() == id);
+        if (target.action == DirectorStepEngine.Action.CURE && DirectorStepEngine.isTreeType(target.patch.getPatchType()))
+            return id == ItemID.SECATEURS || id == ItemID.FAIRY_ENCHANTED_SECATEURS;
+        return id == itemId(target);
     }
 
     /** Exact positions win. For named compass pairs, only resolve when BOTH

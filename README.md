@@ -49,7 +49,7 @@ counts) → Begin farming → follow Shortest Path → click the highlighted pat
 or gardener. The guide advances after observed work; Next is a manual fallback.
 Only the active farming target is marked in the world. It uses the existing
 Advisor event-tracked patch objects and patch footprint renderer, with the
-clickbox, downward arrow and required-item icon pattern from Quest Helper's
+clickbox, downward arrow, active inventory-item highlight and required-item icon pattern from Quest Helper's
 `ObjectStep` / `QuestHelperWorldOverlay`. No dependency on Quest Helper's
 plugin runtime, no automated game actions. World guidance can be disabled
 or recolored in RuneLite's Director configuration. Exact coordinates and
@@ -64,8 +64,7 @@ active loadouts; use Timers & farming contract for additional information.
 The default guide shows the current destination, short action, progress and
 next two stops; More options & details reveals the diagnostic/advanced controls.
 Default merged runs visit each farm's patches together unless a saved custom
-order or nearest-stop option applies. All Enabled is grouped by location by
-default. This is stable grouping, not optimal travel-time pathfinding.
+order or nearest-stop option applies. All Enabled is grouped by location unless a custom order is saved. This is stable grouping, not optimal travel-time pathfinding.
 
 1. Log into a character and scan your **bank** and **Farming Guild Seed Vault**
    so the Director can use observed stock. Stale snapshots are not presented

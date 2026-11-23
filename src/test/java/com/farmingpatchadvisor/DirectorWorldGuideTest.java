@@ -25,6 +25,18 @@ public class DirectorWorldGuideTest
         assertEquals(-1, DirectorWorldGuide.select(tree, Arrays.asList(new WorldPoint(3714,3835,0), new WorldPoint(3716,3835,0)), 3, exact));
     }
 
+    @Test public void itemHighlightUsesThePlannedCompostBucket()
+    {
+        DirectorPlanner.Step step = new DirectorPlanner.Step(new FarmRunPatch("Falador", "", PatchType.HERB),
+            CropCatalog.findByName(PatchType.HERB, "Ranarr"));
+        int bucket = net.runelite.api.gameval.ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED;
+        DirectorWorldGuide.Target target = new DirectorWorldGuide.Target(step, DirectorStepEngine.Action.COMPOST,
+            "test", true, bucket);
+        assertEquals(bucket, DirectorWorldGuide.itemId(target));
+        assertTrue(DirectorWorldGuide.matchesInventoryItem(target, bucket));
+        assertFalse(DirectorWorldGuide.matchesInventoryItem(target, step.crop.getItemId()));
+    }
+
     @Test public void numberedGrapevinesDoNotGuessIdentity()
     {
         FarmRunPatch vine = new FarmRunPatch("Kourend", "East 1", PatchType.GRAPEVINE);

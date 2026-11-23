@@ -1805,8 +1805,9 @@ final class FarmingDirectorPanel extends PluginPanel
         // Default merged/all runs visit all patches at a farm together.
         // An explicitly saved route remains authoritative.
         if (!proximity && (selection == DirectorRunSelection.MERGED || selection == DirectorRunSelection.ALL)
-            && (selection != DirectorRunSelection.MERGED ||
-                profileValue("directorMergedRouteOrder_" + presetName, "").isEmpty()))
+            && (selection == DirectorRunSelection.MERGED
+                ? profileValue("directorMergedRouteOrder_" + presetName, "").isEmpty()
+                : !routes.isCustom(FarmRunFilter.ALL)))
             candidates = DirectorLocationOrder.group(candidates);
 
         if (proximity && client.getLocalPlayer() != null)
@@ -2681,7 +2682,10 @@ final class FarmingDirectorPanel extends PluginPanel
             !planningInFlight && !compostPageOpen && currentStep >= 0 &&
             currentStep < currentPlan.steps.size() && activeProfile != null
             ? new DirectorWorldGuide.Target(currentPlan.steps.get(currentStep), visibleAction,
-                activeProfile, includeCompostForRun.isSelected()) : null;
+                activeProfile, includeCompostForRun.isSelected(),
+                currentSession != null && waveIndex < currentSession.supplies.size() &&
+                    currentSession.supplies.get(waveIndex).containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)
+                    ? ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED : ItemID.BUCKET_ULTRACOMPOST) : null;
     }
 
     private void publishBankChecklist()

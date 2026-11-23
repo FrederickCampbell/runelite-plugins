@@ -19,14 +19,16 @@ final class FarmingItemOverlay extends WidgetItemOverlay
 	private final FarmingPatchAdvisorConfig config;
 	private final ItemManager itemManager;
 	private final FarmingLoadout farmingLoadout;
+    private final FarmingPatchAdvisorPlugin plugin;
 
 	@Inject
 	private FarmingItemOverlay(FarmingPatchAdvisorConfig config, ItemManager itemManager,
-		FarmingLoadout farmingLoadout)
+		FarmingLoadout farmingLoadout, FarmingPatchAdvisorPlugin plugin)
 	{
 		this.config = config;
 		this.itemManager = itemManager;
 		this.farmingLoadout = farmingLoadout;
+        this.plugin = plugin;
 		showOnBank();
 		showOnInventory();
 		showOnInterfaces(InterfaceID.SEED_VAULT);
@@ -44,6 +46,15 @@ final class FarmingItemOverlay extends WidgetItemOverlay
 			return;
 		}
 
+        DirectorWorldGuide.Target target = plugin.activeDirectorWorldTarget();
+        if (!bankItem && !seedVaultItem && target != null && config.directorWorldHints())
+        {
+            if (!DirectorWorldGuide.matchesInventoryItem(target, itemId)) return;
+            BufferedImage outline = itemManager.getItemOutline(itemId, widgetItem.getQuantity(), config.directorTargetColor());
+            Rectangle bounds = widgetItem.getCanvasBounds();
+            graphics.drawImage(outline, bounds.x, bounds.y, null);
+            return;
+        }
         DirectorBankChecklist director = farmingLoadout.activeDirectorChecklist();
         if (director != null)
         {
