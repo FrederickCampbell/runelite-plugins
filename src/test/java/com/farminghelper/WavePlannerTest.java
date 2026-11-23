@@ -99,4 +99,35 @@ public class WavePlannerTest
         assertTrue(result.unplanned.isEmpty());
         assertEquals(7, result.waves.get(0).occupiedSlots);
     }
+
+    @Test
+    public void stackableSeedsDoNotImposeAnArtificialStopLimit()
+    {
+        Crop ranarr = CropCatalog.findByName(PatchType.HERB, "Ranarr");
+        WavePlanner.Result result = WavePlanner.split(
+            patches(PatchType.HERB, 35), 80, Collections.singletonMap(ranarr.getItemId(), 35),
+            true, "Ranarr", "", 3, 0, 8, false, id -> true,
+            Collections.emptySet(), Collections.emptySet(), Collections.emptyMap(),
+            false, Integer.MAX_VALUE);
+        assertEquals(1, result.waves.size());
+        assertEquals(35, result.totalStops);
+        assertTrue(result.unplanned.isEmpty());
+        assertTrue(result.waves.get(0).occupiedSlots + result.waves.get(0).reservedSlots <= 28);
+    }
+
+    @Test
+    public void unlimitedStopsStillRespectNonStackableSaplings()
+    {
+        Crop oak = CropCatalog.findByName(PatchType.TREE, "Oak sapling");
+        WavePlanner.Result result = WavePlanner.split(
+            patches(PatchType.TREE, 30), 80, Collections.singletonMap(oak.getItemId(), 30),
+            false, "", "", 3, 0, 2, false, id -> false,
+            Collections.emptySet(), Collections.emptySet(), Collections.emptyMap(),
+            false, Integer.MAX_VALUE);
+        assertEquals(2, result.waves.size());
+        assertEquals(30, result.totalStops);
+        assertTrue(result.unplanned.isEmpty());
+        for (RunPlanner.Plan wave : result.waves)
+            assertTrue(wave.occupiedSlots + wave.reservedSlots <= 28);
+    }
 }
