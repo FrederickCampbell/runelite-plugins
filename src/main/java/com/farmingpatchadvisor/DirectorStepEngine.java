@@ -83,8 +83,10 @@ final class DirectorStepEngine
         switch (action)
         {
             case HARVEST:
-                return "Harvest this " + type.getDisplayName().toLowerCase() +
-                    " patch, then replant " + name + " if appropriate.";
+                return crop == null
+                    ? "Harvest this patch; no replacement stock allocated. Refill and replan."
+                    : "Harvest this " + type.getDisplayName().toLowerCase() +
+                        " patch, then replant " + name + " if appropriate.";
             case CHECK_HEALTH:
                 return "Check the tree's health, then remove the tree.";
             case REMOVE_TREE:
@@ -96,7 +98,8 @@ final class DirectorStepEngine
             case CURE:
                 return "Cure the diseased crop before harvesting.";
             case PLANT:
-                return isTreeType(type)
+                return crop == null ? "No suitable planting stock allocated. Bank or replan."
+                    : isTreeType(type)
                     ? "Rake if necessary, compost and plant " + name + "."
                     : "Rake if necessary, harvest if needed, compost and plant "
                         + name + ".";

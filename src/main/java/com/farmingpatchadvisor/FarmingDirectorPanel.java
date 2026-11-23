@@ -31,6 +31,7 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
@@ -78,6 +79,8 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JButton replan = new JButton("Replan remaining");
+    private final JButton overrideCrop = new JButton("Override this patch");
+    private final JButton clearOverride = new JButton("Clear override");
     private final JLabel currentAction = new JLabel("Start a run to see context-aware steps");
     private final JTextField priorities = new JTextField();
     private final JTextField reserves = new JTextField();
@@ -195,6 +198,13 @@ final class FarmingDirectorPanel extends PluginPanel
         replan.setAlignmentX(Component.LEFT_ALIGNMENT);
         replan.setMaximumSize(new Dimension(Integer.MAX_VALUE, 27));
         controls.add(replan);
+        JPanel overrides = new JPanel(new GridLayout(1, 2, 3, 0));
+        overrides.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        overrideCrop.addActionListener(e -> chooseCropOverride());
+        clearOverride.addActionListener(e -> clearCropOverride());
+        overrides.add(overrideCrop);
+        overrides.add(clearOverride);
+        controls.add(overrides);
         controls.add(Box.createVerticalStrut(7));
         progress.setForeground(new Color(244, 197, 86));
         progress.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -446,6 +456,8 @@ final class FarmingDirectorPanel extends PluginPanel
         // protection stops; unknown patches remain unknown.
         List<FarmRunPatch> actionable = new ArrayList<>();
         Set<String> preplanted = new HashSet<>();
+        Set<String> harvestOnly = new HashSet<>();
+        Map<String, String> cropOverrides = new HashMap<>();
         int alreadyGrowing = 0;
         for (FarmRunPatch patch : candidates)
         {
@@ -466,6 +478,20 @@ final class FarmingDirectorPanel extends PluginPanel
             else
             {
                 actionable.add(patch);
+                if (observation.known() &&
+                    (observation.state == CropState.HARVESTABLE ||
+                     observation.state == CropState.UNCHECKED ||
+                     observation.state == CropState.DEAD ||
+                     observation.state == CropState.DISEASED ||
+                     observation.state == CropState.STUMP))
+                {
+                    harvestOnly.add(FarmRouteManager.key(patch));
+                }
+            }
+            String override = profileValue("directorCrop_" + FarmRouteManager.key(patch), "");
+            if (!override.isEmpty())
+            {
+                cropOverrides.put(FarmRouteManager.key(patch), override);
             }
         }
         if (alreadyGrowing > 0)
@@ -512,7 +538,8 @@ final class FarmingDirectorPanel extends PluginPanel
         DirectorPlanner.Plan plan = DirectorPlanner.build(null, candidates, level, stock,
             custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
             harvestReserve, protection, id ->
-                itemManager.getItemComposition(id).isStackable(), preplanted);
+                itemManager.getItemComposition(id).isStackable(), preplanted,
+                harvestOnly, cropOverrides);
 
         for (Map.Entry<Integer, Integer> item : plan.payments.entrySet())
         {
@@ -538,6 +565,41 @@ final class FarmingDirectorPanel extends PluginPanel
         warnings.addAll(plan.warnings);
         return new DirectorPlanner.Plan(plan.steps, plan.seeds, plan.payments, warnings,
             plan.occupiedSlots, plan.reservedSlots);
+    }
+
+    private void chooseCropOverride()
+    {
+        if (currentPlan == null || runFinished || currentStep >= currentPlan.steps.size()) return;
+        FarmRunPatch patch = currentPlan.steps.get(currentStep).patch;
+        List<Crop> eligible = new ArrayList<>();
+        for (Crop crop : CropCatalog.crops(patch.getPatchType()))
+        {
+            if (crop.getLevel() <= plugin.getFarmingLevel()) eligible.add(crop);
+        }
+        if (eligible.isEmpty()) return;
+        String[] options = eligible.stream().map(Crop::getName).toArray(String[]::new);
+        Object chosen = JOptionPane.showInputDialog(this,
+            "Preferred crop at " + patch.getDisplayName() + ":",
+            "Ironman Farming Director — crop override",
+            JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        if (chosen != null && configManager.getRSProfileKey() != null)
+        {
+            configManager.setRSProfileConfiguration(GROUP,
+                "directorCrop_" + FarmRouteManager.key(patch), chosen.toString());
+            beginRun(true);
+        }
+    }
+
+    private void clearCropOverride()
+    {
+        if (currentPlan == null || runFinished || currentStep >= currentPlan.steps.size()) return;
+        FarmRunPatch patch = currentPlan.steps.get(currentStep).patch;
+        if (configManager.getRSProfileKey() != null)
+        {
+            configManager.unsetRSProfileConfiguration(GROUP,
+                "directorCrop_" + FarmRouteManager.key(patch));
+            beginRun(true);
+        }
     }
 
     private static boolean fresh(long scannedAt, long now)
@@ -877,6 +939,8 @@ final class FarmingDirectorPanel extends PluginPanel
         pause.setEnabled(active && steps > 0 && !runFinished);
         end.setEnabled(active);
         replan.setEnabled(active && steps > 0);
+        overrideCrop.setEnabled(active && !runFinished && steps > 0);
+        clearOverride.setEnabled(active && !runFinished && steps > 0);
         pause.setText(paused ? "Resume" : "Pause");
 
         if (active)
@@ -912,6 +976,7 @@ final class FarmingDirectorPanel extends PluginPanel
                         step.patch.getPatchType())
                     : completedSteps.contains(i) ? "Completed / skipped"
                     : step.requiresPlanting ? "Harvest / clear / plant " + step.crop.getName()
+                    : step.harvestOnly ? "Harvest-only: refill before replanting"
                     : "Existing tree: verify gardener protection";
                 item.add(warning(instruction));
                 if (i == currentStep && !runFinished)
