@@ -303,25 +303,42 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void beginRun()
     {
+        beginRun(false);
+    }
+
+    /** Replan keeps completed patch IDs so we can safely refill at a bank. */
+    private void beginRun(boolean preserveProgress)
+    {
         savePreferences();
-        final PatchType type = (PatchType) runType.getSelectedItem();
+        final DirectorRunSelection selected = (DirectorRunSelection) runType.getSelectedItem();
+        if (selected == null) return;
         final boolean custom = customPriority.isSelected();
         final String priorityText = priorities.getText();
         final String reserveText = reserves.getText();
         final boolean protection = protectTrees.isSelected();
+        final boolean proximity = nearestRoute.isSelected();
+        final Set<String> skip = preserveProgress
+            ? new HashSet<>(completedPatchKeys) : Collections.emptySet();
+        final long generation = ++planningGeneration;
         start.setEnabled(false);
+        replan.setEnabled(false);
+        clearRoute();
         clientThread.invoke(() ->
         {
-            DirectorPlanner.Plan result = compute(type, custom, priorityText, reserveText, protection);
+            DirectorPlanner.Plan result = compute(selected, custom, priorityText,
+                reserveText, protection, proximity, skip);
             SwingUtilities.invokeLater(() ->
             {
+                if (generation != planningGeneration) return;
                 currentPlan = result;
                 currentStep = 0;
                 paused = false;
                 runFinished = false;
                 completedSteps.clear();
+                if (!preserveProgress) completedPatchKeys.clear();
                 activateCurrentStep();
                 start.setEnabled(true);
+                replan.setEnabled(true);
                 render();
                 if (!currentPlan.steps.isEmpty())
                 {
@@ -332,8 +349,9 @@ final class FarmingDirectorPanel extends PluginPanel
         });
     }
 
-    private DirectorPlanner.Plan compute(PatchType type, boolean custom, String priorityText,
-                                         String reserveText, boolean protection)
+    private DirectorPlanner.Plan compute(DirectorRunSelection selection,
+        boolean custom, String priorityText, String reserveText,
+        boolean protection, boolean proximity, Set<String> skip)
     {
         List<String> warnings = new ArrayList<>();
         if (client.getGameState() != GameState.LOGGED_IN)
@@ -344,42 +362,60 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         int level = plugin.getFarmingLevel();
         List<FarmRunPatch> candidates = new ArrayList<>();
-        FarmRunFilter filter = type == PatchType.TREE ? FarmRunFilter.TREE
-            : type == PatchType.ALLOTMENT ? FarmRunFilter.ALLOTMENT_FLOWER : FarmRunFilter.HERB;
-        for (FarmRunPatch patch : routes.activePatches(filter))
+        List<FarmRunPatch> configured = routes.activePatches(selection.filter);
+        int unknownPatchDefinitions = 0;
+        int approximateDestinations = 0;
+
+        for (FarmRunPatch grouped : configured)
         {
-            if (patch.getPatchType() != type)
-            {
-                continue;
-            }
-            if (DirectorWaypoints.point(type, patch.getLocation()) == null)
-            {
-                warnings.add("No verified waypoint for " + patch.getDisplayName() + ".");
-                continue;
-            }
-            String access = DirectorWaypoints.accessIssue(client, type, patch.getLocation(), level,
-                config.directorIncludeUnverifiedLocations());
+            PatchType type = grouped.getPatchType();
+            if (!selection.includes(type)) continue;
+            String access = DirectorWaypoints.accessIssue(client, type, grouped.getLocation(),
+                level, config.directorIncludeUnverifiedLocations());
             if (access != null)
             {
                 warnings.add(access);
                 continue;
             }
-            if (type == PatchType.ALLOTMENT)
+            List<String> canonical = stateReader.patchNamesForType(type.name(),
+                grouped.getLocation());
+            List<FarmRunPatch> separate = DirectorPatchNames.expand(grouped, canonical);
+            if (separate.isEmpty())
             {
-                List<FarmRunPatch> split = DirectorAllotments.split(patch,
-                    stateReader.patchNames(Tab.ALLOTMENT, patch.getLocation()));
-                if (split.isEmpty())
-                {
-                    warnings.add("Quest Helper has no matching allotment varbits for "
-                        + patch.getLocation() + "; skipping rather than guessing.");
-                    continue;
-                }
-                candidates.addAll(split);
+                unknownPatchDefinitions++;
+                continue;
             }
-            else
+            for (FarmRunPatch patch : separate)
             {
+                if (skip.contains(FarmRouteManager.key(patch))) continue;
+                DirectorTravelTarget target = DirectorTravelTarget.choose(patch,
+                    stateReader, timerManager);
+                if (!target.exact) approximateDestinations++;
                 candidates.add(patch);
             }
+        }
+        if (unknownPatchDefinitions > 0)
+        {
+            warnings.add(unknownPatchDefinitions +
+                " grouped patch definitions could not be matched to Quest Helper and were skipped.");
+        }
+        if (approximateDestinations > 0)
+        {
+            warnings.add(approximateDestinations + " destinations lack exact verified tiles. "
+                + "These show area hints rather than pretending to have exact patch pathing.");
+        }
+
+        if (proximity && client.getLocalPlayer() != null)
+        {
+            candidates = DirectorNearestRoute.order(candidates,
+                client.getLocalPlayer().getWorldLocation(), patch ->
+                {
+                    DirectorTravelTarget target = DirectorTravelTarget.choose(patch,
+                        stateReader, timerManager);
+                    return target.point;
+                });
+            warnings.add("Nearest-stop order is a tile-distance heuristic, not "
+                + "Shortest Path travel-time optimization.");
         }
 
         long bankAt = loadout.directorBankSnapshotAt();
@@ -405,9 +441,9 @@ final class FarmingDirectorPanel extends PluginPanel
                 : "Seed Vault snapshot is over 6 hours old: reopen it to refresh.");
         }
 
-        // A growing crop already has its planting stock in the ground. It must
-        // not consume another seed in the loadout calculation. The exception is
-        // an existing tree that still needs (or may need) gardener protection.
+        // Existing crops require neither a duplicate sapling nor a visit to
+        // plant. Growing trees without observed protection remain eligible
+        // protection stops; unknown patches remain unknown.
         List<FarmRunPatch> actionable = new ArrayList<>();
         Set<String> preplanted = new HashSet<>();
         int alreadyGrowing = 0;
@@ -416,13 +452,11 @@ final class FarmingDirectorPanel extends PluginPanel
             QuestFarmingStateReader.Observation observation = observePatchState(patch);
             if (observation.known() && observation.state == CropState.GROWING)
             {
-                if (type == PatchType.TREE && protection
-                    && !Boolean.TRUE.equals(observation.protectedByFarmer))
+                if (DirectorStepEngine.isTreeType(patch.getPatchType())
+                    && protection && !Boolean.TRUE.equals(observation.protectedByFarmer))
                 {
                     preplanted.add(FarmRouteManager.key(patch));
                     actionable.add(patch);
-                    warnings.add("Existing tree at " + patch.getLocation() +
-                        ": protection not verified; no extra sapling allocated.");
                 }
                 else
                 {
@@ -434,57 +468,58 @@ final class FarmingDirectorPanel extends PluginPanel
                 actionable.add(patch);
             }
         }
-        candidates = actionable;
         if (alreadyGrowing > 0)
         {
-            warnings.add("Skipped " + alreadyGrowing + " already-growing "
-                + (type == PatchType.TREE ? "trees" : "patches") + " in the run.");
+            warnings.add("Omitted " + alreadyGrowing + " already-growing patches.");
         }
+        candidates = actionable;
 
-        int toolSlots = type == PatchType.TREE ? 2 : 3; // Rake, spade, plus herb seed dibber.
-        if (type == PatchType.HERB && stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
+        // Tool allowance is conservative. Exact per-teleport consumables and
+        // every equipment-slot alternative are not yet modeled.
+        boolean needsDibber = candidates.stream()
+            .anyMatch(p -> p.getPatchType().usesDibber());
+        boolean needsAxe = candidates.stream()
+            .anyMatch(p -> DirectorStepEngine.isTreeType(p.getPatchType()));
+        boolean needsMagicSecateurs = candidates.stream()
+            .anyMatch(p -> p.getPatchType() == PatchType.HERB);
+        int toolSlots = 2 + (needsDibber ? 1 : 0) + (needsAxe ? 1 : 0);
+        if (needsMagicSecateurs && stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
             && !loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS))
         {
             toolSlots++;
         }
+
         Set<RouteTeleport> distinctTeleports = new HashSet<>();
         for (FarmRunPatch patch : candidates)
         {
-            RouteTeleport teleport = routes.teleport(filter, patch);
-            if (teleport != RouteTeleport.NONE)
+            for (FarmRunPatch configuredPatch : configured)
             {
-                distinctTeleports.add(teleport);
-            }
-        }
-        int teleportSlots = distinctTeleports.size();
-        int harvestReserve = type == PatchType.TREE ? 2
-            : type == PatchType.ALLOTMENT ? Math.max(14, config.directorHarvestSlots())
-            : config.directorHarvestSlots();
-        DirectorPlanner.Plan plan = DirectorPlanner.build(type, candidates, level, stock,
-            custom, priorityText, reserveText, toolSlots, teleportSlots, harvestReserve,
-            protection, id -> itemManager.getItemComposition(id).isStackable(), preplanted);
-
-        if (type == PatchType.TREE && plan.steps.isEmpty())
-        {
-            // Raw tree seeds are not interchangeable with plantable saplings.
-            int[] rawSeeds = {ItemID.ACORN, ItemID.WILLOW_SEED, ItemID.MAPLE_SEED,
-                ItemID.YEW_SEED, ItemID.MAGIC_TREE_SEED};
-            for (int rawId : rawSeeds)
-            {
-                if (stock.getOrDefault(rawId, 0) > 0)
+                if (configuredPatch.getLocation().equals(patch.getLocation()) &&
+                    configuredPatch.getPatchType() == patch.getPatchType())
                 {
-                    warnings.add("Tree seeds found but no suitable saplings were allocated. "
-                        + "Prepare saplings in filled plant pots and let them grow.");
+                    RouteTeleport teleport = routes.teleport(selection.filter, configuredPatch);
+                    if (teleport != RouteTeleport.NONE) distinctTeleports.add(teleport);
                     break;
                 }
             }
         }
+        int harvestReserve = selection == DirectorRunSelection.TREES ||
+            selection == DirectorRunSelection.FRUIT_TREES ||
+            selection == DirectorRunSelection.HARDWOODS ? 2 :
+            selection == DirectorRunSelection.ALLOTMENTS ? Math.max(14, config.directorHarvestSlots())
+                : config.directorHarvestSlots();
+
+        DirectorPlanner.Plan plan = DirectorPlanner.build(null, candidates, level, stock,
+            custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
+            harvestReserve, protection, id ->
+                itemManager.getItemComposition(id).isStackable(), preplanted);
+
         for (Map.Entry<Integer, Integer> item : plan.payments.entrySet())
         {
             if (stock.getOrDefault(item.getKey(), 0) < item.getValue())
             {
-                warnings.add("Tree protection payment missing: item " + item.getKey()
-                    + ", need " + item.getValue() + ".");
+                warnings.add("Gardener payment missing: item " + item.getKey() +
+                    ", need " + item.getValue() + ".");
             }
         }
         for (RouteTeleport teleport : distinctTeleports)
