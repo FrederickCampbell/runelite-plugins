@@ -21,6 +21,14 @@ final class ProtectionPaymentCatalog
 			: PAYMENTS.getOrDefault(crop.getItemId(), Collections.emptyList());
 	}
 
+    static String nameForItem(int id)
+    {
+        for (List<ProtectionPayment> payments : PAYMENTS.values())
+            for (ProtectionPayment payment : payments)
+                if (payment.getItemId() == id) return payment.getName();
+        return null;
+    }
+
 	private static Map<Integer, List<ProtectionPayment>> build()
 	{
 		Map<Integer, List<ProtectionPayment>> payments = new HashMap<>();

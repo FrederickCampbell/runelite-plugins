@@ -63,6 +63,26 @@ final class DirectorTeleportPlan
         return totals;
     }
 
+    /** Reusable equipped items occupy no bag slot; unstackable consumables
+     * consume a slot for every use, rather than one slot per teleport kind. */
+    static int inventorySlots(Map<RouteTeleport, Integer> uses, Map<Integer, Integer> equipped,
+                              java.util.function.IntPredicate stackable)
+    {
+        int slots = 0;
+        for (Map.Entry<RouteTeleport, Integer> entry : uses.entrySet())
+        {
+            RouteTeleport teleport = entry.getKey();
+            if (teleport == RouteTeleport.NONE || entry.getValue() <= 0) continue;
+            int[] ids = teleport.itemIds();
+            boolean worn = false;
+            for (int id : ids) worn |= equipped.getOrDefault(id, 0) > 0;
+            if (!teleport.consumable && worn) continue;
+            slots += teleport.consumable && ids.length > 0 && !stackable.test(ids[0])
+                ? entry.getValue() : 1;
+        }
+        return slots;
+    }
+
     static List<String> missingTravelItems(
         Map<RouteTeleport, Integer> uses, Map<Integer, Integer> available)
     {

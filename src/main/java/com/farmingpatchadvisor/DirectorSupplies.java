@@ -55,7 +55,9 @@ final class DirectorSupplies
             case ItemID.FAIRY_ENCHANTED_SECATEURS: return "Magic secateurs";
             case ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED: return "Filled bottomless compost bucket";
             case ItemID.BUCKET_ULTRACOMPOST: return "Ultracompost";
-            default: return "Item #" + id;
+            default:
+                String payment = ProtectionPaymentCatalog.nameForItem(id);
+                return payment == null ? "Item #" + id : payment;
         }
     }
 }

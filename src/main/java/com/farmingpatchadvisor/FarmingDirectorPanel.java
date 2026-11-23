@@ -145,6 +145,9 @@ final class FarmingDirectorPanel extends PluginPanel
     private volatile boolean compostPageOpen;
     private List<CompostBinLocation> compostStops = Collections.emptyList();
     private final JPanel statusRows = new JPanel();
+    private final JPanel loadoutRows = new JPanel();
+    private final JButton openLoadout = new JButton("View loadout & withdrawals");
+    private final JLabel activeDestination = new JLabel();
     private final javax.swing.DefaultListModel<FarmRunPatch> routeModel =
         new javax.swing.DefaultListModel<>();
     private final javax.swing.JList<FarmRunPatch> routeList =
@@ -259,6 +262,7 @@ final class FarmingDirectorPanel extends PluginPanel
         pages.add(createCompostGuide(), "compost");
         pages.add(createRouteEditor(), "route");
         pages.add(createStatusPage(), "status");
+        pages.add(createLoadoutPage(), "loadout");
     }
 
     private JPanel vertical()
@@ -322,6 +326,7 @@ final class FarmingDirectorPanel extends PluginPanel
         if ("compost".equals(name)) refreshCompostGuide();
         if ("route".equals(name)) loadRouteEditor();
         if ("status".equals(name)) refreshStatusPage();
+        if ("loadout".equals(name)) refreshLoadoutPage();
     }
 
     private JPanel createSelection()
@@ -374,6 +379,9 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(header, activeTitle);
         addFull(header, progress);
         addFull(header, progressBar);
+        activeDestination.setFont(activeDestination.getFont().deriveFont(Font.BOLD, 13f));
+        activeDestination.setForeground(Color.WHITE);
+        addFull(header, activeDestination);
         addFull(header, currentAction);
         addFull(header, inventory);
         guideWarning.setForeground(new Color(244, 197, 86));
@@ -394,6 +402,8 @@ final class FarmingDirectorPanel extends PluginPanel
         stepList.setBackground(ColorScheme.DARK_GRAY_COLOR);
         stepList.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         JPanel content = vertical();
+        openLoadout.addActionListener(e -> showPage("loadout"));
+        addFull(content, openLoadout);
         addFull(content, replan);
         addFull(content, overrides);
         addFull(content, guideDetails);
@@ -837,6 +847,87 @@ final class FarmingDirectorPanel extends PluginPanel
             return;
         }
         loadRouteEditor();
+    }
+
+    private JPanel createLoadoutPage()
+    {
+        JPanel page = new JPanel(new BorderLayout());
+        page.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        JPanel top = vertical();
+        addFull(top, nav("← Active guide", "guide"));
+        addFull(top, label("Loadout", true));
+        addFull(top, label("Estimated at planning time. Check your bag before leaving storage.", false));
+        JButton refresh = new JButton("Rescan / replan remaining");
+        refresh.addActionListener(e -> beginRun(true));
+        addFull(top, refresh);
+        page.add(top, BorderLayout.NORTH);
+        loadoutRows.setLayout(new BoxLayout(loadoutRows, BoxLayout.Y_AXIS));
+        loadoutRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        loadoutRows.setBorder(BorderFactory.createEmptyBorder(4, 8, 8, 8));
+        page.add(scrolling(loadoutRows), BorderLayout.CENTER);
+        return page;
+    }
+
+    private void loadoutSection(String heading, Map<Integer, Integer> items, Color tint)
+    {
+        if (items.isEmpty()) return;
+        addFull(loadoutRows, label(heading, true));
+        for (Map.Entry<Integer, Integer> entry : items.entrySet())
+        {
+            JPanel row = new JPanel(new BorderLayout(4, 0));
+            row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            row.setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
+            Crop crop = CropCatalog.findByItemId(entry.getKey());
+            JLabel name = new JLabel(wrapped(crop == null ? DirectorSupplies.name(entry.getKey()) : crop.getItemName(), 118));
+            name.setForeground(Color.WHITE);
+            JLabel quantity = new JLabel("×" + entry.getValue());
+            quantity.setForeground(tint);
+            quantity.setFont(quantity.getFont().deriveFont(Font.BOLD));
+            row.add(name, BorderLayout.CENTER);
+            row.add(quantity, BorderLayout.EAST);
+            addFull(loadoutRows, row);
+        }
+    }
+
+    private void refreshLoadoutPage()
+    {
+        loadoutRows.removeAll();
+        if (currentSession == null || currentPlan == null)
+        {
+            addFull(loadoutRows, warning("Start a run to plan supplies."));
+        }
+        else
+        {
+            int index = awaitingBank && waveIndex + 1 < currentSession.waves.size()
+                ? waveIndex + 1 : waveIndex;
+            DirectorPlanner.Plan wave = index < currentSession.waves.size()
+                ? currentSession.waves.get(index) : currentPlan;
+            Map<Integer, Integer> kit = index < currentSession.supplies.size()
+                ? currentSession.supplies.get(index) : Collections.emptyMap();
+            addFull(loadoutRows, label("WAVE " + (index + 1) + " · " + wave.steps.size() + " stops", true));
+            addFull(loadoutRows, label(wave.occupiedSlots + " planned slots + " + wave.reservedSlots
+                + " free-space reserve / 28", false));
+            if (awaitingBank)
+                addFull(loadoutRows, warning("Upcoming wave is provisional. Replan after opening storage."));
+            loadoutSection("Planting stock", wave.seeds, Color.WHITE);
+            loadoutSection("Tools & compost", kit, Color.WHITE);
+            loadoutSection("Potential gardener payments", wave.payments, Color.WHITE);
+            if (index < currentSession.teleports.size() && !currentSession.teleports.get(index).isEmpty())
+                addFull(loadoutRows, warning("Travel: " + formatTeleports(currentSession.teleports.get(index))));
+            if (!awaitingBank && index == 0)
+            {
+                DirectorStockLedger.Manifest manifest = currentSession.observedStock.manifest(wave, kit);
+                loadoutSection("Carried at planning", manifest.carried, new Color(143, 187, 136));
+                loadoutSection("Withdraw from bank", manifest.takeFromBank, new Color(244, 197, 86));
+                loadoutSection("Withdraw from Seed Vault", manifest.takeFromVault, new Color(244, 197, 86));
+                loadoutSection("Missing / unobserved", manifest.missing, new Color(240, 144, 120));
+            }
+            if (!currentSession.observedStock.bankObserved) addFull(loadoutRows, warning("Bank snapshot missing or stale."));
+            if (!currentSession.observedStock.vaultObserved) addFull(loadoutRows, warning("Seed Vault snapshot missing or stale."));
+            addFull(loadoutRows, warning("Teleport charges, actual harvest yield and axe alternatives require manual verification."));
+        }
+        loadoutRows.revalidate();
+        loadoutRows.repaint();
     }
 
     private JPanel createStatusPage()
@@ -1697,26 +1788,12 @@ final class FarmingDirectorPanel extends PluginPanel
                 harvestOnly, cropOverrides, herbPriority, waveCap,
             selectedPatches ->
             {
-                Set<RouteTeleport> carriedTeleports = new HashSet<>();
-                for (FarmRunPatch selectedPatch : selectedPatches)
-                {
-                    RouteTeleport teleport = teleportForPatch.getOrDefault(
-                        FarmRouteManager.key(selectedPatch), RouteTeleport.NONE);
-                    if (teleport == RouteTeleport.NONE) continue;
-                    boolean equipped = false;
-                    for (int id : teleport.itemIds())
-                    {
-                        if (equippedItems.getOrDefault(id, 0) > 0)
-                        {
-                            equipped = true;
-                            break;
-                        }
-                    }
-                    if (!equipped) carriedTeleports.add(teleport);
-                }
+                int travelSlots = DirectorTeleportPlan.inventorySlots(
+                    FarmRouteManager.requirements(selectedPatches, teleportForPatch),
+                    equippedItems, id -> itemManager.getItemComposition(id).isStackable());
                 Map<Integer, Integer> kit = DirectorSupplies.required(selectedPatches,
                     compost, bottomless, carrySecateurs);
-                return carriedTeleports.size() + DirectorSupplies.slots(selectedPatches, kit,
+                return travelSlots + DirectorSupplies.slots(selectedPatches, kit,
                     id -> itemManager.getItemComposition(id).isStackable());
             }, categoryPriority);
 
@@ -2388,6 +2465,10 @@ final class FarmingDirectorPanel extends PluginPanel
             }
         }
         currentAction.setText(wrapped(actionText, 184));
+        activeDestination.setVisible(active && !runFinished && !awaitingBank && currentStep < steps);
+        activeDestination.setText(active && currentStep < steps
+            ? wrapped(currentPlan.steps.get(currentStep).patch.getDisplayName(), 184) : "");
+        openLoadout.setEnabled(active);
         activeTitle.setText(wrapped(activeRunSelection == null ? "Active guide" :
             activeRunSelection == DirectorRunSelection.MERGED ? activePresetName :
             activeRunSelection.toString(), 184));
@@ -2514,70 +2595,16 @@ final class FarmingDirectorPanel extends PluginPanel
                         + formatTeleports(currentSession.teleports.get(waveIndex + 1))));
                 }
             }
-            if (!currentPlan.seeds.isEmpty())
-                stepList.add(warning("Required planting stock: " + formatItems(currentPlan.seeds)));
-            if (currentSession != null && waveIndex < currentSession.supplies.size())
-            {
-                Map<Integer, Integer> kit = currentSession.supplies.get(waveIndex);
-                if (!kit.isEmpty()) stepList.add(warning("Tools and compost: " + formatItems(kit)));
-            }
-            if (currentSession != null && waveIndex == 0)
+            if (!awaitingBank && currentSession != null && waveIndex == 0)
             {
                 Map<Integer, Integer> kit = currentSession.supplies.isEmpty()
                     ? Collections.emptyMap() : currentSession.supplies.get(0);
-                DirectorStockLedger.Manifest supplies = currentSession.observedStock.manifest(currentPlan, kit);
-                if (!supplies.takeFromBank.isEmpty())
-                    stepList.add(warning("Withdraw from bank: " + formatItems(supplies.takeFromBank)));
-                if (!supplies.takeFromVault.isEmpty())
-                    stepList.add(warning("Withdraw from Seed Vault: " + formatItems(supplies.takeFromVault)));
-                if (!supplies.missing.isEmpty())
-                    stepList.add(warning("Missing or unobserved: " + formatItems(supplies.missing)));
+                DirectorStockLedger.Manifest manifest = currentSession.observedStock.manifest(currentPlan, kit);
+                if (!manifest.missing.isEmpty())
+                    stepList.add(warning("Missing at planning: " + formatItems(manifest.missing)));
             }
             if (guideDetails.isSelected())
             {
-            if (!currentPlan.payments.isEmpty())
-            {
-                stepList.add(warning("Potential gardener payments: "
-                    + formatItems(currentPlan.payments)));
-            }
-            if (currentSession != null && waveIndex < currentSession.teleports.size())
-            {
-                stepList.add(warning("Travel items for this wave (configured): "
-                    + formatTeleports(currentSession.teleports.get(waveIndex))));
-            }
-            if (!currentPlan.seeds.isEmpty())
-            {
-                StringBuilder req = new StringBuilder("Planting stock: ");
-                for (Map.Entry<Integer, Integer> entry : currentPlan.seeds.entrySet())
-                {
-                    Crop crop = CropCatalog.findByItemId(entry.getKey());
-                    req.append(crop == null ? entry.getKey() : crop.getItemName())
-                        .append(" x").append(entry.getValue()).append("; ");
-                }
-                stepList.add(warning(req.toString()));
-            }
-            if (currentSession != null && waveIndex == 0)
-            {
-                DirectorStockLedger.Manifest manifest =
-                    currentSession.observedStock.manifest(currentPlan,
-                        currentSession.supplies.isEmpty() ? Collections.emptyMap()
-                            : currentSession.supplies.get(0));
-                if (!manifest.takeFromBank.isEmpty())
-                {
-                    stepList.add(warning("Bank withdrawals (last scan): "
-                        + formatItems(manifest.takeFromBank)));
-                }
-                if (!manifest.takeFromVault.isEmpty())
-                {
-                    stepList.add(warning("Seed Vault withdrawals (last scan): "
-                        + formatItems(manifest.takeFromVault)));
-                }
-                if (!manifest.missing.isEmpty())
-                {
-                    stepList.add(warning("Unaccounted supplies: "
-                        + formatItems(manifest.missing)));
-                }
-            }
             for (String message : currentPlan.warnings)
             {
                 stepList.add(warning(message));
@@ -2589,16 +2616,8 @@ final class FarmingDirectorPanel extends PluginPanel
                     stepList.add(warning(currentSession.unplanned
                         + " patch(es) remain UNPLANNED; they have not been marked completed."));
                 }
-                int displayed = 0;
-                for (String message : currentSession.warnings)
-                {
-                    if (displayed++ == 20)
-                    {
-                        stepList.add(warning("Additional warnings omitted from sidebar."));
-                        break;
-                    }
-                    stepList.add(warning(message));
-                }
+                for (String message : new java.util.LinkedHashSet<>(currentSession.warnings))
+                    if (!currentPlan.warnings.contains(message)) stepList.add(warning(message));
             }
             }
         }
@@ -2609,6 +2628,7 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         stepList.revalidate();
         stepList.repaint();
+        if ("loadout".equals(visiblePage)) refreshLoadoutPage();
     }
 
     private static String formatTeleports(Map<RouteTeleport, Integer> items)
