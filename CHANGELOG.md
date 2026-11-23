@@ -1,5 +1,14 @@
 # Farming Helper development history
 
+## v0.8.1-beta.1 — Unified Patch Settings
+
+- Direct run buttons with combined-run membership presets; one Global Settings page and one Patch Settings page.
+- Separate physical patch types, progressive ranked dropdowns, no duplicate preferences, automatic saves and collapsed locations. Retains reserves and route editing.
+- All run selections share physical patch preferences, including combined runs. Older category settings are filtered into their constituent types; previous merged-only overrides remain stored but do not supersede shared settings.
+- Display planting unlocks independently from access gates; regression tests cover Anima 65/76, independent type choices and stock fallback.
+
+
+
 ## v0.8.0-beta.1 — Polish Update
 
 - Local forest-green Swing theme: buttons, checkboxes, dropdowns, fields, spinners and lists; no global LookAndFeel changes.

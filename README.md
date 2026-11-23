@@ -1,4 +1,4 @@
-# Farming Helper — v0.8.0-beta.1
+# Farming Helper — v0.8.1-beta.1
 
 **Basically, Quest Helper, for farm runs.**
 
@@ -29,7 +29,7 @@ the vendored Quest Helper farming-state reader, with the unified RuneLite-native
 
 ## Installation — RuneLite Dev Manager
 
-[Download the v0.8 beta from GitHub Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.8.0-beta.1) — choose **Source code (zip)**.
+[Download the v0.8 beta from GitHub Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.8.1-beta.1) — choose **Source code (zip)**.
 
 The release is not a Plugin Hub listing; it is intended for the local development manager.
 
@@ -41,6 +41,13 @@ Use **Refresh → Build → Launch** in RuneLite Dev Manager. A normal local bui
 from the project root uses `gradlew.bat clean test build`. CI uses Java 21 to
 run Gradle while the source targets Java 11. Neither the Windows launch
 workflow nor in-game behavior has been tested by this CI.
+
+## v0.8.1 — Patch Settings
+
+- Home run buttons start runs directly; combined runs retain their membership preset selector.
+- Global Settings controls run behavior. Patch Settings controls each physical patch type, with Automatic or custom progressive ranked dropdowns, reserves, route editing and collapsible farming locations.
+- Individual and combined runs inherit the same physical patch-type preferences. Legacy category preferences are filtered into each physical type until explicitly edited. Historical merged-only priority overrides remain stored but are no longer applied; configure the shared patch type instead.
+- Access and planting requirements are shown separately (Anima: guild tier 65, seeds 76).
 
 ## v0.8 — Polish Update
 

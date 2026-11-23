@@ -353,7 +353,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void showPage(String name)
     {
-        if ("editor".equals(name)) name = "patches";
+        if ("editor".equals(name)) name = runType.getSelectedItem() == DirectorRunSelection.MERGED ? "selection" : "patches";
         boolean leavingCompost = compostPageOpen && !"compost".equals(name);
         compostPageOpen = "compost".equals(name);
         if (leavingCompost)
@@ -421,7 +421,7 @@ final class FarmingDirectorPanel extends PluginPanel
             card.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
             JButton fold = new JButton();
             fold.setHorizontalAlignment(JButton.LEFT);
-            fold.setToolTipText("Expand " + mode);
+            fold.setToolTipText((mode == DirectorRunSelection.MERGED ? "Configure " : "Start ") + mode);
             fold.addActionListener(e ->
             {
                 if (mode == DirectorRunSelection.MERGED) openRun(mode, true);
@@ -645,7 +645,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JButton cropOverride = new JButton("Per-category crop priority override");
         cropOverride.addActionListener(e -> chooseMergedPriorityOverride());
         // All merged runs inherit the actual patch-type preferences.
-        addFull(mergedControls, label("By default, merged runs inherit each category's saved crop preferences.", false));
+        addFull(mergedControls, label("Uses the preferences in Patch Settings.", false));
         addFull(body, regularControls);
         addFull(body, mergedControls);
         JButton route = nav("Route & teleports", "route");
@@ -791,7 +791,7 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         JPanel settings = vertical();
         addFull(settings, nav("← Runs", "selection"));
-        addFull(settings, label("Settings", true));
+        addFull(settings, label("Global Settings", true));
         JPanel farming = vertical();
         addFull(farming, label("Compost", false));
         addFull(farming, compostChoice);
@@ -879,7 +879,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel screen = new JPanel(new BorderLayout(0, 7));
         screen.setBackground(FarmingHelperTheme.BASE);
         JPanel top = vertical();
-        addFull(top, nav("← Back to Run Editor", "editor"));
+        addFull(top, nav("← Back", "editor"));
         addFull(top, label("Route order & teleports", true));
         addFull(top, label("Select a stop to choose an optional travel item.", false));
         routeList.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
@@ -1518,7 +1518,8 @@ final class FarmingDirectorPanel extends PluginPanel
         patchRows.removeAll();
         String query = patchSearch.getText().trim().toLowerCase(java.util.Locale.ROOT);
         boolean onlyOff = disabledOnly.isSelected();
-        Map<PatchType, List<PatchView>> byType = new EnumMap<>(PatchType.class);
+        Map<PatchType, List<PatchView>> byType = new LinkedHashMap<>();
+        for (PatchType t : new PatchType[]{PatchType.HERB, PatchType.TREE, PatchType.FRUIT_TREE, PatchType.CALQUAT, PatchType.HARDWOOD_TREE, PatchType.ALLOTMENT, PatchType.FLOWER, PatchType.HOPS, PatchType.BUSH, PatchType.CACTUS}) byType.put(t, new ArrayList<>());
         int enabledCount = 0;
         for (PatchView patch : patchViews)
         {
@@ -1531,6 +1532,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     .toLowerCase(java.util.Locale.ROOT).contains(query)) continue;
             byType.computeIfAbsent(patch.patch.getPatchType(), t -> new ArrayList<>()).add(patch);
         }
+        byType.entrySet().removeIf(e -> e.getValue().isEmpty());
         patchSummary.setText(wrapped(enabledCount + " / " + patchViews.size() +
             " enabled · " + byType.values().stream().mapToInt(List::size).sum() + " shown", 184));
         for (Map.Entry<PatchType, List<PatchView>> group : byType.entrySet())
@@ -1548,7 +1550,12 @@ final class FarmingDirectorPanel extends PluginPanel
             for (PatchView patch : patchViews) if (patch.patch.getPatchType() == group.getKey()) entireGroup.add(patch);
             long groupEnabled = entireGroup.stream().filter(v -> patchPrefs.enabled(v.patch)).count();
             fold.setText(wrapped(fold.getText() + " · " + groupEnabled + "/" + entireGroup.size(), 150));
+            fold.setHorizontalAlignment(JButton.LEFT);
+            fold.putClientProperty("fh.primary", !collapsedTypes.contains(group.getKey()));
             category.add(fold, BorderLayout.NORTH);
+            JPanel contents = vertical();
+            contents.setBackground(FarmingHelperTheme.SURFACE);
+            contents.setBorder(BorderFactory.createEmptyBorder(3,5,3,5));
             JPanel bulk = new JPanel(new GridLayout(1, 2, 3, 0));
             bulk.setBackground(FarmingHelperTheme.SURFACE);
             JButton all = new JButton("Enable group");
@@ -1557,11 +1564,11 @@ final class FarmingDirectorPanel extends PluginPanel
             JButton none = new JButton("Disable group");
             none.addActionListener(e -> setCategoryEnabled(entireGroup, false));
             bulk.add(none);
-            if (!collapsedTypes.contains(group.getKey())) category.add(bulk, BorderLayout.SOUTH);
+            if (!collapsedTypes.contains(group.getKey())) category.add(contents, BorderLayout.CENTER);
             addFull(patchRows, category);
             if (collapsedTypes.contains(group.getKey())) continue;
 
-            addFull(patchRows, patchPriorityEditor(group.getKey()));
+            addFull(contents, patchPriorityEditor(group.getKey()));
             boolean showLocations = openPatchLocations.contains(group.getKey());
             JButton locations = new JButton((showLocations ? "▾ " : "▸ ") + "Farming locations");
             locations.setHorizontalAlignment(JButton.LEFT);
@@ -1570,14 +1577,31 @@ final class FarmingDirectorPanel extends PluginPanel
                 if (!openPatchLocations.add(group.getKey())) openPatchLocations.remove(group.getKey());
                 drawPatchRows();
             });
-            addFull(patchRows, locations);
+            addFull(contents, locations);
             if (!showLocations) continue;
+            addFull(contents, bulk);
             Map<String, List<PatchView>> byLocation = new LinkedHashMap<>();
             for (PatchView patch : group.getValue())
                 byLocation.computeIfAbsent(patch.patch.getLocation(),
                     loc -> new ArrayList<>()).add(patch);
             for (Map.Entry<String, List<PatchView>> location : byLocation.entrySet())
             {
+                if (location.getValue().size() == 1 && entireGroup.stream().filter(v -> v.patch.getLocation().equals(location.getKey())).count() == 1)
+                {
+                    PatchView patch = location.getValue().get(0);
+                    JCheckBox single = new JCheckBox(wrapped(location.getKey(), 130), patchPrefs.enabled(patch.patch));
+                    single.setEnabled(configManager.getRSProfileKey() != null);
+                    single.setToolTipText(patch.unlock + " · " + patch.state);
+                    single.addActionListener(e -> { patchPrefs.setEnabled(patch.patch, single.isSelected()); drawPatchRows(); });
+                    addFull(contents, single);
+                    if (patch.unlock.startsWith("Locked:") || patch.unlock.contains("Planting requires"))
+                    {
+                        JLabel info = label(patch.unlock, false);
+                        info.setForeground(FarmingHelperTheme.GOLD);
+                        addFull(contents, info);
+                    }
+                    continue;
+                }
                 JPanel locationBar = new JPanel(new BorderLayout(3, 0));
                 locationBar.setBackground(FarmingHelperTheme.BASE);
                 String locationKey = group.getKey().name() + "~" + location.getKey();
@@ -1602,7 +1626,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 disable.setMargin(new java.awt.Insets(2, 5, 2, 5));
                 locationActions.add(disable);
                 locationBar.add(locationActions, BorderLayout.EAST);
-                addFull(patchRows, locationBar);
+                addFull(contents, locationBar);
                 if (!locationOpen) continue;
                 for (PatchView patch : location.getValue())
                 {
@@ -1626,7 +1650,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     if (patch.unlock.startsWith("Locked:") || patch.unlock.contains("Planting requires")) info.setForeground(FarmingHelperTheme.GOLD);
                     else if (!patchPrefs.enabled(patch.patch)) info.setForeground(FarmingHelperTheme.MUTED);
                     addFull(entry, info);
-                    addFull(patchRows, entry);
+                    addFull(contents, entry);
                 }
             }
         }
@@ -1649,8 +1673,9 @@ final class FarmingDirectorPanel extends PluginPanel
         String defaults = type == PatchType.TREE ? "Magic, Yew, Maple, Willow, Oak"
             : type == PatchType.ALLOTMENT ? "Snape grass, Watermelon, Strawberry, Sweetcorn"
             : type == PatchType.HERB ? "Ranarr, Snapdragon, Toadflax, Irit, Avantoe" : "";
-        return DirectorPatchPriority.legacy(type, Boolean.parseBoolean(profileValue("directorCustom" + old, "false")),
-            profileValue("directorPriority" + old, defaults), profileValue("directorReserve" + old, ""));
+        boolean legacyCustom = Boolean.parseBoolean(profileValue("directorCustom" + old, "false"));
+        return DirectorPatchPriority.legacy(type, legacyCustom,
+            legacyCustom ? profileValue("directorPriority" + old, defaults) : "", profileValue("directorReserve" + old, ""));
     }
 
     private void savePatchPriority(PatchType type, boolean custom, List<Crop> ranked, String held)

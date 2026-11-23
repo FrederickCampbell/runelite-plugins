@@ -1,4 +1,4 @@
-name: Farming Helper build and v0.8 release
+name: Farming Helper build and v0.8.1 release
 on:
   push:
     branches: [master, farming-helper-v0.8.1]
@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: farming-helper-v0.8-release
+      group: farming-helper-v0.8.1-release
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -42,15 +42,15 @@ jobs:
         with:
           name: farming-helper-jar
           path: release-artifacts
-      - name: Publish the verified v0.8 beta
+      - name: Publish the verified v0.8.1 beta
         id: publish
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag=v0.8.0-beta.1
-          if ! grep -qx 'version=0.8.0-beta.1' runelite-plugin.properties; then
+          tag=v0.8.1-beta.1
+          if ! grep -qx 'version=0.8.1-beta.1' runelite-plugin.properties; then
             echo "Different version; this one-time release is not applicable."
             exit 0
           fi
@@ -64,16 +64,16 @@ jobs:
             git push origin "refs/tags/$tag"
           fi
           if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$tag" release-artifacts/*.jar --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "Farming Helper v0.8 beta" --notes-file RELEASE_NOTES.md
+            gh release create "$tag" release-artifacts/*.jar --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "Farming Helper v0.8.1 beta" --notes-file RELEASE_NOTES.md
           fi
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,url
           echo "published=true" >> "$GITHUB_OUTPUT"
-      - name: Prune merged v0.8 development branch
+      - name: Prune merged v0.8.1 development branch
         if: steps.publish.outputs.published == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          branch=farming-helper-v0.8
+          branch=farming-helper-v0.8.1
           actual=$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)
           if [ "$actual" = "$GITHUB_SHA" ]; then
             git push --force-with-lease="refs/heads/$branch:$actual" origin ":refs/heads/$branch"

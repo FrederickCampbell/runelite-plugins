@@ -1,9 +1,9 @@
-# Farming Helper v0.8 beta — Polish Update
+# Farming Helper v0.8.1 beta — Unified Patch Settings
 
-Basically, Quest Helper, for farm runs.
+Configure by patch type. Execute by run type.
 
-Collapsed run cards with OSRS item sprites, forest-green Swing controls, a single settings cog, automatic preference saves and nested global patch controls. Removes the legacy Advisor overlay clutter without removing tracking, contracts, timers, seed selection or inventory planning.
+Global Settings controls farming behavior. Patch Settings combines crop priorities, stock reserves, route editing and physical patch exclusions. Custom preference rows appear as needed; ordinary run buttons start directly. Combined runs inherit the same patch settings.
 
-Expand a run, configure priorities, start, gather supplies and follow the active hints. Shortest Path remains optional. Download Source code (zip), extract into the same Farming-Helper directory, and Refresh → Build → Launch in RuneLite Dev Manager. Automated tests run before publication; live behavior and styling still require playtesting. Not a Plugin Hub listing. Existing character settings and the v0.7 rollback release remain available.
+The Anima patch is in the level-65 guild tier, but its seeds require level 76. The planner honors unboosted planting requirements.
 
-Credits: Farming Patch Advisor (Seadeadmeat), Quest Helper (Zoinkwiz and contributors).
+Existing category priorities are retained as a migration fallback. Old merged-only priority overrides remain stored but are no longer applied; use Patch Settings instead. Previous releases remain available. Automated tests are required before release; live RuneLite visual testing remains necessary.
