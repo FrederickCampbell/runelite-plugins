@@ -225,6 +225,10 @@ final class FarmingDirectorPanel extends PluginPanel
         advanced.add(label("Bank between waves", false));
         bankChoice.setMaximumSize(new Dimension(Integer.MAX_VALUE, 25));
         bankChoice.setAlignmentX(Component.LEFT_ALIGNMENT);
+        bankChoice.addActionListener(e ->
+        {
+            if (awaitingBank && !paused) requestBankRoute();
+        });
         advanced.add(bankChoice);
         advanced.setVisible(false);
 
@@ -1179,10 +1183,16 @@ final class FarmingDirectorPanel extends PluginPanel
         stepList.removeAll();
         boolean active = currentPlan != null;
         int steps = active ? currentPlan.steps.size() : 0;
+        int waveCount = currentSession == null ? 0 : currentSession.waves.size();
+        String wave = waveCount > 0 ? "Wave " + (waveIndex + 1) + " / " + waveCount : "No wave";
         progress.setText(!active ? "Configure a run and press Start"
-            : steps == 0 ? "No planting steps available"
-            : runFinished ? "Run complete: " + steps + " stops visited / skipped"
-            : "Step " + (currentStep + 1) + " / " + steps + (paused ? "  (paused)" : ""));
+            : awaitingBank ? "Bank checkpoint · " + wave
+            : runFinished ? (currentSession != null && currentSession.unplanned > 0
+                ? "Partial run · unplanned patches remain"
+                : "All planned patches completed")
+            : steps == 0 ? "No planting steps allocated"
+            : wave + " · patch " + (currentStep + 1) + " / " + steps
+                + (paused ? " (paused)" : ""));
         inventory.setText(!active ? "28 inventory slots available"
             : currentPlan.occupiedSlots + " planned + " + currentPlan.reservedSlots
                 + " reserved / 28 slots");
@@ -1195,7 +1205,18 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         else if (runFinished)
         {
-            actionText = "Run complete. Replan when you are ready for another run.";
+            actionText = currentSession != null && currentSession.unplanned > 0
+                ? "The last loadout is finished, but " + currentSession.unplanned
+                    + " patch(es) could not be planned. Restock and choose Replan remaining."
+                : "All planned patches completed. Choose Start for another run.";
+        }
+        else if (awaitingBank)
+        {
+            actionText = "Bank before the next loadout. "
+                + (suggestedBank == null ? "Choose a bank, or use your preferred teleport."
+                    : "Suggested bank area: " + suggestedBank.label + ".")
+                + " Deposit harvested produce, prepare the next supplies, then choose "
+                + "Next wave or Replan remaining after scanning storage.";
         }
         else
         {
@@ -1212,13 +1233,16 @@ final class FarmingDirectorPanel extends PluginPanel
         currentAction.setText("<html><body style='width:245px'>"
             + escape(actionText) + "</body></html>");
         back.setEnabled(active && currentStep > 0);
-        next.setEnabled(active && !runFinished && currentStep < steps);
+        next.setEnabled(active && !runFinished && (awaitingBank || currentStep < steps));
+        next.setText(awaitingBank ? "Next wave" : "Next step");
+        next.setToolTipText(awaitingBank
+            ? "Continue after banking. No items are withdrawn automatically." : null);
         pause.setEnabled(active && steps > 0 && !runFinished);
         end.setEnabled(active);
-        replan.setEnabled(active && steps > 0);
+        replan.setEnabled(active && currentSession != null);
         resume.setEnabled(!profileValue("directorSavedMode", "").isEmpty());
-        overrideCrop.setEnabled(active && !runFinished && steps > 0);
-        clearOverride.setEnabled(active && !runFinished && steps > 0);
+        overrideCrop.setEnabled(active && !runFinished && !awaitingBank && steps > 0);
+        clearOverride.setEnabled(active && !runFinished && !awaitingBank && steps > 0);
         pause.setText(paused ? "Resume" : "Pause");
 
         if (active)
@@ -1279,9 +1303,25 @@ final class FarmingDirectorPanel extends PluginPanel
                 }
                 stepList.add(item);
             }
+            if (awaitingBank && currentSession != null &&
+                waveIndex + 1 < currentSession.waves.size())
+            {
+                DirectorPlanner.Plan nextWave = currentSession.waves.get(waveIndex + 1);
+                stepList.add(warning("NEXT LOADOUT · " + nextWave.steps.size()
+                    + " patch stops. Bank/Seed Vault withdrawal amounts are estimates "
+                    + "until you reopen storage and Replan remaining."));
+                stepList.add(warning("Next seeds and saplings: "
+                    + formatItems(nextWave.seeds)));
+                if (!nextWave.payments.isEmpty())
+                {
+                    stepList.add(warning("Potential gardener payments: "
+                        + formatItems(nextWave.payments)));
+                }
+            }
             if (!currentPlan.payments.isEmpty())
             {
-                stepList.add(warning("Tree protection payments: " + currentPlan.payments));
+                stepList.add(warning("Potential gardener payments: "
+                    + formatItems(currentPlan.payments)));
             }
             if (!currentPlan.seeds.isEmpty())
             {
@@ -1294,9 +1334,47 @@ final class FarmingDirectorPanel extends PluginPanel
                 }
                 stepList.add(warning(req.toString()));
             }
+            if (currentSession != null && waveIndex == 0)
+            {
+                DirectorStockLedger.Manifest manifest =
+                    currentSession.observedStock.manifest(currentPlan);
+                if (!manifest.takeFromBank.isEmpty())
+                {
+                    stepList.add(warning("Bank withdrawals (last scan): "
+                        + formatItems(manifest.takeFromBank)));
+                }
+                if (!manifest.takeFromVault.isEmpty())
+                {
+                    stepList.add(warning("Seed Vault withdrawals (last scan): "
+                        + formatItems(manifest.takeFromVault)));
+                }
+                if (!manifest.missing.isEmpty())
+                {
+                    stepList.add(warning("Unaccounted supplies: "
+                        + formatItems(manifest.missing)));
+                }
+            }
             for (String message : currentPlan.warnings)
             {
                 stepList.add(warning(message));
+            }
+            if (currentSession != null)
+            {
+                if (currentSession.unplanned > 0)
+                {
+                    stepList.add(warning(currentSession.unplanned
+                        + " patch(es) remain UNPLANNED; they have not been marked completed."));
+                }
+                int displayed = 0;
+                for (String message : currentSession.warnings)
+                {
+                    if (displayed++ == 20)
+                    {
+                        stepList.add(warning("Additional warnings omitted from sidebar."));
+                        break;
+                    }
+                    stepList.add(warning(message));
+                }
             }
         }
         else
@@ -1307,6 +1385,20 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         stepList.revalidate();
         stepList.repaint();
+    }
+
+    private static String formatItems(Map<Integer, Integer> items)
+    {
+        if (items == null || items.isEmpty()) return "None";
+        StringBuilder details = new StringBuilder();
+        for (Map.Entry<Integer, Integer> entry : items.entrySet())
+        {
+            if (details.length() > 0) details.append(", ");
+            Crop crop = CropCatalog.findByItemId(entry.getKey());
+            details.append(crop == null ? "item #" + entry.getKey() : crop.getItemName());
+            details.append(" x").append(entry.getValue());
+        }
+        return details.toString();
     }
 
     private static JLabel warning(String message)
