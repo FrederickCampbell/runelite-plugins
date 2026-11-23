@@ -284,6 +284,11 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		if (event.getGroupId() == InterfaceID.BANKMAIN)
 		{
 			bankChecklistFilter.onBankClosed();
+			directorPanel.onStorageClosed();
+		}
+		else if (event.getGroupId() == InterfaceID.SEED_VAULT)
+		{
+			directorPanel.onStorageClosed();
 		}
 	}
 

@@ -78,6 +78,8 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox protectTrees = new JCheckBox("Carry tree protection payments", true);
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
+    private final JCheckBox herbloreFocus = new JCheckBox("Prioritize Herblore supplies (preset)", false);
+    private final JCheckBox autoReplanBank = new JCheckBox("Replan after banking", false);
     private final JButton replan = new JButton("Replan remaining");
     private final JButton resume = new JButton("Resume saved run");
     private final JButton overrideCrop = new JButton("Override this patch");
@@ -106,6 +108,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final Set<Integer> completedSteps = new HashSet<>();
     private final Set<String> completedPatchKeys = new HashSet<>();
     private long planningGeneration;
+    private volatile int lastPlannedFarmingLevel;
     private volatile long routeGeneration;
     private volatile boolean routeIssued;
     private boolean loadingPreferences;
@@ -197,6 +200,12 @@ final class FarmingDirectorPanel extends PluginPanel
         nearestRoute.setForeground(Color.WHITE);
         nearestRoute.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         advanced.add(nearestRoute);
+        herbloreFocus.setForeground(Color.WHITE);
+        herbloreFocus.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        advanced.add(herbloreFocus);
+        autoReplanBank.setForeground(Color.WHITE);
+        autoReplanBank.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        advanced.add(autoReplanBank);
         advanced.setVisible(false);
 
         JButton advancedToggle = new JButton("Planner options ▸");
@@ -318,6 +327,8 @@ final class FarmingDirectorPanel extends PluginPanel
             selected == DirectorRunSelection.ALL);
         autoNext.setSelected(Boolean.parseBoolean(profileValue("directorAutoNext", "true")));
         nearestRoute.setSelected(Boolean.parseBoolean(profileValue("directorNearest", "false")));
+        herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
+        autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "false")));
         loadingPreferences = false;
     }
 
@@ -341,6 +352,10 @@ final class FarmingDirectorPanel extends PluginPanel
             Boolean.toString(autoNext.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorNearest",
             Boolean.toString(nearestRoute.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorHerblore",
+            Boolean.toString(herbloreFocus.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorAutoReplanBank",
+            Boolean.toString(autoReplanBank.isSelected()));
     }
 
     private void beginRun()
@@ -359,6 +374,7 @@ final class FarmingDirectorPanel extends PluginPanel
         final String reserveText = reserves.getText();
         final boolean protection = protectTrees.isSelected();
         final boolean proximity = nearestRoute.isSelected();
+        final boolean herbPriority = herbloreFocus.isSelected();
         final Set<String> skip = preserveProgress
             ? new HashSet<>(completedPatchKeys) : Collections.emptySet();
         final long generation = ++planningGeneration;
@@ -368,7 +384,7 @@ final class FarmingDirectorPanel extends PluginPanel
         clientThread.invoke(() ->
         {
             DirectorPlanner.Plan result = compute(selected, custom, priorityText,
-                reserveText, protection, proximity, skip);
+                reserveText, protection, proximity, herbPriority, skip);
             SwingUtilities.invokeLater(() ->
             {
                 if (generation != planningGeneration) return;
@@ -394,7 +410,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private DirectorPlanner.Plan compute(DirectorRunSelection selection,
         boolean custom, String priorityText, String reserveText,
-        boolean protection, boolean proximity, Set<String> skip)
+        boolean protection, boolean proximity, boolean herbPriority, Set<String> skip)
     {
         List<String> warnings = new ArrayList<>();
         if (client.getGameState() != GameState.LOGGED_IN)
@@ -404,6 +420,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 Collections.emptyMap(), warnings, 0, 0);
         }
         int level = plugin.getFarmingLevel();
+        lastPlannedFarmingLevel = level;
         List<FarmRunPatch> candidates = new ArrayList<>();
         List<FarmRunPatch> configured = routes.activePatches(selection.filter);
         int unknownPatchDefinitions = 0;
@@ -572,7 +589,7 @@ final class FarmingDirectorPanel extends PluginPanel
             custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
             harvestReserve, protection, id ->
                 itemManager.getItemComposition(id).isStackable(), preplanted,
-                harvestOnly, cropOverrides);
+                harvestOnly, cropOverrides, herbPriority);
 
         for (Map.Entry<Integer, Integer> item : plan.payments.entrySet())
         {
@@ -617,6 +634,19 @@ final class FarmingDirectorPanel extends PluginPanel
         configManager.unsetRSProfileConfiguration(GROUP, "directorCompletedKeys");
     }
 
+    /** Called when a banking or seed-vault interface closes, on the client thread. */
+    void onStorageClosed()
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            if (autoReplanBank.isSelected() && currentPlan != null && !runFinished
+                && client.getGameState() == GameState.LOGGED_IN)
+            {
+                beginRun(true);
+            }
+        });
+    }
+
     private void resumeSavedRun()
     {
         String mode = profileValue("directorSavedMode", "");
@@ -646,7 +676,7 @@ final class FarmingDirectorPanel extends PluginPanel
         List<Crop> eligible = new ArrayList<>();
         for (Crop crop : CropCatalog.crops(patch.getPatchType()))
         {
-            if (crop.getLevel() <= plugin.getFarmingLevel()) eligible.add(crop);
+            if (crop.getLevel() <= lastPlannedFarmingLevel) eligible.add(crop);
         }
         if (eligible.isEmpty()) return;
         String[] options = eligible.stream().map(Crop::getName).toArray(String[]::new);
