@@ -106,7 +106,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JCheckBox herbloreFocus = new JCheckBox("Prioritize Herblore supplies (preset)", false);
     private final JCheckBox autoReplanBank = new JCheckBox("Replan after banking", false);
-    private final JSpinner maxStopsPerWave = new JSpinner(new SpinnerNumberModel(8, 1, 28, 1));
+    private final JSpinner maxStopsPerWave = new JSpinner(new SpinnerNumberModel(28, 1, 28, 1));
     private final JComboBox<DirectorBankStops.Bank> bankChoice =
         new JComboBox<>(DirectorBankStops.Bank.values());
     private final JButton replan = new JButton("Replan remaining");
@@ -169,7 +169,16 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox guideDetails = new JCheckBox("Show planning details and warnings");
     private final JComboBox<String> presetChoice = new JComboBox<>();
     private final Map<FarmRunType, JCheckBox> mergedTypes = new EnumMap<>(FarmRunType.class);
-    private final Set<FarmRunType> collapsedTypes = EnumSet.noneOf(FarmRunType.class);
+    private final Set<FarmRunType> collapsedTypes = EnumSet.allOf(FarmRunType.class);
+    private final Map<DirectorRunSelection, JPanel> runBodies = new EnumMap<>(DirectorRunSelection.class);
+    private final Map<DirectorRunSelection, JButton> runHeaders = new EnumMap<>(DirectorRunSelection.class);
+    private final Map<DirectorRunSelection, javax.swing.Icon> runIcons = new EnumMap<>(DirectorRunSelection.class);
+    private final Set<String> expandedLocations = new HashSet<>();
+    private DirectorRunSelection expandedRun;
+    private JPanel inlineEditor;
+    private boolean loadingMerged;
+    private boolean settingsReady;
+    private final JCheckBox worldHints = new JCheckBox("World and interaction hints", true);
     private final JPanel mergedControls = new JPanel();
     private final JPanel regularControls = new JPanel();
     private final List<PatchView> patchViews = new ArrayList<>();
@@ -249,9 +258,11 @@ final class FarmingDirectorPanel extends PluginPanel
         this.contractManager = contractManager;
 
         setLayout(new BorderLayout());
-        setBackground(ColorScheme.DARK_GRAY_COLOR);
+        setBackground(FarmingHelperTheme.BASE);
         buildPages();
+        FarmingHelperTheme.style(this);
         add(pages, BorderLayout.CENTER);
+        FarmingHelperTheme.style(pages);
         runType.addActionListener(e ->
         {
             if (!loadingPreferences)
@@ -263,6 +274,7 @@ final class FarmingDirectorPanel extends PluginPanel
         presetChoice.addActionListener(e -> { if (!loadingPresets) loadPreset(); });
         loadPreferences();
         reloadPresetNames();
+        settingsReady = true;
         render();
         showPage("selection");
     }
@@ -270,10 +282,9 @@ final class FarmingDirectorPanel extends PluginPanel
     /** A single RuneLite-native sidebar with persistent navigation between pages. */
     private void buildPages()
     {
-        pages.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        pages.setBackground(FarmingHelperTheme.BASE);
         pages.add(createSelection(), "selection");
         pages.add(createGuide(), "guide");
-        pages.add(createEditor(), "editor");
         pages.add(createPatchManager(), "patches");
         pages.add(createSettings(), "settings");
         pages.add(createCompostGuide(), "compost");
@@ -286,8 +297,8 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 9, 10, 9));
+        panel.setBackground(FarmingHelperTheme.BASE);
+        panel.setBorder(BorderFactory.createEmptyBorder(7, 7, 7, 7));
         return panel;
     }
 
@@ -296,7 +307,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JScrollPane scroll = new JScrollPane(new DirectorSidebarViewport(content));
         scroll.getVerticalScrollBar().setUnitIncrement(16);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.getViewport().setBackground(ColorScheme.DARK_GRAY_COLOR);
+        scroll.getViewport().setBackground(FarmingHelperTheme.BASE);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         return scroll;
     }
@@ -327,8 +338,9 @@ final class FarmingDirectorPanel extends PluginPanel
                     : child instanceof JTextField || child instanceof JComboBox ? 28
                     : child instanceof javax.swing.JSeparator ? 2 : Integer.MAX_VALUE));
         }
+        FarmingHelperTheme.style(child);
         parent.add(child);
-        parent.add(Box.createVerticalStrut(7));
+        parent.add(Box.createVerticalStrut(4));
     }
 
     private JButton nav(String caption, String page)
@@ -340,6 +352,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void showPage(String name)
     {
+        if ("editor".equals(name)) name = "selection";
         boolean leavingCompost = compostPageOpen && !"compost".equals(name);
         compostPageOpen = "compost".equals(name);
         if (leavingCompost)
@@ -362,7 +375,7 @@ final class FarmingDirectorPanel extends PluginPanel
             name = "loadout";
         }
         if ("patches".equals(name)) refreshPatchManager();
-        if ("editor".equals(name)) showEditorMode();
+        if ("selection".equals(name)) updateRunCards();
         if ("compost".equals(name)) refreshCompostGuide();
         if ("route".equals(name)) loadRouteEditor();
         if ("status".equals(name)) refreshStatusPage();
@@ -374,28 +387,16 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createSelection()
     {
         JPanel list = vertical();
-        JLabel title = label("Farming Director", true);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
-        addFull(list, title);
-        addFull(list, label("FARMING HELPER  ·  v0.7 beta", false));
+        JPanel heading = new JPanel(new BorderLayout(4, 0));
+        JLabel title = label("Farming Helper", true);
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 17f));
+        heading.add(title, BorderLayout.CENTER);
+        JButton cog = nav("⚙", "settings");
+        cog.setToolTipText("Settings for every run");
+        cog.setPreferredSize(new Dimension(31, 29));
+        heading.add(cog, BorderLayout.EAST);
+        addFull(list, heading);
         addFull(list, selectionStatus);
-        addFull(list, label("START A RUN", true));
-        addFull(list, runType);
-        homePresetChoice.setVisible(false);
-        homePresetChoice.addActionListener(e ->
-        {
-            if (!syncingHomePreset && homePresetChoice.getSelectedItem() != null)
-            {
-                presetChoice.setSelectedItem(homePresetChoice.getSelectedItem());
-                if (configManager.getRSProfileKey() != null)
-                    configManager.setRSProfileConfiguration(GROUP, "directorLastPreset",
-                        (String) homePresetChoice.getSelectedItem());
-            }
-        });
-        addFull(list, homePresetChoice);
-        start.setText("Start farming run");
-        start.addActionListener(e -> beginRun());
-        addFull(list, start);
         resume.addActionListener(e -> resumeSavedRun());
         addFull(list, resume);
         returnGuide.addActionListener(e ->
@@ -409,34 +410,110 @@ final class FarmingDirectorPanel extends PluginPanel
             }
         });
         addFull(list, returnGuide);
-        addFull(list, new javax.swing.JSeparator());
-        addFull(list, label("CONFIGURATION", true));
-        addFull(list, nav("Edit selected run", "editor"));
-        addFull(list, nav("Manage farming patches", "patches"));
-        addFull(list, nav("Timers & farming contract", "status"));
-        addFull(list, nav("Global settings", "settings"));
-        addFull(list, label("Routes, crops and supplies use your character's saved choices.", false));
-        return new JPanel(new BorderLayout())
-        {{
-            setBackground(ColorScheme.DARK_GRAY_COLOR);
-            add(scrolling(list), BorderLayout.CENTER);
-        }};
+        addFull(list, label("FARMING RUNS", true));
+        inlineEditor = createEditorControls();
+        for (int i = 0; i < runType.getItemCount(); i++)
+        {
+            DirectorRunSelection mode = runType.getItemAt(i);
+            JPanel card = new JPanel(new BorderLayout(0, 2));
+            card.setBackground(FarmingHelperTheme.SURFACE);
+            card.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+            JButton fold = new JButton();
+            fold.setHorizontalAlignment(JButton.LEFT);
+            fold.setToolTipText("Expand " + mode);
+            fold.addActionListener(e -> openRun(mode, true));
+            runHeaders.put(mode, fold);
+            card.add(fold, BorderLayout.NORTH);
+            JPanel body = new JPanel(new BorderLayout());
+            body.setBackground(FarmingHelperTheme.SURFACE);
+            body.setVisible(false);
+            runBodies.put(mode, body);
+            card.add(body, BorderLayout.CENTER);
+            addFull(list, card);
+            int iconId = runIcon(mode);
+            if (iconId > 0) clientThread.invoke(() ->
+            {
+                java.awt.image.BufferedImage image = itemManager.getImage(iconId);
+                if (image != null) SwingUtilities.invokeLater(() ->
+                {
+                    runIcons.put(mode, new javax.swing.ImageIcon(image));
+                    fold.setIcon(runIcons.get(mode));
+                });
+            });
+        }
+        JPanel footer = new JPanel(new GridLayout(1, 2, 4, 0));
+        footer.add(nav("Patches", "patches"));
+        footer.add(nav("Timers / contracts", "status"));
+        addFull(list, footer);
+        updateRunCards();
+        JPanel page = new JPanel(new BorderLayout());
+        page.add(scrolling(list), BorderLayout.CENTER);
+        return page;
+    }
+
+    private static int runIcon(DirectorRunSelection mode)
+    {
+        switch (mode)
+        {
+            case HERBS: return ItemID.RANARR_SEED;
+            case TREES: return ItemID.PLANTPOT_YEW_SAPLING;
+            case FRUIT_TREES: return ItemID.PLANTPOT_PAPAYA_SAPLING;
+            case HARDWOODS: return ItemID.PLANTPOT_TEAK_SAPLING;
+            case ALLOTMENTS: return ItemID.SNAPE_GRASS_SEED;
+            case HOPS: return ItemID.JUTE_SEED;
+            case BUSHES: return ItemID.WHITEBERRY_BUSH_SEED;
+            case CACTUS: return ItemID.CACTUS_SEED;
+            case SPECIAL: return ItemID.MUSHROOM_SEED;
+            case COMPOST: return ItemID.BUCKET_ULTRACOMPOST;
+            default: return ItemID.DIBBER;
+        }
+    }
+
+    private void openRun(DirectorRunSelection mode, boolean toggle)
+    {
+        if (toggle && expandedRun == mode) expandedRun = null;
+        else
+        {
+            expandedRun = mode;
+            runType.setSelectedItem(mode);
+        }
+        showEditorMode();
+        updateRunCards();
+    }
+
+    private void updateRunCards()
+    {
+        if (inlineEditor == null) return;
+        if (inlineEditor.getParent() != null) inlineEditor.getParent().remove(inlineEditor);
+        for (Map.Entry<DirectorRunSelection, JPanel> e : runBodies.entrySet())
+        {
+            boolean open = e.getKey() == expandedRun;
+            e.getValue().setVisible(open);
+            JButton header = runHeaders.get(e.getKey());
+            header.setText(wrapped((open ? "▾ " : "▸ ") + e.getKey(), 130));
+            header.putClientProperty("fh.primary", open);
+            header.repaint();
+            if (open) e.getValue().add(inlineEditor, BorderLayout.CENTER);
+            e.getValue().revalidate();
+        }
+        revalidate();
+        repaint();
     }
 
     private JPanel createGuide()
     {
         JPanel guide = new JPanel(new BorderLayout(0, 7));
-        guide.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        guide.setBackground(FarmingHelperTheme.BASE);
         JPanel header = vertical();
         JPanel menu = new JPanel(new GridLayout(1, 3, 3, 0));
-        menu.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        menu.setBackground(FarmingHelperTheme.BASE);
         menu.add(nav("Runs", "selection"));
         menu.add(nav("Patches", "patches"));
         menu.add(nav("Settings", "settings"));
         addFull(header, menu);
         activeTitle.setFont(activeTitle.getFont().deriveFont(Font.BOLD, 15f));
-        currentAction.setForeground(new Color(150, 218, 239));
-        progress.setForeground(new Color(244, 197, 86));
+        currentAction.setForeground(FarmingHelperTheme.SUCCESS);
+        progress.setForeground(FarmingHelperTheme.GOLD);
         progressBar.setStringPainted(true);
         progressBar.setForeground(new Color(120, 173, 113));
         addFull(header, activeTitle);
@@ -447,22 +524,22 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(header, activeDestination);
         addFull(header, currentAction);
         addFull(header, inventory);
-        guideWarning.setForeground(new Color(244, 197, 86));
+        guideWarning.setForeground(FarmingHelperTheme.GOLD);
         addFull(header, guideWarning);
         replan.addActionListener(e -> beginRun(true));
         JPanel overrides = new JPanel(new GridLayout(1, 2, 3, 0));
-        overrides.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        overrides.setBackground(FarmingHelperTheme.BASE);
         overrideCrop.setText("Edit crop");
         overrideCrop.addActionListener(e -> chooseCropOverride());
         clearOverride.addActionListener(e -> clearCropOverride());
         overrides.add(overrideCrop);
         overrides.add(clearOverride);
         guideDetails.setForeground(Color.LIGHT_GRAY);
-        guideDetails.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        guideDetails.setBackground(FarmingHelperTheme.BASE);
         guideDetails.addActionListener(e -> render());
         guide.add(header, BorderLayout.NORTH);
         stepList.setLayout(new BoxLayout(stepList, BoxLayout.Y_AXIS));
-        stepList.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        stepList.setBackground(FarmingHelperTheme.BASE);
         stepList.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         JPanel content = vertical();
         openLoadout.addActionListener(e -> showPage("loadout"));
@@ -478,7 +555,7 @@ final class FarmingDirectorPanel extends PluginPanel
         guideDetails.setText("More options & details");
         addFull(content, guideDetails);
         advancedGuideControls.setLayout(new BoxLayout(advancedGuideControls, BoxLayout.Y_AXIS));
-        advancedGuideControls.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        advancedGuideControls.setBackground(FarmingHelperTheme.BASE);
         routeOptions.addActionListener(e -> chooseRouteOption());
         addFull(advancedGuideControls, routeOptions);
         addFull(advancedGuideControls, routeStatus);
@@ -489,7 +566,7 @@ final class FarmingDirectorPanel extends PluginPanel
         guide.add(scrolling(content), BorderLayout.CENTER);
         JPanel actions = new JPanel(new GridLayout(2, 2, 4, 4));
         actions.setBorder(BorderFactory.createEmptyBorder(6, 7, 7, 7));
-        actions.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        actions.setBackground(FarmingHelperTheme.SURFACE);
         back.addActionListener(e -> advance(-1));
         next.addActionListener(e -> advance(1));
         pause.addActionListener(e -> togglePause());
@@ -510,15 +587,14 @@ final class FarmingDirectorPanel extends PluginPanel
         return guide;
     }
 
-    private JPanel createEditor()
+    private JPanel createEditorControls()
     {
         JPanel body = vertical();
-        addFull(body, nav("← Back to runs", "selection"));
-        addFull(body, label("Run Editor", true));
+        body.setBorder(BorderFactory.createEmptyBorder(4, 5, 5, 5));
         regularControls.setLayout(new BoxLayout(regularControls, BoxLayout.Y_AXIS));
-        regularControls.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        regularControls.setBackground(FarmingHelperTheme.BASE);
         customPriority.setForeground(Color.WHITE);
-        customPriority.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        customPriority.setBackground(FarmingHelperTheme.BASE);
         addFull(regularControls, customPriority);
         addFull(regularControls, prioritySummary);
         addFull(regularControls, reserveSummary);
@@ -535,30 +611,26 @@ final class FarmingDirectorPanel extends PluginPanel
                 reserves.setText(result.reserves);
                 customPriority.setSelected(!result.priorities.isEmpty());
                 updatePrioritySummary();
+                autoSavePreferences();
             }
         });
         addFull(regularControls, rank);
-        customPriority.addActionListener(e -> updatePrioritySummary());
+        customPriority.addActionListener(e -> { updatePrioritySummary(); autoSavePreferences(); });
         addFull(regularControls, label("Only listed crops are eligible in custom mode. Use Add remaining crops for fallbacks.", false));
-        JButton save = new JButton("Save this run's choices");
-        save.addActionListener(e -> { savePreferences(); showPage("selection"); });
-        addFull(regularControls, save);
 
         mergedControls.setLayout(new BoxLayout(mergedControls, BoxLayout.Y_AXIS));
-        mergedControls.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        mergedControls.setBackground(FarmingHelperTheme.BASE);
         addFull(mergedControls, label("Reusable merged-run preset", false));
         addFull(mergedControls, presetChoice);
         for (FarmRunType type : FarmRunType.values())
         {
             JCheckBox check = new JCheckBox(type.getDisplayName());
-            check.setBackground(ColorScheme.DARK_GRAY_COLOR);
+            check.setBackground(FarmingHelperTheme.BASE);
             check.setForeground(Color.WHITE);
             mergedTypes.put(type, check);
+            check.addActionListener(e -> { if (!loadingMerged) saveMergedPreset(); });
             addFull(mergedControls, check);
         }
-        JButton saveMerged = new JButton("Save merged preset");
-        saveMerged.addActionListener(e -> saveMergedPreset());
-        addFull(mergedControls, saveMerged);
         JButton newMerged = new JButton("Create new preset");
         newMerged.addActionListener(e -> createMergedPreset());
         addFull(mergedControls, newMerged);
@@ -571,20 +643,24 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(mergedControls, label("By default, merged runs inherit each category's saved crop preferences.", false));
         addFull(body, regularControls);
         addFull(body, mergedControls);
-        JButton route = nav("Edit patch order and teleports", "route");
+        JButton route = nav("Route & teleports", "route");
+        route.setName("fh.route");
         addFull(body, route);
-        return new JPanel(new BorderLayout())
-        {{
-            setBackground(ColorScheme.DARK_GRAY_COLOR);
-            add(scrolling(body), BorderLayout.CENTER);
-        }};
+        start.setText("Start run");
+        start.putClientProperty("fh.primary", true);
+        start.addActionListener(e -> beginRun());
+        addFull(body, start);
+        return body;
     }
 
     private void showEditorMode()
     {
         boolean merged = runType.getSelectedItem() == DirectorRunSelection.MERGED;
+        boolean compost = runType.getSelectedItem() == DirectorRunSelection.COMPOST;
         mergedControls.setVisible(merged);
-        regularControls.setVisible(!merged);
+        regularControls.setVisible(!merged && !compost);
+        if (inlineEditor != null) for (Component c : inlineEditor.getComponents())
+            if ("fh.route".equals(c.getName())) c.setVisible(!compost);
         if (merged) reloadPresetNames();
         homePresetChoice.setVisible(merged);
         syncHomePresets();
@@ -622,9 +698,13 @@ final class FarmingDirectorPanel extends PluginPanel
         String name = (String) presetChoice.getSelectedItem();
         if (name == null) return;
         Set<FarmRunType> types = presets.categories(name);
+        loadingMerged = true;
         for (Map.Entry<FarmRunType, JCheckBox> row : mergedTypes.entrySet())
             row.getValue().setSelected(types.contains(row.getKey()));
+        loadingMerged = false;
         if (!syncingHomePreset) syncHomePresets();
+        if (settingsReady && configManager.getRSProfileKey() != null)
+            configManager.setRSProfileConfiguration(GROUP, "directorLastPreset", name);
     }
 
     private void saveMergedPreset()
@@ -637,10 +717,10 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             JOptionPane.showMessageDialog(this,
                 "Select at least one category and log into a character to save.");
+            loadPreset();
             return;
         }
         configManager.setRSProfileConfiguration(GROUP, "directorLastPreset", name);
-        showPage("selection");
     }
 
     private void createMergedPreset()
@@ -719,53 +799,96 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createSettings()
     {
         JPanel settings = vertical();
-        addFull(settings, nav("← Back to runs", "selection"));
-        addFull(settings, label("Global Settings", true));
-        addFull(settings, label("Compost", false));
-        addFull(settings, compostChoice);
-        for (JCheckBox toggle : new JCheckBox[] {payRemoval, protectTrees, autoNext,
-            nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified, shortestPathEnabled})
+        addFull(settings, nav("← Runs", "selection"));
+        addFull(settings, label("Settings", true));
+        JPanel farming = vertical();
+        addFull(farming, label("Compost", false));
+        addFull(farming, compostChoice);
+        addFull(farming, payRemoval);
+        addFull(farming, protectTrees);
+        addFull(settings, foldSection("Farming", farming));
+        JPanel runs = vertical();
+        for (int i = 0; i < runType.getItemCount(); i++)
         {
-            toggle.setBackground(ColorScheme.DARK_GRAY_COLOR);
-            toggle.setForeground(Color.WHITE);
-            addFull(settings, toggle);
+            DirectorRunSelection mode = runType.getItemAt(i);
+            if (mode == DirectorRunSelection.COMPOST) continue;
+            JButton edit = new JButton(mode.toString() + "  ›");
+            edit.addActionListener(e -> { openRun(mode, false); showPage("selection"); });
+            addFull(runs, edit);
         }
+        addFull(settings, foldSection("Crop priorities & routes", runs));
+        JPanel guidance = vertical();
+        addFull(guidance, autoNext);
+        addFull(guidance, shortestPathEnabled);
+        addFull(guidance, worldHints);
         shortestPathEnabled.addActionListener(e ->
         {
             navigationEnabled = shortestPathEnabled.isSelected();
             if (!navigationEnabled) clearRoute();
         });
-        addFull(settings, label("Maximum stops per loadout", false));
-        addFull(settings, maxStopsPerWave);
-        addFull(settings, label("Harvest space reserve (-1 = run default)", false));
-        addFull(settings, harvestSlots);
-        addFull(settings, label("Bank between loadouts", false));
-        bankChoice.addActionListener(e ->
+        worldHints.addActionListener(e ->
         {
-            if (awaitingBank && !paused) requestBankRoute();
+            if (settingsReady && !loadingPreferences)
+                configManager.setConfiguration(GROUP, "directorWorldHints", worldHints.isSelected());
         });
-        addFull(settings, bankChoice);
-        JButton save = new JButton("Save settings");
-        save.addActionListener(e -> { savePreferences(); showPage("selection"); });
-        addFull(settings, save);
-        addFull(settings, label("Nearest-stop ordering is approximate; Shortest Path handles travel to each stop.", false));
-        return new JPanel(new BorderLayout())
-        {{
-            setBackground(ColorScheme.DARK_GRAY_COLOR);
-            add(scrolling(settings), BorderLayout.CENTER);
-        }};
+        addFull(settings, foldSection("Guidance & appearance", guidance));
+        JPanel advanced = vertical();
+        for (JCheckBox toggle : new JCheckBox[]{nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified})
+            addFull(advanced, toggle);
+        addFull(advanced, label("Stop limit (28 = inventory decides)", false));
+        addFull(advanced, maxStopsPerWave);
+        addFull(advanced, label("Harvest reserve (-1 = automatic)", false));
+        addFull(advanced, harvestSlots);
+        addFull(advanced, label("Bank between loadouts", false));
+        addFull(advanced, bankChoice);
+        bankChoice.addActionListener(e -> { if (settingsReady && !loadingPreferences && awaitingBank && !paused) requestBankRoute(); });
+        addFull(settings, foldSection("Advanced", advanced));
+        for (JCheckBox toggle : new JCheckBox[]{payRemoval, protectTrees, autoNext, nearestRoute,
+            herbloreFocus, autoReplanBank, readyOnly, allowUnverified, shortestPathEnabled})
+            toggle.addActionListener(e -> autoSavePreferences());
+        compostChoice.addActionListener(e -> autoSavePreferences());
+        bankChoice.addActionListener(e -> autoSavePreferences());
+        maxStopsPerWave.addChangeListener(e -> autoSavePreferences());
+        harvestSlots.addChangeListener(e -> autoSavePreferences());
+        addFull(settings, label("Saved automatically per character.", false));
+        JPanel page = new JPanel(new BorderLayout());
+        page.add(scrolling(settings), BorderLayout.CENTER);
+        return page;
+    }
+
+    private JPanel foldSection(String name, JPanel body)
+    {
+        JPanel section = new JPanel(new BorderLayout(0, 2));
+        section.setBackground(FarmingHelperTheme.SURFACE);
+        JButton toggle = new JButton("▸ " + name);
+        toggle.setHorizontalAlignment(JButton.LEFT);
+        body.setVisible(false);
+        toggle.addActionListener(e ->
+        {
+            body.setVisible(!body.isVisible());
+            toggle.setText((body.isVisible() ? "▾ " : "▸ ") + name);
+            section.revalidate();
+        });
+        section.add(toggle, BorderLayout.NORTH);
+        section.add(body, BorderLayout.CENTER);
+        return section;
+    }
+
+    private void autoSavePreferences()
+    {
+        if (settingsReady && !loadingPreferences) savePreferences();
     }
 
     private JPanel createRouteEditor()
     {
         JPanel screen = new JPanel(new BorderLayout(0, 7));
-        screen.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        screen.setBackground(FarmingHelperTheme.BASE);
         JPanel top = vertical();
         addFull(top, nav("← Back to Run Editor", "editor"));
         addFull(top, label("Route order & teleports", true));
         addFull(top, label("Select a stop to choose an optional travel item.", false));
         routeList.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        routeList.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        routeList.setBackground(FarmingHelperTheme.SURFACE);
         routeList.setForeground(Color.WHITE);
         routeList.setCellRenderer(new javax.swing.DefaultListCellRenderer()
         {
@@ -802,13 +925,13 @@ final class FarmingDirectorPanel extends PluginPanel
         screen.add(top, BorderLayout.NORTH);
         screen.add(scrolling(new JPanel(new BorderLayout())
         {{
-            setBackground(ColorScheme.DARK_GRAY_COLOR);
+            setBackground(FarmingHelperTheme.BASE);
             add(routeList, BorderLayout.CENTER);
         }}), BorderLayout.CENTER);
 
         JPanel bottom = vertical();
         JPanel arrows = new JPanel(new GridLayout(1, 3, 3, 0));
-        arrows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        arrows.setBackground(FarmingHelperTheme.BASE);
         JButton up = new JButton("↑ Up");
         up.addActionListener(e -> moveRoute(-1));
         JButton down = new JButton("↓ Down");
@@ -948,7 +1071,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createLoadoutPage()
     {
         JPanel page = new JPanel(new BorderLayout());
-        page.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        page.setBackground(FarmingHelperTheme.BASE);
         JPanel top = vertical();
         addFull(top, label("Get supplies", true));
         leaveLoadout.addActionListener(e -> continueFromLoadout());
@@ -959,7 +1082,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(top, refresh);
         page.add(top, BorderLayout.NORTH);
         loadoutRows.setLayout(new BoxLayout(loadoutRows, BoxLayout.Y_AXIS));
-        loadoutRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        loadoutRows.setBackground(FarmingHelperTheme.BASE);
         loadoutRows.setBorder(BorderFactory.createEmptyBorder(4, 8, 8, 8));
         page.add(scrolling(loadoutRows), BorderLayout.CENTER);
         return page;
@@ -972,7 +1095,7 @@ final class FarmingDirectorPanel extends PluginPanel
         for (Map.Entry<Integer, Integer> entry : items.entrySet())
         {
             JPanel row = new JPanel(new BorderLayout(4, 0));
-            row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            row.setBackground(FarmingHelperTheme.SURFACE);
             row.setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
             Crop crop = CropCatalog.findByItemId(entry.getKey());
             JLabel name = new JLabel(wrapped(crop == null ? DirectorSupplies.name(entry.getKey()) : crop.getItemName(), 118));
@@ -1019,7 +1142,7 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             boolean ready = item.getOwned() >= item.getNeeded();
             JPanel row = new JPanel(new BorderLayout(4, 0));
-            row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            row.setBackground(FarmingHelperTheme.SURFACE);
             row.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
             JLabel name = new JLabel(wrapped((ready ? "✓ " : "○ ") + item.getName(), 119));
             JLabel amount = new JLabel(item.amount());
@@ -1037,7 +1160,7 @@ final class FarmingDirectorPanel extends PluginPanel
         leaveLoadout.setText(awaitingBank ? "Replan after banking" : preparingLoadout ? "Begin farming" : "Return to guide");
         leaveLoadout.setEnabled(currentPlan != null && !planningInFlight);
         boolean missing = suppliesMissing();
-        loadoutReady.setForeground(missing ? new Color(244, 197, 86) : new Color(143, 187, 136));
+        loadoutReady.setForeground(missing ? FarmingHelperTheme.GOLD : new Color(143, 187, 136));
         loadoutReady.setText(wrapped(missing ? "Withdraw the missing items below." :
             "Carried items ready. Check teleport charges manually.", 184));
         if (currentSession == null || currentPlan == null)
@@ -1070,8 +1193,8 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 DirectorStockLedger.Manifest manifest = currentSession.observedStock.manifest(wave, kit);
                 loadoutSection("Carried at planning", manifest.carried, new Color(143, 187, 136));
-                loadoutSection("Withdraw from bank", manifest.takeFromBank, new Color(244, 197, 86));
-                loadoutSection("Withdraw from Seed Vault", manifest.takeFromVault, new Color(244, 197, 86));
+                loadoutSection("Withdraw from bank", manifest.takeFromBank, FarmingHelperTheme.GOLD);
+                loadoutSection("Withdraw from Seed Vault", manifest.takeFromVault, FarmingHelperTheme.GOLD);
                 loadoutSection("Missing / unobserved", manifest.missing, new Color(240, 144, 120));
             }
             if (!currentSession.observedStock.bankObserved) addFull(loadoutRows, warning("Bank snapshot missing or stale."));
@@ -1092,7 +1215,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createStatusPage()
     {
         JPanel screen = new JPanel(new BorderLayout(0, 7));
-        screen.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        screen.setBackground(FarmingHelperTheme.BASE);
         JPanel top = vertical();
         addFull(top, nav("← Back to runs", "selection"));
         addFull(top, label("Farming status", true));
@@ -1101,7 +1224,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(top, refresh);
         screen.add(top, BorderLayout.NORTH);
         statusRows.setLayout(new BoxLayout(statusRows, BoxLayout.Y_AXIS));
-        statusRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        statusRows.setBackground(FarmingHelperTheme.BASE);
         screen.add(scrolling(statusRows), BorderLayout.CENTER);
         return screen;
     }
@@ -1146,7 +1269,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createCompostGuide()
     {
         JPanel outer = new JPanel(new BorderLayout(0, 6));
-        outer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        outer.setBackground(FarmingHelperTheme.BASE);
         JPanel top = vertical();
         addFull(top, nav("← Back to runs", "selection"));
         addFull(top, compostProgress);
@@ -1165,7 +1288,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(top, refresh);
         outer.add(top, BorderLayout.NORTH);
         compostRows.setLayout(new BoxLayout(compostRows, BoxLayout.Y_AXIS));
-        compostRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        compostRows.setBackground(FarmingHelperTheme.BASE);
         outer.add(scrolling(compostRows), BorderLayout.CENTER);
         return outer;
     }
@@ -1290,21 +1413,27 @@ final class FarmingDirectorPanel extends PluginPanel
     private JPanel createPatchManager()
     {
         JPanel outer = new JPanel(new BorderLayout(0, 6));
-        outer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        outer.setBackground(FarmingHelperTheme.BASE);
         JPanel header = vertical();
         addFull(header, nav("← Back to runs", "selection"));
         addFull(header, label("Global Patch Manager", true));
         addFull(header, label("Disabled patches are excluded from every run.", false));
         patchSearch.setToolTipText("Filter patch names and locations");
         addFull(header, patchSearch);
-        disabledOnly.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        disabledOnly.setBackground(FarmingHelperTheme.BASE);
         disabledOnly.setForeground(Color.WHITE);
         addFull(header, disabledOnly);
-        actionableOnly.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        actionableOnly.setBackground(FarmingHelperTheme.BASE);
         actionableOnly.setForeground(Color.WHITE);
         addFull(header, actionableOnly);
         actionableOnly.addActionListener(e -> drawPatchRows());
         addFull(header, patchSummary);
+        JPanel bulkAll = new JPanel(new GridLayout(1, 2, 4, 0));
+        JButton enableAll = new JButton("Enable all"), disableAll = new JButton("Disable all");
+        enableAll.addActionListener(e -> setCategoryEnabled(new ArrayList<>(patchViews), true));
+        disableAll.addActionListener(e -> setCategoryEnabled(new ArrayList<>(patchViews), false));
+        bulkAll.add(enableAll); bulkAll.add(disableAll);
+        addFull(header, bulkAll);
         JButton refresh = new JButton("Refresh patch states");
         refresh.addActionListener(e -> refreshPatchManager());
         addFull(header, refresh);
@@ -1317,7 +1446,7 @@ final class FarmingDirectorPanel extends PluginPanel
         disabledOnly.addActionListener(e -> drawPatchRows());
         outer.add(header, BorderLayout.NORTH);
         patchRows.setLayout(new BoxLayout(patchRows, BoxLayout.Y_AXIS));
-        patchRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        patchRows.setBackground(FarmingHelperTheme.BASE);
         patchRows.setBorder(BorderFactory.createEmptyBorder(5, 9, 8, 9));
         outer.add(scrolling(patchRows), BorderLayout.CENTER);
         return outer;
@@ -1377,6 +1506,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void setCategoryEnabled(List<PatchView> rows, boolean enabled)
     {
+        if (configManager.getRSProfileKey() == null) return;
         for (PatchView row : rows) patchPrefs.setEnabled(row.patch, enabled);
         drawPatchRows();
     }
@@ -1404,7 +1534,7 @@ final class FarmingDirectorPanel extends PluginPanel
         for (Map.Entry<FarmRunType, List<PatchView>> group : byType.entrySet())
         {
             JPanel category = new JPanel(new BorderLayout(3, 3));
-            category.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            category.setBackground(FarmingHelperTheme.SURFACE);
             JButton fold = new JButton((collapsedTypes.contains(group.getKey()) ? "▸ " : "▾ ")
                 + group.getKey().getDisplayName());
             fold.addActionListener(e ->
@@ -1412,17 +1542,20 @@ final class FarmingDirectorPanel extends PluginPanel
                 if (!collapsedTypes.add(group.getKey())) collapsedTypes.remove(group.getKey());
                 drawPatchRows();
             });
-            fold.setText(wrapped(fold.getText() + " (" + group.getValue().size() + ")", 164));
+            List<PatchView> entireGroup = new ArrayList<>();
+            for (PatchView patch : patchViews) if (patch.patch.getFarmRunType() == group.getKey()) entireGroup.add(patch);
+            long groupEnabled = entireGroup.stream().filter(v -> patchPrefs.enabled(v.patch)).count();
+            fold.setText(wrapped(fold.getText() + " · " + groupEnabled + "/" + entireGroup.size(), 150));
             category.add(fold, BorderLayout.NORTH);
             JPanel bulk = new JPanel(new GridLayout(1, 2, 3, 0));
-            bulk.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            JButton all = new JButton("Enable shown");
-            all.addActionListener(e -> setCategoryEnabled(group.getValue(), true));
+            bulk.setBackground(FarmingHelperTheme.SURFACE);
+            JButton all = new JButton("Enable group");
+            all.addActionListener(e -> setCategoryEnabled(entireGroup, true));
             bulk.add(all);
-            JButton none = new JButton("Disable shown");
-            none.addActionListener(e -> setCategoryEnabled(group.getValue(), false));
+            JButton none = new JButton("Disable group");
+            none.addActionListener(e -> setCategoryEnabled(entireGroup, false));
             bulk.add(none);
-            category.add(bulk, BorderLayout.SOUTH);
+            if (!collapsedTypes.contains(group.getKey())) category.add(bulk, BorderLayout.SOUTH);
             addFull(patchRows, category);
             if (collapsedTypes.contains(group.getKey())) continue;
 
@@ -1433,24 +1566,31 @@ final class FarmingDirectorPanel extends PluginPanel
             for (Map.Entry<String, List<PatchView>> location : byLocation.entrySet())
             {
                 JPanel locationBar = new JPanel(new BorderLayout(3, 0));
-                locationBar.setBackground(ColorScheme.DARK_GRAY_COLOR);
-                JLabel locationTitle = new JLabel(wrapped(location.getKey(), 106));
-                locationTitle.setForeground(Color.WHITE);
+                locationBar.setBackground(FarmingHelperTheme.BASE);
+                String locationKey = group.getKey().name() + "~" + location.getKey();
+                boolean locationOpen = expandedLocations.contains(locationKey);
+                List<PatchView> entireLocation = new ArrayList<>();
+                for (PatchView patch : entireGroup) if (patch.patch.getLocation().equals(location.getKey())) entireLocation.add(patch);
+                long locEnabled = entireLocation.stream().filter(v -> patchPrefs.enabled(v.patch)).count();
+                JButton locationTitle = new JButton(wrapped((locationOpen ? "▾ " : "▸ ") + location.getKey() + " · " + locEnabled + "/" + entireLocation.size(), 108));
+                locationTitle.setHorizontalAlignment(JButton.LEFT);
+                locationTitle.addActionListener(e -> { if (!expandedLocations.add(locationKey)) expandedLocations.remove(locationKey); drawPatchRows(); });
                 locationBar.add(locationTitle, BorderLayout.CENTER);
                 JPanel locationActions = new JPanel(new GridLayout(1, 2, 2, 0));
-                locationActions.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                locationActions.setBackground(FarmingHelperTheme.BASE);
                 JButton enable = new JButton("+");
                 enable.setToolTipText("Enable all patches at this location in this category");
-                enable.addActionListener(e -> setCategoryEnabled(location.getValue(), true));
+                enable.addActionListener(e -> setCategoryEnabled(entireLocation, true));
                 enable.setMargin(new java.awt.Insets(2, 5, 2, 5));
                 locationActions.add(enable);
                 JButton disable = new JButton("−");
                 disable.setToolTipText("Disable all patches at this location in this category");
-                disable.addActionListener(e -> setCategoryEnabled(location.getValue(), false));
+                disable.addActionListener(e -> setCategoryEnabled(entireLocation, false));
                 disable.setMargin(new java.awt.Insets(2, 5, 2, 5));
                 locationActions.add(disable);
                 locationBar.add(locationActions, BorderLayout.EAST);
                 addFull(patchRows, locationBar);
+                if (!locationOpen) continue;
                 for (PatchView patch : location.getValue())
                 {
                     JPanel entry = vertical();
@@ -1461,7 +1601,7 @@ final class FarmingDirectorPanel extends PluginPanel
                         patchPrefs.enabled(patch.patch));
                     enabled.setText(wrapped(enabled.getText(), 146));
                     enabled.setForeground(Color.WHITE);
-                    enabled.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                    enabled.setBackground(FarmingHelperTheme.BASE);
                     enabled.setEnabled(configManager.getRSProfileKey() != null);
                     enabled.addActionListener(e ->
                     {
@@ -1469,13 +1609,17 @@ final class FarmingDirectorPanel extends PluginPanel
                         drawPatchRows();
                     });
                     addFull(entry, enabled);
-                    addFull(entry, label(patch.unlock + " · " + patch.state, false));
+                    JLabel info = label(patch.unlock + " · " + patch.state, false);
+                    if (patch.unlock.startsWith("Locked:")) info.setForeground(FarmingHelperTheme.GOLD);
+                    else if (!patchPrefs.enabled(patch.patch)) info.setForeground(FarmingHelperTheme.MUTED);
+                    addFull(entry, info);
                     addFull(patchRows, entry);
                 }
             }
         }
         if (patchViews.isEmpty()) patchRows.add(warning("Loading patch observations..."));
         else if (byType.isEmpty()) patchRows.add(warning("No patches match your filters."));
+        FarmingHelperTheme.style(patchRows);
         patchRows.revalidate();
         patchRows.repaint();
     }
@@ -1543,10 +1687,11 @@ final class FarmingDirectorPanel extends PluginPanel
         shortestPathEnabled.setSelected(navigationEnabled);
         allowUnverified.setSelected(Boolean.parseBoolean(profileValue("directorAllowUnverified",
             Boolean.toString(config.directorIncludeUnverifiedLocations()))));
-        int cap = 8;
+        worldHints.setSelected(config.directorWorldHints());
+        int cap = 28;
         try
         {
-            cap = Integer.parseInt(profileValue("directorWaveStopLimit", "8"));
+            cap = Integer.parseInt(profileValue("directorWaveStopLimit", "28"));
         }
         catch (NumberFormatException ignored)
         {
@@ -2661,6 +2806,8 @@ final class FarmingDirectorPanel extends PluginPanel
             completedPatchKeys.clear();
             temporaryOverrides.clear();
             patchViews.clear();
+            collapsedTypes.clear(); collapsedTypes.addAll(EnumSet.allOf(FarmRunType.class));
+            expandedLocations.clear(); expandedRun = null;
             routeModel.clear();
             start.setEnabled(true);
             activateCurrentStep();
@@ -2819,7 +2966,7 @@ final class FarmingDirectorPanel extends PluginPanel
             ? wrapped(currentPlan.steps.get(currentStep).patch.getDisplayName(), 184) : "");
         openLoadout.setEnabled(active);
         routeOptions.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && currentStep < steps);
-        routeStatus.setVisible(active && !runFinished && !awaitingBank && currentStep < steps);
+        routeStatus.setVisible(guideDetails.isSelected() && active && !runFinished && !awaitingBank && currentStep < steps);
         if (!navigationEnabled) routeStatus.setText(wrapped("Shortest Path navigation disabled.", 184));
         activeTitle.setText(wrapped(activeRunSelection == null ? "Active guide" :
             activeRunSelection == DirectorRunSelection.MERGED ? activePresetName :
@@ -2829,7 +2976,7 @@ final class FarmingDirectorPanel extends PluginPanel
         progressBar.setValue(complete);
         progressBar.setString(complete + " / " + steps + " stops");
         int warningCount = currentSession == null ? 0 : currentSession.warnings.size();
-        guideWarning.setVisible(warningCount > 0 || planningInFlight);
+        guideWarning.setVisible((guideDetails.isSelected() && warningCount > 0) || planningInFlight);
         guideWarning.setText(wrapped(planningInFlight ? "Planning…" :
             warningCount + " planning notices · see details", 184));
         if (active && currentSession != null && currentSession.unplanned > 0)
@@ -2837,7 +2984,8 @@ final class FarmingDirectorPanel extends PluginPanel
             guideWarning.setText(wrapped(currentSession.unplanned + " unplanned stops · check details", 184));
             guideWarning.setVisible(true);
         }
-        returnGuide.setEnabled(active);
+        returnGuide.setEnabled(active && !runFinished);
+        returnGuide.setVisible(active && !runFinished);
         selectionStatus.setText(wrapped(active && !runFinished ?
             "Run in progress · " + completedPatchKeys.size() + " completed" :
             "Choose a run to plan your next harvest.", 184));
@@ -2850,6 +2998,7 @@ final class FarmingDirectorPanel extends PluginPanel
         end.setEnabled(active);
         replan.setEnabled(active && !planningInFlight && currentSession != null);
         resume.setEnabled(!profileValue("directorSavedMode", "").isEmpty());
+        resume.setVisible(resume.isEnabled() && !(active && !runFinished));
         overrideCrop.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && steps > 0);
         clearOverride.setEnabled(active && !planningInFlight && !runFinished && !awaitingBank && steps > 0);
         pause.setText(paused ? "Resume" : "Pause");
@@ -2864,16 +3013,16 @@ final class FarmingDirectorPanel extends PluginPanel
                 item.setLayout(new BoxLayout(item, BoxLayout.Y_AXIS));
                 boolean isCurrent = i == currentStep && !runFinished && !awaitingBank;
                 boolean isDone = completedSteps.contains(i);
-                item.setBackground(isCurrent ? new Color(52, 55, 46) : ColorScheme.DARKER_GRAY_COLOR);
+                item.setBackground(isCurrent ? FarmingHelperTheme.SELECTED : FarmingHelperTheme.SURFACE);
                 item.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(0, 3, 1, 0, isCurrent
-                        ? new Color(244, 197, 86) : isDone ? new Color(120, 173, 113) : ColorScheme.BORDER_COLOR),
+                        ? FarmingHelperTheme.GOLD : isDone ? new Color(120, 173, 113) : ColorScheme.BORDER_COLOR),
                     BorderFactory.createEmptyBorder(8, 9, 8, 7)));
                 item.setAlignmentX(Component.LEFT_ALIGNMENT);
                 final int index = i;
                 JButton place = new JButton(wrapped((isCurrent ? "▶ "
                     : isDone ? "✓ " : "○ ") + step.patch.getDisplayName(), 128));
-                place.setForeground(isCurrent ? new Color(244, 197, 86) :
+                place.setForeground(isCurrent ? FarmingHelperTheme.GOLD :
                     isDone ? new Color(143, 187, 136) : Color.WHITE);
                 place.setBackground(item.getBackground());
                 place.setBorderPainted(false);
@@ -2914,7 +3063,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     JLabel actionLine = new JLabel(wrapped("▶ " + (worldTarget != null && worldTarget.travelling
                         ? DirectorWorldGuide.travelInstruction(worldTarget)
                         : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(), plannedCompostItem() >= 0)), 157));
-                    actionLine.setForeground(new Color(150, 218, 239));
+                    actionLine.setForeground(FarmingHelperTheme.SUCCESS);
                     item.add(actionLine);
                 }
                 else item.add(warning(instruction));
@@ -2996,6 +3145,7 @@ final class FarmingDirectorPanel extends PluginPanel
             stepList.add(warning("Choose a run on the Runs page to get guided steps. "
                 + "The patch manager and settings can be opened without ending a run."));
         }
+        FarmingHelperTheme.style(stepList);
         stepList.revalidate();
         stepList.repaint();
         publishWorldTarget();
@@ -3040,7 +3190,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private static String wrapped(String raw, int width)
     {
-        return "<html><body style='width:" + width + "px'>" + escape(raw) + "</body></html>";
+        return "<html><body style='width:" + Math.min(width, 170) + "px'>" + escape(raw) + "</body></html>";
     }
 
     private static String escape(String raw)

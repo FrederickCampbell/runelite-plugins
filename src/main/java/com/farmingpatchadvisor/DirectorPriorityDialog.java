@@ -132,6 +132,7 @@ final class DirectorPriorityDialog
             controls.add(reserve);
         }
         panel.add(controls, BorderLayout.SOUTH);
+        FarmingHelperTheme.style(panel);
         if (JOptionPane.showConfirmDialog(parent, panel, "Crop priority order",
             JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return null;
         return new Result(DirectorPriorityEditorModel.encode(ranked),
