@@ -42,6 +42,9 @@ final class DirectorWorldGuide
             case HARVEST: return type == PatchType.HESPORI ? "Harvest after defeating Hespori" : "Harvest";
             case CHECK_HEALTH: return "Check health";
             case REMOVE_TREE: return "Remove tree";
+            case PAY_REMOVE: return "Pay gardener to remove tree";
+            case CHOP_TREE: return "Chop tree";
+            case RAKE: return "Rake weeds";
             case DIG_STUMP: return "Dig stump";
             case CLEAR_DEAD: return "Clear dead crop";
             case CURE: return DirectorStepEngine.isTreeType(type) ? "Prune tree" : "Cure crop";
@@ -60,6 +63,8 @@ final class DirectorWorldGuide
         {
             case PLANT: return target.crop == null ? -1 : target.crop.getItemId();
             case COMPOST: return target.compostItem;
+            case RAKE: return ItemID.RAKE;
+            case PAY_REMOVE: return ItemID.COINS;
             case DIG_STUMP: case CLEAR_DEAD: return ItemID.SPADE;
             case CURE: return DirectorStepEngine.isTreeType(target.patch.getPatchType()) ? ItemID.SECATEURS : ItemID.PLANT_CURE;
             case PROTECT_TREE:

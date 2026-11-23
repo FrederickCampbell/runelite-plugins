@@ -15,6 +15,12 @@ final class DirectorSupplies
                                           boolean compost, boolean filledBucket,
                                           boolean carriedSecateurs)
     {
+        return required(patches, compost, filledBucket, carriedSecateurs, false);
+    }
+
+    static Map<Integer, Integer> required(List<FarmRunPatch> patches, boolean compost,
+                                          boolean filledBucket, boolean carriedSecateurs, boolean payRemoval)
+    {
         Map<Integer, Integer> items = new LinkedHashMap<>();
         if (patches.isEmpty()) return items;
         items.put(ItemID.RAKE, 1);
@@ -30,17 +36,31 @@ final class DirectorSupplies
             if (filledBucket) items.put(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED, 1);
             else items.put(ItemID.BUCKET_ULTRACOMPOST, doses);
         }
+        int coins = 0;
+        if (payRemoval) for (FarmRunPatch patch : patches)
+        {
+            DirectorQuestTargets.Definition def = DirectorQuestTargets.get(patch);
+            if (def != null && def.gardenerId >= 0) coins += 200 * patch.getPatchCount();
+        }
+        if (coins > 0) items.put(ItemID.COINS, coins);
         return items;
     }
 
     static int slots(List<FarmRunPatch> patches, Map<Integer, Integer> items,
                      IntPredicate stackable)
     {
+        return slots(patches, items, stackable, false);
+    }
+
+    static int slots(List<FarmRunPatch> patches, Map<Integer, Integer> items,
+                     IntPredicate stackable, boolean payRemoval)
+    {
         int result = 0;
         for (Map.Entry<Integer, Integer> entry : items.entrySet())
             result += stackable.test(entry.getKey()) ? 1 : entry.getValue();
         // An axe or manual removal alternative; no particular axe is assumed.
-        if (patches.stream().anyMatch(p -> DirectorStepEngine.isTreeType(p.getPatchType())))
+        if (patches.stream().anyMatch(p -> DirectorStepEngine.isTreeType(p.getPatchType()) &&
+            (!payRemoval || DirectorQuestTargets.get(p) == null || DirectorQuestTargets.get(p).gardenerId < 0)))
             result++;
         return result;
     }
@@ -59,6 +79,7 @@ final class DirectorSupplies
     {
         switch (id)
         {
+            case ItemID.COINS: return "Coins for tree removal";
             case ItemID.RAKE: return "Rake";
             case ItemID.SPADE: return "Spade";
             case ItemID.DIBBER: return "Seed dibber";

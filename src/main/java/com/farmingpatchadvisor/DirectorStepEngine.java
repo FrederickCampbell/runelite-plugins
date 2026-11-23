@@ -16,6 +16,9 @@ final class DirectorStepEngine
         HARVEST,
         CHECK_HEALTH,
         REMOVE_TREE,
+        PAY_REMOVE,
+        CHOP_TREE,
+        RAKE,
         DIG_STUMP,
         CLEAR_DEAD,
         CURE,
@@ -99,6 +102,13 @@ final class DirectorStepEngine
         return action(type, state, step.protectionPlanned, protection);
     }
 
+    static Action refine(Action action, boolean payRemoval, boolean knownGardener, boolean weeds)
+    {
+        if (action == Action.REMOVE_TREE) return payRemoval && knownGardener ? Action.PAY_REMOVE : Action.CHOP_TREE;
+        if (action == Action.PLANT && weeds) return Action.RAKE;
+        return action;
+    }
+
     static Action withCompost(Action action, DirectorPlanner.Step step,
                               boolean plannedCompost, boolean sawPlanting, boolean compostConfirmed)
     {
@@ -138,6 +148,9 @@ final class DirectorStepEngine
                 return "Check the tree's health, then remove the tree if replanting.";
             case REMOVE_TREE:
                 return "Chop the tree or pay the gardener to remove it.";
+            case PAY_REMOVE: return "Pay the gardener 200 coins to remove the tree.";
+            case CHOP_TREE: return "Chop the tree.";
+            case RAKE: return "Rake the weeds.";
             case DIG_STUMP:
                 return "Dig out the tree stump with a spade.";
             case CLEAR_DEAD:

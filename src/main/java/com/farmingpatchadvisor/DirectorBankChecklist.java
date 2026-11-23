@@ -34,6 +34,7 @@ final class DirectorBankChecklist
         Map<Integer, Integer> seeds = new LinkedHashMap<>();
         Map<Integer, Integer> supplies = new LinkedHashMap<>(kit);
         int compost = 0;
+        int coins = 0;
         boolean hasRemaining = false;
         for (int i = 0; i < wave.steps.size(); i++)
         {
@@ -41,6 +42,8 @@ final class DirectorBankChecklist
             DirectorPlanner.Step step = wave.steps.get(i);
             hasRemaining = true;
             int count = step.patch.getPatchCount();
+            DirectorQuestTargets.Definition def = DirectorQuestTargets.get(step.patch);
+            if (def != null && def.gardenerId >= 0) coins += 200 * count;
             if (step.patch.getPatchType().usesCompost()) compost += count;
             if (step.crop == null || !step.requiresPlanting) continue;
             seeds.merge(step.crop.getItemId(), count * step.crop.getQuantity(), Integer::sum);
@@ -50,6 +53,11 @@ final class DirectorBankChecklist
         }
         if (!hasRemaining) return new DirectorBankChecklist(Collections.emptyMap(),
             Collections.emptyMap(), Collections.emptyMap());
+        if (supplies.containsKey(ItemID.COINS))
+        {
+            if (coins == 0) supplies.remove(ItemID.COINS);
+            else supplies.put(ItemID.COINS, coins);
+        }
         if (supplies.containsKey(ItemID.BUCKET_ULTRACOMPOST))
         {
             if (compost == 0) supplies.remove(ItemID.BUCKET_ULTRACOMPOST);

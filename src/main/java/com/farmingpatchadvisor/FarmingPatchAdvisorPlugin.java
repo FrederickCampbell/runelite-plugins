@@ -113,6 +113,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	private NavigationButton navigationButton;
 
 	private final Set<GameObject> patchObjects = new HashSet<>();
+    private final Set<GameObject> directorObjects = new HashSet<>();
 
 	@Override
 	protected void startUp()
@@ -159,6 +160,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		directorPanel.shutDown();
 		bankChecklistFilter.removeButton();
 		patchObjects.clear();
+        directorObjects.clear();
 		compostBinManager.unload();
 		log.debug("Farming Patch Advisor stopped");
 	}
@@ -171,6 +173,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		{
 			patchObjects.add(object);
 		}
+        if (DirectorQuestTargets.knownObject(client, object)) directorObjects.add(object);
 		timerManager.onPatchObjectSpawned(object);
 		compostBinManager.onGameObjectSpawned(object);
 	}
@@ -179,6 +182,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	public void onGameObjectDespawned(GameObjectDespawned event)
 	{
 		patchObjects.remove(event.getGameObject());
+        directorObjects.remove(event.getGameObject());
 		compostBinManager.onGameObjectDespawned(event.getGameObject());
 	}
 
@@ -194,6 +198,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		if (event.getGameState() == GameState.LOADING || event.getGameState() == GameState.LOGIN_SCREEN)
 		{
 			patchObjects.clear();
+        directorObjects.clear();
 			compostBinManager.clearObjects();
 			if (event.getGameState() == GameState.LOGIN_SCREEN)
 			{
@@ -248,6 +253,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	{
 		directorPanel.resetCharacter();
 		patchObjects.clear();
+        directorObjects.clear();
 		farmingLoadout.clearStorageSnapshots();
 		contractManager.load();
 		timerManager.load();
@@ -347,6 +353,11 @@ public class FarmingPatchAdvisorPlugin extends Plugin
         return directorPanel.directorRunDisplayed();
     }
 
+    boolean directorPatchHasWeeds(FarmRunPatch patch)
+    {
+        return patchOverlay.directorPatchHasWeeds(patch);
+    }
+
     WorldPoint directorPatchAnchor(FarmRunPatch patch)
     {
         return patchOverlay.directorPatchAnchor(patch);
@@ -358,7 +369,12 @@ public class FarmingPatchAdvisorPlugin extends Plugin
         return getRecognizedPatchType(object);
     }
 
-	Set<GameObject> getPatchObjects()
+	Set<GameObject> getDirectorObjects()
+    {
+        return Collections.unmodifiableSet(directorObjects);
+    }
+
+    Set<GameObject> getPatchObjects()
 	{
 		return Collections.unmodifiableSet(patchObjects);
 	}

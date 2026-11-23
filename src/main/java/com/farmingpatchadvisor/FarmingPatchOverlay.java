@@ -206,9 +206,10 @@ final class FarmingPatchOverlay extends Overlay
         String text = DirectorWorldGuide.instruction(target.action, target.crop, patch.getPatchType(), target.compost);
         int iconId = DirectorWorldGuide.itemId(target);
         java.awt.image.BufferedImage icon = iconId < 0 ? null : itemManager.getImage(iconId);
-        if (target.action == DirectorStepEngine.Action.PROTECT_TREE)
+        if (target.action == DirectorStepEngine.Action.PROTECT_TREE || target.action == DirectorStepEngine.Action.PAY_REMOVE)
         {
-            int id = states.gardenerId(patch.getPatchType().name(), patch.getLocation(), patch.getName());
+            DirectorQuestTargets.Definition def = DirectorQuestTargets.get(patch);
+            int id = def != null && def.gardenerId >= 0 ? def.gardenerId : states.gardenerId(patch.getPatchType().name(), patch.getLocation(), patch.getName());
             if (id >= 0 && client.getTopLevelWorldView() != null)
             {
                 for (net.runelite.api.NPC npc : client.getTopLevelWorldView().npcs())
@@ -220,6 +221,7 @@ final class FarmingPatchOverlay extends Overlay
                     }
                 }
             }
+            return; // Never point at the tree when the interaction is with a gardener.
         }
         List<PatchObject> group = resolveDirectorPatch(patch);
         if (group.isEmpty()) return;
@@ -239,6 +241,19 @@ final class FarmingPatchOverlay extends Overlay
     private List<PatchObject> resolveDirectorPatch(FarmRunPatch patch)
     {
         if (client.getLocalPlayer() == null) return java.util.Collections.emptyList();
+        DirectorQuestTargets.Definition def = DirectorQuestTargets.get(patch);
+        if (def != null)
+        {
+            List<PatchObject> exactObjects = new ArrayList<>();
+            for (GameObject object : plugin.getDirectorObjects())
+            {
+                if (object.getWorldView() == client.getLocalPlayer().getWorldView() &&
+                    DirectorQuestTargets.matches(client, object, def) &&
+                    DirectorQuestTargets.atPoint(object, DirectorWaypoints.exactPoint(patch)))
+                    exactObjects.add(new PatchObject(object, patch.getPatchType(), null, false));
+            }
+            if (!exactObjects.isEmpty()) return exactObjects;
+        }
         List<PatchObject> candidates = new ArrayList<>();
         for (GameObject object : plugin.getPatchObjects())
         {
@@ -267,6 +282,17 @@ final class FarmingPatchOverlay extends Overlay
         int count = states.patchNamesForType(patch.getPatchType().name(), patch.getLocation()).size();
         int selected = DirectorWorldGuide.select(patch, positions, count, exact);
         return selected < 0 ? java.util.Collections.emptyList() : groups.get(selected);
+    }
+
+    boolean directorPatchHasWeeds(FarmRunPatch patch)
+    {
+        for (PatchObject p : resolveDirectorPatch(patch))
+        {
+            net.runelite.api.ObjectComposition c = client.getObjectDefinition(p.object.getId());
+            if (c != null && c.getImpostorIds() != null) c = c.getImpostor();
+            if (PatchClassifier.hasAction(c, "Rake")) return true;
+        }
+        return false;
     }
 
     WorldPoint directorPatchAnchor(FarmRunPatch patch)

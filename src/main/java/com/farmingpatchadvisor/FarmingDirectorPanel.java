@@ -95,6 +95,8 @@ final class FarmingDirectorPanel extends PluginPanel
             DirectorRunSelection.MERGED, DirectorRunSelection.ALL
         });
     private final JCheckBox customPriority = new JCheckBox("Use custom priority");
+    private final JCheckBox payRemoval = new JCheckBox("Pay gardener to remove trees", true);
+    private boolean activePayRemoval;
     private final JCheckBox protectTrees = new JCheckBox("Pay for tree protection when possible", true);
     private final JCheckBox includeCompostForRun = new JCheckBox("Plan compost for planting");
     private final JSpinner harvestSlots = new JSpinner(new SpinnerNumberModel(-1, -1, 26, 1));
@@ -373,7 +375,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JLabel title = label("Farming Director", true);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
         addFull(list, title);
-        addFull(list, label("IRONMAN  ·  v0.6.1 beta", false));
+        addFull(list, label("IRONMAN  ·  v0.7 beta", false));
         addFull(list, selectionStatus);
         addFull(list, label("START A RUN", true));
         addFull(list, runType);
@@ -717,7 +719,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel settings = vertical();
         addFull(settings, nav("← Back to runs", "selection"));
         addFull(settings, label("Global Settings", true));
-        for (JCheckBox toggle : new JCheckBox[] {protectTrees, includeCompostForRun, autoNext,
+        for (JCheckBox toggle : new JCheckBox[] {payRemoval, protectTrees, includeCompostForRun, autoNext,
             nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified, shortestPathEnabled})
         {
             toggle.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -1517,6 +1519,7 @@ final class FarmingDirectorPanel extends PluginPanel
         reserves.setText(profileValue("directorReserve" + name, ""));
         customPriority.setSelected(Boolean.parseBoolean(
             profileValue("directorCustom" + name, "false")));
+        payRemoval.setSelected(Boolean.parseBoolean(profileValue("directorPayRemoval", "true")));
         protectTrees.setSelected(Boolean.parseBoolean(
             profileValue("directorProtectTrees", "true")));
         includeCompostForRun.setSelected(Boolean.parseBoolean(
@@ -1573,6 +1576,7 @@ final class FarmingDirectorPanel extends PluginPanel
             reserves.getText());
         configManager.setRSProfileConfiguration(GROUP, "directorCustom" + name,
             Boolean.toString(customPriority.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorPayRemoval", Boolean.toString(payRemoval.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorProtectTrees",
             Boolean.toString(protectTrees.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorUseCompost",
@@ -1647,6 +1651,7 @@ final class FarmingDirectorPanel extends PluginPanel
         if (!preserveProgress) temporaryOverrides.clear();
         final Map<String, String> localOverrides = new HashMap<>(temporaryOverrides);
         final boolean protection = protectTrees.isSelected();
+        final boolean payToRemove = payRemoval.isSelected();
         final boolean useCompost = includeCompostForRun.isSelected();
         final int freeSlots = (Integer) harvestSlots.getValue();
         final boolean proximity = nearestRoute.isSelected();
@@ -1677,7 +1682,7 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 calculated = compute(selected, custom, priorityText,
                     reserveText, protection, proximity, herbPriority, waveCap, skip,
-                    presetName, onlyActionable, includeUnverified, localOverrides, useCompost, freeSlots);
+                    presetName, onlyActionable, includeUnverified, localOverrides, useCompost, freeSlots, payToRemove);
             }
             catch (RuntimeException problem)
             {
@@ -1698,6 +1703,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 planningInFlight = false;
                 currentSession = result;
                 activeRunSelection = selected;
+                activePayRemoval = payToRemove;
                 activeProfile = planningProfile;
                 activePresetName = presetName == null
                     ? DirectorMergedPresets.DEFAULT_NAME : presetName;
@@ -1737,7 +1743,7 @@ final class FarmingDirectorPanel extends PluginPanel
         boolean protection, boolean proximity, boolean herbPriority, int waveCap,
         Set<String> skip, String presetName, boolean onlyActionable,
         boolean includeUnverified, Map<String, String> localOverrides, boolean useCompost,
-        int freeSlots)
+        int freeSlots, boolean payToRemove)
     {
         List<String> warnings = new ArrayList<>();
         if (client.getGameState() != GameState.LOGGED_IN)
@@ -1975,9 +1981,9 @@ final class FarmingDirectorPanel extends PluginPanel
                     FarmRouteManager.requirements(selectedPatches, teleportForPatch),
                     equippedItems, id -> itemManager.getItemComposition(id).isStackable());
                 Map<Integer, Integer> kit = DirectorSupplies.required(selectedPatches,
-                    compost, bottomless, carrySecateurs);
+                    compost, bottomless, carrySecateurs, payToRemove);
                 return travelSlots + DirectorSupplies.slots(selectedPatches, kit,
-                    id -> itemManager.getItemComposition(id).isStackable());
+                    id -> itemManager.getItemComposition(id).isStackable(), payToRemove);
             }, categoryPriority);
 
         List<Map<RouteTeleport, Integer>> travelRequirements =
@@ -1996,7 +2002,7 @@ final class FarmingDirectorPanel extends PluginPanel
             List<FarmRunPatch> stops = new ArrayList<>();
             for (DirectorPlanner.Step step : wave.steps) stops.add(step.patch);
             Map<Integer, Integer> kit = DirectorSupplies.required(stops,
-                compost, bottomless, carrySecateurs);
+                compost, bottomless, carrySecateurs, payToRemove);
             supplyRequirements.add(kit);
             totalCompost += kit.getOrDefault(ItemID.BUCKET_ULTRACOMPOST, 0);
             DirectorStockLedger.Manifest manifest = stockLedger.manifest(wave, kit);
@@ -2239,12 +2245,14 @@ final class FarmingDirectorPanel extends PluginPanel
             }
         }
         final boolean compostConfirmed = treated;
-        SwingUtilities.invokeLater(() -> acceptObservation(plan, index, latest, compostConfirmed));
+        final boolean weeds = plugin.directorPatchHasWeeds(step.patch);
+        final long activation = activatedAtMillis;
+        SwingUtilities.invokeLater(() -> { if (activation == activatedAtMillis) acceptObservation(plan, index, latest, compostConfirmed, weeds); });
     }
 
     /** Only the EDT owns live guide state; stale asynchronous ticks are dropped. */
     private void acceptObservation(DirectorPlanner.Plan plan, int index,
-                                   QuestFarmingStateReader.Observation observation, boolean compostConfirmed)
+                                   QuestFarmingStateReader.Observation observation, boolean compostConfirmed, boolean weeds)
     {
         if (plan != currentPlan || index != currentStep || planningInFlight || preparingLoadout || paused || runFinished || awaitingBank
             || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
@@ -2265,6 +2273,8 @@ final class FarmingDirectorPanel extends PluginPanel
             step, observation.state, observation.protectedByFarmer);
         action = DirectorStepEngine.withCompost(action, step, includeCompostForRun.isSelected(),
             sawLiveEmpty || sawHarvestable && !initiallyGrowing, compostConfirmed);
+        DirectorQuestTargets.Definition def = DirectorQuestTargets.get(step.patch);
+        action = DirectorStepEngine.refine(action, activePayRemoval, def != null && def.gardenerId >= 0, weeds);
         boolean changed = visibleObservation == null ||
             !Objects.equals(visibleObservation.state, observation.state) ||
             visibleObservation.source != observation.source ||
