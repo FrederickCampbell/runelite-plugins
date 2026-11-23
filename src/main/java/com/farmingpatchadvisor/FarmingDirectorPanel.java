@@ -126,6 +126,14 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
     private final JCheckBox allowUnverified = new JCheckBox("Include unverified-access locations");
     private final JPanel compostRows = new JPanel();
+    private final javax.swing.DefaultListModel<FarmRunPatch> routeModel =
+        new javax.swing.DefaultListModel<>();
+    private final javax.swing.JList<FarmRunPatch> routeList =
+        new javax.swing.JList<>(routeModel);
+    private final JComboBox<RouteTeleport> routeTeleportChoice = new JComboBox<>();
+    private final Map<String, RouteTeleport> routeEdits = new LinkedHashMap<>();
+    private FarmRunFilter routeEditFilter = FarmRunFilter.HERB;
+    private boolean updatingRouteChoice;
     private final JCheckBox guideDetails = new JCheckBox("Show planning details and warnings");
     private final JComboBox<String> presetChoice = new JComboBox<>();
     private final Map<FarmRunType, JCheckBox> mergedTypes = new EnumMap<>(FarmRunType.class);
@@ -226,6 +234,7 @@ final class FarmingDirectorPanel extends PluginPanel
         pages.add(createPatchManager(), "patches");
         pages.add(createSettings(), "settings");
         pages.add(createCompostGuide(), "compost");
+        pages.add(createRouteEditor(), "route");
     }
 
     private JPanel vertical()
@@ -274,6 +283,7 @@ final class FarmingDirectorPanel extends PluginPanel
         if ("patches".equals(name)) refreshPatchManager();
         if ("editor".equals(name)) showEditorMode();
         if ("compost".equals(name)) refreshCompostGuide();
+        if ("route".equals(name)) loadRouteEditor();
     }
 
     private JPanel createSelection()
@@ -397,10 +407,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(mergedControls, label("By default, merged runs inherit each category's saved crop preferences.", false));
         addFull(body, regularControls);
         addFull(body, mergedControls);
-        JButton route = new JButton("Edit patch order and teleport choices");
-        route.addActionListener(e -> FarmRouteEditor.open(this, routes,
-            runType.getSelectedItem() == DirectorRunSelection.MERGED
-                ? FarmRunFilter.ALL : ((DirectorRunSelection) runType.getSelectedItem()).filter));
+        JButton route = nav("Edit patch order and teleports", "route");
         addFull(body, route);
         return new JPanel(new BorderLayout())
         {{
@@ -531,6 +538,143 @@ final class FarmingDirectorPanel extends PluginPanel
             setBackground(ColorScheme.DARK_GRAY_COLOR);
             add(scrolling(settings), BorderLayout.CENTER);
         }};
+    }
+
+    private JPanel createRouteEditor()
+    {
+        JPanel screen = new JPanel(new BorderLayout(0, 7));
+        screen.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        JPanel top = vertical();
+        addFull(top, nav("← Back to Run Editor", "editor"));
+        addFull(top, label("Route order & teleports", true));
+        addFull(top, label("Select a stop to choose an optional travel item.", false));
+        routeList.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        routeList.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        routeList.setForeground(Color.WHITE);
+        routeList.setCellRenderer(new javax.swing.DefaultListCellRenderer()
+        {
+            @Override public Component getListCellRendererComponent(javax.swing.JList<?> list,
+                Object value, int index, boolean selected, boolean focused)
+            {
+                FarmRunPatch patch = (FarmRunPatch) value;
+                return super.getListCellRendererComponent(list,
+                    (index + 1) + ". " + patch.getDisplayName(),
+                    index, selected, focused);
+            }
+        });
+        routeList.addListSelectionListener(e ->
+        {
+            if (e.getValueIsAdjusting()) return;
+            FarmRunPatch patch = routeList.getSelectedValue();
+            updatingRouteChoice = true;
+            routeTeleportChoice.setModel(new javax.swing.DefaultComboBoxModel<>(
+                patch == null ? new RouteTeleport[] {RouteTeleport.NONE}
+                    : RouteTeleport.viableValues(patch)));
+            routeTeleportChoice.setSelectedItem(patch == null ? RouteTeleport.NONE :
+                routeEdits.getOrDefault(FarmRouteManager.key(patch), RouteTeleport.NONE));
+            updatingRouteChoice = false;
+        });
+        routeTeleportChoice.addActionListener(e ->
+        {
+            FarmRunPatch patch = routeList.getSelectedValue();
+            if (!updatingRouteChoice && patch != null)
+                routeEdits.put(FarmRouteManager.key(patch),
+                    (RouteTeleport) routeTeleportChoice.getSelectedItem());
+        });
+        addFull(top, routeTeleportChoice);
+        screen.add(top, BorderLayout.NORTH);
+        screen.add(scrolling(new JPanel(new BorderLayout())
+        {{
+            setBackground(ColorScheme.DARK_GRAY_COLOR);
+            add(routeList, BorderLayout.CENTER);
+        }}), BorderLayout.CENTER);
+
+        JPanel bottom = vertical();
+        JPanel arrows = new JPanel(new GridLayout(1, 3, 3, 0));
+        arrows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        JButton up = new JButton("↑ Up");
+        up.addActionListener(e -> moveRoute(-1));
+        JButton down = new JButton("↓ Down");
+        down.addActionListener(e -> moveRoute(1));
+        JButton remove = new JButton("Skip stop");
+        remove.addActionListener(e ->
+        {
+            int selected = routeList.getSelectedIndex();
+            if (selected >= 0)
+            {
+                routeModel.remove(selected);
+                if (!routeModel.isEmpty())
+                    routeList.setSelectedIndex(Math.min(selected, routeModel.size() - 1));
+            }
+        });
+        arrows.add(up); arrows.add(down); arrows.add(remove);
+        addFull(bottom, arrows);
+        JButton save = new JButton("Save route and teleports");
+        save.addActionListener(e -> saveRouteEditor());
+        addFull(bottom, save);
+        JButton defaults = new JButton("Restore default route");
+        defaults.addActionListener(e -> resetRouteEditor());
+        addFull(bottom, defaults);
+        screen.add(bottom, BorderLayout.SOUTH);
+        return screen;
+    }
+
+    private void loadRouteEditor()
+    {
+        DirectorRunSelection selected = (DirectorRunSelection) runType.getSelectedItem();
+        if (selected == null || selected == DirectorRunSelection.COMPOST) return;
+        routeEditFilter = selected.filter;
+        routeModel.clear();
+        routeEdits.clear();
+        List<FarmRunPatch> patches = routes.directorPatches(routeEditFilter);
+        if (selected == DirectorRunSelection.MERGED)
+            patches = DirectorMergedPresets.selected(patches,
+                presets.categories((String) presetChoice.getSelectedItem()));
+        for (FarmRunPatch patch : patches)
+        {
+            if (!patchPrefs.enabled(patch)) continue;
+            routeModel.addElement(patch);
+            routeEdits.put(FarmRouteManager.key(patch),
+                routes.teleportPreferred(routeEditFilter, patch));
+        }
+        if (!routeModel.isEmpty()) routeList.setSelectedIndex(0);
+    }
+
+    private void moveRoute(int direction)
+    {
+        int index = routeList.getSelectedIndex();
+        int destination = index + direction;
+        if (index < 0 || destination < 0 || destination >= routeModel.size()) return;
+        FarmRunPatch selected = routeModel.remove(index);
+        routeModel.add(destination, selected);
+        routeList.setSelectedIndex(destination);
+    }
+
+    private void saveRouteEditor()
+    {
+        List<FarmRunPatch> patches = new ArrayList<>();
+        for (int i = 0; i < routeModel.size(); i++) patches.add(routeModel.get(i));
+        if (!routes.save(routes.profile(), routeEditFilter, patches, routeEdits, true))
+        {
+            JOptionPane.showMessageDialog(this, "Log in to a character to save route choices.");
+            return;
+        }
+        showPage("editor");
+    }
+
+    private void resetRouteEditor()
+    {
+        List<FarmRunPatch> defaults = new ArrayList<>(FarmRunCatalog.patches());
+        defaults.removeIf(p -> !routeEditFilter.includes(p.getFarmRunType()));
+        Map<String, RouteTeleport> emptyTravel = new LinkedHashMap<>();
+        for (FarmRunPatch p : defaults)
+            emptyTravel.put(FarmRouteManager.key(p), RouteTeleport.NONE);
+        if (!routes.save(routes.profile(), routeEditFilter, defaults, emptyTravel, false))
+        {
+            JOptionPane.showMessageDialog(this, "Log in before changing route preferences.");
+            return;
+        }
+        loadRouteEditor();
     }
 
     private JPanel createCompostGuide()
