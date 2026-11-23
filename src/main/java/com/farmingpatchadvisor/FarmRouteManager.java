@@ -41,7 +41,18 @@ final class FarmRouteManager
 
 	List<FarmRunPatch> activePatches(FarmRunFilter run)
 	{
-		List<FarmRunPatch> patches = availablePatches();
+		return selectPatches(availablePatches(), run);
+	}
+
+	/** Director ignores legacy checklist visibility and uses the global patch
+	 * manager after physical patch identities have been expanded. */
+	List<FarmRunPatch> directorPatches(FarmRunFilter run)
+	{
+		return selectPatches(new ArrayList<>(FarmRunCatalog.patches(config)), run);
+	}
+
+	private List<FarmRunPatch> selectPatches(List<FarmRunPatch> patches, FarmRunFilter run)
+	{
 		String included = read("routeIncluded_" + run.name());
 		if (isCustom(run) && included != null)
 		{

@@ -117,6 +117,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JTextField patchSearch = new JTextField();
     private final JCheckBox disabledOnly = new JCheckBox("Show disabled only");
     private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
+    private final JPanel compostRows = new JPanel();
     private final JCheckBox guideDetails = new JCheckBox("Show planning details and warnings");
     private final JComboBox<String> presetChoice = new JComboBox<>();
     private final Map<FarmRunType, JCheckBox> mergedTypes = new EnumMap<>(FarmRunType.class);
@@ -215,6 +216,7 @@ final class FarmingDirectorPanel extends PluginPanel
         pages.add(createEditor(), "editor");
         pages.add(createPatchManager(), "patches");
         pages.add(createSettings(), "settings");
+        pages.add(createCompostGuide(), "compost");
     }
 
     private JPanel vertical()
@@ -262,6 +264,7 @@ final class FarmingDirectorPanel extends PluginPanel
         pageLayout.show(pages, name);
         if ("patches".equals(name)) refreshPatchManager();
         if ("editor".equals(name)) showEditorMode();
+        if ("compost".equals(name)) refreshCompostGuide();
     }
 
     private JPanel createSelection()
@@ -521,6 +524,51 @@ final class FarmingDirectorPanel extends PluginPanel
         }};
     }
 
+    private JPanel createCompostGuide()
+    {
+        JPanel outer = new JPanel(new BorderLayout());
+        outer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        JPanel top = vertical();
+        addFull(top, nav("← Back to runs", "selection"));
+        addFull(top, label("Compost Run", true));
+        JButton refresh = new JButton("Refresh compost observations");
+        refresh.addActionListener(e -> refreshCompostGuide());
+        addFull(top, refresh);
+        outer.add(top, BorderLayout.NORTH);
+        compostRows.setLayout(new BoxLayout(compostRows, BoxLayout.Y_AXIS));
+        compostRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        outer.add(scrolling(compostRows), BorderLayout.CENTER);
+        return outer;
+    }
+
+    private void refreshCompostGuide()
+    {
+        clientThread.invoke(() ->
+        {
+            List<String> instructions = new ArrayList<>();
+            CompostSupplyPlan supply = compostBins.supplyPlan();
+            instructions.add("Estimated supplies · ingredients x" + supply.getIngredientQuantity()
+                + ", volcanic ash x" + supply.getVolcanicAshQuantity()
+                + ", compost potion doses x" + supply.getCompostPotionDoses()
+                + ", buckets x" + supply.getBucketQuantity());
+            for (CompostBinLocation location : compostBins.enabledLocations())
+            {
+                CompostBinState state = compostBins.getState(location);
+                instructions.add(location.getDisplayName() + " · "
+                    + compostBins.nextAction(location, state));
+            }
+            if (instructions.size() == 1)
+                instructions.add("No compost bins enabled. Enable compost tracking in RuneLite plugin settings.");
+            SwingUtilities.invokeLater(() ->
+            {
+                compostRows.removeAll();
+                for (String line : instructions) addFull(compostRows, warning(line));
+                compostRows.revalidate();
+                compostRows.repaint();
+            });
+        });
+    }
+
     private JPanel createPatchManager()
     {
         JPanel outer = new JPanel(new BorderLayout(0, 6));
@@ -730,6 +778,7 @@ final class FarmingDirectorPanel extends PluginPanel
         nearestRoute.setSelected(Boolean.parseBoolean(profileValue("directorNearest", "false")));
         herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
         autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "false")));
+        readyOnly.setSelected(Boolean.parseBoolean(profileValue("directorReadyOnly", "false")));
         int cap = 8;
         try
         {
@@ -776,6 +825,8 @@ final class FarmingDirectorPanel extends PluginPanel
             Boolean.toString(herbloreFocus.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorAutoReplanBank",
             Boolean.toString(autoReplanBank.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorReadyOnly",
+            Boolean.toString(readyOnly.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorWaveStopLimit",
             maxStopsPerWave.getValue().toString());
         DirectorBankStops.Bank bank = (DirectorBankStops.Bank) bankChoice.getSelectedItem();
@@ -791,12 +842,27 @@ final class FarmingDirectorPanel extends PluginPanel
     /** Replan keeps completed patch IDs so we can safely refill at a bank. */
     private void beginRun(boolean preserveProgress)
     {
-        savePreferences();
-        final DirectorRunSelection selected = (DirectorRunSelection) runType.getSelectedItem();
+        if (!preserveProgress) savePreferences();
+        final DirectorRunSelection selected = preserveProgress && activeRunSelection != null
+            ? activeRunSelection : (DirectorRunSelection) runType.getSelectedItem();
         if (selected == null) return;
-        final boolean custom = customPriority.isSelected();
-        final String priorityText = priorities.getText();
-        final String reserveText = reserves.getText();
+        if (selected == DirectorRunSelection.COMPOST)
+        {
+            activeRunSelection = selected;
+            showPage("compost");
+            return;
+        }
+        final String name = selected.name();
+        final boolean custom = preserveProgress
+            ? Boolean.parseBoolean(profileValue("directorCustom" + name, "false"))
+            : customPriority.isSelected();
+        final String priorityText = preserveProgress
+            ? profileValue("directorPriority" + name, "") : priorities.getText();
+        final String reserveText = preserveProgress
+            ? profileValue("directorReserve" + name, "") : reserves.getText();
+        final String presetName = preserveProgress ? activePresetName
+            : (String) presetChoice.getSelectedItem();
+        final boolean onlyActionable = readyOnly.isSelected();
         final boolean protection = protectTrees.isSelected();
         final boolean proximity = nearestRoute.isSelected();
         final boolean herbPriority = herbloreFocus.isSelected();
@@ -813,7 +879,8 @@ final class FarmingDirectorPanel extends PluginPanel
             try
             {
                 calculated = compute(selected, custom, priorityText,
-                    reserveText, protection, proximity, herbPriority, waveCap, skip);
+                    reserveText, protection, proximity, herbPriority, waveCap, skip,
+                    presetName, onlyActionable);
             }
             catch (RuntimeException problem)
             {
@@ -831,6 +898,9 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 if (generation != planningGeneration) return;
                 currentSession = result;
+                activeRunSelection = selected;
+                activePresetName = presetName == null
+                    ? DirectorMergedPresets.DEFAULT_NAME : presetName;
                 waveIndex = 0;
                 awaitingBank = false;
                 currentPlan = result.firstWave();
@@ -844,6 +914,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 start.setEnabled(true);
                 replan.setEnabled(true);
                 render();
+                showPage("guide");
                 if (!currentPlan.steps.isEmpty())
                 {
                     requestRoute(currentPlan.steps.get(0));
@@ -856,7 +927,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private DirectorSessionPlan compute(DirectorRunSelection selection,
         boolean custom, String priorityText, String reserveText,
         boolean protection, boolean proximity, boolean herbPriority, int waveCap,
-        Set<String> skip)
+        Set<String> skip, String presetName, boolean onlyActionable)
     {
         List<String> warnings = new ArrayList<>();
         if (client.getGameState() != GameState.LOGGED_IN)
@@ -871,7 +942,12 @@ final class FarmingDirectorPanel extends PluginPanel
         int level = plugin.getFarmingLevel();
         lastPlannedFarmingLevel = level;
         List<FarmRunPatch> candidates = new ArrayList<>();
-        List<FarmRunPatch> configured = routes.activePatches(selection.filter);
+        List<FarmRunPatch> configured = routes.directorPatches(selection.filter);
+        if (selection == DirectorRunSelection.MERGED)
+        {
+            configured = DirectorMergedPresets.selected(configured,
+                presets.categories(presetName));
+        }
         int unknownPatchDefinitions = 0;
         int approximateDestinations = 0;
 
@@ -896,7 +972,8 @@ final class FarmingDirectorPanel extends PluginPanel
             }
             for (FarmRunPatch patch : separate)
             {
-                if (skip.contains(FarmRouteManager.key(patch))) continue;
+                if (skip.contains(FarmRouteManager.key(patch)) || !patchPrefs.enabled(patch))
+                    continue;
                 DirectorTravelTarget target = DirectorTravelTarget.choose(patch,
                     stateReader, timerManager);
                 if (!target.exact) approximateDestinations++;
@@ -958,6 +1035,11 @@ final class FarmingDirectorPanel extends PluginPanel
         for (FarmRunPatch patch : candidates)
         {
             QuestFarmingStateReader.Observation observation = observePatchState(patch);
+            if (onlyActionable && !observation.known())
+            {
+                warnings.add("Ready-only: omitted unverified " + patch.getDisplayName() + ".");
+                continue;
+            }
             if (observation.known() && observation.state == CropState.GROWING)
             {
                 if (DirectorStepEngine.supportsProtection(patch.getPatchType())
@@ -1035,6 +1117,21 @@ final class FarmingDirectorPanel extends PluginPanel
             selection == DirectorRunSelection.ALLOTMENTS ? Math.max(14, config.directorHarvestSlots())
                 : config.directorHarvestSlots();
 
+        Map<FarmRunType, String> categoryPriority = new EnumMap<>(FarmRunType.class);
+        if (selection == DirectorRunSelection.MERGED)
+        {
+            for (FarmRunType category : FarmRunType.values())
+            {
+                String base = individualMode(category);
+                String saved = profileValue("directorCustom" + base, "false");
+                if (Boolean.parseBoolean(saved))
+                    categoryPriority.put(category, profileValue("directorPriority" + base, ""));
+                String local = profileValue("directorMergedPriority_" + presetName
+                    + "_" + category.name(), "");
+                if (!local.isEmpty()) categoryPriority.put(category, local);
+            }
+        }
+
         Map<Integer, Integer> equippedItems = loadout.directorEquipment();
         DirectorWavePlanner.Result wavePlan = DirectorWavePlanner.split(candidates, level,
             stock, custom, priorityText, reserveText, toolSlots, distinctTeleports.size(),
@@ -1061,7 +1158,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     if (!equipped) carriedTeleports.add(teleport);
                 }
                 return carriedTeleports.size();
-            });
+            }, categoryPriority);
 
         List<Map<RouteTeleport, Integer>> travelRequirements =
             DirectorTeleportPlan.perWave(wavePlan, teleportForPatch);
@@ -1099,12 +1196,28 @@ final class FarmingDirectorPanel extends PluginPanel
             travelRequirements);
     }
 
+    private static String individualMode(FarmRunType type)
+    {
+        switch (type)
+        {
+            case HERB: return DirectorRunSelection.HERBS.name();
+            case ALLOTMENT_FLOWER: return DirectorRunSelection.ALLOTMENTS.name();
+            case TREE: return DirectorRunSelection.TREES.name();
+            case FRUIT_TREE_CALQUAT: return DirectorRunSelection.FRUIT_TREES.name();
+            case HARDWOOD_TREE: return DirectorRunSelection.HARDWOODS.name();
+            case HOPS: return DirectorRunSelection.HOPS.name();
+            case BUSH: return DirectorRunSelection.BUSHES.name();
+            case CACTUS: return DirectorRunSelection.CACTUS.name();
+            default: return DirectorRunSelection.SPECIAL.name();
+        }
+    }
+
     private void persistProgress()
     {
         if (configManager.getRSProfileKey() == null) return;
-        DirectorRunSelection mode = (DirectorRunSelection) runType.getSelectedItem();
-        if (mode == null) return;
-        configManager.setRSProfileConfiguration(GROUP, "directorSavedMode", mode.name());
+        if (activeRunSelection == null) return;
+        configManager.setRSProfileConfiguration(GROUP, "directorSavedMode", activeRunSelection.name());
+        configManager.setRSProfileConfiguration(GROUP, "directorSavedPreset", activePresetName);
         configManager.setRSProfileConfiguration(GROUP, "directorCompletedKeys",
             DirectorRunPersistence.encode(completedPatchKeys));
     }
@@ -1113,6 +1226,7 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         if (configManager.getRSProfileKey() == null) return;
         configManager.unsetRSProfileConfiguration(GROUP, "directorSavedMode");
+        configManager.unsetRSProfileConfiguration(GROUP, "directorSavedPreset");
         configManager.unsetRSProfileConfiguration(GROUP, "directorCompletedKeys");
     }
 
@@ -1141,6 +1255,9 @@ final class FarmingDirectorPanel extends PluginPanel
             runType.setSelectedItem(selected);
             loadingPreferences = false;
             loadPreferences();
+            activeRunSelection = selected;
+            activePresetName = profileValue("directorSavedPreset",
+                DirectorMergedPresets.DEFAULT_NAME);
             completedPatchKeys.clear();
             completedPatchKeys.addAll(DirectorRunPersistence.decode(
                 profileValue("directorCompletedKeys", "")));
@@ -1554,6 +1671,7 @@ final class FarmingDirectorPanel extends PluginPanel
         ++planningGeneration;
         currentPlan = null;
         currentSession = null;
+        activeRunSelection = null;
         waveIndex = 0;
         awaitingBank = false;
         suggestedBank = null;
@@ -1575,6 +1693,7 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             currentPlan = null;
             currentSession = null;
+            activeRunSelection = null;
             waveIndex = 0;
             awaitingBank = false;
             suggestedBank = null;
@@ -1585,6 +1704,8 @@ final class FarmingDirectorPanel extends PluginPanel
             completedPatchKeys.clear();
             activateCurrentStep();
             loadPreferences();
+            reloadPresetNames();
+            showPage("selection");
             render();
         });
         clearRoute();
@@ -1701,7 +1822,17 @@ final class FarmingDirectorPanel extends PluginPanel
                 place.setAlignmentX(Component.LEFT_ALIGNMENT);
                 place.setToolTipText("Select this destination and navigate there");
                 place.addActionListener(e -> jumpTo(index));
-                item.add(place);
+                JPanel stepHeader = new JPanel(new BorderLayout());
+                stepHeader.setBackground(item.getBackground());
+                stepHeader.add(place, BorderLayout.CENTER);
+                if (i == currentStep && !runFinished)
+                {
+                    JButton edit = new JButton("✎");
+                    edit.setToolTipText("Set a permanent crop preference for this patch");
+                    edit.addActionListener(e -> chooseCropOverride());
+                    stepHeader.add(edit, BorderLayout.EAST);
+                }
+                item.add(stepHeader);
                 item.add(Box.createVerticalStrut(4));
                 String instruction = i == currentStep && !runFinished
                     ? DirectorStepEngine.instruction(visibleAction, step.crop,
@@ -1753,6 +1884,10 @@ final class FarmingDirectorPanel extends PluginPanel
                         + formatTeleports(currentSession.teleports.get(waveIndex + 1))));
                 }
             }
+            if (!currentPlan.seeds.isEmpty())
+                stepList.add(warning("Required planting stock: " + formatItems(currentPlan.seeds)));
+            if (guideDetails.isSelected())
+            {
             if (!currentPlan.payments.isEmpty())
             {
                 stepList.add(warning("Potential gardener payments: "
@@ -1816,12 +1951,12 @@ final class FarmingDirectorPanel extends PluginPanel
                     stepList.add(warning(message));
                 }
             }
+            }
         }
         else
         {
-            stepList.add(warning("Quest Helper's farming-state decoder chooses the next action: "
-                + "harvest, check health, clear, plant, or pay protection. "
-                + "Use the Advisor tab for timers, checklists and route editing."));
+            stepList.add(warning("Choose a run on the Runs page to get guided steps. "
+                + "The patch manager and settings can be opened without ending a run."));
         }
         stepList.revalidate();
         stepList.repaint();
