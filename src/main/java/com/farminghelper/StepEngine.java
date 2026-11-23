@@ -93,6 +93,8 @@ final class StepEngine
     static Action actionForStep(RunPlanner.Step step, CropState state, Boolean protection)
     {
         PatchType type = step.patch.getPatchType();
+        if (type == PatchType.SPIRIT_TREE && state == CropState.HARVESTABLE)
+            return Action.COMPLETE; // Mature transport tree must remain planted.
         if (step.harvestOnly && state == CropState.HARVESTABLE && isTreeType(type))
         {
             if (type == PatchType.FRUIT_TREE || type == PatchType.CALQUAT || type == PatchType.CELASTRUS)
@@ -100,6 +102,18 @@ final class StepEngine
             return Action.COMPLETE;
         }
         return action(type, state, step.protectionPlanned, protection);
+    }
+
+    /** Curing a growing crop is not planting. Optional post-plant supplies cannot trap a guide. */
+    static Action guideAction(RunPlanner.Step step, CropState state, Boolean protection,
+                              boolean sawEmpty, boolean sawWork, boolean hasPayment)
+    {
+        Action action = actionForStep(step, state, protection);
+        if (state == CropState.GROWING && sawWork && !sawEmpty)
+            return Action.COMPLETE;
+        if (action == Action.PROTECT_TREE && (!sawEmpty || !hasPayment))
+            return Action.COMPLETE;
+        return action;
     }
 
     static Action refine(Action action, boolean payRemoval, boolean knownGardener, boolean weeds)
