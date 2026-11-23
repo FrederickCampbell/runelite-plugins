@@ -17,6 +17,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
+import com.farmingpatchadvisor.queststate.CropState;
+import com.farmingpatchadvisor.queststate.QuestFarmingStateReader;
+import net.runelite.client.plugins.timetracking.Tab;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.BorderFactory;
@@ -64,11 +68,15 @@ final class FarmingDirectorPanel extends PluginPanel
     private final FarmingPatchAdvisorPlugin plugin;
     private final FarmingPatchAdvisorConfig config;
     private final FarmRouteManager routes;
+    private final QuestFarmingStateReader stateReader;
+    private final PatchTimerManager timerManager;
 
     private final JComboBox<PatchType> runType =
         new JComboBox<>(new PatchType[]{PatchType.HERB, PatchType.TREE});
     private final JCheckBox customPriority = new JCheckBox("Use custom priority");
     private final JCheckBox protectTrees = new JCheckBox("Carry tree protection payments", true);
+    private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
+    private final JLabel currentAction = new JLabel("Start a run to see context-aware steps");
     private final JTextField priorities = new JTextField();
     private final JTextField reserves = new JTextField();
     private final JLabel progress = new JLabel("Choose a run and press Start");
@@ -80,9 +88,17 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JButton next = new JButton("Next step");
     private final JButton pause = new JButton("Pause");
     private final JButton end = new JButton("End");
-    private DirectorPlanner.Plan currentPlan;
-    private int currentStep;
-    private boolean paused;
+    private volatile DirectorPlanner.Plan currentPlan;
+    private volatile int currentStep;
+    private volatile boolean paused;
+    private volatile boolean runFinished;
+    private boolean observedInitialState;
+    private boolean initiallyGrowing;
+    private long activatedAtMillis;
+    private QuestFarmingStateReader.Observation visibleObservation;
+    private DirectorStepEngine.Action visibleAction = DirectorStepEngine.Action.INSPECT;
+    private final Set<Integer> completedSteps = new HashSet<>();
+    private long routeGeneration;
     private volatile boolean routeIssued;
     private boolean loadingPreferences;
 
@@ -90,7 +106,8 @@ final class FarmingDirectorPanel extends PluginPanel
     FarmingDirectorPanel(Client client, ClientThread clientThread, EventBus eventBus,
                          ConfigManager configManager, ItemManager itemManager, FarmingLoadout loadout,
                          FarmingPatchAdvisorPlugin plugin, FarmingPatchAdvisorConfig config,
-                         FarmRouteManager routes, FarmingPatchPanel advisorPanel)
+                         FarmRouteManager routes, QuestFarmingStateReader stateReader, PatchTimerManager timerManager,
+                         FarmingPatchPanel advisorPanel)
     {
         super(false);
         this.client = client;
@@ -102,6 +119,8 @@ final class FarmingDirectorPanel extends PluginPanel
         this.plugin = plugin;
         this.config = config;
         this.routes = routes;
+        this.stateReader = stateReader;
+        this.timerManager = timerManager;
 
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -154,6 +173,12 @@ final class FarmingDirectorPanel extends PluginPanel
         protectTrees.setForeground(Color.WHITE);
         protectTrees.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         controls.add(protectTrees);
+        autoNext.setForeground(Color.WHITE);
+        autoNext.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        controls.add(autoNext);
+        currentAction.setForeground(new Color(120, 205, 238));
+        currentAction.setAlignmentX(Component.LEFT_ALIGNMENT);
+        controls.add(currentAction);
         controls.add(Box.createVerticalStrut(8));
         start.addActionListener(e -> beginRun());
         start.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -223,6 +248,7 @@ final class FarmingDirectorPanel extends PluginPanel
         customPriority.setSelected(Boolean.parseBoolean(profileValue("directorCustom" + name, "false")));
         protectTrees.setSelected(Boolean.parseBoolean(profileValue("directorProtectTrees", "true")));
         protectTrees.setVisible(type == PatchType.TREE);
+        autoNext.setSelected(Boolean.parseBoolean(profileValue("directorAutoNext", "true")));
         loadingPreferences = false;
     }
 
@@ -239,6 +265,8 @@ final class FarmingDirectorPanel extends PluginPanel
             Boolean.toString(customPriority.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorProtectTrees",
             Boolean.toString(protectTrees.isSelected()));
+        configManager.setRSProfileConfiguration(GROUP, "directorAutoNext",
+            Boolean.toString(autoNext.isSelected()));
     }
 
     private void beginRun()
