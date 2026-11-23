@@ -1,71 +1,126 @@
-# Ironman Farming Director — v0.1 (Quest Helper state integration)
+# Ironman Farming Director — v0.2.0-beta.1
 
-A standalone RuneLite plugin with a Quest Helper-style guided Farming sidebar powered by Farming Patch Advisor's existing codebase. The Advisor's crop catalogs, bank and Seed Vault scanning, timers, compost, protection payments, checklists, overlays and route editor are retained.
+An integration-first, standalone RuneLite farming companion for ironmen. This
+is a **developer preview**: GitHub Actions compiles and runs tests successfully;
+interactive RuneLite behavior still needs verification.
 
-The new Guide tab adds ordered seed priorities, stock reserves, a 28-slot inventory budget, dynamic patch-state instructions, automatic step advancement, and optional Shortest Path destinations. It reuses Quest Helper's farming-region registry, patch-varbit decoder and Time Tracking predictions; these sources are vendored under the separate `com.farmingpatchadvisor.queststate` package. The existing Advisor is available in its own tab.
+## Architecture
 
-## Install with RuneLite Dev Manager
+- **Farming Patch Advisor** remains the farming engine: crop and patch catalogs,
+  selected/enabled locations, route/teleport preferences, observed inventory,
+  bank and Seed Vault, timers, contracts, payments, compost and existing overlays.
+- **Quest Helper farming code** is vendored into
+  \`com.farmingpatchadvisor.queststate\`: \`FarmingWorld\`, \`FarmingRegion\`,
+  \`FarmingPatch\`, \`PatchImplementation\`, \`PatchState\`, \`CropState\`,
+  \`FarmingHandler\`, and \`PaymentTracker\`. Individual Quest Helper patch
+  varbits and RuneLite Time Tracking predictions drive the guide's conditions.
+- **The Guide UI** is a custom, compact Swing sidebar inspired by Quest Helper.
+  It does **not** embed the entire original Quest Helper panel framework.
+- **Shortest Path** remains a separate optional plugin. The Director sends the
+  same \`shortestpath/path\` and \`shortestpath/clear\` event messages that Quest
+  Helper uses; it never attempts to implement its own movement pathfinder.
 
-Download the ironman-farming-director-v0.1 branch or clone it:
+## Installation via RuneLite Dev Manager
+
+Download this branch:
 
     git clone --branch ironman-farming-director-v0.1 --single-branch https://github.com/FrederickCampbell/runelite-plugins.git Ironman-Farming-Director
 
-Move the Ironman-Farming-Director project folder into:
+Place the Gradle project at:
 
     C:\_Hub\Projects\Gaming\OSRS\RuneLite\Plugins\Ironman-Farming-Director\
 
-Open your installed RuneLite Dev Manager, click Refresh, select Ironman-Farming-Director, click Build and then Launch. Do not overwrite any other project or modify Dev Manager.
+In RuneLite Dev Manager choose **Refresh → Build → Launch**. The installed Dev
+Manager and user's Windows client are not accessible from this environment.
 
-This is a standard Gradle project targeting Java 11. The RuneLite developer build uses Gradle and downloads its dependencies on first run. The local Dev Manager has NOT been accessible or verified from this session.
-
-## How to use the Guide
-
-1. Open your bank and Farming Guild Seed Vault after logging in. The plugin never reads unopened storage. A snapshot older than six hours is treated as stale and is excluded from the plan.
-2. Open the Ironman Farming Director navigation button. Select HERB, TREE or ALLOTMENT.
-3. Choose the Highest Available mode or enable Use custom priority. Enter ordered crop names such as Ranarr, Snapdragon, Toadflax, Irit, Avantoe.
-4. Enter reserves such as Ranarr=10, Snapdragon=3. The planner will preserve those quantities and allocate another crop when necessary.
-5. Select tree protection payments if desired and press Start / Replan.
-6. Follow the currently highlighted action: harvest, check tree health, remove tree, dig stump, cure disease, clear a dead crop, plant or protect the tree. If the patch becomes confirmed growing (and optional gardener protection is confirmed), **Auto-next** proceeds to the next destination. Turn Auto-next off or use Back, Next step, Pause, End, or click a patch name for manual control.
-7. Quest Helper's varbit decoder reads live patches near you. Elsewhere it uses RuneLite Time Tracking observations, with Advisor's timers as a fallback. If the patch has never been observed, it is **unknown**, not treated as empty. Visit/inspect the patch or use manual Next.
-8. If Shortest Path is installed, the Guide sends it the target destination, otherwise the patch name and coordinates remain visible.
-9. Use the Advisor tab for the original timers, custom routes and teleport choices, checklists and overlays.
-
-Each character has separate stored Guide priorities (RuneLite RS-profile configuration). A distinct ironman-farming-director configuration group prevents clashing with the original Farming Patch Advisor.
-
-## Implemented constraints
-
-- Guided runs cover herbs, regular trees, and independent allotment patches, using existing Advisor crop data and Quest Helper's individual patch varbits. The original Advisor has additional run categories.
-- Uses stock quantities from observed inventory, fresh bank and fresh Seed Vault; missing storage yields visible warnings.
-- Regular-tree crops are plantable saplings, not raw seeds; raw seeds trigger a preparation warning when no suitable saplings are available.
-- Custom priorities, insufficient stock, reserved stock and Farming-level limits are handled by an explicit allocation algorithm.
-- Planned seeds, unstackable saplings, payment items and configurable harvest reserve are counted against 28 inventory slots. Impossible full runs are shortened, with a banking warning.
-- Basic quest checks cover Morytania, Troll Stronghold and Weiss. Farming Guild requires level 65 for regular trees/herbs and level 45 for allotments. Some new/unverified areas are opt-in, never silently assumed accessible.
-- Advisor's route order can be edited in its Route & Teleports control; no global optimization in v0.1. Already-growing patches with known states are omitted from new planting requirements.
-- Protection-payment requirements may be missing from available stock, and the sidebar warns.
-- The Guide auto-advances on observed growing/protected states, following the Quest Helper conditional-step approach. It never clicks in-game objects, banks, harvests or plants for you. Manual completion remains available as a fallback.
-
-## Build and test
+Or build from the project root:
 
     gradlew.bat clean test build
 
-Optional developer harness:
+## Using the Guide
 
-    gradlew.bat run
+1. Log into your intended character and **open your bank and Seed Vault** to
+   scan stock. Stored inventories are profile-local, only observed rather than
+   inferred, and are excluded when older than six hours.
+2. Choose a run: herbs, allotments, flowers, trees, fruit trees/calquats,
+   hardwoods, hops, bushes, cactus, specialist patches, core mixed farm run,
+   all tree categories, or **all enabled patches**.
+3. Open **Planner options** to choose crop priorities, stock reserves, gardener
+   payments, Herblore-supplies preset, automatic next step, automatic replanning
+   after closing bank/Seed Vault, and optional straight-line nearest-stop order.
+4. Press **Start / Replan**. The plugin filters out known-growing patches and
+   allocates available seeds/saplings by level, crop priority and reserved stock.
+   A growing tree with protection still unconfirmed remains a protection stop.
+5. Follow live instructions: harvest, check health, chop/remove, dig stump,
+   cure, clear, plant, or protect. Auto-next advances after confirmed
+   growing/protected states. No clicks or game actions are performed for you.
+6. Use **Back**, **Next step**, **Pause**, **End**, or click a destination to
+   override automatic routing. Use **Override this patch** to select a specific
+   crop when available; **Clear override** restores automatic allocation.
+7. Use **Replan remaining** after restocking to preserve completed patch IDs.
+   **Resume saved run** restores a profile-scoped checkpoint after relogging.
+   The bank-close auto-replan option is opt-in, and only triggers during an
+   unfinished active run.
+8. The **Advisor** tab still contains upstream timers, overlays, contracts,
+   custom route choices, checklists and their original controls.
 
-The existing Dev Manager is the normal route for testing. Tests include priority fallback, reserve quantities, insufficient seeds, level eligibility, raw tree seed vs sapling handling, inventory-slot capacity, actual Quest Helper patch-registry lookups, independent allotment patches and state-driven transitions. Growing patches are excluded from new planting requirements, while existing trees that still require protection can appear without claiming another sapling. A real RuneLite account is still needed to verify live patch states, storage events, profile switching, sidebar geometry and Shortest Path rendering.
+## Verified and approximate destinations
 
-## Source and attribution
+Herb, ordinary tree, fruit tree, calquat and hardwood tree coordinates come
+directly from Quest Helper's existing Farm Run object steps. Grouped allotment,
+seaweed, coral and grape locations are split into individual Quest Helper patch
+identities instead of being mistaken for a single patch.
 
-Primary upstream: Seadeadmeat / Farming Patch Advisor, BSD-2-Clause:
+Where no exact Quest Helper tile is known, the Director can display a **region
+centre as an approximate hint** or use a previously observed Advisor location.
+It does **not** send Shortest Path to an unverified region centre. On known
+shared farming areas it can route toward the nearby herb patch. More exact
+single-patch waypoints and in-client confirmation remain needed for specialist
+categories. Shortest Path must be installed separately for map navigation.
+
+## Inventory and planning behavior
+
+The existing Advisor crop database provides Farming level and planted quantity
+requirements. Regular saplings (and other unstackable items) occupy separate
+slots; stackable seed quantities use one slot. The 28-slot budget includes
+conservative tool/teleport allowances and configurable harvest space. Replan
+after banking for additional waves of a large all-enabled run. It never
+fabricates inaccessible bank/Seed Vault contents or silently consumes reserved
+stock.
+
+A ready patch without replacement stock can still appear as a **harvest-only**
+stop; an unknown or empty patch is never treated as confirmed ready. Explicit
+per-patch crop choices take priority over the overall crop order. The optional
+Herblore preset prioritizes common potion-herb supplies; it is a preference
+preset, not a claimed mathematical optimum. Optional nearby-stop sorting uses
+**straight-line tile distance**, not obstacle-aware or teleport-aware route
+optimisation.
+
+## Limitations / in-game validation checklist
+
+- In-game planting, harvesting, payments, diseased patch transitions and UI
+  sizing are **not yet empirically verified** on this account.
+- Some new access/quest gates are conservative. You may need to enable
+  unverified locations or manually deselect locations you cannot reach.
+- RuneLite's Time Tracking or Advisor must observe a patch before it can
+  provide a trustworthy state. Unknown does not mean empty.
+- Stock snapshots can become stale after bank withdrawals. Reopen storage
+  before relying on exact available quantities.
+- Actual banking-stop navigation, a fully accurate itinerary solver using
+  transport/teleports, and the complete original Quest Helper GUI/overlays
+  remain future work. Large combined runs may require replan-and-bank waves.
+- No in-game action automation, macros, mouse control or botting is included.
+
+CI checks \`clean test build\` on this branch. A green build proves source
+compatibility with the CI RuneLite dependency, **not** flawless in-game play.
+
+## Source and licenses
+
+Farming Patch Advisor by Seadeadmeat (BSD-2-Clause):
 https://github.com/Seadeadmeat/farming-patch-advisor
 
-The original source (snapshot tree fb0aa6115dd0a7dc71b146b42870b7c19b1ca10d) is included with modifications. Original LICENSE is retained.
-
-Quest Helper: Zoinkwiz, BSD-2-Clause:
+Quest Helper by Zoinkwiz and contributors (BSD-2-Clause):
 https://github.com/Zoinkwiz/quest-helper
 
-The guide ports Quest Helper's actual `FarmingWorld`, `FarmingPatch`, `FarmingRegion`, `PatchImplementation`, `PatchState`, `CropState`, `FarmingHandler` and `PaymentTracker` classes into a standalone namespace, retaining their original license headers. The visible sidebar remains a streamlined standalone Swing implementation (not the entire Quest Helper plugin). The Shortest Path event-message contract is reused directly. Quest Helper is **not required to be installed**. Its license is included as LICENSE-QUEST-HELPER.
-
-## Remaining verification and next milestone
-
-This branch is an engineering build, not a declared production-ready plugin until both automated tests and in-game checks pass. After verification, improve exact allotment-tile waypoints, bank-stop optimization, fruit/hardwood trees and additional crop runs with the already imported Advisor catalogs. Current allotment navigation targets the known nearby farm area rather than the precise subpatch tile; the sidebar labels each subpatch independently.
+Original imported licenses and attribution headers are preserved as \`LICENSE\`
+and \`LICENSE-QUEST-HELPER\`. Their names, UI and code ownership remain credited.

@@ -1,5 +1,19 @@
 # Ironman Farming Director development history
 
+## v0.2.0-beta.1 — Consolidated farming director (2026-11-23)
+
+- Generalized Guide to every patch type in Advisor's crop catalog, including multi-type combined runs.
+- Individual Quest Helper patch decoding for herbs, trees, fruit trees, calquats, hardwoods, allotments, bushes, hops, flowers, seaweed, grapefields, cactus and specialist patches.
+- Added exact Quest Helper fruit/calquat/hardwood coordinates, observed Advisor targets and clearly labelled non-routable region hints.
+- Automatic state-driven actions and step progression with manual overrides and optional Shortest Path integration.
+- Global 28-slot seed/sapling inventory planner, grouped-patch splitting, reserved seed stock, tree protection, and harvest-only stops.
+- Individual crop overrides, Herblore-supplies preference preset, optional nearest-stop proximity heuristic and opt-in replan after banking.
+- Saved per-character run checkpoints, resume after relog, and replan-remaining workflow.
+- Streamlined guide into a compact sidebar with expandable planner options and preserved Advisor tab.
+- Unit tests and GitHub Actions builds. Interactive in-client verification is still outstanding.
+
+
+
 ## v0.1 — Quest Helper farming-guidance integration (2026-11-23)
 
 - Preserved Farming Patch Advisor's implementation as the main engine, with a separate plugin name and configuration.
