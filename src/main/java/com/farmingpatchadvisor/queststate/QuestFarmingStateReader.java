@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Locale;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -74,6 +76,62 @@ public final class QuestFarmingStateReader
         }
     }
 
+
+    /**
+     * Full patch-type-aware state lookup. Several categories share RuneLite's
+     * tab (e.g. hardwood and ordinary trees), so tab alone is insufficient.
+     * Pass the Advisor patch enum name; mapping is verified against Quest
+     * Helper's PatchImplementation definitions.
+     */
+    public Observation observeType(String patchType, String location,
+                                   String patchName, WorldPoint worldPoint)
+    {
+        PatchImplementation implementation = implementation(patchType);
+        if (implementation == null)
+        {
+            return new Observation(null, Source.NONE, 0, null, "");
+        }
+        return observeResolved(implementation.getTab(), location, patchName,
+            worldPoint, implementation);
+    }
+
+    public List<String> patchNamesForType(String patchType, String location)
+    {
+        PatchImplementation impl = implementation(patchType);
+        return impl == null ? Collections.emptyList()
+            : patchNamesResolved(impl.getTab(), location, impl);
+    }
+
+    /** Geographical fallback derived from Quest Helper's actual world regions.
+     * A region centre is approximate, never a verified patch tile.
+     */
+    @Nullable
+    public WorldPoint regionHint(String patchType, String location)
+    {
+        PatchImplementation impl = implementation(patchType);
+        if (impl == null) return null;
+        FarmingPatch patch = find(world, impl.getTab(), location, null, impl);
+        if (patch == null) return null;
+        int region = patch.getRegion().getRegionID();
+        return new WorldPoint(((region >> 8) & 0xff) * 64 + 32,
+            (region & 0xff) * 64 + 32, 0);
+    }
+
+    @Nullable
+    static PatchImplementation implementation(String type)
+    {
+        if (type == null) return null;
+        String normalized = "GRAPEVINE".equals(type) ? "GRAPES" : type;
+        try
+        {
+            return PatchImplementation.valueOf(normalized);
+        }
+        catch (IllegalArgumentException ex)
+        {
+            return null;
+        }
+    }
+
     /**
      * Call on RuneLite's client thread. Regions follow Quest Helper's registry
      * including the nonintuitive Harmony vs Harmony Island display name.
@@ -85,13 +143,19 @@ public final class QuestFarmingStateReader
 
     public Observation observe(Tab tab, String location, String patchName, WorldPoint worldPoint)
     {
+        return observeResolved(tab, location, patchName, worldPoint, null);
+    }
+
+    private Observation observeResolved(Tab tab, String location, String patchName,
+                                        WorldPoint worldPoint, PatchImplementation implementation)
+    {
         if (client.getGameState() != GameState.LOGGED_IN ||
             config.getRSProfileKey() == null)
         {
             return new Observation(null, Source.NONE, 0, null, "");
         }
 
-        FarmingPatch match = find(world, tab, location, patchName);
+        FarmingPatch match = find(world, tab, location, patchName, implementation);
         if (match == null)
         {
             return new Observation(null, Source.NONE, 0, null, "");
@@ -164,6 +228,12 @@ public final class QuestFarmingStateReader
 
     static FarmingPatch find(FarmingWorld world, Tab tab, String location, String patchName)
     {
+        return find(world, tab, location, patchName, null);
+    }
+
+    static FarmingPatch find(FarmingWorld world, Tab tab, String location,
+                             String patchName, PatchImplementation implementation)
+    {
         Collection<FarmingPatch> patches = world.getTabs().get(tab);
         if (patches == null || location == null)
         {
@@ -173,6 +243,7 @@ public final class QuestFarmingStateReader
         for (FarmingPatch patch : patches)
         {
             if (normalize(patch.getRegion().getName()).equals(expected)
+                && (implementation == null || patch.getImplementation() == implementation)
                 && (patchName == null || patch.getName().equalsIgnoreCase(patchName)))
             {
                 return patch;
@@ -184,6 +255,11 @@ public final class QuestFarmingStateReader
     /** Canonical Quest Helper patch names for multi-patch locations. */
     public List<String> patchNames(Tab tab, String location)
     {
+        return patchNamesResolved(tab, location, null);
+    }
+
+    private List<String> patchNamesResolved(Tab tab, String location, PatchImplementation implementation)
+    {
         Collection<FarmingPatch> patches = world.getTabs().get(tab);
         if (patches == null || location == null)
         {
@@ -192,7 +268,8 @@ public final class QuestFarmingStateReader
         List<String> result = new ArrayList<>();
         for (FarmingPatch patch : patches)
         {
-            if (normalize(patch.getRegion().getName()).equals(normalize(location)))
+            if (normalize(patch.getRegion().getName()).equals(normalize(location))
+                && (implementation == null || patch.getImplementation() == implementation))
             {
                 result.add(patch.getName());
             }
