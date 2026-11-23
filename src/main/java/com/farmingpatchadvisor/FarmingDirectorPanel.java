@@ -98,7 +98,9 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox payRemoval = new JCheckBox("Pay gardener to remove trees", true);
     private boolean activePayRemoval;
     private final JCheckBox protectTrees = new JCheckBox("Pay for tree protection when possible", true);
-    private final JCheckBox includeCompostForRun = new JCheckBox("Plan compost for planting");
+    private final JComboBox<DirectorCompostChoice> compostChoice = new JComboBox<>(DirectorCompostChoice.values());
+    private final java.util.LinkedHashSet<DirectorStepEngine.Action> observedInteractions = new java.util.LinkedHashSet<>();
+    private boolean nearCurrentTarget;
     private final JSpinner harvestSlots = new JSpinner(new SpinnerNumberModel(-1, -1, 26, 1));
     private final JCheckBox autoNext = new JCheckBox("Auto-next after patch completion", true);
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
@@ -719,7 +721,9 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel settings = vertical();
         addFull(settings, nav("← Back to runs", "selection"));
         addFull(settings, label("Global Settings", true));
-        for (JCheckBox toggle : new JCheckBox[] {payRemoval, protectTrees, includeCompostForRun, autoNext,
+        addFull(settings, label("Compost", false));
+        addFull(settings, compostChoice);
+        for (JCheckBox toggle : new JCheckBox[] {payRemoval, protectTrees, autoNext,
             nearestRoute, herbloreFocus, autoReplanBank, readyOnly, allowUnverified, shortestPathEnabled})
         {
             toggle.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -1522,8 +1526,8 @@ final class FarmingDirectorPanel extends PluginPanel
         payRemoval.setSelected(Boolean.parseBoolean(profileValue("directorPayRemoval", "true")));
         protectTrees.setSelected(Boolean.parseBoolean(
             profileValue("directorProtectTrees", "true")));
-        includeCompostForRun.setSelected(Boolean.parseBoolean(
-            profileValue("directorUseCompost", Boolean.toString(config.includeCompost()))));
+        compostChoice.setSelectedItem(DirectorCompostChoice.load(profileValue("directorCompostChoice", ""),
+            Boolean.parseBoolean(profileValue("directorUseCompost", Boolean.toString(config.includeCompost())))));
         int reserve = -1;
         try { reserve = Integer.parseInt(profileValue("directorFreeSlots", "-1")); }
         catch (NumberFormatException ignored) {}
@@ -1579,8 +1583,10 @@ final class FarmingDirectorPanel extends PluginPanel
         configManager.setRSProfileConfiguration(GROUP, "directorPayRemoval", Boolean.toString(payRemoval.isSelected()));
         configManager.setRSProfileConfiguration(GROUP, "directorProtectTrees",
             Boolean.toString(protectTrees.isSelected()));
-        configManager.setRSProfileConfiguration(GROUP, "directorUseCompost",
-            Boolean.toString(includeCompostForRun.isSelected()));
+        DirectorCompostChoice compost = (DirectorCompostChoice) compostChoice.getSelectedItem();
+        if (compost == null) compost = DirectorCompostChoice.NONE;
+        configManager.setRSProfileConfiguration(GROUP, "directorCompostChoice", compost.name());
+        configManager.setRSProfileConfiguration(GROUP, "directorUseCompost", Boolean.toString(compost != DirectorCompostChoice.NONE));
         configManager.setRSProfileConfiguration(GROUP, "directorFreeSlots", harvestSlots.getValue().toString());
         configManager.setRSProfileConfiguration(GROUP, "directorAutoNext",
             Boolean.toString(autoNext.isSelected()));
@@ -1652,7 +1658,7 @@ final class FarmingDirectorPanel extends PluginPanel
         final Map<String, String> localOverrides = new HashMap<>(temporaryOverrides);
         final boolean protection = protectTrees.isSelected();
         final boolean payToRemove = payRemoval.isSelected();
-        final boolean useCompost = includeCompostForRun.isSelected();
+        final DirectorCompostChoice useCompost = (DirectorCompostChoice) compostChoice.getSelectedItem();
         final int freeSlots = (Integer) harvestSlots.getValue();
         final boolean proximity = nearestRoute.isSelected();
         final boolean herbPriority = herbloreFocus.isSelected();
@@ -1742,7 +1748,7 @@ final class FarmingDirectorPanel extends PluginPanel
         boolean custom, String priorityText, String reserveText,
         boolean protection, boolean proximity, boolean herbPriority, int waveCap,
         Set<String> skip, String presetName, boolean onlyActionable,
-        boolean includeUnverified, Map<String, String> localOverrides, boolean useCompost,
+        boolean includeUnverified, Map<String, String> localOverrides, DirectorCompostChoice useCompost,
         int freeSlots, boolean payToRemove)
     {
         List<String> warnings = new ArrayList<>();
@@ -1915,12 +1921,12 @@ final class FarmingDirectorPanel extends PluginPanel
 
         // Recalculate tools and compost for the actual selected stops of each wave.
         // A filled bottomless bucket is observed as an item; its charge count is not known.
-        final boolean compost = useCompost;
-        final boolean bottomless = stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED);
+        final boolean bottomless = stock.getOrDefault(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED, 0) > 0;
+        final int compostItem = (useCompost == null ? DirectorCompostChoice.NONE : useCompost).resolve(bottomless);
         final boolean carrySecateurs = stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
             && !loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS);
-        if (compost && bottomless)
-            warnings.add("Check the bottomless compost bucket has enough charges.");
+        if (compostItem == ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)
+            warnings.add("Check the bottomless compost bucket's contents and charges.");
         if (candidates.stream().anyMatch(p -> DirectorStepEngine.isTreeType(p.getPatchType())))
             warnings.add("Bring an appropriate axe or coins for gardener removal; verify tool/equipment space.");
 
@@ -1981,7 +1987,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     FarmRouteManager.requirements(selectedPatches, teleportForPatch),
                     equippedItems, id -> itemManager.getItemComposition(id).isStackable());
                 Map<Integer, Integer> kit = DirectorSupplies.required(selectedPatches,
-                    compost, bottomless, carrySecateurs, payToRemove);
+                    compostItem, carrySecateurs, payToRemove);
                 return travelSlots + DirectorSupplies.slots(selectedPatches, kit,
                     id -> itemManager.getItemComposition(id).isStackable(), payToRemove);
             }, categoryPriority);
@@ -2002,9 +2008,9 @@ final class FarmingDirectorPanel extends PluginPanel
             List<FarmRunPatch> stops = new ArrayList<>();
             for (DirectorPlanner.Step step : wave.steps) stops.add(step.patch);
             Map<Integer, Integer> kit = DirectorSupplies.required(stops,
-                compost, bottomless, carrySecateurs, payToRemove);
+                compostItem, carrySecateurs, payToRemove);
             supplyRequirements.add(kit);
-            totalCompost += kit.getOrDefault(ItemID.BUCKET_ULTRACOMPOST, 0);
+            if (DirectorCompostChoice.isOrdinary(compostItem)) totalCompost += kit.getOrDefault(compostItem, 0);
             DirectorStockLedger.Manifest manifest = stockLedger.manifest(wave, kit);
             if (!manifest.missing.isEmpty())
             {
@@ -2025,8 +2031,8 @@ final class FarmingDirectorPanel extends PluginPanel
                 warnings.add("Configured teleport not in scanned supplies: " + teleport + ".");
             }
         }
-        if (totalCompost > stock.getOrDefault(ItemID.BUCKET_ULTRACOMPOST, 0))
-            warnings.add("Total planned ultracompost exceeds scanned stock; replenish or change compost settings.");
+        if (DirectorCompostChoice.isOrdinary(compostItem) && totalCompost > stock.getOrDefault(compostItem, 0))
+            warnings.add("Total planned compost exceeds scanned stock; replenish or change compost settings.");
         warnings.addAll(wavePlan.warnings);
         return new DirectorSessionPlan(wavePlan, stockLedger, warnings,
             travelRequirements, supplyRequirements, teleportForPatch);
@@ -2246,13 +2252,16 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         final boolean compostConfirmed = treated;
         final boolean weeds = plugin.directorPatchHasWeeds(step.patch);
+        WorldPoint localPatch = plugin.directorPatchAnchor(step.patch);
+        final boolean near = observation.source == QuestFarmingStateReader.Source.LIVE ||
+            (localPatch != null && client.getLocalPlayer() != null && localPatch.distanceTo(client.getLocalPlayer().getWorldLocation()) <= 18);
         final long activation = activatedAtMillis;
-        SwingUtilities.invokeLater(() -> { if (activation == activatedAtMillis) acceptObservation(plan, index, latest, compostConfirmed, weeds); });
+        SwingUtilities.invokeLater(() -> { if (activation == activatedAtMillis) acceptObservation(plan, index, latest, compostConfirmed, weeds, near); });
     }
 
     /** Only the EDT owns live guide state; stale asynchronous ticks are dropped. */
     private void acceptObservation(DirectorPlanner.Plan plan, int index,
-                                   QuestFarmingStateReader.Observation observation, boolean compostConfirmed, boolean weeds)
+                                   QuestFarmingStateReader.Observation observation, boolean compostConfirmed, boolean weeds, boolean near)
     {
         if (plan != currentPlan || index != currentStep || planningInFlight || preparingLoadout || paused || runFinished || awaitingBank
             || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
@@ -2271,15 +2280,22 @@ final class FarmingDirectorPanel extends PluginPanel
             sawLiveEmpty = true;
         DirectorStepEngine.Action action = DirectorStepEngine.actionForStep(
             step, observation.state, observation.protectedByFarmer);
-        action = DirectorStepEngine.withCompost(action, step, includeCompostForRun.isSelected(),
+        action = DirectorStepEngine.withCompost(action, step, plannedCompostItem() >= 0,
             sawLiveEmpty || sawHarvestable && !initiallyGrowing, compostConfirmed);
         DirectorQuestTargets.Definition def = DirectorQuestTargets.get(step.patch);
         action = DirectorStepEngine.refine(action, activePayRemoval, def != null && def.gardenerId >= 0, weeds);
-        boolean changed = visibleObservation == null ||
+        if (action == DirectorStepEngine.Action.CHOP_TREE && step.patch.getPatchType() == PatchType.CALQUAT)
+            action = DirectorStepEngine.Action.REMOVE_TREE;
+        boolean changed = near != nearCurrentTarget || visibleObservation == null ||
             !Objects.equals(visibleObservation.state, observation.state) ||
             visibleObservation.source != observation.source ||
             !Objects.equals(visibleObservation.protectedByFarmer, observation.protectedByFarmer) ||
             action != visibleAction;
+        if (near && nearCurrentTarget && visibleObservation != null &&
+            visibleObservation.source == QuestFarmingStateReader.Source.LIVE && observation.source == QuestFarmingStateReader.Source.LIVE &&
+            visibleAction != action && visibleAction != DirectorStepEngine.Action.INSPECT && visibleAction != DirectorStepEngine.Action.COMPLETE)
+            observedInteractions.add(visibleAction);
+        nearCurrentTarget = near;
         visibleObservation = observation;
         visibleAction = action;
         if (observation.source == QuestFarmingStateReader.Source.LIVE &&
@@ -2318,6 +2334,8 @@ final class FarmingDirectorPanel extends PluginPanel
         initiallyGrowing = false;
         sawHarvestable = false;
         sawLiveEmpty = false;
+        nearCurrentTarget = false;
+        observedInteractions.clear();
         visibleObservation = null;
         visibleAction = DirectorStepEngine.Action.INSPECT;
     }
@@ -2685,6 +2703,15 @@ final class FarmingDirectorPanel extends PluginPanel
         return directorRunDisplayed || planningInFlight;
     }
 
+    private int plannedCompostItem()
+    {
+        if (currentSession == null || waveIndex >= currentSession.supplies.size()) return -1;
+        Map<Integer, Integer> kit = currentSession.supplies.get(waveIndex);
+        for (DirectorCompostChoice choice : DirectorCompostChoice.values())
+            if (choice.item >= 0 && kit.containsKey(choice.item)) return choice.item;
+        return -1;
+    }
+
     private void publishWorldTarget()
     {
         directorRunDisplayed = currentPlan != null || compostPageOpen;
@@ -2692,13 +2719,11 @@ final class FarmingDirectorPanel extends PluginPanel
             !planningInFlight && !compostPageOpen && currentStep >= 0 &&
             currentStep < currentPlan.steps.size() && activeProfile != null
             ? new DirectorWorldGuide.Target(currentPlan.steps.get(currentStep), visibleAction,
-                activeProfile, includeCompostForRun.isSelected(),
-                currentSession != null && waveIndex < currentSession.supplies.size() &&
-                    currentSession.supplies.get(waveIndex).containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)
-                    ? ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED : ItemID.BUCKET_ULTRACOMPOST,
+                activeProfile, plannedCompostItem() >= 0,
+                plannedCompostItem(),
                 currentSession == null ? RouteTeleport.NONE : currentSession.teleportByPatch.getOrDefault(
                     FarmRouteManager.key(currentPlan.steps.get(currentStep).patch), RouteTeleport.NONE),
-                visibleObservation == null || visibleObservation.source != QuestFarmingStateReader.Source.LIVE) : null;
+                !nearCurrentTarget) : null;
     }
 
     private void publishBankChecklist()
@@ -2768,7 +2793,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 ? "Harvest/clearing complete or patch empty. No replacement seed "
                     + "allocated; press Next, or restock and Replan remaining."
                 : DirectorStepEngine.instruction(visibleAction, current.crop,
-                    current.patch.getPatchType(), includeCompostForRun.isSelected());
+                    current.patch.getPatchType(), plannedCompostItem() >= 0);
             if (visibleObservation != null)
             {
                 String source = visibleObservation.source.name().replace('_', ' ');
@@ -2780,10 +2805,10 @@ final class FarmingDirectorPanel extends PluginPanel
         if (active && !runFinished && !awaitingBank && currentStep < steps && !guideDetails.isSelected())
         {
             DirectorPlanner.Step step = currentPlan.steps.get(currentStep);
-            actionText = visibleObservation == null || visibleObservation.source != QuestFarmingStateReader.Source.LIVE
+            actionText = !nearCurrentTarget
                 ? (worldTarget == null ? "Travel to " + step.patch.getLocation() : DirectorWorldGuide.travelInstruction(worldTarget)) + (navigationEnabled ? " · follow Shortest Path." : ".")
                 : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(),
-                    includeCompostForRun.isSelected());
+                    plannedCompostItem() >= 0);
         }
         advancedGuideControls.setVisible(guideDetails.isSelected());
         progress.setVisible(guideDetails.isSelected() || awaitingBank || runFinished);
@@ -2879,9 +2904,16 @@ final class FarmingDirectorPanel extends PluginPanel
                     : "Existing crop: check condition or gardener protection";
                 if (isCurrent && !guideDetails.isSelected())
                 {
+                    for (DirectorStepEngine.Action previous : observedInteractions)
+                    {
+                        JLabel finished = new JLabel(wrapped("✓ " + DirectorWorldGuide.instruction(previous, step.crop,
+                            step.patch.getPatchType(), plannedCompostItem() >= 0), 157));
+                        finished.setForeground(new Color(143, 187, 136));
+                        item.add(finished);
+                    }
                     JLabel actionLine = new JLabel(wrapped("▶ " + (worldTarget != null && worldTarget.travelling
                         ? DirectorWorldGuide.travelInstruction(worldTarget)
-                        : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(), includeCompostForRun.isSelected())), 157));
+                        : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(), plannedCompostItem() >= 0)), 157));
                     actionLine.setForeground(new Color(150, 218, 239));
                     item.add(actionLine);
                 }

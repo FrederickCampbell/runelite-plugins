@@ -58,11 +58,13 @@ final class DirectorBankChecklist
             if (coins == 0) supplies.remove(ItemID.COINS);
             else supplies.put(ItemID.COINS, coins);
         }
-        if (supplies.containsKey(ItemID.BUCKET_ULTRACOMPOST))
+        for (int id : new int[]{ItemID.BUCKET_COMPOST, ItemID.BUCKET_SUPERCOMPOST, ItemID.BUCKET_ULTRACOMPOST})
         {
-            if (compost == 0) supplies.remove(ItemID.BUCKET_ULTRACOMPOST);
-            else supplies.put(ItemID.BUCKET_ULTRACOMPOST, compost);
+            if (!supplies.containsKey(id)) continue;
+            if (compost == 0) supplies.remove(id);
+            else supplies.put(id, compost);
         }
+        if (compost == 0) supplies.remove(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED);
         return new DirectorBankChecklist(seeds, supplies, travel);
     }
 

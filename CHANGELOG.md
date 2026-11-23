@@ -1,5 +1,15 @@
 # Ironman Farming Director development history
 
+## v0.7.0-beta.1 — Quest Helper interaction parity pass
+
+- Imported the original 32 TreeRun/HerbRun patch object IDs and 22 gardener IDs from Quest Helper, preserving its attribution and using the existing DirectorWaypoints coordinates. Event-tracked exact matching precedes the conservative Advisor fallback.
+- Separate tree removal (pay or chop), stump clearing, raking, planting, compost and protection actions. Budget 200 coins per potentially paid removal; manual chopping still needs an axe.
+- Profile-scoped compost selector supports none, regular, super, ultra or filled bottomless (ultra fallback), preserving legacy boolean settings. Both protection and compost may be enabled independently.
+- Active interaction snapshot drives route item/spellbook highlights, patch/NPC world hints, specific gardener dialogue choice outlines, active inventory highlights and sidebar. Generic confirmations are left manual to avoid false matches.
+- Current patch card shows observed action transitions; advanced details are tucked away. Existing planner, storage scanner and Shortest Path integration remain.
+- Added regression tests for exact targets, action selection, removal coins, dialogue matching, travel hints and compost migration/stock. In-client testing remains required, particularly ambiguous specialist patches, garden dialogues and care confirmation.
+
+
 ## v0.6.1-beta.1 — In-world guidance and simple workflow
 
 - Reused Advisor's patch-object tracking and footprint overlay; adapted Quest Helper's active ObjectStep clickbox, down-arrow and item-icon presentation to the Director's actual planned step.

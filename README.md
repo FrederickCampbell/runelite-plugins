@@ -1,4 +1,4 @@
-# Ironman Farming Director — v0.6.1-beta.1
+# Ironman Farming Director — v0.7.0-beta.1
 
 A standalone, integration-first RuneLite farming assistant for ironmen. **This is
 a developer beta, not an in-game verified production release.** The v0.6.1 branch
@@ -31,7 +31,7 @@ the vendored Quest Helper farming-state reader, with the unified RuneLite-native
 
 Download the v0.6.1 branch ZIP:
 
-https://github.com/FrederickCampbell/runelite-plugins/archive/refs/heads/ironman-farming-director-v0.6.1.zip
+https://github.com/FrederickCampbell/runelite-plugins/archive/refs/heads/ironman-farming-director-v0.7.zip
 
 Extract its Gradle project into:
 
@@ -41,6 +41,28 @@ Use **Refresh → Build → Launch** in RuneLite Dev Manager. A normal local bui
 from the project root uses `gradlew.bat clean test build`. CI uses Java 21 to
 run Gradle while the source targets Java 11. Neither the Windows launch
 workflow nor in-game behavior has been tested by this CI.
+
+## v0.7 interaction guidance
+
+Tree removal and tree protection are independent. Pay 200 coins to the
+gardener or chop/dig yourself; the appropriate interaction is selected
+from current patch state. Protection payments remain conditional on
+planned available stock. Choose no compost, regular compost, supercompost,
+ultracompost or the filled bottomless bucket (ultracompost fallback).
+The loadout accounts for the selected compost and removal coins. Verify
+bottomless contents and charges yourself.
+
+The exact 22 tree-run and 10 herb-run object definitions from Quest Helper
+are used first, with original gardener IDs for tree removal/protection.
+Other patches retain the existing conservative identification logic.
+The current interaction drives the world, sidebar and inventory highlights;
+during travel, configured route items and their supported visible spellbook
+alternatives are highlighted instead. Shortest Path remains optional.
+The dialogue overlay outlines the known, specific gardener choices without
+changing game widgets or clicking; generic Yes confirmations are manual.
+The current patch card shows observed interaction transitions, not guessed
+completion. Rake, plant, compost, payment and tree removal are separate
+instructions. No changes to game input or menu behavior.
 
 ## Using the sidebar
 

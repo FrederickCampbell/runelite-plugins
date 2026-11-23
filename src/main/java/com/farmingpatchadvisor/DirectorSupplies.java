@@ -21,6 +21,11 @@ final class DirectorSupplies
     static Map<Integer, Integer> required(List<FarmRunPatch> patches, boolean compost,
                                           boolean filledBucket, boolean carriedSecateurs, boolean payRemoval)
     {
+        return required(patches, compost ? (filledBucket ? ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED : ItemID.BUCKET_ULTRACOMPOST) : -1, carriedSecateurs, payRemoval);
+    }
+
+    static Map<Integer, Integer> required(List<FarmRunPatch> patches, int compostItem, boolean carriedSecateurs, boolean payRemoval)
+    {
         Map<Integer, Integer> items = new LinkedHashMap<>();
         if (patches.isEmpty()) return items;
         items.put(ItemID.RAKE, 1);
@@ -31,11 +36,8 @@ final class DirectorSupplies
             items.put(ItemID.FAIRY_ENCHANTED_SECATEURS, 1);
         int doses = patches.stream().filter(p -> p.getPatchType().usesCompost())
             .mapToInt(FarmRunPatch::getPatchCount).sum();
-        if (compost && doses > 0)
-        {
-            if (filledBucket) items.put(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED, 1);
-            else items.put(ItemID.BUCKET_ULTRACOMPOST, doses);
-        }
+        if (compostItem >= 0 && doses > 0)
+            items.put(compostItem, compostItem == ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED ? 1 : doses);
         int coins = 0;
         if (payRemoval) for (FarmRunPatch patch : patches)
         {
@@ -85,6 +87,8 @@ final class DirectorSupplies
             case ItemID.DIBBER: return "Seed dibber";
             case ItemID.FAIRY_ENCHANTED_SECATEURS: return "Magic secateurs";
             case ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED: return "Filled bottomless compost bucket";
+            case ItemID.BUCKET_COMPOST: return "Compost";
+            case ItemID.BUCKET_SUPERCOMPOST: return "Supercompost";
             case ItemID.BUCKET_ULTRACOMPOST: return "Ultracompost";
             default:
                 String payment = ProtectionPaymentCatalog.nameForItem(id);
