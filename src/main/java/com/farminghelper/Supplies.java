@@ -59,6 +59,15 @@ final class Supplies
         return items;
     }
 
+    static boolean hasProtectionPayment(RunPlanner.Step step, Map<Integer, Integer> inventory)
+    {
+        if (step.crop == null) return false;
+        List<ProtectionPayment> payments = ProtectionPaymentCatalog.forCrop(step.crop);
+        return !payments.isEmpty() && payments.stream().allMatch(payment ->
+            inventory.getOrDefault(payment.getItemId(), 0) >=
+                payment.getQuantity() * step.patch.getPatchCount());
+    }
+
     static boolean recommended(int id)
     {
         return id == ItemID.FAIRY_ENCHANTED_SECATEURS ||
