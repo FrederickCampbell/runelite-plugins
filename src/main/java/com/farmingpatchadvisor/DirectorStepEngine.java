@@ -26,6 +26,24 @@ final class DirectorStepEngine
 
     private DirectorStepEngine() {}
 
+    static boolean isTreeType(PatchType type)
+    {
+        switch (type)
+        {
+            case TREE:
+            case FRUIT_TREE:
+            case CALQUAT:
+            case HARDWOOD_TREE:
+            case SPIRIT_TREE:
+            case CELASTRUS:
+            case REDWOOD:
+            case CRYSTAL_TREE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     static Action action(PatchType type, @Nullable CropState state,
                          boolean requireProtection, @Nullable Boolean protectedByFarmer)
     {
@@ -44,11 +62,11 @@ final class DirectorStepEngine
             case STUMP:
                 return Action.DIG_STUMP;
             case UNCHECKED:
-                return type == PatchType.TREE ? Action.CHECK_HEALTH : Action.HARVEST;
+                return isTreeType(type) ? Action.CHECK_HEALTH : Action.HARVEST;
             case HARVESTABLE:
-                return type == PatchType.TREE ? Action.REMOVE_TREE : Action.HARVEST;
+                return isTreeType(type) ? Action.REMOVE_TREE : Action.HARVEST;
             case GROWING:
-                if (type == PatchType.TREE && requireProtection
+                if (isTreeType(type) && requireProtection
                     && !Boolean.TRUE.equals(protectedByFarmer))
                 {
                     return Action.PROTECT_TREE;
@@ -65,8 +83,8 @@ final class DirectorStepEngine
         switch (action)
         {
             case HARVEST:
-                return "Harvest the " + (type == PatchType.ALLOTMENT ? "allotment" : "herbs") +
-                    ", then compost and plant " + name + ".";
+                return "Harvest this " + type.getDisplayName().toLowerCase() +
+                    " patch, then replant " + name + " if appropriate.";
             case CHECK_HEALTH:
                 return "Check the tree's health, then remove the tree.";
             case REMOVE_TREE:
@@ -78,8 +96,8 @@ final class DirectorStepEngine
             case CURE:
                 return "Cure the diseased crop before harvesting.";
             case PLANT:
-                return type == PatchType.TREE
-                    ? "Rake if necessary, compost and plant " + crop.getName() + "."
+                return isTreeType(type)
+                    ? "Rake if necessary, compost and plant " + name + "."
                     : "Rake if necessary, harvest if needed, compost and plant "
                         + name + ".";
             case PROTECT_TREE:

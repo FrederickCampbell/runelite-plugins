@@ -94,26 +94,7 @@ final class DirectorPlanner
         Map<Integer, Integer> used = new LinkedHashMap<>();
         Map<Integer, Integer> paymentItems = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
-        List<Crop> eligible = new ArrayList<>();
-        for (Crop crop : CropCatalog.crops(type))
-        {
-            if (crop.getLevel() <= farmingLevel)
-            {
-                eligible.add(crop);
-            }
-        }
-        eligible.sort(Comparator.comparingInt(Crop::getLevel).reversed());
-
         Map<String, Integer> rank = priorityRanks(priorities);
-        if (customPriority)
-        {
-            eligible.removeIf(c -> !rank.containsKey(normalize(c.getName())));
-            eligible.sort(Comparator.comparingInt(c -> rank.get(normalize(c.getName()))));
-            if (eligible.isEmpty())
-            {
-                warnings.add("No crops in your custom priority list meet your Farming level.");
-            }
-        }
         Map<String, Integer> reservesByName = parseReserves(reserves);
         int budget = Math.max(0, INVENTORY_CAPACITY - freeHarvestSlots);
 
@@ -125,6 +106,21 @@ final class DirectorPlanner
                 continue;
             }
             Crop choice = null;
+            PatchType patchType = patch.getPatchType();
+            List<Crop> eligible = new ArrayList<>();
+            for (Crop crop : CropCatalog.crops(patchType))
+            {
+                if (crop.getLevel() <= farmingLevel)
+                {
+                    eligible.add(crop);
+                }
+            }
+            eligible.sort(Comparator.comparingInt(Crop::getLevel).reversed());
+            if (customPriority)
+            {
+                eligible.removeIf(c -> !rank.containsKey(normalize(c.getName())));
+                eligible.sort(Comparator.comparingInt(c -> rank.get(normalize(c.getName()))));
+            }
             int count = Math.max(1, patch.getPatchCount());
             for (Crop candidate : eligible)
             {
@@ -146,7 +142,7 @@ final class DirectorPlanner
             Map<Integer, Integer> nextSeeds = new LinkedHashMap<>(used);
             nextSeeds.merge(choice.getItemId(), count * choice.getQuantity(), Integer::sum);
             Map<Integer, Integer> nextPayments = new LinkedHashMap<>(paymentItems);
-            if (type == PatchType.TREE && protectTrees)
+            if (DirectorStepEngine.isTreeType(patchType) && protectTrees)
             {
                 for (ProtectionPayment payment : ProtectionPaymentCatalog.forCrop(choice))
                 {
@@ -183,8 +179,8 @@ final class DirectorPlanner
         int slots = Math.max(0, tools) + Math.max(0, teleports);
         for (Map.Entry<Integer, Integer> item : seeds.entrySet())
         {
-            // Herb seeds stack; each tree sapling occupies an inventory slot.
-            slots += type == PatchType.TREE ? item.getValue() : 1;
+            // Query RuneLite's real item composition for every patch category.
+            slots += stackable.test(item.getKey()) ? 1 : item.getValue();
         }
         for (Map.Entry<Integer, Integer> item : payments.entrySet())
         {

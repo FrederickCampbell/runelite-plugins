@@ -136,4 +136,35 @@ public class DirectorPlannerTest
             .get("ranarr").intValue());
         assertFalse(DirectorPlanner.parseReserves("snapdragon=abc").containsKey("snapdragon"));
     }
+
+    @Test
+    public void mixedRunRetainsIndependentCropTypesInOneStockBudget()
+    {
+        java.util.List<FarmRunPatch> patches = Arrays.asList(
+            new FarmRunPatch("Ardougne", "", PatchType.HERB),
+            new FarmRunPatch("Falador", "", PatchType.TREE),
+            new FarmRunPatch("Ardougne", "North", PatchType.ALLOTMENT));
+        Crop herb = crop(PatchType.HERB, "ranarr");
+        Crop tree = crop(PatchType.TREE, "oak");
+        Crop allotment = crop(PatchType.ALLOTMENT, "watermelon");
+        java.util.Map<Integer,Integer> owned = new HashMap<>();
+        owned.put(herb.getItemId(), 1);
+        owned.put(tree.getItemId(), 1);
+        owned.put(allotment.getItemId(), 3);
+        DirectorPlanner.Plan plan = DirectorPlanner.build(null, patches, 80,
+            owned, false, "", "", 3, 0, 6, false,
+            id -> id != tree.getItemId());
+        assertEquals(3, plan.steps.size());
+        assertEquals(1, plan.seeds.get(tree.getItemId()).intValue());
+        assertEquals(3, plan.seeds.get(allotment.getItemId()).intValue());
+        assertEquals(6, plan.occupiedSlots); // tools + herb + tree sapling + watermelon stack
+    }
+
+    @Test
+    public void treeFamilyUsesCheckHealthAndProtection()
+    {
+        assertTrue(DirectorStepEngine.isTreeType(PatchType.FRUIT_TREE));
+        assertTrue(DirectorStepEngine.isTreeType(PatchType.HARDWOOD_TREE));
+        assertFalse(DirectorStepEngine.isTreeType(PatchType.BUSH));
+    }
 }
