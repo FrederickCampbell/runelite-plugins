@@ -190,6 +190,9 @@ final class FarmingDirectorPanel extends PluginPanel
     private volatile DirectorPlanner.Plan currentPlan;
     private volatile DirectorWorldGuide.Target worldTarget;
     private volatile boolean directorRunDisplayed;
+    private volatile boolean preparingLoadout;
+    private final JButton leaveLoadout = new JButton("Begin farming");
+    private final JLabel loadoutReady = new JLabel();
     private final JPanel advancedGuideControls = new JPanel();
     private DirectorSessionPlan currentSession;
     private int waveIndex;
@@ -347,14 +350,20 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         visiblePage = name;
         pageLayout.show(pages, name);
+        if ("guide".equals(name) && preparingLoadout)
+        {
+            visiblePage = "loadout";
+            pageLayout.show(pages, "loadout");
+            name = "loadout";
+        }
         if ("patches".equals(name)) refreshPatchManager();
         if ("editor".equals(name)) showEditorMode();
         if ("compost".equals(name)) refreshCompostGuide();
         if ("route".equals(name)) loadRouteEditor();
         if ("status".equals(name)) refreshStatusPage();
-        if ("loadout".equals(name)) refreshLoadoutPage();
         publishWorldTarget();
         publishBankChecklist();
+        if ("loadout".equals(name)) refreshLoadoutPage();
     }
 
     private JPanel createSelection()
@@ -363,7 +372,7 @@ final class FarmingDirectorPanel extends PluginPanel
         JLabel title = label("Farming Director", true);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 18f));
         addFull(list, title);
-        addFull(list, label("IRONMAN  ·  v0.6 beta", false));
+        addFull(list, label("IRONMAN  ·  v0.6.1 beta", false));
         addFull(list, selectionStatus);
         addFull(list, label("START A RUN", true));
         addFull(list, runType);
@@ -934,9 +943,10 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel page = new JPanel(new BorderLayout());
         page.setBackground(ColorScheme.DARK_GRAY_COLOR);
         JPanel top = vertical();
-        addFull(top, nav("← Active guide", "guide"));
-        addFull(top, label("Loadout", true));
-        addFull(top, label("Estimated at planning time. Check your bag before leaving storage.", false));
+        addFull(top, label("Get supplies", true));
+        leaveLoadout.addActionListener(e -> continueFromLoadout());
+        addFull(top, leaveLoadout);
+        addFull(top, loadoutReady);
         JButton refresh = new JButton("Rescan / replan remaining");
         refresh.addActionListener(e -> beginRun(true));
         addFull(top, refresh);
@@ -969,9 +979,60 @@ final class FarmingDirectorPanel extends PluginPanel
         }
     }
 
+    private boolean suppliesMissing()
+    {
+        return loadout.directorChecklistRows().stream().anyMatch(item -> item.getOwned() < item.getNeeded()) ||
+            loadout.directorTravelRows().stream().anyMatch(item -> item.getOwned() < item.getNeeded());
+    }
+
+    private void continueFromLoadout()
+    {
+        if (currentPlan == null || planningInFlight) return;
+        if (awaitingBank)
+        {
+            beginNextWave();
+            return;
+        }
+        if (preparingLoadout && suppliesMissing() && JOptionPane.showConfirmDialog(this,
+            "Some supplies are still missing. Continue anyway?", "Check supplies",
+            JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        preparingLoadout = false;
+        showPage("guide");
+        render();
+        if (!paused && !runFinished && currentStep < currentPlan.steps.size())
+        {
+            requestRoute(currentPlan.steps.get(currentStep));
+            clientThread.invoke(this::onClientTick);
+        }
+    }
+
+    private void liveLoadoutRows(List<FarmingLoadout.ChecklistItem> rows)
+    {
+        for (FarmingLoadout.ChecklistItem item : rows)
+        {
+            boolean ready = item.getOwned() >= item.getNeeded();
+            JPanel row = new JPanel(new BorderLayout(4, 0));
+            row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            row.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            JLabel name = new JLabel(wrapped((ready ? "✓ " : "○ ") + item.getName(), 119));
+            JLabel amount = new JLabel(item.amount());
+            Color color = ready ? new Color(143, 187, 136) : new Color(240, 144, 120);
+            name.setForeground(color); amount.setForeground(color);
+            row.add(name, BorderLayout.CENTER);
+            row.add(amount, BorderLayout.EAST);
+            addFull(loadoutRows, row);
+        }
+    }
+
     private void refreshLoadoutPage()
     {
         loadoutRows.removeAll();
+        leaveLoadout.setText(awaitingBank ? "Replan after banking" : preparingLoadout ? "Begin farming" : "Return to guide");
+        leaveLoadout.setEnabled(currentPlan != null && !planningInFlight);
+        boolean missing = suppliesMissing();
+        loadoutReady.setForeground(missing ? new Color(244, 197, 86) : new Color(143, 187, 136));
+        loadoutReady.setText(wrapped(missing ? "Withdraw the missing items below." :
+            "Carried items ready. Check teleport charges manually.", 184));
         if (currentSession == null || currentPlan == null)
         {
             addFull(loadoutRows, warning("Start a run to plan supplies."));
@@ -985,6 +1046,10 @@ final class FarmingDirectorPanel extends PluginPanel
             Map<Integer, Integer> kit = index < currentSession.supplies.size()
                 ? currentSession.supplies.get(index) : Collections.emptyMap();
             addFull(loadoutRows, label("WAVE " + (index + 1) + " · " + wave.steps.size() + " stops", true));
+            liveLoadoutRows(loadout.directorChecklistRows());
+            liveLoadoutRows(loadout.directorTravelRows());
+            if (guideDetails.isSelected())
+            {
             addFull(loadoutRows, label(wave.occupiedSlots + " planned slots + " + wave.reservedSlots
                 + " free-space reserve / 28", false));
             if (awaitingBank)
@@ -1005,6 +1070,13 @@ final class FarmingDirectorPanel extends PluginPanel
             if (!currentSession.observedStock.bankObserved) addFull(loadoutRows, warning("Bank snapshot missing or stale."));
             if (!currentSession.observedStock.vaultObserved) addFull(loadoutRows, warning("Seed Vault snapshot missing or stale."));
             addFull(loadoutRows, warning("Teleport charges, actual harvest yield and axe alternatives require manual verification."));
+            }
+            else
+            {
+                if (awaitingBank) addFull(loadoutRows, warning("Replan after banking to refresh the next loadout."));
+                if (!currentSession.observedStock.bankObserved) addFull(loadoutRows, warning("Open your bank to refresh stock."));
+                if (!currentSession.observedStock.vaultObserved && missing) addFull(loadoutRows, warning("Open the Seed Vault if seeds are stored there."));
+            }
         }
         loadoutRows.revalidate();
         loadoutRows.repaint();
@@ -1633,6 +1705,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 currentPlan = result.firstWave();
                 currentStep = 0;
                 paused = wasPaused;
+                preparingLoadout = false;
                 runFinished = false;
                 completedSteps.clear();
                 if (!preserveProgress) completedPatchKeys.clear();
@@ -1643,10 +1716,13 @@ final class FarmingDirectorPanel extends PluginPanel
                 render();
                 if (!preserveProgress || "guide".equals(visiblePage)
                     || "selection".equals(visiblePage)) showPage("guide");
-                if (!preserveProgress && !currentPlan.steps.isEmpty() &&
-                    loadout.directorChecklistRows().stream().anyMatch(item -> item.getOwned() < item.getNeeded()))
+                if (!currentPlan.steps.isEmpty() && !paused && suppliesMissing())
+                {
+                    preparingLoadout = true;
                     showPage("loadout");
-                if (!currentPlan.steps.isEmpty() && !paused)
+                }
+                else if ("loadout".equals(visiblePage)) showPage("guide");
+                if (!currentPlan.steps.isEmpty() && !paused && !preparingLoadout)
                 {
                     requestRoute(currentPlan.steps.get(0));
                     clientThread.invoke(this::onClientTick);
@@ -1724,6 +1800,13 @@ final class FarmingDirectorPanel extends PluginPanel
             warnings.add(approximateDestinations + " destinations lack exact verified tiles. "
                 + "These show area hints rather than pretending to have exact patch pathing.");
         }
+
+        // Default merged/all runs visit all patches at a farm together.
+        // An explicitly saved route remains authoritative.
+        if (!proximity && (selection == DirectorRunSelection.MERGED || selection == DirectorRunSelection.ALL)
+            && (selection != DirectorRunSelection.MERGED ||
+                profileValue("directorMergedRouteOrder_" + presetName, "").isEmpty()))
+            candidates = DirectorLocationOrder.group(candidates);
 
         if (proximity && client.getLocalPlayer() != null)
         {
@@ -2131,7 +2214,7 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         DirectorPlanner.Plan plan = currentPlan;
         int index = currentStep;
-        if (plan == null || planningInFlight || paused || runFinished || awaitingBank || compostPageOpen
+        if (plan == null || planningInFlight || preparingLoadout || paused || runFinished || awaitingBank || compostPageOpen
             || !Objects.equals(activeProfile, configManager.getRSProfileKey())
             || client.getGameState() != GameState.LOGGED_IN
             || index < 0 || index >= plan.steps.size())
@@ -2148,7 +2231,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private void acceptObservation(DirectorPlanner.Plan plan, int index,
                                    QuestFarmingStateReader.Observation observation)
     {
-        if (plan != currentPlan || index != currentStep || planningInFlight || paused || runFinished || awaitingBank
+        if (plan != currentPlan || index != currentStep || planningInFlight || preparingLoadout || paused || runFinished || awaitingBank
             || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
         {
             return;
@@ -2211,7 +2294,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void moveStep(int delta, boolean automatic)
     {
-        if (currentPlan == null || planningInFlight || paused || runFinished) return;
+        if (currentPlan == null || planningInFlight || preparingLoadout || paused || runFinished) return;
         if (awaitingBank)
         {
             if (delta > 0)
@@ -2372,7 +2455,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void requestRoute(DirectorPlanner.Step step)
     {
-        if (!navigationEnabled || paused || compostPageOpen)
+        if (!navigationEnabled || preparingLoadout || paused || compostPageOpen)
         {
             return;
         }
@@ -2434,7 +2517,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void jumpTo(int targetIndex)
     {
-        if (currentPlan == null || planningInFlight || paused || targetIndex < 0
+        if (currentPlan == null || planningInFlight || preparingLoadout || paused || targetIndex < 0
             || targetIndex >= currentPlan.steps.size())
         {
             return;
@@ -2482,6 +2565,7 @@ final class FarmingDirectorPanel extends PluginPanel
         ++planningGeneration;
         planningInFlight = false;
         String stoppedProfile = activeProfile;
+        preparingLoadout = false;
         currentPlan = null;
         currentSession = null;
         activeRunSelection = null;
@@ -2507,6 +2591,7 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         ++planningGeneration;
         worldTarget = null;
+        preparingLoadout = false;
         directorRunDisplayed = false;
         planningInFlight = false;
         SwingUtilities.invokeLater(() ->
@@ -2549,6 +2634,7 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 storage.setText("Storage updated. Start a run for a fresh plan.");
             }
+            else if ("loadout".equals(visiblePage)) refreshLoadoutPage();
         });
     }
 
@@ -2560,7 +2646,7 @@ final class FarmingDirectorPanel extends PluginPanel
     DirectorWorldGuide.Target activeWorldTarget()
     {
         DirectorWorldGuide.Target target = worldTarget;
-        return target != null && !paused && !planningInFlight && !runFinished && !compostPageOpen
+        return target != null && !paused && !preparingLoadout && !planningInFlight && !runFinished && !compostPageOpen
             && Objects.equals(target.profile, configManager.getRSProfileKey()) ? target : null;
     }
 
@@ -2572,7 +2658,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private void publishWorldTarget()
     {
         directorRunDisplayed = currentPlan != null || compostPageOpen;
-        worldTarget = currentPlan != null && !paused && !runFinished && !awaitingBank &&
+        worldTarget = currentPlan != null && !paused && !preparingLoadout && !runFinished && !awaitingBank &&
             !planningInFlight && !compostPageOpen && currentStep >= 0 &&
             currentStep < currentPlan.steps.size() && activeProfile != null
             ? new DirectorWorldGuide.Target(currentPlan.steps.get(currentStep), visibleAction,
