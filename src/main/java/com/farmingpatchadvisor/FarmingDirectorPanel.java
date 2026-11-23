@@ -188,6 +188,9 @@ final class FarmingDirectorPanel extends PluginPanel
         }
     }
     private volatile DirectorPlanner.Plan currentPlan;
+    private volatile DirectorWorldGuide.Target worldTarget;
+    private volatile boolean directorRunDisplayed;
+    private final JPanel advancedGuideControls = new JPanel();
     private DirectorSessionPlan currentSession;
     private int waveIndex;
     private boolean awaitingBank;
@@ -350,6 +353,7 @@ final class FarmingDirectorPanel extends PluginPanel
         if ("route".equals(name)) loadRouteEditor();
         if ("status".equals(name)) refreshStatusPage();
         if ("loadout".equals(name)) refreshLoadoutPage();
+        publishWorldTarget();
         publishBankChecklist();
     }
 
@@ -422,8 +426,8 @@ final class FarmingDirectorPanel extends PluginPanel
         progressBar.setStringPainted(true);
         progressBar.setForeground(new Color(120, 173, 113));
         addFull(header, activeTitle);
-        addFull(header, progress);
         addFull(header, progressBar);
+        addFull(header, progress);
         activeDestination.setFont(activeDestination.getFont().deriveFont(Font.BOLD, 13f));
         activeDestination.setForeground(Color.WHITE);
         addFull(header, activeDestination);
@@ -449,12 +453,24 @@ final class FarmingDirectorPanel extends PluginPanel
         JPanel content = vertical();
         openLoadout.addActionListener(e -> showPage("loadout"));
         addFull(content, openLoadout);
-        routeOptions.addActionListener(e -> chooseRouteOption());
-        addFull(content, routeOptions);
-        addFull(content, routeStatus);
-        addFull(content, replan);
-        addFull(content, overrides);
+        JButton navigate = new JButton("Route to current patch");
+        navigate.addActionListener(e ->
+        {
+            if (awaitingBank) requestBankRoute();
+            else if (currentPlan != null && currentStep < currentPlan.steps.size())
+                requestRoute(currentPlan.steps.get(currentStep));
+        });
+        addFull(content, navigate);
+        guideDetails.setText("More options & details");
         addFull(content, guideDetails);
+        advancedGuideControls.setLayout(new BoxLayout(advancedGuideControls, BoxLayout.Y_AXIS));
+        advancedGuideControls.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        routeOptions.addActionListener(e -> chooseRouteOption());
+        addFull(advancedGuideControls, routeOptions);
+        addFull(advancedGuideControls, routeStatus);
+        addFull(advancedGuideControls, replan);
+        addFull(advancedGuideControls, overrides);
+        addFull(content, advancedGuideControls);
         addFull(content, stepList);
         guide.add(scrolling(content), BorderLayout.CENTER);
         JPanel actions = new JPanel(new GridLayout(2, 2, 4, 4));
@@ -1574,6 +1590,7 @@ final class FarmingDirectorPanel extends PluginPanel
             return;
         }
         planningInFlight = true;
+        publishWorldTarget();
         publishBankChecklist();
         guideWarning.setText(wrapped("Planning remaining patches…", 184));
         guideWarning.setVisible(true);
@@ -1626,6 +1643,9 @@ final class FarmingDirectorPanel extends PluginPanel
                 render();
                 if (!preserveProgress || "guide".equals(visiblePage)
                     || "selection".equals(visiblePage)) showPage("guide");
+                if (!preserveProgress && !currentPlan.steps.isEmpty() &&
+                    loadout.directorChecklistRows().stream().anyMatch(item -> item.getOwned() < item.getNeeded()))
+                    showPage("loadout");
                 if (!currentPlan.steps.isEmpty() && !paused)
                 {
                     requestRoute(currentPlan.steps.get(0));
@@ -2486,6 +2506,8 @@ final class FarmingDirectorPanel extends PluginPanel
     void resetCharacter()
     {
         ++planningGeneration;
+        worldTarget = null;
+        directorRunDisplayed = false;
         planningInFlight = false;
         SwingUtilities.invokeLater(() ->
         {
@@ -2533,6 +2555,28 @@ final class FarmingDirectorPanel extends PluginPanel
     void shutDown()
     {
         resetCharacter();
+    }
+
+    DirectorWorldGuide.Target activeWorldTarget()
+    {
+        DirectorWorldGuide.Target target = worldTarget;
+        return target != null && !paused && !planningInFlight && !runFinished && !compostPageOpen
+            && Objects.equals(target.profile, configManager.getRSProfileKey()) ? target : null;
+    }
+
+    boolean directorRunDisplayed()
+    {
+        return directorRunDisplayed || planningInFlight;
+    }
+
+    private void publishWorldTarget()
+    {
+        directorRunDisplayed = currentPlan != null || compostPageOpen;
+        worldTarget = currentPlan != null && !paused && !runFinished && !awaitingBank &&
+            !planningInFlight && !compostPageOpen && currentStep >= 0 &&
+            currentStep < currentPlan.steps.size() && activeProfile != null
+            ? new DirectorWorldGuide.Target(currentPlan.steps.get(currentStep), visibleAction,
+                activeProfile, includeCompostForRun.isSelected()) : null;
     }
 
     private void publishBankChecklist()
@@ -2610,6 +2654,17 @@ final class FarmingDirectorPanel extends PluginPanel
                     ? ": unknown)" : ": " + visibleObservation.state.name().toLowerCase() + ")");
             }
         }
+        if (active && !runFinished && !awaitingBank && currentStep < steps && !guideDetails.isSelected())
+        {
+            DirectorPlanner.Step step = currentPlan.steps.get(currentStep);
+            actionText = visibleObservation == null || visibleObservation.source != QuestFarmingStateReader.Source.LIVE
+                ? "Travel to " + step.patch.getLocation() + " · follow Shortest Path."
+                : DirectorWorldGuide.instruction(visibleAction, step.crop, step.patch.getPatchType(),
+                    includeCompostForRun.isSelected());
+        }
+        advancedGuideControls.setVisible(guideDetails.isSelected());
+        progress.setVisible(guideDetails.isSelected() || awaitingBank || runFinished);
+        inventory.setVisible(guideDetails.isSelected() || awaitingBank);
         currentAction.setText(wrapped(actionText, 184));
         activeDestination.setVisible(active && !runFinished && !awaitingBank && currentStep < steps);
         activeDestination.setText(active && currentStep < steps
@@ -2655,6 +2710,7 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             for (int i = 0; i < steps; i++)
             {
+                if (!guideDetails.isSelected() && (i < currentStep || i > currentStep + 2 || awaitingBank || runFinished)) continue;
                 DirectorPlanner.Step step = currentPlan.steps.get(i);
                 JPanel item = new JPanel();
                 item.setLayout(new BoxLayout(item, BoxLayout.Y_AXIS));
@@ -2723,7 +2779,7 @@ final class FarmingDirectorPanel extends PluginPanel
                 }
                 stepList.add(item);
             }
-            if (awaitingBank && currentSession != null &&
+            if (guideDetails.isSelected() && awaitingBank && currentSession != null &&
                 waveIndex + 1 < currentSession.waves.size())
             {
                 DirectorPlanner.Plan nextWave = currentSession.waves.get(waveIndex + 1);
@@ -2746,7 +2802,7 @@ final class FarmingDirectorPanel extends PluginPanel
                         + formatTeleports(currentSession.teleports.get(waveIndex + 1))));
                 }
             }
-            if (!awaitingBank && currentSession != null && waveIndex == 0)
+            if (guideDetails.isSelected() && !awaitingBank && currentSession != null && waveIndex == 0)
             {
                 Map<Integer, Integer> kit = currentSession.supplies.isEmpty()
                     ? Collections.emptyMap() : currentSession.supplies.get(0);
@@ -2780,6 +2836,7 @@ final class FarmingDirectorPanel extends PluginPanel
         stepList.revalidate();
         stepList.repaint();
         if ("loadout".equals(visiblePage)) refreshLoadoutPage();
+        publishWorldTarget();
         publishBankChecklist();
     }
 

@@ -39,11 +39,15 @@ final class FarmingPatchOverlay extends Overlay
 	private final PatchTimerManager timerManager;
 	private final FarmRunFilterState runFilterState;
 	private final FarmRouteManager routes;
+    private final com.farmingpatchadvisor.queststate.QuestFarmingStateReader states;
+    private final net.runelite.client.game.ItemManager itemManager;
 
 	@Inject
 	private FarmingPatchOverlay(Client client, FarmingPatchAdvisorPlugin plugin, FarmingPatchAdvisorConfig config,
 		FarmingLoadout farmingLoadout, FarmingContractManager contractManager,
-		PatchTimerManager timerManager, FarmRunFilterState runFilterState, FarmRouteManager routes)
+		PatchTimerManager timerManager, FarmRunFilterState runFilterState, FarmRouteManager routes,
+        com.farmingpatchadvisor.queststate.QuestFarmingStateReader states,
+        net.runelite.client.game.ItemManager itemManager)
 	{
 		this.client = client;
 		this.plugin = plugin;
@@ -53,6 +57,8 @@ final class FarmingPatchOverlay extends Overlay
 		this.timerManager = timerManager;
 		this.runFilterState = runFilterState;
 		this.routes = routes;
+        this.states = states;
+        this.itemManager = itemManager;
 		setPosition(OverlayPosition.DYNAMIC);
 		setLayer(OverlayLayer.ABOVE_SCENE);
 		setPriority(PRIORITY_LOW);
@@ -61,6 +67,12 @@ final class FarmingPatchOverlay extends Overlay
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
+        if (plugin.directorRunDisplayed())
+        {
+            DirectorWorldGuide.Target target = plugin.activeDirectorWorldTarget();
+            if (target != null && config.directorWorldHints()) renderDirectorTarget(graphics, target);
+            return null; // Never render conflicting legacy recommendations during a Director run.
+        }
 		if (!config.showPatchLabels())
 		{
 			return null;
@@ -185,6 +197,71 @@ final class FarmingPatchOverlay extends Overlay
 		}
 		return null;
 	}
+
+    private void renderDirectorTarget(Graphics2D graphics, DirectorWorldGuide.Target target)
+    {
+        if (client.getGameState() != net.runelite.api.GameState.LOGGED_IN || client.getLocalPlayer() == null) return;
+        FarmRunPatch patch = target.patch;
+        Color color = config.directorTargetColor();
+        String text = DirectorWorldGuide.instruction(target.action, target.crop, patch.getPatchType(), target.compost);
+        int iconId = DirectorWorldGuide.itemId(target);
+        java.awt.image.BufferedImage icon = iconId < 0 ? null : itemManager.getImage(iconId);
+        if (target.action == DirectorStepEngine.Action.PROTECT_TREE)
+        {
+            int id = states.gardenerId(patch.getPatchType().name(), patch.getLocation(), patch.getName());
+            if (id >= 0 && client.getTopLevelWorldView() != null)
+            {
+                for (net.runelite.api.NPC npc : client.getTopLevelWorldView().npcs())
+                {
+                    if (npc.getId() == id && patch.getLocation().equals(PatchLocationCatalog.name(npc.getWorldLocation())))
+                    {
+                        DirectorWorldGuide.drawHint(graphics, npc.getConvexHull(), color, text, icon);
+                        return;
+                    }
+                }
+            }
+        }
+        List<PatchObject> candidates = new ArrayList<>();
+        for (GameObject object : plugin.getPatchObjects())
+        {
+            if (object.getWorldView() != client.getLocalPlayer().getWorldView() ||
+                object.getPlane() != client.getLocalPlayer().getWorldLocation().getPlane()) continue;
+            if (plugin.directorPatchType(object) == patch.getPatchType() &&
+                patch.getLocation().equals(PatchLocationCatalog.name(object.getWorldLocation())))
+                candidates.add(new PatchObject(object, patch.getPatchType(), target.crop, false));
+        }
+        List<List<PatchObject>> groups = new ArrayList<>();
+        List<WorldPoint> positions = new ArrayList<>();
+        while (!candidates.isEmpty())
+        {
+            List<PatchObject> group = collectConnectedPatch(candidates.remove(candidates.size() - 1), candidates);
+            groups.add(group);
+            int x = 0, y = 0;
+            for (PatchObject object : group)
+            {
+                x += object.object.getWorldLocation().getX();
+                y += object.object.getWorldLocation().getY();
+            }
+            positions.add(new WorldPoint(x / group.size(), y / group.size(), group.get(0).object.getPlane()));
+        }
+        WorldPoint exact = patch.getPatchType() == PatchType.HERB || DirectorStepEngine.isTreeType(patch.getPatchType())
+            ? DirectorWaypoints.exactPoint(patch) : null;
+        int count = states.patchNamesForType(patch.getPatchType().name(), patch.getLocation()).size();
+        int selected = DirectorWorldGuide.select(patch, positions, count, exact);
+        if (selected < 0) return;
+        List<PatchObject> group = groups.get(selected);
+        GameObject reference = group.get(0).object;
+        Set<PatchTile> tiles = patchTiles(group);
+        Area footprint = canvasArea(tiles, reference);
+        Area clickboxes = new Area();
+        for (PatchObject object : group)
+        {
+            java.awt.Shape clickbox = object.object.getClickbox();
+            if (clickbox != null) clickboxes.add(new Area(clickbox));
+        }
+        if (!footprint.isEmpty()) renderPatchBoundary(graphics, footprint, tiles, reference, color);
+        DirectorWorldGuide.drawHint(graphics, clickboxes.isEmpty() ? footprint : clickboxes, color, text, icon);
+    }
 
 	static boolean shouldHighlight(PatchType patchType, Set<ChecklistPatch> selectedPatches,
 		FarmRunFilterState runFilterState)

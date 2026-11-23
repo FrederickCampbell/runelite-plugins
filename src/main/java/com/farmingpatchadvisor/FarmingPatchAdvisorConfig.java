@@ -24,6 +24,15 @@ public interface FarmingPatchAdvisorConfig extends Config
         position = 1, section = directorSection)
     default boolean directorIncludeUnverifiedLocations() { return false; }
 
+    @ConfigItem(keyName = "directorWorldHints", name = "Active patch world hints",
+        description = "Highlight the active farming target and show an action arrow", position = 2, section = directorSection)
+    default boolean directorWorldHints() { return true; }
+
+    @Alpha
+    @ConfigItem(keyName = "directorTargetColor", name = "Active target color",
+        description = "Color for the current patch, clickbox and action arrow", position = 3, section = directorSection)
+    default Color directorTargetColor() { return new Color(120, 210, 150); }
+
     @ConfigSection(name = "Crop overrides", description = "Override automatic seed recommendations by patch type", position = 16, closedByDefault = true)
 	String cropOverridesSection = "cropOverridesSection";
 

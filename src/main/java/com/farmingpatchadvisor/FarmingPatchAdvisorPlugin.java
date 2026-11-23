@@ -337,6 +337,22 @@ public class FarmingPatchAdvisorPlugin extends Plugin
         clientThread.invokeLater(bankChecklistFilter::refreshDirectorFilter);
     }
 
+    DirectorWorldGuide.Target activeDirectorWorldTarget()
+    {
+        return directorPanel.activeWorldTarget();
+    }
+
+    boolean directorRunDisplayed()
+    {
+        return directorPanel.directorRunDisplayed();
+    }
+
+    PatchType directorPatchType(GameObject object)
+    {
+        // Explicit Director physical-patch choices supersede legacy area switches.
+        return getRecognizedPatchType(object);
+    }
+
 	Set<GameObject> getPatchObjects()
 	{
 		return Collections.unmodifiableSet(patchObjects);

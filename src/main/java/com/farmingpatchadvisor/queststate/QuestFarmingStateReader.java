@@ -95,6 +95,14 @@ public final class QuestFarmingStateReader
             worldPoint, implementation);
     }
 
+    /** Existing Quest Helper registry supplies the actual gardener NPC ID. */
+    public int gardenerId(String patchType, String location, String patchName)
+    {
+        PatchImplementation impl = implementation(patchType);
+        FarmingPatch patch = impl == null ? null : find(world, impl.getTab(), location, patchName, impl);
+        return patch == null ? -1 : patch.getFarmer();
+    }
+
     public List<String> patchNamesForType(String patchType, String location)
     {
         PatchImplementation impl = implementation(patchType);
