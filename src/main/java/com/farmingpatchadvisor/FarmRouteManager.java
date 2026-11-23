@@ -48,7 +48,13 @@ final class FarmRouteManager
 	 * manager after physical patch identities have been expanded. */
 	List<FarmRunPatch> directorPatches(FarmRunFilter run)
 	{
-		return selectPatches(new ArrayList<>(FarmRunCatalog.patches(config)), run);
+		return selectPatches(new ArrayList<>(FarmRunCatalog.patches()), run);
+	}
+
+	/** Merged presets do not inherit custom exclusions on the ALL route. */
+	List<FarmRunPatch> directorAllPatches()
+	{
+		return new ArrayList<>(FarmRunCatalog.patches());
 	}
 
 	private List<FarmRunPatch> selectPatches(List<FarmRunPatch> patches, FarmRunFilter run)
@@ -67,7 +73,7 @@ final class FarmRouteManager
 
 	List<FarmRunPatch> availablePatches()
 	{
-		List<FarmRunPatch> patches = new ArrayList<>(FarmRunCatalog.patches());
+		List<FarmRunPatch> patches = new ArrayList<>(FarmRunCatalog.patches(config));
 		Set<ChecklistPatch> selected = ChecklistPatch.selected(config);
 		patches.removeIf(p -> !ChecklistPatch.includes(selected, p.getPatchType()));
 		return patches;

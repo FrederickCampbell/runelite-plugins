@@ -83,6 +83,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final DirectorPatchPreferences patchPrefs;
     private final DirectorMergedPresets presets;
     private final CompostBinManager compostBins;
+    private final FarmingContractManager contractManager;
 
     private final JComboBox<DirectorRunSelection> runType =
         new JComboBox<>(new DirectorRunSelection[] {
@@ -126,6 +127,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
     private final JCheckBox allowUnverified = new JCheckBox("Include unverified-access locations");
     private final JPanel compostRows = new JPanel();
+    private final JPanel statusRows = new JPanel();
     private final javax.swing.DefaultListModel<FarmRunPatch> routeModel =
         new javax.swing.DefaultListModel<>();
     private final javax.swing.JList<FarmRunPatch> routeList =
@@ -187,7 +189,8 @@ final class FarmingDirectorPanel extends PluginPanel
                          FarmingPatchAdvisorPlugin plugin, FarmingPatchAdvisorConfig config,
                          FarmRouteManager routes, QuestFarmingStateReader stateReader, PatchTimerManager timerManager,
                          DirectorPatchPreferences patchPrefs, DirectorMergedPresets presets,
-                         CompostBinManager compostBins)
+                         CompostBinManager compostBins,
+                         FarmingContractManager contractManager)
     {
         super(false);
         this.client = client;
@@ -204,6 +207,7 @@ final class FarmingDirectorPanel extends PluginPanel
         this.patchPrefs = patchPrefs;
         this.presets = presets;
         this.compostBins = compostBins;
+        this.contractManager = contractManager;
 
         setLayout(new BorderLayout());
         setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -235,6 +239,7 @@ final class FarmingDirectorPanel extends PluginPanel
         pages.add(createSettings(), "settings");
         pages.add(createCompostGuide(), "compost");
         pages.add(createRouteEditor(), "route");
+        pages.add(createStatusPage(), "status");
     }
 
     private JPanel vertical()
@@ -284,6 +289,7 @@ final class FarmingDirectorPanel extends PluginPanel
         if ("editor".equals(name)) showEditorMode();
         if ("compost".equals(name)) refreshCompostGuide();
         if ("route".equals(name)) loadRouteEditor();
+        if ("status".equals(name)) refreshStatusPage();
     }
 
     private JPanel createSelection()
@@ -301,6 +307,7 @@ final class FarmingDirectorPanel extends PluginPanel
         addFull(list, resume);
         addFull(list, nav("Edit selected run", "editor"));
         addFull(list, nav("Manage farming patches", "patches"));
+        addFull(list, nav("Timers & farming contract", "status"));
         addFull(list, nav("Global settings", "settings"));
         JButton guide = new JButton("Return to active guide");
         guide.addActionListener(e -> { if (currentPlan != null) showPage("guide"); });
@@ -626,7 +633,8 @@ final class FarmingDirectorPanel extends PluginPanel
         routeEditFilter = selected.filter;
         routeModel.clear();
         routeEdits.clear();
-        List<FarmRunPatch> patches = routes.directorPatches(routeEditFilter);
+        List<FarmRunPatch> patches = selected == DirectorRunSelection.MERGED
+            ? routes.directorAllPatches() : routes.directorPatches(routeEditFilter);
         if (selected == DirectorRunSelection.MERGED)
         {
             String name = (String) presetChoice.getSelectedItem();
@@ -689,6 +697,58 @@ final class FarmingDirectorPanel extends PluginPanel
             return;
         }
         loadRouteEditor();
+    }
+
+    private JPanel createStatusPage()
+    {
+        JPanel screen = new JPanel(new BorderLayout(0, 7));
+        screen.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        JPanel top = vertical();
+        addFull(top, nav("← Back to runs", "selection"));
+        addFull(top, label("Farming status", true));
+        JButton refresh = new JButton("Refresh observed timers and contract");
+        refresh.addActionListener(e -> refreshStatusPage());
+        addFull(top, refresh);
+        screen.add(top, BorderLayout.NORTH);
+        statusRows.setLayout(new BoxLayout(statusRows, BoxLayout.Y_AXIS));
+        statusRows.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        screen.add(scrolling(statusRows), BorderLayout.CENTER);
+        return screen;
+    }
+
+    private void refreshStatusPage()
+    {
+        clientThread.invoke(() ->
+        {
+            List<String> descriptions = new ArrayList<>();
+            FarmingContract contract = contractManager.getContract();
+            descriptions.add(contract == null ? "Farming contract: none observed"
+                : "Farming contract: " + contract.getName());
+            List<PatchTimer> timers = new ArrayList<>(timerManager.getTimers());
+            descriptions.add(timers.size() + " observed farming timer(s)");
+            long now = System.currentTimeMillis();
+            for (PatchTimer timer : timers)
+            {
+                String location = PatchLocationCatalog.name(timer.getPatchLocation());
+                String crop = timer.getCrop() == null ? "Unknown crop" :
+                    timer.getCrop().getName();
+                String condition = timer.isDead() ? "Dead" :
+                    timer.isDiseased() ? "Diseased" :
+                    timer.isPicked() ? "Picked" :
+                    timer.getReadyAt() == null ? "Readiness unverified" :
+                    timer.getReadyAt().toEpochMilli() <= now ? "Predicted ready" :
+                    "Estimated ready " + CLOCK.format(timer.getReadyAt());
+                descriptions.add(location + " · " + timer.getPatchType().getDisplayName()
+                    + " · " + crop + " · " + condition);
+            }
+            SwingUtilities.invokeLater(() ->
+            {
+                statusRows.removeAll();
+                for (String line : descriptions) addFull(statusRows, warning(line));
+                statusRows.revalidate();
+                statusRows.repaint();
+            });
+        });
     }
 
     private JPanel createCompostGuide()
@@ -1121,7 +1181,8 @@ final class FarmingDirectorPanel extends PluginPanel
         int level = plugin.getFarmingLevel();
         lastPlannedFarmingLevel = level;
         List<FarmRunPatch> candidates = new ArrayList<>();
-        List<FarmRunPatch> configured = routes.directorPatches(selection.filter);
+        List<FarmRunPatch> configured = selection == DirectorRunSelection.MERGED
+            ? routes.directorAllPatches() : routes.directorPatches(selection.filter);
         if (selection == DirectorRunSelection.MERGED)
         {
             configured = presets.applyRoute(presetName,
