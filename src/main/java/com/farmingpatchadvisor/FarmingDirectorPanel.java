@@ -899,16 +899,32 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void moveStep(int delta, boolean automatic)
     {
-        if (currentPlan == null || currentPlan.steps.isEmpty() || paused)
+        if (currentPlan == null || paused) return;
+        if (awaitingBank)
         {
+            if (delta > 0)
+            {
+                beginNextWave();
+            }
+            else if (delta < 0 && !currentPlan.steps.isEmpty())
+            {
+                awaitingBank = false;
+                currentStep = currentPlan.steps.size() - 1;
+                completedSteps.remove(currentStep);
+                completedPatchKeys.remove(FarmRouteManager.key(
+                    currentPlan.steps.get(currentStep).patch));
+                persistProgress();
+                activateCurrentStep();
+                render();
+                requestRoute(currentPlan.steps.get(currentStep));
+            }
             return;
         }
+        if (currentPlan.steps.isEmpty()) return;
         int previous = currentStep;
         int nextIndex = Math.max(0, Math.min(currentPlan.steps.size(), currentStep + delta));
-        if (previous == nextIndex)
-        {
-            return;
-        }
+        if (previous == nextIndex) return;
+
         if (delta > 0)
         {
             completedSteps.add(previous);
@@ -924,8 +940,20 @@ final class FarmingDirectorPanel extends PluginPanel
         currentStep = nextIndex;
         if (currentStep >= currentPlan.steps.size())
         {
+            if (currentSession != null && waveIndex + 1 < currentSession.waves.size())
+            {
+                awaitingBank = true;
+                suggestedBank = null;
+                clearRoute();
+                requestBankRoute();
+                render();
+                return;
+            }
             runFinished = true;
-            clearSavedRun();
+            if (currentSession == null || currentSession.unplanned == 0)
+            {
+                clearSavedRun();
+            }
             clearRoute();
             render();
             return;
@@ -934,9 +962,58 @@ final class FarmingDirectorPanel extends PluginPanel
         activateCurrentStep();
         render();
         requestRoute(currentPlan.steps.get(currentStep));
-        // First read resolves already-growing patches without the user
-        // needing to click Next at every location.
         clientThread.invoke(this::onClientTick);
+    }
+
+    /** Manual restocking checkpoint, never clicks the bank or withdraws items. */
+    private void beginNextWave()
+    {
+        if (!awaitingBank || currentSession == null ||
+            waveIndex + 1 >= currentSession.waves.size()) return;
+        ++waveIndex;
+        currentPlan = currentSession.waves.get(waveIndex);
+        awaitingBank = false;
+        suggestedBank = null;
+        currentStep = 0;
+        runFinished = false;
+        completedSteps.clear();
+        activateCurrentStep();
+        render();
+        if (!currentPlan.steps.isEmpty())
+        {
+            requestRoute(currentPlan.steps.get(0));
+            clientThread.invoke(this::onClientTick);
+        }
+    }
+
+    private void requestBankRoute()
+    {
+        final long generation = ++routeGeneration;
+        final DirectorBankStops.Bank preferred =
+            (DirectorBankStops.Bank) bankChoice.getSelectedItem();
+        clientThread.invoke(() ->
+        {
+            if (generation != routeGeneration || !awaitingBank || paused ||
+                client.getLocalPlayer() == null) return;
+            WorldPoint player = client.getLocalPlayer().getWorldLocation();
+            DirectorBankStops.Bank bank = DirectorBankStops.choose(preferred, player);
+            SwingUtilities.invokeLater(() ->
+            {
+                if (generation == routeGeneration && awaitingBank)
+                {
+                    suggestedBank = bank;
+                    render();
+                }
+            });
+            if (bank != null && bank.point != null)
+            {
+                Map<String, Object> data = new HashMap<>();
+                data.put("start", player);
+                data.put("target", bank.point);
+                eventBus.post(new PluginMessage("shortestpath", "path", data));
+                routeIssued = true;
+            }
+        });
     }
 
     private void requestRoute(DirectorPlanner.Step step)
@@ -1004,6 +1081,7 @@ final class FarmingDirectorPanel extends PluginPanel
             return;
         }
         int previous = currentStep;
+        awaitingBank = false;
         currentStep = targetIndex;
         runFinished = false;
         if (targetIndex < previous)
@@ -1029,6 +1107,10 @@ final class FarmingDirectorPanel extends PluginPanel
         {
             clearRoute();
         }
+        else if (awaitingBank)
+        {
+            requestBankRoute();
+        }
         else if (currentStep < currentPlan.steps.size())
         {
             requestRoute(currentPlan.steps.get(currentStep));
@@ -1040,6 +1122,10 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         ++planningGeneration;
         currentPlan = null;
+        currentSession = null;
+        waveIndex = 0;
+        awaitingBank = false;
+        suggestedBank = null;
         paused = false;
         currentStep = 0;
         runFinished = false;
@@ -1057,6 +1143,10 @@ final class FarmingDirectorPanel extends PluginPanel
         SwingUtilities.invokeLater(() ->
         {
             currentPlan = null;
+            currentSession = null;
+            waveIndex = 0;
+            awaitingBank = false;
+            suggestedBank = null;
             currentStep = 0;
             paused = false;
             runFinished = false;
