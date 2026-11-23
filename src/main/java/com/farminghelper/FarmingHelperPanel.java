@@ -1997,10 +1997,9 @@ final class FarmingHelperPanel extends PluginPanel
         for (FarmRunPatch patch : candidates)
         {
             QuestFarmingStateReader.Observation observation = observePatchState(patch);
-            if (patch.getPatchType() == PatchType.SPIRIT_TREE && observation.known()
-                && observation.state == CropState.UNCHECKED)
+            if (observation.known() && StepEngine.keepExisting(patch.getPatchType(), observation.state))
             {
-                // Do not reserve another sapling simply to check an existing tree.
+                // Do not reserve replacement seeds for existing perennial crops.
                 preplanted.add(FarmRouteManager.key(patch));
                 actionable.add(patch);
                 continue;
@@ -2286,8 +2285,7 @@ final class FarmingHelperPanel extends PluginPanel
      */
     private QuestFarmingStateReader.Observation observePatchState(FarmRunPatch patch)
     {
-        TravelTarget target = TravelTarget.choose(patch,
-            stateReader, timerManager);
+        TravelTarget target = TravelTarget.navigation(patch, stateReader);
         WorldPoint point = target.point;
         QuestFarmingStateReader.Observation observation = stateReader.observeType(
             patch.getPatchType().name(), patch.getLocation(), patch.getName(),
@@ -2295,10 +2293,9 @@ final class FarmingHelperPanel extends PluginPanel
 
         // Advisor is an independent fallback when RuneLite Time Tracking has
         // not yet observed the patch. It NEVER turns missing data into empty.
-        if (target.exact && point != null &&
-            observation.source != QuestFarmingStateReader.Source.LIVE)
+        if (target.exact && point != null && !observation.known())
         {
-            PatchTimer timer = timerManager.findTimer(point, patch.getPatchType(), 9);
+            PatchTimer timer = timerManager.findTimer(point, patch.getPatchType(), 0);
             boolean advisorNewer = timer != null &&
                 timer.getPlantedAt().toEpochMilli() > observation.observedAtMillis + 1500L;
             if (timer != null)
@@ -2360,30 +2357,18 @@ final class FarmingHelperPanel extends PluginPanel
         }
         QuestFarmingStateReader.Observation observation = observePatchState(step.patch);
         final QuestFarmingStateReader.Observation latest = observation;
-        boolean treated = false;
-        if (step.requiresPlanting && observation.source == QuestFarmingStateReader.Source.LIVE &&
-            observation.state == CropState.GROWING && step.crop != null && step.patch.getPatchType().usesCompost())
-        {
-            WorldPoint anchor = plugin.directorPatchAnchor(step.patch);
-            if (anchor != null)
-            {
-                PatchTimer timer = timerManager.findTimer(anchor, step.patch.getPatchType(), 0);
-                treated = timer != null && timer.isCompostApplied() &&
-                    step.crop.equals(timer.getCrop()) && timer.getPlantedAt().toEpochMilli() >= activatedAtMillis;
-            }
-        }
-        final boolean compostConfirmed = treated;
+
         final boolean weeds = plugin.directorPatchHasWeeds(step.patch);
         WorldPoint localPatch = plugin.directorPatchAnchor(step.patch);
         final boolean near = observation.source == QuestFarmingStateReader.Source.LIVE ||
             (localPatch != null && client.getLocalPlayer() != null && localPatch.distanceTo(client.getLocalPlayer().getWorldLocation()) <= 18);
         final long activation = activatedAtMillis;
-        SwingUtilities.invokeLater(() -> { if (activation == activatedAtMillis) acceptObservation(plan, index, latest, compostConfirmed, weeds, near); });
+        SwingUtilities.invokeLater(() -> { if (activation == activatedAtMillis) acceptObservation(plan, index, latest, weeds, near); });
     }
 
     /** Only the EDT owns live guide state; stale asynchronous ticks are dropped. */
     private void acceptObservation(RunPlanner.Plan plan, int index,
-                                   QuestFarmingStateReader.Observation observation, boolean compostConfirmed, boolean weeds, boolean near)
+                                   QuestFarmingStateReader.Observation observation, boolean weeds, boolean near)
     {
         if (plan != currentPlan || index != currentStep || planningInFlight || preparingLoadout || paused || runFinished || awaitingBank
             || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
@@ -2409,6 +2394,8 @@ final class FarmingHelperPanel extends PluginPanel
             observation.protectedByFarmer, sawLiveEmpty, sawHarvestable,
             Supplies.hasProtectionPayment(step, loadout.directorInventory()));
         QuestTargets.Definition def = QuestTargets.get(step.patch);
+        if (step.patch.getPatchType() == PatchType.CELASTRUS && observation.rawValue == 17)
+            action = StepEngine.Action.REMOVE_TREE;
         action = StepEngine.refine(action, activePayRemoval, def != null && def.gardenerId >= 0, weeds);
         if (action == StepEngine.Action.CHOP_TREE && step.patch.getPatchType() == PatchType.CALQUAT)
             action = StepEngine.Action.REMOVE_TREE;
