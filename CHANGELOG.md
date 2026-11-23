@@ -1,5 +1,19 @@
 # Ironman Farming Director development history
 
+## v0.3.0-beta.1 — Intelligent banking and loadout planning (2026-11-23)
+
+- Built a multi-wave planner that preserves unplanned patches instead of dropping the remainder at 28 slots.
+- Added bank checkpoints with user-selected or approximate nearest-listed bank waypoints; supports optional Shortest Path event routing and manual next-wave confirmation.
+- Source-aware inventory/bank/Seed Vault ledger with estimated per-wave withdrawals and missing-item breakdown.
+- Added inventory stop limits and dynamic per-wave teleport slot budgeting, excluding equipped travel items.
+- Counted consumable teleport uses, warned on missing configured travel items, and retained the existing Advisor route preferences.
+- Added safe auto-advance for harvest-only stops only after an observed live state transition to empty.
+- Kept manual crop and route overrides, tree protection gating, resume/replan and Herblore-focused presets.
+- Expanded regression tests for planning waves, bank eligibility, source-aware stock, travel supplies and progress safety.
+- Java build and tests run on GitHub Actions; in-game RuneLite verification remains outstanding.
+
+
+
 ## v0.2.0-beta.1 — Consolidated farming director (2026-11-23)
 
 - Generalized Guide to every patch type in Advisor's crop catalog, including multi-type combined runs.

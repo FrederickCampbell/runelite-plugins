@@ -1,4 +1,4 @@
-# Ironman Farming Director — v0.2.0-beta.1
+# Ironman Farming Director — v0.3.0-beta.1
 
 An integration-first, standalone RuneLite farming companion for ironmen. This
 is a **developer preview**: GitHub Actions compiles and runs tests successfully;
@@ -24,7 +24,7 @@ interactive RuneLite behavior still needs verification.
 
 Download this branch:
 
-    git clone --branch ironman-farming-director-v0.2 --single-branch https://github.com/FrederickCampbell/runelite-plugins.git Ironman-Farming-Director
+    git clone --branch ironman-farming-director-v0.3 --single-branch https://github.com/FrederickCampbell/runelite-plugins.git Ironman-Farming-Director
 
 Place the Gradle project at:
 
@@ -47,7 +47,9 @@ Or build from the project root:
    all tree categories, or **all enabled patches**.
 3. Open **Planner options** to choose crop priorities, stock reserves, gardener
    payments, Herblore-supplies preset, automatic next step, automatic replanning
-   after closing bank/Seed Vault, and optional straight-line nearest-stop order.
+   after closing bank/Seed Vault, optional straight-line nearest-stop order,
+   **maximum patch stops per loadout** (1–28; initially 8), and a preferred
+   banking destination. You can leave banking on nearest listed bank.
 4. Press **Start / Replan**. The plugin filters out known-growing patches and
    allocates available seeds/saplings by level, crop priority and reserved stock.
    A growing tree with protection still unconfirmed remains a protection stop.
@@ -57,12 +59,21 @@ Or build from the project root:
 6. Use **Back**, **Next step**, **Pause**, **End**, or click a destination to
    override automatic routing. Use **Override this patch** to select a specific
    crop when available; **Clear override** restores automatic allocation.
-7. Use **Replan remaining** after restocking to preserve completed patch IDs.
+7. The entire itinerary is split into **inventory waves** using the same
+   Advisor-derived crops, stock, protection payments and RuneLite item
+   stackability as the individual-run planner. Before a wave, see the required
+   seeds/saplings, possible gardener payments, configured travel items, and
+   estimated bank/Seed Vault withdrawals from the latest observations.
+8. After the last patch of a wave, the guide enters an **explicit bank
+   checkpoint**, suggests a nearby *listed* bank area (or your manual choice),
+   and sends an optional Shortest Path waypoint. **Next wave** continues
+   manually after restocking. No banking or item-withdrawal clicks are automated.
+9. Use **Replan remaining** after restocking to preserve completed patch IDs.
    **Resume saved run** restores a profile-scoped checkpoint after relogging.
    The bank-close auto-replan option is opt-in, and only triggers during an
    unfinished active run.
-8. The **Advisor** tab still contains upstream timers, overlays, contracts,
-   custom route choices, checklists and their original controls.
+10. The **Advisor** tab still contains upstream timers, overlays, contracts,
+    custom route choices, checklists and their original controls.
 
 ## Verified and approximate destinations
 
@@ -78,13 +89,43 @@ shared farming areas it can route toward the nearby herb patch. More exact
 single-patch waypoints and in-client confirmation remain needed for specialist
 categories. Shortest Path must be installed separately for map navigation.
 
+## Inventory waves and banking
+
+v0.3 uses `DirectorWavePlanner` to build multiple loadouts without
+losing future patches after a 28-slot boundary. It debits allocated planting
+stock and potential protection payments between waves, so the same seed is
+never promised to two stops. Unplannable patches are tracked separately and
+are **never marked completed**. When another wave exists the Guide displays a
+bank checkpoint instead of declaring the run finished.
+
+`DirectorStockLedger` separates currently carried, last-observed
+bank, and last-observed Seed Vault quantities. Expired caches are excluded.
+The Guide shows estimated withdrawals for the first loadout; subsequent
+loadouts should be recalculated after opening your bank/vault, because source
+counts can change during farming.
+
+`DirectorTeleportPlan` counts configured teleport needs per
+bank-to-bank wave, consolidates consecutive visits to the same location,
+counts consumable tablets over multiple waves, and excludes equipped
+teleport items from the **inventory-slot estimate**. It warns if the observed
+stock contains fewer travel items than the configured itinerary expects.
+Charges on reusables and actual travel time remain unverified.
+
+Bank waypoints currently include Farming Guild's accessible middle area
+(45 Farming), Catherby, Falador west, Varrock west, and Ardougne north.
+These are **approximate bank-area navigation targets**, not exact banker
+interaction tiles. Auto-selection uses straight-line coordinates among
+these five choices; it cannot evaluate teleports, restricted areas or
+pathfinder travel times. Choose a bank manually if the suggestion is poor.
+
 ## Inventory and planning behavior
 
 The existing Advisor crop database provides Farming level and planted quantity
 requirements. Regular saplings (and other unstackable items) occupy separate
 slots; stackable seed quantities use one slot. The 28-slot budget includes
-conservative tool/teleport allowances and configurable harvest space. Replan
-after banking for additional waves of a large all-enabled run. It never
+conservative tool and **per-wave** teleport allowances and configurable
+harvest space. Optional max-stops-per-wave prevents an oversized loadout.
+Replan after banking for additional waves of a large all-enabled run. It never
 fabricates inaccessible bank/Seed Vault contents or silently consumes reserved
 stock.
 
@@ -106,9 +147,16 @@ optimisation.
   provide a trustworthy state. Unknown does not mean empty.
 - Stock snapshots can become stale after bank withdrawals. Reopen storage
   before relying on exact available quantities.
-- Actual banking-stop navigation, a fully accurate itinerary solver using
-  transport/teleports, and the complete original Quest Helper GUI/overlays
-  remain future work. Large combined runs may require replan-and-bank waves.
+- Banking-area navigation is now implemented through optional Shortest Path
+  messages, but accurate nearest-bank travel times and bank-booth interaction
+  have **not** been implemented. The complete original Quest Helper GUI and
+  path-distance-based itinerary optimization also remain future work.
+- Harvest yields can overflow the configured free-space reserve during a wave;
+  the planner **cannot guarantee** the user's inventory will not fill. Bank
+  early or replan as needed. No automatic deposits or withdrawals occur.
+- The manifest checks *last-observed* inventory, bank, Seed Vault and equipped
+  travel items. It does not guarantee a particular teleport's charges or
+  that the external Shortest Path plugin will produce a route.
 - No in-game action automation, macros, mouse control or botting is included.
 
 CI checks `clean test build` on this branch. A green build proves source
