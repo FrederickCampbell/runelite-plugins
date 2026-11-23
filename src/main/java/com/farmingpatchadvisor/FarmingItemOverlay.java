@@ -44,6 +44,17 @@ final class FarmingItemOverlay extends WidgetItemOverlay
 			return;
 		}
 
+        DirectorBankChecklist director = farmingLoadout.activeDirectorChecklist();
+        if (director != null)
+        {
+            boolean planting = director.seeds.containsKey(itemId);
+            if (!planting && !director.ids().contains(itemId)) return;
+            BufferedImage outline = itemManager.getItemOutline(itemId, widgetItem.getQuantity(),
+                planting ? config.seedColor() : config.requiredItemColor());
+            Rectangle bounds = widgetItem.getCanvasBounds();
+            graphics.drawImage(outline, bounds.x, bounds.y, null);
+            return;
+        }
 		int canonicalItemId = ItemVariationMapping.map(itemId);
 		Crop crop = (seedVaultItem
 			? farmingLoadout.bestAvailableInSeedVaultByItemId()

@@ -64,35 +64,36 @@ final class BankFarmRunOverlay extends OverlayPanel
 		}
 
 		FarmRunFilter selected = runFilterState.getSelected();
-		List<FarmingLoadout.ChecklistItem> runChecklist = selected.isCompostOnly()
+        boolean director = farmingLoadout.activeDirectorChecklist() != null;
+		List<FarmingLoadout.ChecklistItem> runChecklist = director ? farmingLoadout.directorChecklistRows() : selected.isCompostOnly()
 			? java.util.Collections.emptyList() : farmingLoadout.checklist(config.includeCompost(),
 				config.checklistTools(), config.checklistPayments(), ChecklistPatch.selected(config));
 		List<FarmingLoadout.ChecklistItem> contractChecklist = selected.isCompostOnly()
 			? java.util.Collections.emptyList() : farmingLoadout.contractChecklist(config.checklistPayments());
-		List<FarmingLoadout.ChecklistItem> compostChecklist = !seedVaultOpen
+		List<FarmingLoadout.ChecklistItem> compostChecklist = !director && !seedVaultOpen
 			&& selected.includesCompost(config.includeCompostBinsInFarmRuns())
 			? farmingLoadout.compostChecklist() : java.util.Collections.emptyList();
 		List<FarmingLoadout.ChecklistItem> runIncomplete = incomplete(runChecklist);
 		List<FarmingLoadout.ChecklistItem> contractIncomplete = incomplete(contractChecklist);
 		List<FarmingLoadout.ChecklistItem> compostIncomplete = incomplete(compostChecklist);
 		List<FarmingLoadout.ChecklistItem> teleports = seedVaultOpen
-			? java.util.Collections.emptyList() : farmingLoadout.teleportChecklist();
+			? java.util.Collections.emptyList() : director ? farmingLoadout.directorTravelRows() : farmingLoadout.teleportChecklist();
 
 		// Always reserve room for every contract item before truncating the normal farm-run list.
 		int contractDisplayed = Math.min(MAX_ITEMS, contractIncomplete.size());
 		int compostDisplayed = Math.min(compostIncomplete.size(), MAX_ITEMS - contractDisplayed);
 		int runDisplayed = Math.min(runIncomplete.size(), MAX_ITEMS - contractDisplayed - compostDisplayed);
-		int renderedRows = (selected.isCompostOnly() ? 0 : sectionRows(runIncomplete, runDisplayed))
+		int renderedRows = (!director && selected.isCompostOnly() ? 0 : sectionRows(runIncomplete, runDisplayed))
 			+ (contractChecklist.isEmpty() ? 0 : sectionRows(contractIncomplete, contractDisplayed))
 			+ (compostChecklist.isEmpty() ? 0 : sectionRows(compostIncomplete, compostDisplayed))
 			+ (teleports.isEmpty() ? 0 : sectionRows(teleports, teleports.size()));
 		positionNextTo(storage.getBounds(), renderedRows);
 		panelComponent.getChildren().add(TitleComponent.builder()
-			.text(selected.isCompostOnly() ? "Compost Run Bank List"
+			.text(director ? "Director Loadout" : selected.isCompostOnly() ? "Compost Run Bank List"
 				: seedVaultOpen ? "Farm Run Seed List" : "Farm Run Bank List").build());
-		if (!runChecklist.isEmpty() || !selected.isCompostOnly())
+		if (director || !runChecklist.isEmpty() || !selected.isCompostOnly())
 		{
-			renderSection("Farm Run Items", runIncomplete, runDisplayed, "[x] Farm run ready");
+			renderSection(director ? "Planned remaining" : "Farm Run Items", runIncomplete, runDisplayed, "[x] Farm run ready");
 		}
 		if (!teleports.isEmpty()) { renderSection("Teleports", teleports, teleports.size(), "[x] Teleports ready"); }
 		if (!compostChecklist.isEmpty())

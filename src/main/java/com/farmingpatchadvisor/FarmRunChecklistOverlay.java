@@ -44,30 +44,33 @@ final class FarmRunChecklistOverlay extends OverlayPanel
 			return null;
 		}
 		FarmRunFilter selected = runFilterState.getSelected();
+        boolean director = farmingLoadout.activeDirectorChecklist() != null;
 		List<FarmingLoadout.ChecklistItem> checklist = new ArrayList<>();
-		if (!selected.isCompostOnly())
+        if (director) checklist.addAll(farmingLoadout.directorChecklistRows());
+		else if (!selected.isCompostOnly())
 		{
 			checklist.addAll(farmingLoadout.checklist(config.includeCompost(), config.checklistTools(),
 				config.checklistPayments(), ChecklistPatch.selected(config)));
 		}
 		FontMetrics metrics = graphics.getFontMetrics();
-		String title = selected.isCompostOnly() ? "Compost Run Checklist" : "Farm Run Checklist";
+		String title = director ? "Director Loadout" : selected.isCompostOnly() ? "Compost Run Checklist" : "Farm Run Checklist";
 		int contentWidth = metrics.stringWidth(title);
 		panelComponent.getChildren().add(TitleComponent.builder().text(title).build());
 		int teleportStart = checklist.size();
-		if (!selected.isCompostOnly())
+		if (director) checklist.addAll(farmingLoadout.directorTravelRows());
+        else if (!selected.isCompostOnly())
 		{
 			checklist.addAll(farmingLoadout.teleportChecklist());
 		}
 		int compostStart = checklist.size();
-		if (selected.includesCompost(config.includeCompostBinsInFarmRuns()))
+		if (!director && selected.includesCompost(config.includeCompostBinsInFarmRuns()))
 		{
 			checklist.addAll(farmingLoadout.compostChecklist());
 		}
 		int index = 0;
 		for (FarmingLoadout.ChecklistItem item : checklist)
 		{
-			if (!selected.isCompostOnly() && index == teleportStart)
+			if ((director || !selected.isCompostOnly()) && index == teleportStart && index < checklist.size())
 			{
 				panelComponent.getChildren().add(LineComponent.builder().left("Teleports").leftColor(Color.ORANGE).build());
 			}

@@ -332,6 +332,11 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		}
 	}
 
+    void refreshDirectorBankFilter()
+    {
+        clientThread.invokeLater(bankChecklistFilter::refreshDirectorFilter);
+    }
+
 	Set<GameObject> getPatchObjects()
 	{
 		return Collections.unmodifiableSet(patchObjects);

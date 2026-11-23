@@ -149,6 +149,12 @@ final class BankChecklistFilter
 		stack[size - 2] = checklistIds.contains(itemId) ? 1 : 0;
 	}
 
+    void refreshDirectorFilter()
+    {
+        Widget bank = client.getWidget(InterfaceID.Bankmain.UNIVERSE);
+        if (active && bank != null && !bank.isHidden()) bankSearch.layoutBank();
+    }
+
 	private void toggle()
 	{
 		active = !active;

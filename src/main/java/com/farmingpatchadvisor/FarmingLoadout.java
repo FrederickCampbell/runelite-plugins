@@ -40,6 +40,7 @@ final class FarmingLoadout
 	private long lastBankSnapshotAt;
 	private long lastVaultSnapshotAt;
 	private boolean bankScanned;
+    private DirectorBankChecklist directorChecklist;
 	private boolean seedVaultScanned;
 	private boolean bankOpen;
 	private boolean seedVaultOpen;
@@ -222,6 +223,7 @@ final class FarmingLoadout
 		equipmentItems.clear();
 		seedVaultItems.clear();
 		seedRunBaselines.clear();
+        directorChecklist = null;
 		bankScanned = false;
 		seedVaultScanned = false;
 		bankOpen = false;
@@ -230,6 +232,51 @@ final class FarmingLoadout
 		lastVaultSnapshotAt = 0;
 		cachedPaymentAtMillis = 0;
 	}
+
+    synchronized boolean publishDirectorChecklist(DirectorBankChecklist next)
+    {
+        if (directorChecklist == null ? next == null : directorChecklist.sameAs(next)) return false;
+        directorChecklist = next;
+        return true;
+    }
+
+    synchronized DirectorBankChecklist activeDirectorChecklist() { return directorChecklist; }
+
+    synchronized List<ChecklistItem> directorChecklistRows()
+    {
+        List<ChecklistItem> rows = new ArrayList<>();
+        if (directorChecklist == null) return rows;
+        directorChecklist.seeds.forEach((id, count) ->
+        {
+            Crop crop = CropCatalog.findByItemId(id);
+            rows.add(new ChecklistItem(crop == null ? DirectorSupplies.name(id) : crop.getItemName(),
+                inventoryCount(id), count, true));
+        });
+        directorChecklist.supplies.forEach((id, count) ->
+            rows.add(new ChecklistItem(DirectorSupplies.name(id),
+                inventoryCount(id) + equipmentItems.getOrDefault(id, 0), count, false)));
+        return rows;
+    }
+
+    synchronized List<ChecklistItem> directorTravelRows()
+    {
+        List<ChecklistItem> rows = new ArrayList<>();
+        if (directorChecklist == null) return rows;
+        directorChecklist.travel.forEach((teleport, count) ->
+        {
+            int owned = 0;
+            boolean equipped = false;
+            for (int id : teleport.itemIds())
+            {
+                owned += inventoryCount(id) + equipmentItems.getOrDefault(id, 0);
+                equipped |= equipmentItems.getOrDefault(id, 0) > 0;
+            }
+            ChecklistItem item = new ChecklistItem(teleport.toString(), owned, count, false);
+            item.equipped = equipped;
+            rows.add(item);
+        });
+        return rows;
+    }
 
 	synchronized List<ChecklistItem> checklist(boolean includeCompost, boolean includeTools, boolean includePayments,
 		Set<ChecklistPatch> includedPatches)
@@ -439,6 +486,12 @@ final class FarmingLoadout
 		Set<ChecklistPatch> includedPatches)
 	{
 		Set<Integer> itemIds = new HashSet<>();
+        if (directorChecklist != null)
+        {
+            itemIds.addAll(directorChecklist.ids());
+            addContractItemIds(itemIds, includePayments);
+            return itemIds;
+        }
 		Map<PatchType, Integer> patchCounts = buildPatchCounts();
 		for (PatchType patchType : PatchType.values())
 		{

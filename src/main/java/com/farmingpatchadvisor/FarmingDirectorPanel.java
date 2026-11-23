@@ -350,6 +350,7 @@ final class FarmingDirectorPanel extends PluginPanel
         if ("route".equals(name)) loadRouteEditor();
         if ("status".equals(name)) refreshStatusPage();
         if ("loadout".equals(name)) refreshLoadoutPage();
+        publishBankChecklist();
     }
 
     private JPanel createSelection()
@@ -1573,6 +1574,7 @@ final class FarmingDirectorPanel extends PluginPanel
             return;
         }
         planningInFlight = true;
+        publishBankChecklist();
         guideWarning.setText(wrapped("Planning remaining patches…", 184));
         guideWarning.setVisible(true);
         start.setEnabled(false);
@@ -2533,6 +2535,22 @@ final class FarmingDirectorPanel extends PluginPanel
         resetCharacter();
     }
 
+    private void publishBankChecklist()
+    {
+        DirectorBankChecklist next = null;
+        if (!compostPageOpen && currentSession != null && currentPlan != null && !runFinished
+            && !planningInFlight && activeProfile != null && Objects.equals(activeProfile, configManager.getRSProfileKey()))
+        {
+            int index = awaitingBank && waveIndex + 1 < currentSession.waves.size() ? waveIndex + 1 : waveIndex;
+            DirectorPlanner.Plan wave = index < currentSession.waves.size() ? currentSession.waves.get(index) : currentPlan;
+            Map<Integer, Integer> kit = index < currentSession.supplies.size() ? currentSession.supplies.get(index) : Collections.emptyMap();
+            Map<RouteTeleport, Integer> travel = index < currentSession.teleports.size() ? currentSession.teleports.get(index) : Collections.emptyMap();
+            next = DirectorBankChecklist.remaining(wave, kit, travel,
+                awaitingBank ? Collections.emptySet() : completedSteps);
+        }
+        if (loadout.publishDirectorChecklist(next)) plugin.refreshDirectorBankFilter();
+    }
+
     private void render()
     {
         stepList.removeAll();
@@ -2762,6 +2780,7 @@ final class FarmingDirectorPanel extends PluginPanel
         stepList.revalidate();
         stepList.repaint();
         if ("loadout".equals(visiblePage)) refreshLoadoutPage();
+        publishBankChecklist();
     }
 
     private static String formatTeleports(Map<RouteTeleport, Integer> items)
