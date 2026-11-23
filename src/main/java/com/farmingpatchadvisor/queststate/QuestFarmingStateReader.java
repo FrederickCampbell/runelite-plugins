@@ -1,6 +1,9 @@
 package com.farmingpatchadvisor.queststate;
 
 import java.util.Collection;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -176,6 +179,26 @@ public final class QuestFarmingStateReader
             }
         }
         return null;
+    }
+
+    /** Canonical Quest Helper patch names for multi-patch locations. */
+    public List<String> patchNames(Tab tab, String location)
+    {
+        Collection<FarmingPatch> patches = world.getTabs().get(tab);
+        if (patches == null || location == null)
+        {
+            return Collections.emptyList();
+        }
+        List<String> result = new ArrayList<>();
+        for (FarmingPatch patch : patches)
+        {
+            if (normalize(patch.getRegion().getName()).equals(normalize(location)))
+            {
+                result.add(patch.getName());
+            }
+        }
+        Collections.sort(result);
+        return result;
     }
 
     private static String normalize(String location)

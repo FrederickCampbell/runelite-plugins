@@ -18,6 +18,21 @@ public class QuestFarmingStateReaderTest
     }
 
     @Test
+    public void canonicalAllotmentPatchesAreSeparate()
+    {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (FarmingPatch patch : world.getTabs().get(Tab.ALLOTMENT))
+        {
+            if ("Falador".equals(patch.getRegion().getName()))
+            {
+                names.add(patch.getName());
+            }
+        }
+        assertEquals(2, names.size());
+        assertNotEquals(names.get(0), names.get(1));
+    }
+
+    @Test
     public void harmonyAliasMatchesQuestHelperWorld()
     {
         assertNotNull(QuestFarmingStateReader.find(world, Tab.HERB, "Harmony Island", null));
