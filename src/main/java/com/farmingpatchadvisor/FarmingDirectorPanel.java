@@ -127,6 +127,12 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JCheckBox readyOnly = new JCheckBox("Only include ready / actionable patches");
     private final JCheckBox allowUnverified = new JCheckBox("Include unverified-access locations");
     private final JPanel compostRows = new JPanel();
+    private final JLabel compostProgress = new JLabel("Compost Run");
+    private final JLabel compostAction = new JLabel("Inspect a bin to begin.");
+    private int compostIndex;
+    private volatile long compostGeneration;
+    private volatile boolean compostPageOpen;
+    private List<CompostBinLocation> compostStops = Collections.emptyList();
     private final JPanel statusRows = new JPanel();
     private final javax.swing.DefaultListModel<FarmRunPatch> routeModel =
         new javax.swing.DefaultListModel<>();
@@ -144,6 +150,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final JPanel regularControls = new JPanel();
     private final List<PatchView> patchViews = new ArrayList<>();
     private DirectorRunSelection activeRunSelection;
+    private volatile String activeProfile;
     private String activePresetName = DirectorMergedPresets.DEFAULT_NAME;
     private boolean loadingPresets;
     private String visiblePage = "selection";
@@ -283,6 +290,19 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void showPage(String name)
     {
+        boolean leavingCompost = compostPageOpen && !"compost".equals(name);
+        compostPageOpen = "compost".equals(name);
+        if (leavingCompost)
+        {
+            ++compostGeneration;
+            clearRoute();
+            if ("guide".equals(name) && currentPlan != null && !paused && !runFinished)
+            {
+                if (awaitingBank) requestBankRoute();
+                else if (currentStep < currentPlan.steps.size())
+                    requestRoute(currentPlan.steps.get(currentStep));
+            }
+        }
         visiblePage = name;
         pageLayout.show(pages, name);
         if ("patches".equals(name)) refreshPatchManager();
@@ -643,7 +663,8 @@ final class FarmingDirectorPanel extends PluginPanel
         }
         for (FarmRunPatch patch : patches)
         {
-            if (!patchPrefs.enabled(patch)) continue;
+            // A global exclusion is not a deletion from the saved route.
+            // Retain disabled grouped stops so re-enabling a patch restores it.
             routeModel.addElement(patch);
             RouteTeleport inherited = routes.teleportPreferred(routeEditFilter, patch);
             routeEdits.put(FarmRouteManager.key(patch),
@@ -753,12 +774,22 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private JPanel createCompostGuide()
     {
-        JPanel outer = new JPanel(new BorderLayout());
+        JPanel outer = new JPanel(new BorderLayout(0, 6));
         outer.setBackground(ColorScheme.DARK_GRAY_COLOR);
         JPanel top = vertical();
         addFull(top, nav("← Back to runs", "selection"));
-        addFull(top, label("Compost Run", true));
-        JButton refresh = new JButton("Refresh compost observations");
+        addFull(top, compostProgress);
+        addFull(top, compostAction);
+        JPanel controls = new JPanel(new GridLayout(1, 3, 3, 0));
+        JButton previous = new JButton("Back");
+        JButton following = new JButton("Next");
+        JButton navigate = new JButton("Route");
+        previous.addActionListener(e -> moveCompost(-1));
+        following.addActionListener(e -> moveCompost(1));
+        navigate.addActionListener(e -> requestCompostRoute());
+        controls.add(previous); controls.add(following); controls.add(navigate);
+        addFull(top, controls);
+        JButton refresh = new JButton("Refresh observations");
         refresh.addActionListener(e -> refreshCompostGuide());
         addFull(top, refresh);
         outer.add(top, BorderLayout.NORTH);
@@ -768,31 +799,114 @@ final class FarmingDirectorPanel extends PluginPanel
         return outer;
     }
 
+    private void moveCompost(int delta)
+    {
+        if (compostStops.isEmpty()) return;
+        compostIndex = Math.max(0, Math.min(compostStops.size(), compostIndex + delta));
+        clearRoute();
+        refreshCompostGuide();
+        requestCompostRoute();
+    }
+
     private void refreshCompostGuide()
     {
+        final long generation = ++compostGeneration;
+        final String profile = configManager.getRSProfileKey();
+        final int index = compostIndex;
         clientThread.invoke(() ->
         {
+            List<CompostBinLocation> locations = new ArrayList<>(compostBins.enabledLocations());
             List<String> instructions = new ArrayList<>();
-            CompostSupplyPlan supply = compostBins.supplyPlan();
-            instructions.add("Estimated supplies · ingredients x" + supply.getIngredientQuantity()
-                + ", volcanic ash x" + supply.getVolcanicAshQuantity()
-                + ", compost potion doses x" + supply.getCompostPotionDoses()
-                + ", buckets x" + supply.getBucketQuantity());
-            for (CompostBinLocation location : compostBins.enabledLocations())
+            for (CompostBinLocation location : locations)
             {
                 CompostBinState state = compostBins.getState(location);
+                String remaining = CompostBinManager.remaining(state, Instant.now());
                 instructions.add(location.getDisplayName() + " · "
-                    + compostBins.nextAction(location, state));
+                    + compostBins.nextAction(location, state)
+                    + (remaining == null ? "" : " · " + remaining));
             }
-            if (instructions.size() == 1)
-                instructions.add("No compost bins enabled. Enable compost tracking in RuneLite plugin settings.");
+            CompostSupplyPlan supply = index < locations.size()
+                ? compostBins.supplyPlan(Collections.singletonList(locations.get(index)))
+                : new CompostSupplyPlan(0, 0, 0, 0);
             SwingUtilities.invokeLater(() ->
             {
+                if (generation != compostGeneration || !compostPageOpen ||
+                    !Objects.equals(profile, configManager.getRSProfileKey())) return;
+                compostStops = locations;
+                compostIndex = Math.min(index, locations.size());
+                compostProgress.setText(locations.isEmpty() ? "No compost bins enabled"
+                    : compostIndex == locations.size() ? "Compost itinerary complete"
+                    : "Compost Run · " + (compostIndex + 1) + " / " + locations.size());
+                compostAction.setText(compostIndex < instructions.size()
+                    ? "<html>" + escape(instructions.get(compostIndex)) + "</html>"
+                    : "Choose Back or start another run.");
                 compostRows.removeAll();
-                for (String line : instructions) addFull(compostRows, warning(line));
+                if (compostIndex < locations.size())
+                    addFull(compostRows, warning("Current-bin maximum/estimated supplies: "
+                        + "ingredients x" + supply.getIngredientQuantity()
+                        + ", ash x" + supply.getVolcanicAshQuantity()
+                        + ", potion doses x" + supply.getCompostPotionDoses()
+                        + ", buckets x" + supply.getBucketQuantity()
+                        + ". Unknown bins must be inspected."));
+                for (int i = 0; i < instructions.size(); i++)
+                {
+                    final int target = i;
+                    JButton stop = new JButton((i == compostIndex ? "▶ " : i < compostIndex
+                        ? "✓ " : "○ ") + locations.get(i).getDisplayName());
+                    stop.addActionListener(e ->
+                    {
+                        compostIndex = target;
+                        refreshCompostGuide();
+                        requestCompostRoute();
+                    });
+                    addFull(compostRows, stop);
+                    addFull(compostRows, warning(instructions.get(i)));
+                }
                 compostRows.revalidate();
                 compostRows.repaint();
             });
+        });
+    }
+
+    private void requestCompostRoute()
+    {
+        if (!compostPageOpen || compostIndex >= compostStops.size()) return;
+        CompostBinLocation location = compostStops.get(compostIndex);
+        final long generation = ++routeGeneration;
+        final String profile = configManager.getRSProfileKey();
+        clientThread.invoke(() ->
+        {
+            if (generation != routeGeneration || !compostPageOpen ||
+                !Objects.equals(profile, configManager.getRSProfileKey()) ||
+                client.getLocalPlayer() == null) return;
+            WorldPoint target = null;
+            for (net.runelite.api.GameObject object : compostBins.getObjects())
+            {
+                if (location.contains(object.getWorldLocation()))
+                {
+                    target = object.getWorldLocation();
+                    break;
+                }
+            }
+            // For ordinary farms use a verified nearby herb area. The Guild
+            // and Prifddinas do not have a verified bin-area fallback here.
+            if (target == null && location != CompostBinLocation.FARMING_GUILD &&
+                location != CompostBinLocation.PRIFDDINAS)
+                target = DirectorWaypoints.point(PatchType.HERB, location.getDisplayName());
+            if (target == null)
+            {
+                if (routeIssued)
+                {
+                    eventBus.post(new PluginMessage("shortestpath", "clear"));
+                    routeIssued = false;
+                }
+                return;
+            }
+            Map<String, Object> data = new HashMap<>();
+            data.put("start", client.getLocalPlayer().getWorldLocation());
+            data.put("target", target);
+            eventBus.post(new PluginMessage("shortestpath", "path", data));
+            routeIssued = true;
         });
     }
 
@@ -1084,6 +1198,8 @@ final class FarmingDirectorPanel extends PluginPanel
         if (selected == null) return;
         if (selected == DirectorRunSelection.COMPOST)
         {
+            compostIndex = 0;
+            clearRoute();
             showPage("compost");
             return;
         }
@@ -1146,6 +1262,7 @@ final class FarmingDirectorPanel extends PluginPanel
                     !Objects.equals(planningProfile, configManager.getRSProfileKey())) return;
                 currentSession = result;
                 activeRunSelection = selected;
+                activeProfile = planningProfile;
                 activePresetName = presetName == null
                     ? DirectorMergedPresets.DEFAULT_NAME : presetName;
                 waveIndex = 0;
@@ -1477,7 +1594,8 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void persistProgress()
     {
-        if (configManager.getRSProfileKey() == null) return;
+        if (activeProfile == null || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
+            return;
         if (activeRunSelection == null) return;
         configManager.setRSProfileConfiguration(GROUP, "directorSavedMode", activeRunSelection.name());
         configManager.setRSProfileConfiguration(GROUP, "directorSavedPreset", activePresetName);
@@ -1520,6 +1638,7 @@ final class FarmingDirectorPanel extends PluginPanel
             loadingPreferences = false;
             loadPreferences();
             activeRunSelection = selected;
+            activeProfile = configManager.getRSProfileKey();
             activePresetName = profileValue("directorSavedPreset",
                 DirectorMergedPresets.DEFAULT_NAME);
             completedPatchKeys.clear();
@@ -1647,7 +1766,9 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         DirectorPlanner.Plan plan = currentPlan;
         int index = currentStep;
-        if (plan == null || paused || runFinished || awaitingBank || client.getGameState() != GameState.LOGGED_IN
+        if (plan == null || paused || runFinished || awaitingBank || compostPageOpen
+            || !Objects.equals(activeProfile, configManager.getRSProfileKey())
+            || client.getGameState() != GameState.LOGGED_IN
             || index < 0 || index >= plan.steps.size())
         {
             return;
@@ -1662,7 +1783,8 @@ final class FarmingDirectorPanel extends PluginPanel
     private void acceptObservation(DirectorPlanner.Plan plan, int index,
                                    QuestFarmingStateReader.Observation observation)
     {
-        if (plan != currentPlan || index != currentStep || paused || runFinished || awaitingBank)
+        if (plan != currentPlan || index != currentStep || paused || runFinished || awaitingBank
+            || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
         {
             return;
         }
@@ -1810,7 +1932,8 @@ final class FarmingDirectorPanel extends PluginPanel
             (DirectorBankStops.Bank) bankChoice.getSelectedItem();
         clientThread.invoke(() ->
         {
-            if (generation != routeGeneration || !awaitingBank || paused ||
+            if (generation != routeGeneration || !awaitingBank || paused || compostPageOpen ||
+                !Objects.equals(activeProfile, configManager.getRSProfileKey()) ||
                 client.getLocalPlayer() == null) return;
             WorldPoint player = client.getLocalPlayer().getWorldLocation();
             DirectorBankStops.Bank bank = DirectorBankStops.choose(
@@ -1836,7 +1959,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void requestRoute(DirectorPlanner.Step step)
     {
-        if (paused)
+        if (paused || compostPageOpen)
         {
             return;
         }
@@ -1849,6 +1972,7 @@ final class FarmingDirectorPanel extends PluginPanel
             DirectorTravelTarget target = DirectorTravelTarget.choose(step.patch,
                 stateReader, timerManager);
             if (generation != routeGeneration || active == null || paused || runFinished
+                || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey())
                 || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
             {
                 return;
@@ -1942,6 +2066,7 @@ final class FarmingDirectorPanel extends PluginPanel
         currentPlan = null;
         currentSession = null;
         activeRunSelection = null;
+        activeProfile = null;
         waveIndex = 0;
         awaitingBank = false;
         suggestedBank = null;
@@ -1965,6 +2090,10 @@ final class FarmingDirectorPanel extends PluginPanel
             currentPlan = null;
             currentSession = null;
             activeRunSelection = null;
+            activeProfile = null;
+            compostStops = Collections.emptyList();
+            compostIndex = 0;
+            ++compostGeneration;
             waveIndex = 0;
             awaitingBank = false;
             suggestedBank = null;
@@ -1979,6 +2108,9 @@ final class FarmingDirectorPanel extends PluginPanel
             start.setEnabled(true);
             activateCurrentStep();
             loadPreferences();
+            loadingPresets = true;
+            presetChoice.removeAllItems();
+            loadingPresets = false;
             reloadPresetNames();
             showPage("selection");
             render();

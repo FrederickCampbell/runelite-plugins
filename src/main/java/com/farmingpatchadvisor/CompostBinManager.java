@@ -178,12 +178,17 @@ final class CompostBinManager
 
 	synchronized CompostSupplyPlan supplyPlan()
 	{
+		return supplyPlan(enabledLocations());
+	}
+
+	synchronized CompostSupplyPlan supplyPlan(List<CompostBinLocation> locations)
+	{
 		int ingredients = 0;
 		int ash = 0;
 		int potions = 0;
 		int buckets = 0;
 		CompostTarget target = config.compostTarget();
-		for (CompostBinLocation location : enabledLocations())
+		for (CompostBinLocation location : locations)
 		{
 			CompostBinState state = states.get(location);
 			if (state == null || state.getPhase() == CompostBinPhase.EMPTY)

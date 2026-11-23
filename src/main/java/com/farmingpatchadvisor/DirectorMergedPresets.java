@@ -80,7 +80,8 @@ final class DirectorMergedPresets
 
     boolean save(String name, Set<FarmRunType> categories)
     {
-        if (!validName(name) || manager.getRSProfileKey() == null) return false;
+        if (!validName(name) || manager.getRSProfileKey() == null || categories == null ||
+            categories.isEmpty()) return false;
         List<String> names = new ArrayList<>(names());
         if (!names.contains(name)) names.add(name);
         manager.setRSProfileConfiguration(GROUP, INDEX, String.join(";", names));

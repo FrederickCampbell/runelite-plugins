@@ -191,6 +191,7 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 			compostBinManager.clearObjects();
 			if (event.getGameState() == GameState.LOGIN_SCREEN)
 			{
+				directorPanel.resetCharacter();
 				farmingLoadout.clearStorageSnapshots();
 				timerManager.unload();
 				contractManager.unload();
