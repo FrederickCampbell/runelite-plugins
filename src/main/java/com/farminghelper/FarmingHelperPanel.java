@@ -48,6 +48,7 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
@@ -106,7 +107,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final JSpinner harvestSlots = new JSpinner(new SpinnerNumberModel(-1, -1, 26, 1));
     private final JCheckBox nearestRoute = new JCheckBox("Nearest-stop order (approximate)", false);
     private final JCheckBox herbloreFocus = new JCheckBox("Prioritize Herblore supplies (preset)", false);
-    private final JCheckBox autoReplanBank = new JCheckBox("Replan after banking", false);
+    private final JCheckBox autoReplanBank = new JCheckBox("Refresh seed choices after banking", true);
     private final JComboBox<BankStops.Bank> bankChoice =
         new JComboBox<>(BankStops.Bank.values());
     private final JButton replan = new JButton("Replan remaining");
@@ -1021,8 +1022,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private boolean suppliesMissing()
     {
-        return loadout.directorChecklistRows().stream().anyMatch(item -> item.getOwned() < item.getNeeded()) ||
-            loadout.directorTravelRows().stream().anyMatch(item -> item.getOwned() < item.getNeeded());
+        return loadout.directorChecklistRows().stream().anyMatch(item -> !item.isRecommended() && item.getOwned() < item.getNeeded());
     }
 
     private void continueFromLoadout()
@@ -1053,8 +1053,10 @@ final class FarmingHelperPanel extends PluginPanel
             row.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
             JLabel name = new JLabel(wrapped((ready ? "✓ " : "○ ") + item.getName(), 119));
             JLabel amount = new JLabel(item.amount());
-            Color color = ready ? new Color(143, 187, 136) : new Color(240, 144, 120);
+            Color color = ready ? new Color(143, 187, 136) :
+                item.isRecommended() ? FarmingHelperTheme.GOLD : new Color(240, 144, 120);
             name.setForeground(color); amount.setForeground(color);
+            if (!item.sourceHint().isEmpty()) row.setToolTipText(item.sourceHint());
             row.add(name, BorderLayout.CENTER);
             row.add(amount, BorderLayout.EAST);
             addFull(target, row);
@@ -1077,16 +1079,31 @@ final class FarmingHelperPanel extends PluginPanel
         }
         List<FarmingLoadout.ChecklistItem> rows = new ArrayList<>(loadout.directorChecklistRows());
         rows.addAll(loadout.directorTravelRows());
-        long ready = rows.stream().filter(row -> row.getOwned() >= row.getNeeded()).count();
+        long required = rows.stream().filter(row -> !row.isRecommended()).count();
+        long ready = rows.stream().filter(row -> !row.isRecommended() && row.getOwned() >= row.getNeeded()).count();
         requirementsToggle.setText((guideRequirements.isVisible() ? "▾ " : "▸ ") +
-            "Supplies · " + ready + "/" + rows.size() + " ready");
+            "Supplies · " + ready + "/" + required + " required");
         StringBuilder signature = new StringBuilder();
         for (FarmingLoadout.ChecklistItem row : rows)
-            signature.append(row.getName()).append('|').append(row.amount()).append('|').append(row.getNeeded()).append(';');
+            signature.append(row.getName()).append('|').append(row.amount()).append('|').append(row.getNeeded())
+                .append('|').append(row.isRecommended()).append('|').append(row.sourceHint()).append(';');
         if (signature.toString().equals(requirementsSignature)) return;
         requirementsSignature = signature.toString();
         guideRequirements.removeAll();
-        liveLoadoutRows(guideRequirements, rows);
+        List<FarmingLoadout.ChecklistItem> requiredRows = new ArrayList<>();
+        List<FarmingLoadout.ChecklistItem> recommendedRows = new ArrayList<>();
+        for (FarmingLoadout.ChecklistItem row : rows)
+            (row.isRecommended() ? recommendedRows : requiredRows).add(row);
+        if (!requiredRows.isEmpty())
+        {
+            addFull(guideRequirements, label("Required items", true));
+            liveLoadoutRows(guideRequirements, requiredRows);
+        }
+        if (!recommendedRows.isEmpty())
+        {
+            addFull(guideRequirements, label("Recommended items", true));
+            liveLoadoutRows(guideRequirements, recommendedRows);
+        }
         FarmingHelperTheme.style(guideRequirements);
         guideRequirements.revalidate();
         guideRequirements.repaint();
@@ -1127,8 +1144,20 @@ final class FarmingHelperPanel extends PluginPanel
             Map<Integer, Integer> kit = index < currentSession.supplies.size()
                 ? currentSession.supplies.get(index) : Collections.emptyMap();
             addFull(loadoutRows, label("RUN SUPPLIES · " + wave.steps.size() + " stops", true));
-            liveLoadoutRows(loadoutRows, loadout.directorChecklistRows());
-            liveLoadoutRows(loadoutRows, loadout.directorTravelRows());
+            List<FarmingLoadout.ChecklistItem> requiredRows = new ArrayList<>();
+            List<FarmingLoadout.ChecklistItem> recommendedRows = new ArrayList<>(loadout.directorTravelRows());
+            for (FarmingLoadout.ChecklistItem row : loadout.directorChecklistRows())
+                (row.isRecommended() ? recommendedRows : requiredRows).add(row);
+            if (!requiredRows.isEmpty())
+            {
+                addFull(loadoutRows, label("Required items", true));
+                liveLoadoutRows(loadoutRows, requiredRows);
+            }
+            if (!recommendedRows.isEmpty())
+            {
+                addFull(loadoutRows, label("Recommended items", true));
+                liveLoadoutRows(loadoutRows, recommendedRows);
+            }
             if (guideDetails.isSelected())
             {
             addFull(loadoutRows, label(wave.occupiedSlots + " planned slots + " + wave.reservedSlots
@@ -1686,7 +1715,7 @@ final class FarmingHelperPanel extends PluginPanel
         protectTrees.setVisible(true);
         nearestRoute.setSelected(Boolean.parseBoolean(profileValue("directorNearest", "false")));
         herbloreFocus.setSelected(Boolean.parseBoolean(profileValue("directorHerblore", "false")));
-        autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "false")));
+        autoReplanBank.setSelected(Boolean.parseBoolean(profileValue("directorAutoReplanBank", "true")));
         navigationEnabled = Boolean.parseBoolean(profileValue("directorNavigationEnabled", "true"));
         shortestPathEnabled.setSelected(navigationEnabled);
         allowUnverified.setSelected(Boolean.parseBoolean(profileValue("directorAllowUnverified",
@@ -2031,7 +2060,9 @@ final class FarmingHelperPanel extends PluginPanel
         final boolean bottomless = stock.getOrDefault(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED, 0) > 0;
         final int compostItem = (useCompost == null ? CompostChoice.NONE : useCompost).resolve(bottomless);
         final boolean carrySecateurs = stock.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)
-            && !loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS);
+            || loadout.directorEquipment().containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS);
+        final boolean autoWeed = client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS) == 2;
+        final boolean barbarianPlanting = client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING) == 3;
         if (compostItem == ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)
             warnings.add("Check the bottomless compost bucket's contents and charges.");
         if (candidates.stream().anyMatch(p -> StepEngine.isTreeType(p.getPatchType())))
@@ -2072,8 +2103,8 @@ final class FarmingHelperPanel extends PluginPanel
                 int travelSlots = TeleportPlan.inventorySlots(
                     FarmRouteManager.requirements(selectedPatches, teleportForPatch),
                     equippedItems, id -> itemManager.getItemComposition(id).isStackable());
-                Map<Integer, Integer> kit = Supplies.required(selectedPatches,
-                    compostItem, carrySecateurs, payToRemove);
+                Map<Integer, Integer> kit = Supplies.guideKit(selectedPatches,
+                    compostItem, carrySecateurs, payToRemove, autoWeed, barbarianPlanting);
                 return travelSlots + Supplies.slots(selectedPatches, kit,
                     id -> itemManager.getItemComposition(id).isStackable(), payToRemove);
             }, patchPriorities);
@@ -2096,8 +2127,8 @@ final class FarmingHelperPanel extends PluginPanel
         {
             List<FarmRunPatch> stops = new ArrayList<>();
             for (RunPlanner.Step step : wave.steps) stops.add(step.patch);
-            Map<Integer, Integer> kit = Supplies.required(stops,
-                compostItem, carrySecateurs, payToRemove);
+            Map<Integer, Integer> kit = Supplies.guideKit(stops,
+                compostItem, carrySecateurs, payToRemove, autoWeed, barbarianPlanting);
             supplyRequirements.add(kit);
             if (CompostChoice.isOrdinary(compostItem)) totalCompost += kit.getOrDefault(compostItem, 0);
             StockLedger.Manifest manifest = stockLedger.manifest(wave, kit);
@@ -2444,6 +2475,7 @@ final class FarmingHelperPanel extends PluginPanel
         }
         else if ("guide".equals(visiblePage))
         {
+            publishBankChecklist();
             refreshGuideRequirements();
         }
     }
@@ -2849,7 +2881,9 @@ final class FarmingHelperPanel extends PluginPanel
             for (int i = 0; i < wave.steps.size(); i++)
                 if (!done.contains(i)) remaining.add(wave.steps.get(i).patch);
             Map<RouteTeleport, Integer> travel = FarmRouteManager.requirements(remaining, currentSession.teleportByPatch);
-            next = BankChecklist.remaining(wave, kit, travel, done);
+            int planted = !awaitingBank && sawLiveEmpty && RunReadiness.growing(visibleObservation)
+                ? currentStep : -1;
+            next = BankChecklist.remaining(wave, kit, travel, done, planted);
         }
         boolean changed = loadout.publishDirectorChecklist(next);
         boolean bankGuidance = OverlayPolicy.bank(next != null, true, false,
