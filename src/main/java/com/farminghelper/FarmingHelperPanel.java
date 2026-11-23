@@ -1994,6 +1994,18 @@ final class FarmingHelperPanel extends PluginPanel
         Set<String> harvestOnly = new HashSet<>();
         Map<String, String> cropOverrides = new HashMap<>();
         int alreadyGrowing = 0;
+        int spiritSlots = RunReadiness.spiritTreeCapacity(level);
+        if (spiritSlots < Integer.MAX_VALUE && candidates.stream().anyMatch(p -> p.getPatchType() == PatchType.SPIRIT_TREE))
+        {
+            // Count all observed planted spirit trees, even disabled locations.
+            for (FarmRunPatch patch : FarmRunCatalog.patches())
+            {
+                if (patch.getPatchType() != PatchType.SPIRIT_TREE) continue;
+                QuestFarmingStateReader.Observation existing = observePatchState(patch);
+                if (existing.known() && existing.state != CropState.EMPTY && existing.state != CropState.DEAD)
+                    spiritSlots--;
+            }
+        }
         for (FarmRunPatch patch : candidates)
         {
             QuestFarmingStateReader.Observation observation = observePatchState(patch);
@@ -2011,6 +2023,16 @@ final class FarmingHelperPanel extends PluginPanel
             }
             else
             {
+                if (patch.getPatchType() == PatchType.SPIRIT_TREE && observation.known() &&
+                    (observation.state == CropState.EMPTY || observation.state == CropState.DEAD))
+                {
+                    if (spiritSlots <= 0)
+                    {
+                        warnings.add("Spirit tree planting limit reached: " + patch.getDisplayName());
+                        continue;
+                    }
+                    spiritSlots--;
+                }
                 actionable.add(patch);
                 if (observation.known() &&
                     (observation.state == CropState.HARVESTABLE ||
@@ -2289,15 +2311,13 @@ final class FarmingHelperPanel extends PluginPanel
         WorldPoint point = target.point;
         QuestFarmingStateReader.Observation observation = stateReader.observeType(
             patch.getPatchType().name(), patch.getLocation(), patch.getName(),
-            target.exact ? point : null);
+            target.routable() ? point : null);
 
-        // Advisor is an independent fallback when RuneLite Time Tracking has
-        // not yet observed the patch. It NEVER turns missing data into empty.
+        // Legacy timers are only a last resort for the same exact patch.
+        // Never override the Quest Helper / Time Tracking state.
         if (target.exact && point != null && !observation.known())
         {
             PatchTimer timer = timerManager.findTimer(point, patch.getPatchType(), 0);
-            boolean advisorNewer = timer != null &&
-                timer.getPlantedAt().toEpochMilli() > observation.observedAtMillis + 1500L;
             if (timer != null)
             {
                 CropState state = null;
@@ -2316,7 +2336,7 @@ final class FarmingHelperPanel extends PluginPanel
                             ? CropState.UNCHECKED : CropState.HARVESTABLE)
                         : CropState.GROWING;
                 }
-                if (state != null && (!observation.known() || advisorNewer))
+                if (state != null)
                 {
                     observation = new QuestFarmingStateReader.Observation(state,
                         QuestFarmingStateReader.Source.ADVISOR,
