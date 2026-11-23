@@ -804,12 +804,20 @@ final class FarmingDirectorPanel extends PluginPanel
             DirectorPlanner.Plan active = currentPlan;
             DirectorTravelTarget target = DirectorTravelTarget.choose(step.patch,
                 stateReader, timerManager);
-            if (generation != routeGeneration || client.getLocalPlayer() == null
-                || target.point == null || (!target.exact &&
-                    !target.source.startsWith("Nearby herb")) ||
-                active == null || paused || runFinished
+            if (generation != routeGeneration || active == null || paused || runFinished
                 || currentStep >= active.steps.size() || active.steps.get(currentStep) != step)
             {
+                return;
+            }
+            boolean routable = client.getLocalPlayer() != null && target.point != null
+                && (target.exact || target.source.startsWith("Nearby herb"));
+            if (!routable)
+            {
+                if (routeIssued)
+                {
+                    eventBus.post(new PluginMessage("shortestpath", "clear"));
+                    routeIssued = false;
+                }
                 return;
             }
             Map<String, Object> data = new HashMap<>();
