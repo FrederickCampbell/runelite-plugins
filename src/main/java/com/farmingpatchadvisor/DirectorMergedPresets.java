@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -92,6 +95,61 @@ final class DirectorMergedPresets
         names.remove(name);
         manager.setRSProfileConfiguration(GROUP, INDEX, String.join(";", names));
         manager.unsetRSProfileConfiguration(GROUP, "directorMerged_" + name);
+        return true;
+    }
+
+    /** Explicit inclusion and order of stops belong to the named preset,
+     * never to the user's separate ALL-enabled run. */
+    List<FarmRunPatch> applyRoute(String name, List<FarmRunPatch> available)
+    {
+        if (!validName(name)) return new ArrayList<>(available);
+        String included = read("directorMergedRouteIncluded_" + name);
+        List<FarmRunPatch> patches = new ArrayList<>(available);
+        if (included != null)
+            patches = FarmRouteManager.included(patches, Arrays.asList(included.split(";", -1)));
+        String order = read("directorMergedRouteOrder_" + name);
+        return order == null ? patches :
+            FarmRouteManager.order(patches, Arrays.asList(order.split(";", -1)));
+    }
+
+    boolean saveRoute(String name, List<FarmRunPatch> selected,
+                      Map<String, RouteTeleport> travel)
+    {
+        if (!validName(name) || manager.getRSProfileKey() == null) return false;
+        List<String> keys = new ArrayList<>();
+        for (FarmRunPatch patch : selected)
+            keys.add(FarmRouteManager.key(patch));
+        manager.setRSProfileConfiguration(GROUP, "directorMergedRouteIncluded_" + name,
+            String.join(";", keys));
+        manager.setRSProfileConfiguration(GROUP, "directorMergedRouteOrder_" + name,
+            String.join(";", keys));
+        for (Map.Entry<String, RouteTeleport> entry : travel.entrySet())
+            manager.setRSProfileConfiguration(GROUP,
+                "directorMergedTeleport_" + name + "_" + entry.getKey(), entry.getValue().name());
+        return true;
+    }
+
+    RouteTeleport teleport(String name, FarmRunPatch patch, RouteTeleport inherited)
+    {
+        String stored = validName(name) ? read("directorMergedTeleport_" +
+            name + "_" + FarmRouteManager.key(patch)) : null;
+        if (stored == null) return inherited;
+        try
+        {
+            RouteTeleport selected = RouteTeleport.valueOf(stored);
+            return selected.isViableFor(patch) ? selected : RouteTeleport.NONE;
+        }
+        catch (IllegalArgumentException exception)
+        {
+            return RouteTeleport.NONE;
+        }
+    }
+
+    boolean resetRoute(String name)
+    {
+        if (!validName(name) || manager.getRSProfileKey() == null) return false;
+        manager.unsetRSProfileConfiguration(GROUP, "directorMergedRouteIncluded_" + name);
+        manager.unsetRSProfileConfiguration(GROUP, "directorMergedRouteOrder_" + name);
         return true;
     }
 

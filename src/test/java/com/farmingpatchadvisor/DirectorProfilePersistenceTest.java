@@ -47,4 +47,27 @@ public class DirectorProfilePersistenceTest
         assertFalse(patches.enabled(troll));
         assertTrue(presets.names().contains("Herbs and trees"));
     }
+
+    @Test public void savedMergedRouteDoesNotChangeOtherNamedPresets()
+    {
+        ConfigManager config = mock(ConfigManager.class);
+        Map<String, String> stored = new HashMap<>();
+        when(config.getRSProfileKey()).thenReturn("account");
+        when(config.getRSProfileConfiguration(anyString(), anyString())).thenAnswer(inv ->
+            stored.get(inv.getArgument(1)));
+        doAnswer(inv ->
+        {
+            stored.put(inv.getArgument(1), inv.getArgument(2));
+            return null;
+        }).when(config).setRSProfileConfiguration(anyString(), anyString(), anyString());
+        DirectorMergedPresets presets = new DirectorMergedPresets(config);
+        FarmRunPatch herb = new FarmRunPatch("Falador", "", PatchType.HERB);
+        FarmRunPatch tree = new FarmRunPatch("Falador", "", PatchType.TREE);
+        java.util.List<FarmRunPatch> both = java.util.Arrays.asList(herb, tree);
+        assertTrue(presets.saveRoute("Herbs Only", java.util.Collections.singletonList(herb),
+            java.util.Collections.emptyMap()));
+        assertEquals(java.util.Collections.singletonList(herb),
+            presets.applyRoute("Herbs Only", both));
+        assertEquals(both, presets.applyRoute("Trees Too", both));
+    }
 }

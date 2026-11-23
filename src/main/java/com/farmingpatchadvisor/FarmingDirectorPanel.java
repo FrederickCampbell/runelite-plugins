@@ -628,14 +628,20 @@ final class FarmingDirectorPanel extends PluginPanel
         routeEdits.clear();
         List<FarmRunPatch> patches = routes.directorPatches(routeEditFilter);
         if (selected == DirectorRunSelection.MERGED)
-            patches = DirectorMergedPresets.selected(patches,
-                presets.categories((String) presetChoice.getSelectedItem()));
+        {
+            String name = (String) presetChoice.getSelectedItem();
+            patches = presets.applyRoute(name, DirectorMergedPresets.selected(patches,
+                presets.categories(name)));
+        }
         for (FarmRunPatch patch : patches)
         {
             if (!patchPrefs.enabled(patch)) continue;
             routeModel.addElement(patch);
+            RouteTeleport inherited = routes.teleportPreferred(routeEditFilter, patch);
             routeEdits.put(FarmRouteManager.key(patch),
-                routes.teleportPreferred(routeEditFilter, patch));
+                selected == DirectorRunSelection.MERGED
+                    ? presets.teleport((String) presetChoice.getSelectedItem(), patch, inherited)
+                    : inherited);
         }
         if (!routeModel.isEmpty()) routeList.setSelectedIndex(0);
     }
@@ -654,7 +660,11 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         List<FarmRunPatch> patches = new ArrayList<>();
         for (int i = 0; i < routeModel.size(); i++) patches.add(routeModel.get(i));
-        if (!routes.save(routes.profile(), routeEditFilter, patches, routeEdits, true))
+        boolean merged = runType.getSelectedItem() == DirectorRunSelection.MERGED;
+        boolean saved = merged
+            ? presets.saveRoute((String) presetChoice.getSelectedItem(), patches, routeEdits)
+            : routes.save(routes.profile(), routeEditFilter, patches, routeEdits, true);
+        if (!saved)
         {
             JOptionPane.showMessageDialog(this, "Log in to a character to save route choices.");
             return;
@@ -669,7 +679,11 @@ final class FarmingDirectorPanel extends PluginPanel
         Map<String, RouteTeleport> emptyTravel = new LinkedHashMap<>();
         for (FarmRunPatch p : defaults)
             emptyTravel.put(FarmRouteManager.key(p), RouteTeleport.NONE);
-        if (!routes.save(routes.profile(), routeEditFilter, defaults, emptyTravel, false))
+        boolean merged = runType.getSelectedItem() == DirectorRunSelection.MERGED;
+        boolean saved = merged
+            ? presets.resetRoute((String) presetChoice.getSelectedItem())
+            : routes.save(routes.profile(), routeEditFilter, defaults, emptyTravel, false);
+        if (!saved)
         {
             JOptionPane.showMessageDialog(this, "Log in before changing route preferences.");
             return;
@@ -1110,8 +1124,8 @@ final class FarmingDirectorPanel extends PluginPanel
         List<FarmRunPatch> configured = routes.directorPatches(selection.filter);
         if (selection == DirectorRunSelection.MERGED)
         {
-            configured = DirectorMergedPresets.selected(configured,
-                presets.categories(presetName));
+            configured = presets.applyRoute(presetName,
+                DirectorMergedPresets.selected(configured, presets.categories(presetName)));
         }
         int unknownPatchDefinitions = 0;
         int approximateDestinations = 0;
@@ -1270,7 +1284,10 @@ final class FarmingDirectorPanel extends PluginPanel
                 if (configuredPatch.getLocation().equals(patch.getLocation()) &&
                     configuredPatch.getPatchType() == patch.getPatchType())
                 {
-                    RouteTeleport teleport = routes.teleportPreferred(selection.filter, configuredPatch);
+                    RouteTeleport inherited = routes.teleportPreferred(selection.filter,
+                        configuredPatch);
+                    RouteTeleport teleport = selection == DirectorRunSelection.MERGED
+                        ? presets.teleport(presetName, configuredPatch, inherited) : inherited;
                     teleportForPatch.put(FarmRouteManager.key(patch), teleport);
                     if (teleport != RouteTeleport.NONE) distinctTeleports.add(teleport);
                     break;
