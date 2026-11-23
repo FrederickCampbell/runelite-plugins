@@ -59,4 +59,19 @@ public class DirectorStepEngineTest
         assertTrue(DirectorStepEngine.canAutoAdvance(
             DirectorStepEngine.Action.COMPLETE, true, false, true));
     }
+
+    @Test
+    public void harvestOnlyRequiresObservedWorkAndLiveEmptyState()
+    {
+        assertFalse(DirectorStepEngine.canFinishHarvestOnly(
+            true, false, CropState.EMPTY, true));
+        assertFalse(DirectorStepEngine.canFinishHarvestOnly(
+            true, true, CropState.EMPTY, false));
+        assertFalse(DirectorStepEngine.canFinishHarvestOnly(
+            false, true, CropState.EMPTY, true));
+        assertFalse(DirectorStepEngine.canFinishHarvestOnly(
+            true, true, CropState.STUMP, true));
+        assertTrue(DirectorStepEngine.canFinishHarvestOnly(
+            true, true, CropState.EMPTY, true));
+    }
 }

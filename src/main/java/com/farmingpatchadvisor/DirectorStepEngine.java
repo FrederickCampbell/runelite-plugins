@@ -120,6 +120,14 @@ final class DirectorStepEngine
         }
     }
 
+    static boolean canFinishHarvestOnly(boolean harvestOnly, boolean workWasObserved,
+                                        CropState latestState, boolean live)
+    {
+        // Initial EMPTY must never imply that a ready crop was harvested.
+        // Only a live transition from an observed actionable state is sufficient.
+        return harvestOnly && workWasObserved && live && latestState == CropState.EMPTY;
+    }
+
     static boolean canAutoAdvance(Action action, boolean known, boolean sourceFresh,
                                   boolean alreadyGrowingAtActivation)
     {

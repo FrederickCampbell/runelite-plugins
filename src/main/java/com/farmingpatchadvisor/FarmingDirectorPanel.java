@@ -880,6 +880,22 @@ final class FarmingDirectorPanel extends PluginPanel
             action != visibleAction;
         visibleObservation = observation;
         visibleAction = action;
+        if (observation.source == QuestFarmingStateReader.Source.LIVE &&
+            (observation.state == CropState.HARVESTABLE ||
+             observation.state == CropState.UNCHECKED ||
+             observation.state == CropState.DEAD ||
+             observation.state == CropState.DISEASED ||
+             observation.state == CropState.STUMP))
+        {
+            sawHarvestable = true;
+        }
+        if (autoNext.isSelected() && DirectorStepEngine.canFinishHarvestOnly(
+            step.harvestOnly, sawHarvestable, observation.state,
+            observation.source == QuestFarmingStateReader.Source.LIVE))
+        {
+            moveStep(1, true);
+            return;
+        }
         if (autoNext.isSelected() && DirectorStepEngine.canAutoAdvance(
             action, observation.known(), fresh, initiallyGrowing))
         {
@@ -897,6 +913,7 @@ final class FarmingDirectorPanel extends PluginPanel
         activatedAtMillis = System.currentTimeMillis();
         observedInitialState = false;
         initiallyGrowing = false;
+        sawHarvestable = false;
         visibleObservation = null;
         visibleAction = DirectorStepEngine.Action.INSPECT;
     }
@@ -1221,8 +1238,11 @@ final class FarmingDirectorPanel extends PluginPanel
         else
         {
             DirectorPlanner.Step current = currentPlan.steps.get(currentStep);
-            actionText = DirectorStepEngine.instruction(visibleAction, current.crop,
-                current.patch.getPatchType());
+            actionText = current.harvestOnly && visibleAction == DirectorStepEngine.Action.PLANT
+                ? "Harvest/clearing complete or patch empty. No replacement seed "
+                    + "allocated; press Next, or restock and Replan remaining."
+                : DirectorStepEngine.instruction(visibleAction, current.crop,
+                    current.patch.getPatchType());
             if (visibleObservation != null)
             {
                 String source = visibleObservation.source.name().replace('_', ' ');
