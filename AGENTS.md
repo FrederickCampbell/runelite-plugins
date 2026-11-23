@@ -5,8 +5,7 @@
 The former Ironman Farming Director project is now Farming Helper. The default
 branch is the consolidated v0.7.0-beta.1 development baseline. Preserve all
 history through normal commits, publish validated release tags, and use short-lived
-branches for future work. Do not change the internal config group or package
-without an explicit migration. Keep the plugin standalone, preserve upstream
+branches for future work. For v0.9 the author explicitly authorizes a clean pre-Hub configuration reset. Preserve releases and upstream attribution. Keep the plugin standalone, preserve upstream
 licenses, and never represent CI as live client validation.
 
 

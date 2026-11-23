@@ -1,4 +1,4 @@
-# Farming Helper — v0.8.1-beta.1
+# Farming Helper — v0.9.0-beta.1
 
 **Basically, Quest Helper, for farm runs.**
 
@@ -6,6 +6,10 @@ A standalone RuneLite farming assistant, designed for ironmen and useful for any
 a developer beta, not an in-game verified production release.** The consolidated default branch
 preserves Advisor's crop, patch, compost, stock and banking infrastructure and
 the vendored Quest Helper farming-state reader, with the unified RuneLite-native multi-page sidebar introduced in v0.4.
+
+## v0.9 — UI and architecture refactor
+
+Modern component-local styles, compact semantic rows and dark controls. The single patch-type preference store replaces legacy run-priority keys. Set crop priorities again after upgrading. Diagnostics are optional and local. A development-only headless Swing component preview is generated at `build/reports/farming-helper-preview.png` by the tests. This is not a live client screenshot.
 
 ## Architecture
 
@@ -29,7 +33,7 @@ the vendored Quest Helper farming-state reader, with the unified RuneLite-native
 
 ## Installation — RuneLite Dev Manager
 
-[Download the v0.8 beta from GitHub Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.8.1-beta.1) — choose **Source code (zip)**.
+[Download the v0.9 beta from GitHub Releases](https://github.com/FrederickCampbell/runelite-plugins/releases/tag/v0.9.0-beta.1) — choose **Source code (zip)**.
 
 The release is not a Plugin Hub listing; it is intended for the local development manager.
 
