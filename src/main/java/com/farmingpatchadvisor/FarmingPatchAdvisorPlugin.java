@@ -15,6 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
+import net.runelite.api.InventoryID;
+import net.runelite.api.ItemContainer;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.api.ObjectComposition;
 import net.runelite.api.ScriptID;
 import net.runelite.api.Skill;
@@ -52,6 +55,9 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 {
 	@Inject
 	private Client client;
+
+	@Inject
+	private ClientThread clientThread;
 
 	@Inject
 	private OverlayManager overlayManager;
@@ -271,11 +277,21 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 		if (event.getGroupId() == InterfaceID.BANKMAIN)
 		{
 			farmingLoadout.markBankScanned();
+			clientThread.invokeLater(() ->
+			{
+				ItemContainer observed = client.getItemContainer(InventoryID.BANK);
+				if (observed != null) farmingLoadout.observeBank(observed.getItems());
+			});
 			bankChecklistFilter.addButton();
 		}
 		else if (event.getGroupId() == InterfaceID.SEED_VAULT)
 		{
 			farmingLoadout.markSeedVaultScanned();
+			clientThread.invokeLater(() ->
+			{
+				ItemContainer observed = client.getItemContainer(InventoryID.SEED_VAULT);
+				if (observed != null) farmingLoadout.observeVault(observed.getItems());
+			});
 		}
 	}
 
@@ -284,11 +300,13 @@ public class FarmingPatchAdvisorPlugin extends Plugin
 	{
 		if (event.getGroupId() == InterfaceID.BANKMAIN)
 		{
+			farmingLoadout.markBankClosed();
 			bankChecklistFilter.onBankClosed();
 			directorPanel.onStorageClosed();
 		}
 		else if (event.getGroupId() == InterfaceID.SEED_VAULT)
 		{
+			farmingLoadout.markSeedVaultClosed();
 			directorPanel.onStorageClosed();
 		}
 	}

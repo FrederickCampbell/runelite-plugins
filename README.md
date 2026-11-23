@@ -1,7 +1,7 @@
-# Ironman Farming Director — v0.4.0-beta.1
+# Ironman Farming Director — v0.5.0-beta.1
 
 A standalone, integration-first RuneLite farming assistant for ironmen. **This is
-a developer beta, not an in-game verified production release.** The v0.4 branch
+a developer beta, not an in-game verified production release.** The v0.5 branch
 preserves Advisor's crop, patch, compost, stock and banking infrastructure and
 the vendored Quest Helper farming-state reader, then replaces the old Guide /
 Advisor tab layout with one multi-page sidebar.
@@ -12,7 +12,7 @@ Advisor tab layout with one multi-page sidebar.
   contracts, compost, payments, teleports, bank and Seed Vault observations.
   Its original panel is no longer a visible tab, but the implementations and
   existing overlays are retained. Some specialized legacy panel controls still
-  need a unified replacement in v0.5.
+  need further unified UI refinement before v1.0.
 - **Quest Helper** farming-region, patch-state and varbit logic is vendored under
   `com.farmingpatchadvisor.queststate`; the external Quest Helper plugin is
   not required. The sidebar uses Quest Helper-style stages and manual controls,
@@ -29,9 +29,9 @@ Advisor tab layout with one multi-page sidebar.
 
 ## Installation — RuneLite Dev Manager
 
-Download the v0.4 branch ZIP:
+Download the v0.5 branch ZIP:
 
-https://github.com/FrederickCampbell/runelite-plugins/archive/refs/heads/ironman-farming-director-v0.4.zip
+https://github.com/FrederickCampbell/runelite-plugins/archive/refs/heads/ironman-farming-director-v0.5.zip
 
 Extract its Gradle project into:
 
@@ -69,20 +69,50 @@ workflow nor in-game behavior has been tested by this CI.
 5. **Global Settings** contains auto-next, ready-only filtering, automatic
    replan after bank closure, approximate nearest-stop order, gardener payment
    preference, unverified-location inclusion, inventory-wave limit and bank
-   choice. Editing these pages never ends an active Guide.
+   choice, and an explicit Shortest Path switch. Editing these pages never ends an active Guide.
 6. After a banking checkpoint, reopen storage and choose **Replan remaining**.
-   Completed patches are retained. **Resume saved run** restores the saved
+   Completed patches are retained. Bank checkpoints replan instead of reusing a
+   stale future loadout. **Resume saved run** restores the saved
    mode and completed physical patch keys for that character.
 7. Choose **Compost Run** for a sidebar readout of the existing Advisor
-   compost-bin state, next actions, and supply estimates. Compost state
-   tracking and relevant overlays remain in Advisor's backend; a fully guided,
-   individually navigable compost itinerary is still future work. The
+   compost-bin state, per-bin supply estimates, manual Back/Next and a Route
+   action. Routing uses observed bin objects or verified nearby herb areas;
+   no invented exact tile for unobserved Guild/Prifddinas bins. Compost
+   progression is manual, and maximum ingredient estimates are not a claim
+   that an unknown bin is empty. The
    **Timers & farming contract** page displays currently observed Advisor
    timers and the latest recorded farming-contract assignment.
 
 Run Selection lists Advisor's nine original categories, plus All Enabled,
 Compost, and Merged. Separate legacy combinations remain internally supported
 for older saved checkpoints but are no longer shown as primary run options.
+
+## What changed in v0.5
+
+- Cross-checks the Advisor patch registry against the vendored Quest Helper
+  patch names; refuses ambiguous grouped patch identities.
+- Corrects known access gates using upstream HerbRun/TreeRun, RuneLite quest
+  state, Morytania elite diary varbit, Sailing skill and Farming Guild tiers.
+  Partial quest progress remains unverified. Boosts, transport restrictions,
+  spirit-tree planting limits and newly introduced content need further checks.
+- Normalizes known special patch stages: expired anima, health checks for
+  spirit/redwood/celastrus/crystal trees. Spirit trees are not intentionally
+  cleared as part of normal harvesting; Hespori instructions distinguish the
+  combat/harvest step.
+- Budgets real tool and compost item slots for each selected wave. Harvest-only
+  and protection-only stops still pass the same inventory limit. Impossible
+  first stops no longer block every otherwise viable stop.
+- Keeps unfinished earlier steps when the user jumps forward; bank checkpoints
+  replan from remaining identities, including changes to global exclusions.
+- Rejects stale asynchronous account results, resets the active session on
+  logout and preserves per-account checkpoints. A planning-in-flight guard
+  prevents old step observations from completing a replaced plan.
+- Provides sequential compost guidance using the existing bin manager and
+  an optional navigation toggle. Shortest Path's current source still accepts
+  the path/clear message contract; actual client behavior is not verified.
+- Bank and Seed Vault snapshots are accepted only while their interfaces are
+  open; closing drains are ignored once the close event is received. Verify
+  actual widget/container event ordering in the live client.
 
 ## State, unlocking and exclusions
 
@@ -99,14 +129,17 @@ Quest Helper cannot resolve a grouped stop, the manager leaves it grouped and
 the planner conservatively refuses to invent subpatch identities. Global
 exclusions take precedence over run membership and manual route selections.
 
-## v0.4 regression and playtest checklist
+## v0.5 regression and playtest checklist
 
 GitHub Actions runs `bash gradlew clean test build --stacktrace`. The tests
 cover patch identity splitting, global exclusion semantics, merged categories,
 category-specific crop priorities, per-profile saved choices, and preserving
-the active run mode while viewing another mode. Passing CI **does not**
+the active run mode while viewing another mode. New tests exercise catalog
+crosswalks, special state normalization, inventory capacity, progress after
+manual jumps, guild access tiers and source-aware tool/compost requirements.
+Passing CI **does not**
 demonstrate that GUI events, in-game state transitions, bank visibility,
-ShortPath messages or client loading work in a real session.
+Shortest Path messages or client loading work in a real session.
 
 In RuneLite, specifically check: default herb start; herb priority fallback;
 disable Troll Stronghold then run Herbs, All Enabled and Herbs+Trees Merged;
@@ -132,7 +165,7 @@ categories. Shortest Path must be installed separately for map navigation.
 
 ## Inventory waves and banking
 
-v0.4 retains `DirectorWavePlanner` to build multiple loadouts without
+v0.5 retains `DirectorWavePlanner` to build multiple loadouts without
 losing future patches after a 28-slot boundary. It debits allocated planting
 stock and potential protection payments between waves, so the same seed is
 never promised to two stops. Unplannable patches are tracked separately and
@@ -164,8 +197,9 @@ pathfinder travel times. Choose a bank manually if the suggestion is poor.
 The existing Advisor crop database provides Farming level and planted quantity
 requirements. Regular saplings (and other unstackable items) occupy separate
 slots; stackable seed quantities use one slot. The 28-slot budget includes
-conservative tool and **per-wave** teleport allowances and configurable
-harvest space. Optional max-stops-per-wave prevents an oversized loadout.
+per-wave tools, ordinary ultracompost slots or a filled bottomless bucket,
+**per-wave** teleport allowances and configurable harvest space. Source-aware
+withdrawals include tools and compost; bucket charges remain unknown. Optional max-stops-per-wave prevents an oversized loadout.
 Replan after banking for additional waves of a large all-enabled run. It never
 fabricates inaccessible bank/Seed Vault contents or silently consumes reserved
 stock.

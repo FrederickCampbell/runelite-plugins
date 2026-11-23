@@ -4,7 +4,7 @@
 
 The original version numbers and local test paths below document Farming Patch
 Advisor's upstream development history. For this repository's **Ironman Farming
-Director** continue the current v0.4.0-beta.1 release lineage on its own
+Director** continue the current v0.5.0-beta.1 release lineage on its own
 ironman-farming-director-v0.x branches (and ultimately v1.0), preserving past
 release branches and never pushing to master without an explicit request.
 The developer uses RuneLite Dev Manager's Refresh → Build → Launch workflow.

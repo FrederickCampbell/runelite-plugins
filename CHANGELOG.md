@@ -1,5 +1,19 @@
 # Ironman Farming Director development history
 
+## v0.5.0-beta.1 — Functional integration and hardening (2026-11-23)
+
+- Reused the existing planner and wave splitter; applied slot limits to harvest-only and protection-only stops and allowed planning to continue past an impossible first stop.
+- Added per-wave rake/spade/dibber/secateurs and compost requirements, ordinary bucket slot costs, filled-bottomless-bucket option, source-aware withdrawals and missing-supply warnings. Axe alternatives, charges and harvest yields still need live verification.
+- Replanned at banking checkpoints rather than continuing with obsolete waves; fixed manual destination jumps so earlier unfinished stops remain in the itinerary.
+- Reconciled known unlock checks with upstream Quest Helper's HerbRun and TreeRun requirements, including Varlamore, Fossil Island, Harmony diary, Prifddinas, Sailing and Farming Guild tier access.
+- Audited Advisor/Quest Helper patch identity coverage and added specialized health-check and anima-expiry normalization; protected permanent spirit trees from routine removal guidance.
+- Extended the Compost Run into a sequential, manual guide with per-bin supply estimates and optional observed/nearby-area route requests.
+- Added a profile-specific Shortest Path switch and reviewed the upstream path/clear message contract.
+- Hardened logout/profile handling, asynchronous planning and storage observations; ignored closed-interface bank/vault events and preserved saved route membership when global exclusions change.
+- Added regression tests for the above pure models and recorded an in-client acceptance checklist.
+- Remaining: live RuneLite/Windows testing, precise specialist destinations, full teleport/charge and spirit-tree-limit modeling, visual/interaction refinement, complete legacy-control migration.
+
+
 ## v0.4.0-beta.1 — Unified sidebar and global Patch Manager (2026-11-23)
 
 - Replaced the visible Guide/Advisor tab arrangement with one sidebar and five pages: Run Selection, Active Guide, Run Editor, Patch Manager and Global Settings; added a dedicated Compost Run observation page.

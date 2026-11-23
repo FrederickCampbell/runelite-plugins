@@ -187,6 +187,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private final Set<String> completedPatchKeys = new HashSet<>();
     private final Map<String, String> temporaryOverrides = new HashMap<>();
     private volatile long planningGeneration;
+    private volatile boolean planningInFlight;
     private volatile int lastPlannedFarmingLevel;
     private volatile long routeGeneration;
     private volatile boolean routeIssued;
@@ -1243,6 +1244,7 @@ final class FarmingDirectorPanel extends PluginPanel
             JOptionPane.showMessageDialog(this, "Log in before planning a run.");
             return;
         }
+        planningInFlight = true;
         start.setEnabled(false);
         replan.setEnabled(false);
         clearRoute();
@@ -1271,6 +1273,7 @@ final class FarmingDirectorPanel extends PluginPanel
             {
                 if (generation != planningGeneration ||
                     !Objects.equals(planningProfile, configManager.getRSProfileKey())) return;
+                planningInFlight = false;
                 currentSession = result;
                 activeRunSelection = selected;
                 activeProfile = planningProfile;
@@ -1638,7 +1641,7 @@ final class FarmingDirectorPanel extends PluginPanel
         SwingUtilities.invokeLater(() ->
         {
             if (autoReplanBank.isSelected() && currentPlan != null && !runFinished
-                && !paused && loggedIn && Objects.equals(profile, configManager.getRSProfileKey()))
+                && !planningInFlight && !compostPageOpen && !paused && loggedIn && Objects.equals(profile, configManager.getRSProfileKey()))
             {
                 beginRun(true);
             }
@@ -1785,7 +1788,7 @@ final class FarmingDirectorPanel extends PluginPanel
     {
         DirectorPlanner.Plan plan = currentPlan;
         int index = currentStep;
-        if (plan == null || paused || runFinished || awaitingBank || compostPageOpen
+        if (plan == null || planningInFlight || paused || runFinished || awaitingBank || compostPageOpen
             || !Objects.equals(activeProfile, configManager.getRSProfileKey())
             || client.getGameState() != GameState.LOGGED_IN
             || index < 0 || index >= plan.steps.size())
@@ -1802,7 +1805,7 @@ final class FarmingDirectorPanel extends PluginPanel
     private void acceptObservation(DirectorPlanner.Plan plan, int index,
                                    QuestFarmingStateReader.Observation observation)
     {
-        if (plan != currentPlan || index != currentStep || paused || runFinished || awaitingBank
+        if (plan != currentPlan || index != currentStep || planningInFlight || paused || runFinished || awaitingBank
             || compostPageOpen || !Objects.equals(activeProfile, configManager.getRSProfileKey()))
         {
             return;
@@ -1866,7 +1869,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void moveStep(int delta, boolean automatic)
     {
-        if (currentPlan == null || paused) return;
+        if (currentPlan == null || planningInFlight || paused) return;
         if (awaitingBank)
         {
             if (delta > 0)
@@ -2036,7 +2039,7 @@ final class FarmingDirectorPanel extends PluginPanel
 
     private void jumpTo(int targetIndex)
     {
-        if (currentPlan == null || paused || targetIndex < 0
+        if (currentPlan == null || planningInFlight || paused || targetIndex < 0
             || targetIndex >= currentPlan.steps.size())
         {
             return;
@@ -2082,6 +2085,8 @@ final class FarmingDirectorPanel extends PluginPanel
     private void stopRun()
     {
         ++planningGeneration;
+        planningInFlight = false;
+        String stoppedProfile = activeProfile;
         currentPlan = null;
         currentSession = null;
         activeRunSelection = null;
@@ -2095,7 +2100,9 @@ final class FarmingDirectorPanel extends PluginPanel
         completedSteps.clear();
         completedPatchKeys.clear();
         temporaryOverrides.clear();
-        clearSavedRun();
+        if (stoppedProfile != null && Objects.equals(stoppedProfile, configManager.getRSProfileKey()))
+            clearSavedRun();
+        start.setEnabled(true);
         activateCurrentStep();
         clearRoute();
         render();
@@ -2104,6 +2111,7 @@ final class FarmingDirectorPanel extends PluginPanel
     void resetCharacter()
     {
         ++planningGeneration;
+        planningInFlight = false;
         SwingUtilities.invokeLater(() ->
         {
             currentPlan = null;

@@ -41,6 +41,8 @@ final class FarmingLoadout
 	private long lastVaultSnapshotAt;
 	private boolean bankScanned;
 	private boolean seedVaultScanned;
+	private boolean bankOpen;
+	private boolean seedVaultOpen;
 
 	@Inject
 	private FarmingLoadout(FarmingPatchAdvisorPlugin plugin, FarmingPatchAdvisorConfig config,
@@ -60,9 +62,7 @@ final class FarmingLoadout
 	{
 		if (event.getContainerId() == InventoryID.BANK.getId())
 		{
-			copyItems(event.getItemContainer().getItems(), bankItems);
-			lastBankSnapshotAt = System.currentTimeMillis();
-			bankScanned = true;
+			observeBank(event.getItemContainer().getItems());
 		}
 		else if (event.getContainerId() == InventoryID.INVENTORY.getId())
 		{
@@ -74,21 +74,42 @@ final class FarmingLoadout
 		}
 		else if (event.getContainerId() == InventoryID.SEED_VAULT.getId())
 		{
-			copyItems(event.getItemContainer().getItems(), seedVaultItems);
-			lastVaultSnapshotAt = System.currentTimeMillis();
-			seedVaultScanned = true;
+			observeVault(event.getItemContainer().getItems());
 		}
 		cachedPaymentAtMillis = 0;
 	}
 
 	synchronized void markBankScanned()
 	{
-		bankScanned = true;
+		bankOpen = true;
 	}
 
 	synchronized void markSeedVaultScanned()
 	{
+		seedVaultOpen = true;
+	}
+
+	synchronized void markBankClosed() { bankOpen = false; }
+	synchronized void markSeedVaultClosed() { seedVaultOpen = false; }
+
+	/** Only a container observed while its interface is open is a stock scan.
+	 * Closing a bank can emit a drained container; keep the last actual scan. */
+	synchronized void observeBank(Item[] items)
+	{
+		if (!bankOpen || items == null) return;
+		copyItems(items, bankItems);
+		lastBankSnapshotAt = System.currentTimeMillis();
+		bankScanned = true;
+		cachedPaymentAtMillis = 0;
+	}
+
+	synchronized void observeVault(Item[] items)
+	{
+		if (!seedVaultOpen || items == null) return;
+		copyItems(items, seedVaultItems);
+		lastVaultSnapshotAt = System.currentTimeMillis();
 		seedVaultScanned = true;
+		cachedPaymentAtMillis = 0;
 	}
 
 	synchronized boolean isBankScanned()
@@ -203,6 +224,8 @@ final class FarmingLoadout
 		seedRunBaselines.clear();
 		bankScanned = false;
 		seedVaultScanned = false;
+		bankOpen = false;
+		seedVaultOpen = false;
 		lastBankSnapshotAt = 0;
 		lastVaultSnapshotAt = 0;
 		cachedPaymentAtMillis = 0;
