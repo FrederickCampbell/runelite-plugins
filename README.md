@@ -1,4 +1,4 @@
-# Farming Helper — v0.11.0-beta.1
+# Farming Helper — v0.12.0-beta.1
 
 **Basically, Quest Helper, for farm runs.**
 
@@ -14,7 +14,14 @@ A standalone RuneLite farming assistant designed for ironmen and useful for any 
 
 The plugin is read-only guidance: every in-game action remains manual. Unknown patch observations and access are not treated as proven. Optional nearest-stop routing is a heuristic.
 
-## v0.11
+## v0.12
+
+- Extend route coverage with RuneLite world-map farming markers, clearly distinguished from Quest Helper exact interaction tiles. Underwater and specialty routes still require in-client validation.
+- Verify catalog identities and area routing across the 99 physical planting plots in the vendored farming registry; use the registry rather than dropping a whole group on count disagreement.
+- Keep established spirit trees, redwoods, bushes and cacti; handle cactus health checks and depleted perennial regrowth. Respect known spirit tree limits (83/88/93/96/99).
+- Quest Helper / Time Tracking is authoritative; exact legacy observations are fallback only. Remove active guide dependency on legacy compost confirmation. Retain timer and contract features.
+
+## v0.11 (historical)
 
 - One uninterrupted itinerary of actionable patches; no required inventory waves or preparation screens.
 - Live required and recommended item counts, conditional rake/dibber requirements, and observed seed-source tooltips. Crop priorities and explicit overrides are preserved even when stock is missing.
