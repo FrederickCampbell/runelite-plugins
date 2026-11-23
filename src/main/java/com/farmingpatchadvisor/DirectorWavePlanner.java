@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.IntPredicate;
+import java.util.function.ToIntFunction;
 
 /**
  * Split a complete farming itinerary into loadouts. Reuses the same Advisor
@@ -49,6 +50,22 @@ final class DirectorWavePlanner
                         Map<String, String> overrides, boolean herbloreFocus,
                         int maxStopsPerWave)
     {
+        return split(patches, farmingLevel, stock, customPriority, priorities,
+            reserves, toolSlots, teleportSlots, harvestSlots, protect, stackable,
+            preplanted, harvestOnly, overrides, herbloreFocus,
+            maxStopsPerWave, selected -> teleportSlots);
+    }
+
+    static Result split(List<FarmRunPatch> patches, int farmingLevel,
+                        Map<Integer, Integer> stock, boolean customPriority,
+                        String priorities, String reserves, int toolSlots,
+                        int teleportSlots, int harvestSlots,
+                        boolean protect, IntPredicate stackable,
+                        Set<String> preplanted, Set<String> harvestOnly,
+                        Map<String, String> overrides, boolean herbloreFocus,
+                        int maxStopsPerWave,
+                        ToIntFunction<List<FarmRunPatch>> teleportSlotsForSelected)
+    {
         List<FarmRunPatch> remaining = new ArrayList<>(patches);
         Map<Integer, Integer> available = new HashMap<>(stock);
         List<DirectorPlanner.Plan> waves = new ArrayList<>();
@@ -60,7 +77,8 @@ final class DirectorWavePlanner
             DirectorPlanner.Plan wave = DirectorPlanner.build(null, remaining,
                 farmingLevel, available, customPriority, priorities, reserves,
                 toolSlots, teleportSlots, harvestSlots, protect, stackable,
-                preplanted, harvestOnly, overrides, herbloreFocus, maxStops);
+                preplanted, harvestOnly, overrides, herbloreFocus, maxStops,
+                teleportSlotsForSelected);
             if (wave.steps.isEmpty())
             {
                 warnings.addAll(wave.warnings);
