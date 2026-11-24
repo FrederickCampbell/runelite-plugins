@@ -3,59 +3,134 @@ package com.farminghelper;
 import java.util.*;
 import java.util.function.IntFunction;
 import java.util.function.IntUnaryOperator;
+import java.util.regex.*;
+import net.runelite.client.game.ItemVariationMapping;
 
-/** Native Bank Tags layout coordinates; no bank item movement or widget mutation.
- * Only actual stocked IDs are supplied by the caller. Each category begins on a new bank row.
- * Multiple variants in one slot remain together; long categories wrap naturally. */
+/** Positional native Bank Tags layout. No custom bank rendering or item movement.
+ * Physical stock is separate from layout positions, including withdrawal placeholders. */
 final class BankShelfLayout
 {
     static final int WIDTH=8;
     static final int PERMANENT=20,CHARGED=21,CONSUMABLE=22,TOOLS=23,COMPOST=24,SEEDS=25;
-    private static final int[] SLOTS={0,1,2,3,4,5,7,9,10,12,13};
+    private static final Pattern CHARGE=Pattern.compile("\\s*\\(([0-9]+)\\)$");
+    private static final String[] RUNES={"air","water","earth","fire","law","nature","astral","cosmic","mist","dust","mud","smoke","steam","lava","blood","soul","death","mind","body"};
+    private static final String[] TOOL_ORDER={"spade","rake","seed dibber","gardening trowel","watering can","gricoller","magic secateurs","secateurs","herb sack","silklined herb sack","seed box","reagent pouch","plant cure","axe","basket","sack","plant pot","hammer","chisel","clockwork","bird house","birdhouse","logs","bucket"};
+    private static final String[] COMPOST_ORDER={"bottomless compost","ultracompost","supercompost","compost","volcanic ash","saltpetre","coins"};
     private BankShelfLayout(){}
-
-    static int category(int id,String name,int equipmentSlot,int transport)
+    private static String name(IntFunction<String> names,int id){return Objects.toString(names.apply(id),"").toLowerCase(Locale.ROOT);}
+    private static String family(String n){return CHARGE.matcher(n).replaceFirst("").replaceFirst(" \\(i\\)$","").trim();}
+    private static int charge(String n){Matcher m=CHARGE.matcher(n);return m.find()?Integer.parseInt(m.group(1)):0;}
+    private static String baseName(IntFunction<String> names,int id)
+    {String n=name(names,id);if(n.contains("graceful")||n.contains("farmer's"))return n;return name(names,ItemVariationMapping.map(id));}
+    private static boolean outfit(String n,String kind){return n.contains(kind);}
+    private static boolean diary(String n){return n.startsWith("ardougne cloak")||n.startsWith("explorer's ring")||n.startsWith("rada's blessing")||n.startsWith("karamja gloves")||n.startsWith("desert amulet")||n.startsWith("morytania legs")||n.startsWith("fremennik sea boots")||n.startsWith("kandarin headgear")||n.startsWith("wilderness sword")||n.startsWith("western banner");}
+    private static boolean cape(String n){return n.contains("cape")&&!n.contains("graceful")&&!n.contains("escape");}
+    private static boolean dive(String n){return n.equals("fishbowl helmet")||n.equals("diving apparatus")||n.equals("medallion of the deep")||n.equals("flippers");}
+    private static boolean spellGear(String n){return n.contains("rune pouch")||n.startsWith("tome of ")||(n.contains("staff")&&!n.equals("dramen staff")&&!n.equals("lunar staff"));}
+    private static boolean consumableTeleport(String n){return n.contains("tablet")||n.endsWith(" basalt")||n.contains("teleport scroll")||n.endsWith(" teleport")||n.endsWith(" teleport scroll");}
+    private static boolean jewellery(String n){return n.startsWith("amulet ")||n.startsWith("ring ")||n.startsWith("skills necklace")||n.startsWith("games necklace")||n.startsWith("combat bracelet")||n.startsWith("necklace of passage")||n.startsWith("slayer ring")||n.startsWith("digsite pendant")||n.startsWith("pendant of ates")||n.startsWith("xeric's talisman")||n.startsWith("teleport crystal")||n.startsWith("pharaoh's sceptre");}
+    private static int slot(String n,int actual)
     {
-        String n=name==null?"":name.toLowerCase(Locale.ROOT);
-        // Farming cape remains with other capes; active transport jewellery stays together.
-        if(n.contains("rune pouch")||n.endsWith(" rune")||n.contains("tablet")||n.endsWith(" basalt")||n.contains("teleport scroll")||n.equals("master scroll book")||n.equals("tai bwo wannai teleport"))return CONSUMABLE;
-        if(transport>=0&&(n.startsWith("ardougne cloak")||n.startsWith("explorer's ring")||n.startsWith("rada's blessing")))return PERMANENT;
-        if(transport>=0&&!n.startsWith("farming cape")&&!n.startsWith("construction cape")&&!n.startsWith("crafting cape")&&!n.startsWith("achievement diary cape"))return transport;
-        if(n.contains("sapling")||n.endsWith(" seed")||n.endsWith(" seeds")||n.endsWith(" spore")||n.endsWith(" spores")||n.equals("grape seed")||n.equals("seaweed spore")||CropCatalog.findByItemId(id)!=null)return SEEDS;
-        if(n.endsWith(" logs")||n.equals("logs")||n.equals("clockwork")||n.contains("bird house")||n.contains("birdhouse"))return TOOLS;
-        if(n.contains("compost")||n.contains("volcanic ash")||n.equals("coins")||n.equals("saltpetre"))return COMPOST;
-        if(n.equals("dramen staff")||n.equals("lunar staff"))return PERMANENT;
-        if(n.contains("staff")||n.contains("secateurs")||n.endsWith(" axe")||n.contains("axe (")||n.contains("hammer")||n.contains("chisel")||n.contains("watering can"))return equipmentSlot==3?3:TOOLS;
-        for(int i=0;i<SLOTS.length;i++)if(equipmentSlot==SLOTS[i])return i;
-        // Item stat lookup may be absent for nontradeable gear; explicit common slots.
         if(n.contains("hood")||n.contains("helmet")||n.contains("strawhat"))return 0;
-        if(n.endsWith("cape")||n.equals("diving apparatus"))return 1;
+        if(n.contains("cape")||n.equals("diving apparatus"))return 1;
         if(n.startsWith("amulet")||n.equals("medallion of the deep")||n.equals("strung rabbit foot"))return 2;
         if(n.startsWith("tome of"))return 5;
         if(n.contains("graceful top")||n.contains("farmer's jacket")||n.contains("farmer's shirt"))return 4;
-        if(n.contains("graceful legs")||n.contains("trousers")||n.contains("breeches"))return 6;
-        if(n.endsWith("gloves"))return 7;
-        if(n.endsWith("boots")||n.equals("flippers"))return 8;
-        if(n.endsWith("blessing"))return 10;
-        if(n.contains("sack")||n.contains("seed box")||n.contains("spade")||n.contains("rake")||n.contains("dibber")||n.contains("trowel")||n.contains("plant cure")||n.contains("bucket")||n.contains("basket")||n.contains("gricoller"))return TOOLS;
-        return COMPOST; // remaining explicit run supplies (payments, logs, clockwork)
+        if(n.contains("graceful legs")||n.contains("trousers")||n.contains("breeches"))return 7;
+        if(n.contains("gloves"))return 9;
+        if(n.contains("boots")||n.equals("flippers"))return 10;
+        return actual;
     }
-
+    // Same 4-column equipment silhouette as the native equipped layouts.
+    private static int mannequinPos(int slot)
+    {switch(slot){case 0:return 1;case 1:return 8;case 2:return 9;case 13:return 10;case 3:return 16;case 4:return 17;case 5:return 18;case 7:return 25;case 9:return 32;case 10:return 33;case 12:return 34;default:return -1;}}
+    private static int order(String n,String[] ordered)
+    {for(int i=0;i<ordered.length;i++)if(n.equals(ordered[i])||n.startsWith(ordered[i]+" ")||n.startsWith(ordered[i]+"("))return i;return ordered.length;}
+    private static void pad(List<Integer> out){while(out.size()%WIDTH!=0)out.add(-1);}
+    private static void block(List<Integer> out,List<Integer> ids)
+    {if(ids.isEmpty())return;pad(out);out.addAll(ids);pad(out);}
+    private static List<Integer> take(Set<Integer> left,java.util.function.IntPredicate condition,Comparator<Integer> comparator)
+    {List<Integer> result=new ArrayList<>();for(int id:left)if(condition.test(id))result.add(id);result.sort(comparator);left.removeAll(result);return result;}
+    private static void familyRows(List<Integer> out,List<Integer> items,IntFunction<String> names)
+    {
+        Map<String,List<Integer>> families=new TreeMap<>();for(int id:items)families.computeIfAbsent(family(name(names,id)),k->new ArrayList<>()).add(id);
+        for(List<Integer> group:families.values())
+        {group.sort(Comparator.comparingInt((Integer id)->charge(name(names,id))).reversed().thenComparingInt(Integer::intValue));block(out,group);}
+    }
     static int[] build(Set<Integer> owned,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport)
     {
-        List<Integer> ordered=new ArrayList<>(owned);
-        ordered.sort(Comparator.comparingInt((Integer id)->category(id,names.apply(id),equipment.applyAsInt(id),transport.applyAsInt(id)))
-            .thenComparing(id->Objects.toString(names.apply(id),""),String.CASE_INSENSITIVE_ORDER).thenComparingInt(Integer::intValue));
-        List<Integer> result=new ArrayList<>();
-        int previous=-1;
-        for(int id:ordered)
+        Set<Integer> left=new HashSet<>(owned);
+        Comparator<Integer> byName=Comparator.comparing((Integer id)->name(names,id)).thenComparingInt(Integer::intValue);
+        List<Integer> out=new ArrayList<>();
+        // Two mannequins per row block. Extra recolors form further silhouettes,
+        // never repeated IDs, and no synthetic unowned equipment.
+        List<Integer> graceful=take(left,id->outfit(baseName(names,id),"graceful"),byName);
+        List<Integer> farmer=take(left,id->outfit(baseName(names,id),"farmer's"),byName);
+        List<Integer> overflow=new ArrayList<>();
+        while(!graceful.isEmpty()||!farmer.isEmpty())
         {
-            int group=category(id,names.apply(id),equipment.applyAsInt(id),transport.applyAsInt(id));
-            // All equipment slots form one contiguous block; every later category starts a fresh row.
-            int section=group<PERMANENT?0:group;
-            if(previous>=0&&section!=previous)while(result.size()%WIDTH!=0)result.add(-1);
-            result.add(id);previous=section;
+            int[] cells=new int[40];Arrays.fill(cells,-1);
+            for(int side=0;side<2;side++)
+            {
+                List<Integer> group=side==0?graceful:farmer;
+                for(Iterator<Integer> iter=group.iterator();iter.hasNext();)
+                {
+                    int id=iter.next();int pos=mannequinPos(slot(baseName(names,id),equipment.applyAsInt(id)));
+                    if(pos<0){overflow.add(id);iter.remove();continue;}
+                    pos+=side*4;if(cells[pos]<0){cells[pos]=id;iter.remove();}
+                }
+            }
+            if(Arrays.stream(cells).anyMatch(id->id>=0)){for(int id:cells)out.add(id);}
         }
-        return result.stream().mapToInt(Integer::intValue).toArray();
+        block(out,overflow);
+        block(out,take(left,id->cape(name(names,id)),byName));
+        block(out,take(left,id->dive(name(names,id)),Comparator.comparingInt((Integer id)->slot(name(names,id),equipment.applyAsInt(id))).thenComparing(byName)));
+        block(out,take(left,id->diary(name(names,id)),byName));
+        // Permanent travel accessories, then one row per jewellery family.
+        block(out,take(left,id->transport.applyAsInt(id)==PERMANENT&&!jewellery(name(names,id))&&!consumableTeleport(name(names,id)),byName));
+        familyRows(out,take(left,id->transport.applyAsInt(id)>=0&&jewellery(name(names,id)),byName),names);
+        block(out,take(left,id->transport.applyAsInt(id)>=0&&!consumableTeleport(name(names,id)),byName));
+        block(out,take(left,id->name(names,id).equals("dramen staff")||name(names,id).equals("lunar staff"),byName));
+        // 4-column rune matrix on the left, spell equipment in the right-hand block.
+        List<Integer> runes=take(left,id->name(names,id).endsWith(" rune"),byName);
+        List<Integer> spell=take(left,id->spellGear(name(names,id)),Comparator.comparingInt((Integer id)->name(names,id).contains("rune pouch")?0:name(names,id).startsWith("tome of")?2:1).thenComparing(byName));
+        if(!runes.isEmpty()||!spell.isEmpty())
+        {
+            pad(out);int rows=Math.max(runes.isEmpty()?0:(RUNES.length+3)/4,(spell.size()+3)/4);
+            int[] cells=new int[rows*WIDTH];Arrays.fill(cells,-1);
+            List<Integer> spare=new ArrayList<>();
+            for(int id:runes){int i=Arrays.asList(RUNES).indexOf(name(names,id).replaceFirst(" rune$",""));if(i<0||cells[i/4*WIDTH+i%4]>=0)spare.add(id);else cells[i/4*WIDTH+i%4]=id;}
+            for(int i=0;i<spell.size();i++)cells[i/4*WIDTH+4+i%4]=spell.get(i);
+            for(int id:cells)out.add(id);block(out,spare);
+        }
+        block(out,take(left,id->consumableTeleport(name(names,id))||name(names,id).equals("master scroll book"),byName));
+        block(out,take(left,id->{String n=name(names,id);return order(n,TOOL_ORDER)<TOOL_ORDER.length||n.contains(" axe")||n.endsWith(" logs")||n.contains("plant pot")||n.contains("watering can");},Comparator.comparingInt((Integer id)->order(name(names,id),TOOL_ORDER)).thenComparing(byName)));
+        block(out,take(left,id->order(name(names,id),COMPOST_ORDER)<COMPOST_ORDER.length||name(names,id).contains("compost"),Comparator.comparingInt((Integer id)->order(name(names,id),COMPOST_ORDER)).thenComparing(byName)));
+        Map<String,List<Integer>> crops=new TreeMap<>();
+        for(int id:take(left,id->{String n=name(names,id);return CropCatalog.findByItemId(id)!=null||n.endsWith(" seed")||n.endsWith(" seeds")||n.contains("sapling")||n.endsWith(" spore")||n.endsWith(" spores");},byName))
+        {
+            Crop crop=VaultRanking.resolve(id,names.apply(id));String kind=crop==null?"Other planting":crop.getPatchType().getDisplayName();
+            crops.computeIfAbsent(kind,k->new ArrayList<>()).add(id);
+        }
+        // All remaining explicit supplies, including protection payments, get their own block.
+        block(out,take(left,id->true,byName));
+        for(List<Integer> group:crops.values())block(out,group);
+        while(!out.isEmpty()&&out.get(out.size()-1)==-1)out.remove(out.size()-1);
+        return out.stream().mapToInt(Integer::intValue).toArray();
+    }
+    /** Keep withdrawal positions for this bank visit. New stock appends as a
+     * structured block; newly ineligible physical stock is removed. Empty
+     * layout cells never enter the stock/requirement calculations. */
+    static int[] reconcile(int[] prior,Set<Integer> eligible,Set<Integer> physical,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport)
+    {
+        if(prior.length==0)return build(eligible,names,equipment,transport);
+        List<Integer> out=new ArrayList<>();Set<Integer> fresh=new HashSet<>(eligible);
+        for(int id:prior)
+        {
+            if(id>=0&&physical.contains(id)&&!eligible.contains(id))out.add(-1);
+            else{out.add(id);fresh.remove(id);}
+        }
+        if(!fresh.isEmpty()){pad(out);for(int id:build(fresh,names,equipment,transport))out.add(id);}
+        return out.stream().mapToInt(Integer::intValue).toArray();
     }
 }

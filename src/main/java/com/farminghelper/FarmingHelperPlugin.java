@@ -390,7 +390,7 @@ public class FarmingHelperPlugin extends Plugin
             refineOrder();
         }
         if(vaultViews!=null)vaultViews.tick();
-        if(runBank!=null)runBank.tick(bankRunItems(),flag("activeRunBank",true));
+        if(runBank!=null)runBank.tick(bankRunItems(),flag("activeRunBank",true),birdBankPhase());
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
     }
 
@@ -424,16 +424,17 @@ public class FarmingHelperPlugin extends Plugin
         return Set.copyOf(ids);
     }
 
+    private boolean birdBankPhase(){return specialtyStaged&&specialtyBirdPhase||run.size()==1&&run.contains(FarmRunType.BIRDHOUSE);}
     private Set<Integer> bankRunItems()
     {
         Set<Integer> runItems=vaultRunItems();
         if(runItems==null)return null;
         Set<Integer> ids=new HashSet<>(runItems);ids.addAll(requiredItems);ids.addAll(recommendedItems);
-        boolean bird=specialtyStaged&&specialtyBirdPhase||run.size()==1&&run.contains(FarmRunType.BIRDHOUSE);
+        boolean bird=birdBankPhase();
         if(runBank==null||!runBank.bankOpen())return Set.copyOf(ids);
         return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird);
     }
-    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(bankRunItems());}});}
+    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(bankRunItems(),birdBankPhase());}});}
     TransportHint birdhouseTransport()
     {
         if(!guideRequested||diseaseTarget!=null||preparing||current==null||current.getPatchType()!=PatchType.BIRDHOUSE||navigation==null||client.getLocalPlayer()==null)return null;

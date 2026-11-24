@@ -27,7 +27,7 @@ final class ActiveRunBank
     private final ItemManager items;
     private Set<Integer> ids=Collections.emptySet();
     private int[] lastLayout=new int[0];
-    private boolean registered,opened,offered;
+    private boolean registered,opened,offered,birdPhase;
     ActiveRunBank(Client client,PluginManager plugins,ItemManager items)
     {this.client=client;this.plugins=plugins;this.items=items;}
     private BankTagsPlugin service()
@@ -53,11 +53,11 @@ final class ActiveRunBank
     {
         if(!registered){tags.registerTag(TAG,id->includes(ids,id,items.getItemComposition(id)));registered=true;}
     }
-    private Set<Integer> physical(Set<Integer> next)
+    private Set<Integer> physical()
     {
         Set<Integer> result=new HashSet<>();
         ItemContainer bank=client.getItemContainer(InventoryID.BANK);
-        if(bank!=null)for(Item item:bank.getItems())if(item!=null&&item.getQuantity()>0&&includes(next,item.getId(),items.getItemComposition(item.getId())))result.add(item.getId());
+        if(bank!=null)for(Item item:bank.getItems())if(item!=null&&item.getQuantity()>0&&items.getItemComposition(item.getId())!=null&&items.getItemComposition(item.getId()).getPlaceholderTemplateId()==-1)result.add(item.getId());
         return Set.copyOf(result);
     }
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
@@ -67,24 +67,29 @@ final class ActiveRunBank
         // Native in-memory layout, no user tag or layout config write by this plugin.
         lastLayout=layout.clone();api.openTag(TAG,new Layout(TAG,layout),BankTagsService.OPTION_ITEMS_NOT_IN_LAYOUT_AT_BOTTOM);
     }
-    void tick(Set<Integer> next,boolean enabled)
+    void tick(Set<Integer> next,boolean enabled,boolean bird)
     {
         BankTagsPlugin api=service();
         if(!enabled||next==null||api==null){close();return;}
-        if(!bankOpen()){opened=false;offered=false;return;}
-        ids=physical(next);register();
-        if(!opened){opened=true;offered=false;}
+        if(!bankOpen()){opened=false;offered=false;lastLayout=new int[0];return;}
+        Set<Integer> physical=physical();Set<Integer> filtered=new HashSet<>(physical);filtered.retainAll(next);
+        boolean changed=!ids.equals(filtered);ids=Set.copyOf(filtered);register();
+        if(!opened){opened=true;offered=false;lastLayout=new int[0];}
+        boolean stageChanged=birdPhase!=bird;birdPhase=bird;
+        if(stageChanged)lastLayout=new int[0];
         if(offered&&!TAG.equals(api.getActiveTag()))return; // Respect manual browsing.
-        int[] layout=BankShelfLayout.build(ids,this::name,this::slot,CuratedBank::transportCategory);
+        int[] layout=BankShelfLayout.reconcile(lastLayout,ids,physical,this::name,this::slot,CuratedBank::transportCategory);
         if(!offered&&!ids.isEmpty()){offered=true;open(api,layout);}
-        else if(offered&&!Arrays.equals(layout,lastLayout))open(api,layout);
+        else if(offered&&(stageChanged||changed||!Arrays.equals(layout,lastLayout)))open(api,layout);
     }
-    void show(Set<Integer> next)
+    void show(Set<Integer> next,boolean bird)
     {
         BankTagsPlugin api=service();
         if(api==null||next==null||next.isEmpty()||!bankOpen())return;
-        ids=physical(next);register();opened=true;offered=true;
-        open(api,BankShelfLayout.build(ids,this::name,this::slot,CuratedBank::transportCategory));
+        Set<Integer> physical=physical();Set<Integer> filtered=new HashSet<>(physical);filtered.retainAll(next);ids=Set.copyOf(filtered);
+        if(!opened||birdPhase!=bird)lastLayout=new int[0];birdPhase=bird;
+        register();opened=true;offered=true;
+        open(api,BankShelfLayout.reconcile(lastLayout,ids,physical,this::name,this::slot,CuratedBank::transportCategory));
     }
     void close()
     {
