@@ -18,7 +18,7 @@ final class StepItems
             case PAY_REMOVE: result.add(ItemID.COINS);break;
             case CHOP_TREE: if(axe>0)result.add(axe);break;
             case CURE:
-                if(StepEngine.isTreeType(type)||type==PatchType.CORAL)
+                if(CropCare.prunes(type))
                     result.add(bag.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0?ItemID.FAIRY_ENCHANTED_SECATEURS:ItemID.SECATEURS);
                 else result.add(ItemID.PLANT_CURE);
                 break;

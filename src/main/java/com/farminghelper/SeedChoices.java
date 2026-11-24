@@ -36,6 +36,13 @@ final class SeedChoices
             Crop crop=committed.get(patch);
             if (available(patch,crop,level,remaining)) assign(patch,crop,remaining,result);
         }
+        // White lilies are permanent allotment protection. Reserve stocked lilies
+        // before ordinary flower XP preferences, without inventing unavailable stock.
+        for(FarmRunPatch patch:patches)if(patch.getPatchType()==PatchType.FLOWER&&!result.containsKey(patch))
+        {
+            Crop lily=CropCatalog.findByName(PatchType.FLOWER,"White lily");
+            if(available(patch,lily,level,remaining))assign(patch,lily,remaining,result);
+        }
         // Reserve available individual preferences before general priorities.
         for (FarmRunPatch patch : patches)
         {

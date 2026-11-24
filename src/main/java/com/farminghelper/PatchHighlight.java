@@ -49,6 +49,19 @@ final class PatchHighlight extends Overlay
     {return client.getLocalPlayer()!=null && o.getWorldView()==client.getLocalPlayer().getWorldView() && o.getPlane()==client.getPlane();}
     private WorldPoint template(GameObject o)
     {return o.getWorldView()!=null && o.getWorldView().isInstance() && o.getLocalLocation()!=null?WorldPoint.fromLocalInstance(client,o.getLocalLocation(),o.getPlane()):o.getWorldLocation();}
+    boolean hasVerifiedDisease(FarmRunPatch patch)
+    {
+        int varbit=plugin.get().patchVarbit(patch);
+        if(varbit<=0)return false;
+        for(GameObject object:resolve(patch))
+        {
+            ObjectComposition base=client.getObjectDefinition(object.getId()), actual=transformed(base);
+            if(base==null||base.getVarbitId()!=varbit||actual==null||actual.getActions()==null)continue;
+            for(String action:actual.getActions())if("Cure".equalsIgnoreCase(action)||"Prune".equalsIgnoreCase(action))return true;
+        }
+        return false;
+    }
+
     boolean hasLocalPatch(FarmRunPatch patch)
     {
         return !resolve(patch).isEmpty();

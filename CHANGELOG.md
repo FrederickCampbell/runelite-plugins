@@ -1,3 +1,10 @@
+## v0.27-beta.1 — Crop care and flower progression
+
+- Optional watering for local dry allotment, flower and hops crops when a usable can is carried.
+- Detect verified nearby diseased patch objects outside the selected run, add a cure-only detour, and resume without changing planting allocation.
+- Include flowers by default in Crop Run; reserve stocked white lily seeds first and preserve living lilies. Existing explicit preset exclusions remain respected.
+- Use secateurs for diseased bushes as well as trees and coral; plant cure for ordinary crops.
+
 ## v0.26.1-beta.1 — Exclude placeholder stock
 
 - Reject bank and vault placeholder item definitions before counting physical stock, even if the quantity is positive and the name matches a seed.

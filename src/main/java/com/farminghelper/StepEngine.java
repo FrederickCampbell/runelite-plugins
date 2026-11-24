@@ -25,6 +25,7 @@ final class StepEngine
         PLANT,
         COMPOST,
         PROTECT_TREE,
+        WATER,
         COMPLETE
     }
 
@@ -149,8 +150,10 @@ final class StepEngine
             case CLEAR_DEAD:
                 return "Clear the dead crop, then plant " + name + ".";
             case CURE:
-                return type == PatchType.CORAL ? "Prune the diseased coral with secateurs." : isTreeType(type) ? "Prune the diseased tree with secateurs."
+                return type == PatchType.CORAL ? "Prune the diseased coral with secateurs." : CropCare.prunes(type) ? "Prune the diseased crop with secateurs."
                     : "Cure the diseased crop before harvesting.";
+            case WATER:
+                return "Water this growing crop with the watering can, then continue.";
             case PLANT:
                 if (type == PatchType.GRAPEVINE && crop != null) return "Prepare the vine patch with saltpetre and a gardening trowel, then plant " + name + ".";
                 return crop == null ? "Choose an eligible crop manually, or skip this patch."

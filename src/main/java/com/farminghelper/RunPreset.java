@@ -19,7 +19,7 @@ enum RunPreset
     final String title; final Set<PatchType> types; final List<String> reference;
     RunPreset(String title,Set<PatchType> types,String reference)
     {this.title=title;this.types=Collections.unmodifiableSet(types);this.reference=List.of(reference.split("\\|"));}
-    boolean defaultEnabled(PatchType type){return type!=PatchType.FLOWER && type!=PatchType.GRAPEVINE && type!=PatchType.COMPOST_BIN;}
+    boolean defaultEnabled(PatchType type){return type!=PatchType.GRAPEVINE && type!=PatchType.COMPOST_BIN;}
     String key(PatchType type){return "preset_"+name()+"_"+type.name();}
     Set<String> select(List<FarmRunPatch> patches,BiPredicate<String,Boolean> flag)
     {
