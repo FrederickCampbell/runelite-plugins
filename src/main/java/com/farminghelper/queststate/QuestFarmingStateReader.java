@@ -157,6 +157,24 @@ public final class QuestFarmingStateReader
         return new BinContents(state,kind,count,capacity,closed);
     }
 
+    /** Native Time Tracking is optional. Its per-patch compost observation is
+     * advisory; absence of data never means treated. */
+    public boolean compostRecorded(String type,String location,String name,int minimum)
+    {
+        PatchImplementation impl=implementation(type,location);
+        FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
+        if(patch==null)return false;
+        String value=config.getRSProfileConfiguration(TIME_TRACKING,patch.configKey()+".compost");
+        if(value==null)return false;
+        switch(value.toUpperCase(Locale.ROOT))
+        {
+            case "ULTRACOMPOST":return minimum<=3;
+            case "SUPERCOMPOST":return minimum<=2;
+            case "COMPOST":return minimum<=1;
+            default:return false;
+        }
+    }
+
     /** Existing Quest Helper registry supplies the actual gardener NPC ID. */
     public int gardenerId(String patchType, String location, String patchName)
     {

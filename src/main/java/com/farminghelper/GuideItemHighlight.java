@@ -6,6 +6,11 @@ import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import javax.inject.Inject;
 import javax.inject.Provider;
+import net.runelite.api.Client;
+import net.runelite.api.InventoryID;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
+import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.WidgetItem;
 import net.runelite.client.game.ItemManager;
@@ -15,17 +20,33 @@ import net.runelite.client.ui.overlay.WidgetItemOverlay;
 final class GuideItemHighlight extends WidgetItemOverlay
 {
     private final ItemManager items;
+    private final Client client;
     private final Provider<FarmingHelperPlugin> plugin;
-    @Inject GuideItemHighlight(ItemManager items,Provider<FarmingHelperPlugin> plugin)
+    @Inject GuideItemHighlight(Client client,ItemManager items,Provider<FarmingHelperPlugin> plugin)
     {
-        this.items=items;this.plugin=plugin;
+        this.client=client;this.items=items;this.plugin=plugin;
         showOnBank();showOnInventory();showOnInterfaces(InterfaceID.SEED_VAULT);
     }
     @Override public void renderItemOverlay(Graphics2D graphics,int id,WidgetItem widget)
     {
         FarmingHelperPlugin helper=plugin.get();
-        Color color=helper.requiredItems().contains(id)?Color.CYAN:
-            helper.recommendedItems().contains(id)?Color.YELLOW:null;
+        Widget itemWidget=widget.getWidget();
+        if(itemWidget==null)return;
+        int group=itemWidget.getId()>>>16;
+        Color color;
+        if(group==InterfaceID.INVENTORY)
+        {
+            if(!helper.activeStepItems().contains(id))return;
+            ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
+            if(inventory==null)return;
+            Item[] entries=inventory.getItems();int[] ids=new int[entries.length];
+            for(int i=0;i<entries.length;i++)ids[i]=entries[i].getId();
+            if(!StepItems.firstSlot(id,itemWidget.getIndex(),ids))return;
+            color=Color.CYAN;
+        }
+        else if(group==InterfaceID.BANKMAIN||group==InterfaceID.SEED_VAULT||group==InterfaceID.SHARED_BANK)
+            color=helper.requiredItems().contains(id)?Color.CYAN:helper.recommendedItems().contains(id)?Color.YELLOW:null;
+        else return;
         if(color==null)return;
         BufferedImage outline=items.getItemOutline(id,widget.getQuantity(),color);
         Rectangle bounds=widget.getCanvasBounds();

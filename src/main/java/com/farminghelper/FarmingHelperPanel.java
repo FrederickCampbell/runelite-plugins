@@ -249,7 +249,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || a.active==null || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || a.active==null || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)if(!rowKey(a.items.get(i)).equals(rowKey(b.items.get(i))))return false;
         for(int i=0;i<a.stops.size();i++)if(a.stops.get(i).patch!=b.stops.get(i).patch || a.stops.get(i).done!=b.stops.get(i).done || a.stops.get(i).active!=b.stops.get(i).active)return false;
         return true;
@@ -309,10 +309,15 @@ final class FarmingHelperPanel extends PluginPanel
         header.add(title,BorderLayout.CENTER);
         JButton close=new JButton("×");close.setUI(new BasicButtonUI());close.setBorderPainted(false);close.setContentAreaFilled(false);
         close.setToolTipText("End farming run");close.addActionListener(e->plugin.stop());header.add(close,BorderLayout.EAST);addRow(header);
-        JCheckBox seedless=new JCheckBox("Hide Seedless Patches",plugin.hideSeedless());
+        JCheckBox seedless=new JCheckBox("Hide Seedless Patches",view.hideSeedless);
         seedless.setFont(FontManager.getRunescapeFont());seedless.setOpaque(false);
         seedless.setToolTipText("Skip replanting patches without enough seeds or saplings; uses observed bank, vault and inventory. Applies only to this run.");
         seedless.addActionListener(e->plugin.setHideSeedless(seedless.isSelected()));addRow(seedless);
+        if(view.hideSeedless)
+        {
+            JCheckBox clear=new JCheckBox("Clear Patches",view.clearSeedless);clear.setFont(FontManager.getRunescapeFont());clear.setOpaque(false);
+            clear.setBorder(BorderFactory.createEmptyBorder(0,14,0,0));clear.setToolTipText("Visit occupied, actionable seedless patches for XP and clearing. Do not replant or visit empty patches.");clear.addActionListener(e->plugin.setClearSeedless(clear.isSelected()));addRow(clear);
+        }
         JComboBox<RunPolicy> care=new JComboBox<>(RunPolicy.values());care.setSelectedItem(plugin.runPolicy());care.setToolTipText("Compost and crop protection for this run type");care.addActionListener(e->plugin.setRunPolicy((RunPolicy)care.getSelectedItem(),null));addRow(care);
         if(plugin.runHasTrees())
         {
@@ -347,7 +352,10 @@ final class FarmingHelperPanel extends PluginPanel
                 stepText.put(stop.patch.key(),detail);body.add(detail,BorderLayout.CENTER);
                 if(stop.active)
                 {
-                    JButton skip=new JButton("Skip step");skip.addActionListener(e->plugin.skip(stop.patch));body.add(skip,BorderLayout.SOUTH);
+                    JButton skip=new JButton("Skip step");skip.addActionListener(e->plugin.skip(stop.patch));
+                    JPanel actions=new JPanel(new java.awt.GridLayout(0,1,0,2));actions.setOpaque(false);
+                    if(view.compostStep){JButton applied=new JButton("Compost applied / skip");applied.addActionListener(e->plugin.acknowledgeCompost(stop.patch));actions.add(applied);}
+                    actions.add(skip);body.add(actions,BorderLayout.SOUTH);
                 }
                 section.add(body,BorderLayout.CENTER);
             }

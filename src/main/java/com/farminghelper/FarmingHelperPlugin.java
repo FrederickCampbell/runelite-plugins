@@ -75,7 +75,9 @@ public class FarmingHelperPlugin extends Plugin
     private volatile boolean runPayRemoval=true, runHasTrees;
     private List<String> referenceOrder;
     private boolean optimizeManual, initialPrepChecked, entranaOffered;
-    private volatile boolean preparing, hideSeedless;
+    private volatile boolean preparing, hideSeedless, clearSeedless;
+    private boolean activeClearOnly, compostAcknowledged;
+    private volatile Set<Integer> stepItems=Collections.emptySet();
     private boolean visitedStorage;
     private final Set<String> resupplyOffered=new HashSet<>();
     private Preparation.Bank preparationBank;
@@ -192,7 +194,7 @@ public class FarmingHelperPlugin extends Plugin
     private void clearRun()
     {
         run = Collections.emptySet();
-        hideSeedless=false;runPolicyKey=null;runHasTrees=false;
+        hideSeedless=false;clearSeedless=false;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;referenceOrder=null;optimizeManual=false;
         initialPrepChecked=false;preparing=false;entranaOffered=false;visitedStorage=false;resupplyOffered.clear();preparationBank=null;preparationReason="";
         runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
@@ -246,12 +248,28 @@ public class FarmingHelperPlugin extends Plugin
     private String observedItemName(int id)
     {if(itemManager==null)return "";return itemNamesCache.computeIfAbsent(id,i->{var item=itemManager.getItemComposition(i);return item==null||item.getNote()!=-1?"":item.getName();});}
     boolean hideSeedless(){return hideSeedless;}
+    boolean clearSeedless(){return clearSeedless;}
+    Set<Integer> activeStepItems(){return guideRequested&&!preparing?stepItems:Collections.emptySet();}
+    void setClearSeedless(boolean value)
+    {
+        long id=session;thread.invokeLater(()->{
+            if(id!=session||!guideRequested||run.isEmpty())return;
+            clearSeedless=value&&hideSeedless;lastView=null;update();
+        });
+    }
+    void acknowledgeCompost(FarmRunPatch patch)
+    {
+        long id=session;thread.invokeLater(()->{
+            if(id!=session||!guideRequested||current!=patch||activeAction!=StepEngine.Action.COMPOST)return;
+            compostAcknowledged=true;lastView=null;update();
+        });
+    }
     void setHideSeedless(boolean value)
     {
         final long id=session;
         thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
-            hideSeedless=value;
+            hideSeedless=value;if(!value)clearSeedless=false;
             lastView=null;
             update();
         });
@@ -530,6 +548,8 @@ public class FarmingHelperPlugin extends Plugin
             if(p==current)
             {
                 progress.observe(o);
+                if(hideSeedless&&clearSeedless&&activeClearOnly&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.EMPTY)
+                {completed.add(p);visible.add(p);continue;}
                 boolean wants=protect && activeCrop!=null && StepEngine.supportsProtection(type) && !ProtectionPaymentCatalog.forCrop(activeCrop).isEmpty();
                 boolean hasPayment=wants && ProtectionPaymentCatalog.forCrop(activeCrop).stream().allMatch(cost -> bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
                 if(progress.finished(type,o,wants,hasPayment)) { completed.add(p); visible.add(p); continue; }
@@ -576,15 +596,22 @@ public class FarmingHelperPlugin extends Plugin
             ? Map.of(current,activeCrop):Collections.emptyMap();
         Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,allocationStock,this::priority,this::override,committed,hideSeedless);
         int seedlessCount=0;
+        Set<FarmRunPatch> clearOnly=new HashSet<>();
         if(hideSeedless)
         {
             Set<FarmRunPatch> seedless=new HashSet<>(plant);
             seedless.removeAll(seeds.keySet());
+            if(clearSeedless)
+            {
+                for(FarmRunPatch p:seedless)if(ClearOnly.eligible(observations.get(p).state))clearOnly.add(p);
+                seedless.removeAll(clearOnly);
+            }
             seedlessCount=seedless.size();
             ready.removeAll(seedless);visible.removeAll(seedless);
         }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
-        if(next!=current) { current=next;progress.reset();activeCrop=null; if(current!=null) progress.observe(observations.get(current)); }
+        if(next!=current) { current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
+        activeClearOnly=clearOnly.contains(current);
         if(runOrder!=null&&!runOrder.isEmpty()&&(current==null||!runOrder.get(0).patches.contains(current)))
         {orderFrozen=true;orderProbeId=null;}
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
@@ -604,13 +631,13 @@ public class FarmingHelperPlugin extends Plugin
         }
         Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
         CompostRun.addSupplies(required,ready,observations,stock,binPlans);
-        int compostCount=0,coins=0;boolean needsAxe=false;
+        int compostCount=0,coins=0,axeId=0;boolean needsAxe=false;
         for(FarmRunPatch p:ready)
         {
             Crop c=seeds.get(p);PatchType type=p.getPatchType();
             if(c!=null) required.merge(c.getItemId(),c.getQuantity(),Integer::sum);
             if(c!=null && type.usesCompost()) compostCount++;
-            if(c!=null&&StepEngine.isTreeType(type)&&type!=PatchType.CRYSTAL_TREE)
+            if((c!=null||clearOnly.contains(p))&&StepEngine.isTreeType(type)&&type!=PatchType.CRYSTAL_TREE)
             {
                 var o=observations.get(p);
                 if(o!=null&&(o.state==null||o.state==CropState.UNCHECKED||o.state==CropState.HARVESTABLE))
@@ -624,7 +651,7 @@ public class FarmingHelperPlugin extends Plugin
             }
         }
         if(coins>0) recommended.merge(ItemID.COINS,coins,Integer::sum);
-        if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);recommended.put(axe>0?axe:1351,1);}
+        if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;recommended.put(axeId,1);}
         Map<Integer,Integer> prepSeeds=TreePreparation.preparation(seeds,stock,aliases);
         if(!prepSeeds.isEmpty())
         {
@@ -647,6 +674,7 @@ public class FarmingHelperPlugin extends Plugin
         String instruction=!loggedIn?"Log in to start this guide.":eligible==0?"No enabled, unlocked patches remain.":deferredGrowing>0?"No ready patches remain. Growing or unconfirmed patches were deferred, not marked completed.":completed.isEmpty()?"No ready patches remain in this run. Close and start another when crops mature.":"Run complete. Close the helper to start another run.";
         activeAction=StepEngine.Action.INSPECT;
         activeLive=false;
+        Set<Integer> localStepItems=Collections.emptySet();
         if(current!=null)
         {
             PatchType type=current.getPatchType();QuestFarmingStateReader.Observation o=observations.get(current);
@@ -657,14 +685,23 @@ public class FarmingHelperPlugin extends Plugin
             if(action==StepEngine.Action.REMOVE_TREE)
                 action=StepEngine.refine(action,pay,reader.gardenerId(type.name(),current.getLocation(),current.getName())>0,false);
             if(action==StepEngine.Action.PLANT && o.source==QuestFarmingStateReader.Source.LIVE && reader.hasWeeds(type.name(),o.rawValue)) action=StepEngine.Action.RAKE;
+            if(action==StepEngine.Action.PLANT&&activeLive&&activeCrop!=null&&compostId>=0&&type.usesCompost()&&!activeClearOnly&&!compostAcknowledged)
+            {
+                int minimum=compostId==ItemID.BUCKET_ULTRACOMPOST?3:compostId==ItemID.BUCKET_SUPERCOMPOST?2:1;
+                if(reader.compostRecorded(type.name(),current.getLocation(),current.getName(),minimum))compostAcknowledged=true;
+                else action=StepEngine.Action.COMPOST;
+            }
             activeAction=action;
-            instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,compostId>=0);
+            instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,false);
+            if(activeClearOnly)instruction=ClearOnly.instruction(action,type);
+            if(action==StepEngine.Action.COMPOST)instruction="Apply the selected compost to this patch. The next step is planting; use Compost applied / skip if the tracker cannot confirm it.";
+            if(activeLive&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)localStepItems=StepItems.select(action,type,activeCrop,compostId,axeId,bag);
             if(type==PatchType.BIRDHOUSE){activeAction=StepEngine.Action.INSPECT;instruction=current.getName()+": "+instruction;}
         }
         for(FarmRunPatch p:visible)
         {
             Crop c=seeds.get(p);
-            String line=p==current?instruction:completed.contains(p)?"Completed":birdhousePlans.containsKey(p)?birdhousePlans.get(p):binPlans.containsKey(p)?binPlans.get(p).instruction:c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
+            String line=p==current?instruction:completed.contains(p)?"Completed":birdhousePlans.containsKey(p)?birdhousePlans.get(p):binPlans.containsKey(p)?binPlans.get(p).instruction:clearOnly.contains(p)?"Check health / harvest and clear; no replacement.":c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
             stops.add(new GuideView.Stop(p,line,p==current,completed.contains(p)));
         }
         WorldPoint actual=loggedIn?client.getLocalPlayer().getWorldLocation():null;
@@ -696,6 +733,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(seedlessCount>0)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+seedlessCount+" patch"+(seedlessCount==1?"":"es")+" hidden: insufficient planting stock.";
+        if(!clearOnly.isEmpty())supplyNote+=(supplyNote.isEmpty()?"":"\n")+clearOnly.size()+" occupied seedless patch(es) retained for clearing.";
         if(current==null)preparing=false;
         String prepMessage="";
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
@@ -718,6 +756,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(!preparing&&current!=null&&"Entrana".equals(current.getLocation()))instruction="Entrana: deposit prohibited weapons and armour before travel.\n"+instruction;
         activeLeg=leg;
+        stepItems=!preparing&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive?localStepItems:Collections.emptySet();
         if(navigation!=null)navigation.request(actual,leg.point,leg.probe);
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
         String routeNote=navigation==null?"":navigation.status();
@@ -726,7 +765,7 @@ public class FarmingHelperPlugin extends Plugin
             for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,!preparing,false));
         if(preparing&&!routeNote.isEmpty())prepMessage+="\n"+routeNote;
         cacheIcons(items);
-        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote);
+        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST);
         String signature=view.signature();
         if(!signature.equals(lastView))
         {

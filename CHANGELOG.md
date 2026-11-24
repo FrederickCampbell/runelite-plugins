@@ -1,3 +1,9 @@
+## v0.25-beta.1 — Focused inventory guidance and seedless clearing
+
+- Separate current-action inventory outlines from whole-run shopping lists. Only the first inventory slot containing each requested item is highlighted.
+- Compost before planting is an explicit step with native per-patch tracker confirmation and manual override.
+- Optional Clear Patches under Hide Seedless Patches retains occupied actionable seedless stops for XP and clearing, with no replacement or protection supplies.
+
 ## v0.24-beta.1 — Health-check state and completion audit
 
 - Normalize all 31 documented Check-health states across fruit trees, trees, hardwoods, bushes and specialty crops before route planning and cached prediction.
