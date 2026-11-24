@@ -1,4 +1,4 @@
-# Farming Helper v0.16.0-beta.1
+# Farming Helper v0.17.0-beta.1
 
 A standalone Quest Helper-style farming guide. Choose a run, bring the items listed in the sidebar if desired, and follow the active patch instructions. Missing items never prevent navigation. The × or switching away from the sidebar ends the session and clears its route and highlights. Crop preferences, enabled patches and last observed storage contents are saved per character; no run progress is saved.
 
@@ -6,7 +6,7 @@ A standalone Quest Helper-style farming guide. Choose a run, bring the items lis
 - Required and recommended items display live carried quantities. The bank and Seed Vault show outlines, not additional tabs or withdrawal automation. Storage counts are observed snapshots, not hidden queries.
 - The guide uses the vendored farming registry, live varbits and RuneLite Time Tracking predictions, when available. It filters known growing, locked, disabled, completed and skipped patches. Unknown state remains inspectable.
 - Optional Shortest Path integration uses active-leg destinations only. Modern versions support reachability queries, bounded nearby fallback, and route-ownership checks; legacy versions receive normal path messages. Hespori, seaweed and coral include explicit approach/exit transitions; Anglers’ Retreat recognizes the rowboat unlock and mooring stages. Manual interactions remain required. Local object transform varbits, canonical regions and Advisor-style connected groups identify actual patch objects; local collision data supplies perimeter candidates. Non-exact map markers are not asserted to be walkable object tiles. Ambiguous object groups receive instructions rather than misleading highlights.
-- Preferences: compost, gardener removal/protection, ordered seed priorities, individual crop overrides and enabled patches. Combined runs use the same rules. There is no run persistence, loadout system, banking route, inventory cap or independent teleport planner.
+- Preferences: compost, gardener removal/protection, ordered seed priorities, individual crop overrides and enabled patches. Manual Run offers individual crop categories and collapsible physical-patch selections. Select All respects permanent exclusions and known access restrictions; selections are remembered per character, not run progress. Individual shortcuts retain their familiar order. Manual and multi-category runs group initially actionable patches by location, complete surface work before underground work, then use a bounded spatial-score ordering (Held-Karp for up to 12 groups, nearest-neighbour/2-opt/or-opt above that). This score is not a travel-time estimate. One optional Shortest Path multi-target query (up to four candidate destinations) can refine the next group while the first group is active; thereafter the order is pinned. Older or absent Shortest Path uses the fallback order, and actual leg routing always belongs to Shortest Path. There is no run persistence, loadout system, banking route, inventory cap or independent teleport planner.
 
 ## Development
 
@@ -17,3 +17,5 @@ Farming Patch Advisor by Seadeadmeat supplies original farming catalogs. Quest H
 ## v0.16 validation scope
 
 The automated tests exercise allocation, snapshots, route-message lifecycle, transport stages and crop state decoding. In-game path reachability depends on Shortest Path’s installed version, unlocked transports, collision data and player location. Exact unresolved object identities are not invented; use live highlighting where matched. The route bridge does not automate gameplay or add a new pathfinder.
+
+Ordering algorithms adapted from [Farm Run Autopilot RoutePlanner](https://github.com/elzerma/farm-run-autopilot/blob/master/src/main/java/com/farmrunautopilot/route/RoutePlanner.java), BSD-2-Clause; see LICENSE-FARM-RUN-AUTOPILOT. Place grouping inspired by Codex Rounds; pinning inspired by Better Farming. No upstream travel planner or bank system is imported.

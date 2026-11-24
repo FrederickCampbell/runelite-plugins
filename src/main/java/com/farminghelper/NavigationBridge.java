@@ -17,6 +17,9 @@ final class NavigationBridge
     NavigationBridge(Consumer<PluginMessage> send){this.send=send;}
     void enabled(boolean value){if(enabled!=value){reset(false);modern=false;enabled=value;}}
     String status(){return status;}
+    // Only use background ordering queries after the installed API has responded
+    // and the active navigation request is no longer awaiting its own probe.
+    boolean canProbeOrder(){return enabled&&modern&&queryId==null&&!refreshPending;}
     void begin(){reset(true);if(enabled)post("clear",null);}
     void stop(){reset(true);}
     private void reset(boolean clear)

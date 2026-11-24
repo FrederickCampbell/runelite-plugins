@@ -1,3 +1,10 @@
+## 0.17.0-beta.1
+
+- Manual Run replaces Combined Run: crop-level checkboxes, collapsed per-patch choices, select/clear all, per-character remembered selections.
+- Group initially actionable patches into farming sites; preserve familiar shortcut routes.
+- Bounded Held-Karp/nearest-neighbour/2-opt/or-opt spatial ordering; optional native Shortest Path multi-target refinement before leaving the first group. Pin remaining route; do not re-add growing patches mid-run.
+- No travel atlas, bank tabs, saved sessions, loadouts or new configuration pages.
+
 # v0.16.0-beta.1 — crop intelligence, navigation and presentation
 
 - Stock-aware individual and category priorities with automatic fallback; persistent character-local storage observations.

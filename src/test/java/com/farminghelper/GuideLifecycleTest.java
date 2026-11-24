@@ -108,4 +108,34 @@ public class GuideLifecycleTest
         assertNull(plugin.activePatch());
         plugin.shutDown();
     }
+    @Test public void manualRunFiltersPhysicalPatchesAndKeepsClusterTogether()
+    {
+        Player player=mock(Player.class);
+        when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(new WorldPoint(2813,3463,0));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(72);
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(config.getRSProfileKey()).thenReturn("profile");
+        when(config.getRSProfileConfiguration("farming-helper","patchEnabled_Falador~HERB~")).thenReturn("false");
+        when(reader.observeType(anyString(),anyString(),anyString(),any())).thenReturn(
+            new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
+        doAnswer(invocation->{((Runnable)invocation.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        plugin.startUp();
+        java.util.Set<String> keys=new java.util.HashSet<>();
+        for(FarmRunPatch p:plugin.patches())if((p.getLocation().equals("Catherby")&&(p.getPatchType()==PatchType.HERB||p.getPatchType()==PatchType.FLOWER))||
+            p.getPatchType()==PatchType.MUSHROOM||(p.getLocation().equals("Falador")&&p.getPatchType()==PatchType.HERB))keys.add(p.key());
+        plugin.startManual(keys);
+        assertEquals("Catherby",plugin.activePatch().getLocation());
+        assertEquals(PatchType.FLOWER,plugin.activePatch().getPatchType());
+        plugin.skip(plugin.activePatch());
+        assertEquals("Catherby",plugin.activePatch().getLocation());
+        assertEquals(PatchType.HERB,plugin.activePatch().getPatchType());
+        plugin.skip(plugin.activePatch());
+        assertEquals(PatchType.MUSHROOM,plugin.activePatch().getPatchType());
+        plugin.skip(plugin.activePatch());
+        assertNull(plugin.activePatch());
+        verifyNoInteractions(bus);
+        plugin.shutDown();
+    }
 }

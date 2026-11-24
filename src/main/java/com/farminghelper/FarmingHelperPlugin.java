@@ -64,6 +64,13 @@ public class FarmingHelperPlugin extends Plugin
     private String stockProfile;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
     private Set<FarmRunType> run = Collections.emptySet();
+    private Set<String> manualKeys; // null = normal shortcut, never persisted as a session
+    private List<RunOrder.Group> runOrder;
+    private List<FarmRunPatch> pinned;
+    private boolean orderProbeSent,orderFrozen;
+    private String orderProbeId;
+    private int orderTicks,orderProbeSequence;
+    private boolean shortestPathAvailable;
     private FarmingHelperPanel panel;
     private NavigationButton nav;
     private volatile FarmRunPatch current;
@@ -81,8 +88,9 @@ public class FarmingHelperPlugin extends Plugin
     {
         running = true;
         navigation=new NavigationBridge(bus::post);
-        navigation.enabled(plugins.getPlugins().stream().anyMatch(p ->
-            "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p)));
+        shortestPathAvailable=plugins.getPlugins().stream().anyMatch(p ->
+            "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
+        navigation.enabled(shortestPathAvailable);
         for (FarmRunPatch group : FarmRunCatalog.patches())
             patches.addAll(PatchNames.expand(group,
                 reader.patchNamesForType(group.getPatchType().name(), group.getLocation())));
@@ -108,13 +116,28 @@ public class FarmingHelperPlugin extends Plugin
 
     void start(Set<FarmRunType> types)
     {
+        start(types,null);
+    }
+
+    void startManual(Set<String> keys)
+    {
+        Set<String> chosen=Set.copyOf(keys);
+        Set<FarmRunType> types=EnumSet.noneOf(FarmRunType.class);
+        for(FarmRunPatch p:patches)if(chosen.contains(p.key())&&enabled(p))types.add(p.getFarmRunType());
+        start(types,chosen);
+    }
+
+    private void start(Set<FarmRunType> types,Set<String> keys)
+    {
         if (types.isEmpty()) return;
+        Set<FarmRunType> selected=EnumSet.copyOf(types);
         guideRequested = true;
         final long requested = ++session;
         thread.invokeLater(() -> {
             if (!running || !guideRequested || requested != session) return;
             clearRun();
-            run = EnumSet.copyOf(types);
+            run = selected;
+            manualKeys=keys;
             loadStock();
             sampleStorage();
             navigation.begin();
@@ -132,6 +155,7 @@ public class FarmingHelperPlugin extends Plugin
     private void clearRun()
     {
         run = Collections.emptySet();
+        manualKeys=null;runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
         current = null;
         skipped.clear();
         completed.clear();
@@ -178,13 +202,48 @@ public class FarmingHelperPlugin extends Plugin
         if (!"Shortest Path".equals(event.getPlugin().getName())) return;
         thread.invokeLater(() -> {
             if (!running) return;
-            navigation.enabled(event.isLoaded());
+            shortestPathAvailable=event.isLoaded();
+            navigation.enabled(shortestPathAvailable);
+            if(!shortestPathAvailable){orderProbeId=null;orderFrozen=true;}
             if (!run.isEmpty()) update();
         });
     }
 
     @Subscribe public void onPluginMessage(PluginMessage event)
-    {if(navigation!=null)navigation.message(event);}
+    {
+        if(navigation!=null)navigation.message(event);
+        if(!guideRequested||orderProbeId==null||!"shortestpath".equals(event.getNamespace())||
+            !"result".equals(event.getName())||event.getData()==null||!orderProbeId.equals(event.getData().get("id")))return;
+        orderProbeId=null;orderFrozen=true;
+        Object target=event.getData().get("target"),cost=event.getData().get("cost");
+        if(runOrder==null||runOrder.isEmpty()||current==null||!runOrder.get(0).patches.contains(current)||
+            !Boolean.TRUE.equals(event.getData().get("reached"))||!(target instanceof WorldPoint)||
+            !(cost instanceof Number)||((Number)cost).doubleValue()<0)return;
+        // Refinement is allowed only while the first cluster is still being worked.
+        // The native search compares candidate destinations directly, never mixes its
+        // cost units with the fallback spatial proxy.
+        runOrder=RunOrder.preferNext(runOrder,(WorldPoint)target);
+        pinned=RunOrder.flatten(runOrder);
+    }
+
+    private void refineOrder()
+    {
+        if(orderFrozen||orderProbeSent||!shortestPathAvailable||runOrder==null||runOrder.isEmpty()||current==null)return;
+        if(!runOrder.get(0).patches.contains(current)){orderFrozen=true;return;}
+        if(++orderTicks<3 || navigation==null || !navigation.canProbeOrder())return;
+        // Do not compete with the initial long-distance route. Probe while the
+        // player is at the active site, before committing to the next cluster.
+        WorldPoint here=client.getLocalPlayer()==null?null:client.getLocalPlayer().getWorldLocation();
+        WorldPoint approach=RunOrder.surface(current);
+        if(here==null||approach==null||here.getPlane()!=approach.getPlane()||here.distanceTo(approach)>18)return;
+        orderProbeSent=true;
+        List<WorldPoint> targets=RunOrder.candidates(runOrder);
+        WorldPoint from=runOrder.get(0).exit();
+        if(targets.isEmpty()||from==null){orderFrozen=true;return;}
+        orderProbeId="farming-helper-order-"+(++orderProbeSequence);
+        bus.post(new PluginMessage("shortestpath","query",Map.of("id",orderProbeId,"start",from,"target",targets)));
+    }
+
 
     @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
     @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { reset(); }
@@ -206,6 +265,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(client.getLocalPlayer().getWorldLocation());
             update();
+            refineOrder();
         }
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
     }
@@ -304,7 +364,7 @@ public class FarmingHelperPlugin extends Plugin
     private void update()
     {
         if (run.isEmpty() || !guideRequested) return;
-        String title = run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
+        String title = manualKeys!=null ? "Manual Run" : run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         int level = client.getRealSkillLevel(Skill.FARMING);
         Map<Integer,Integer> bag=new HashMap<>(), carried=new HashMap<>();
@@ -326,9 +386,10 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn) for(FarmRunPatch p:patches)
         {
             PatchType type=p.getPatchType();
-            if(!run.contains(p.getFarmRunType()) || !enabled(p) || skipped.contains(p) ||
+            if(!ManualSelection.includes(p,run,manualKeys) || !enabled(p) || skipped.contains(p) ||
                 Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || CropCatalog.recommend(type,level)==null) continue;
             eligible++;
+            if(pinned!=null && !pinned.contains(p))continue;
             QuestFarmingStateReader.Observation o=observe(p);
             if(o==null) continue;
             observations.put(p,o);
@@ -349,11 +410,32 @@ public class FarmingHelperPlugin extends Plugin
             ready.add(p);visible.add(p);
             if(!StepEngine.keepExisting(type,o.state) && o.state!=CropState.DISEASED) { plant.add(p); if(type==PatchType.SPIRIT_TREE) spiritSlots--; }
         }
+        // Plan only from initially actionable patches. A manual run keeps its selected
+        // subset for the session, and its remaining order is pinned after the first cluster.
+        if(loggedIn && pinned==null)
+        {
+            if(manualKeys!=null || run.size()>1)
+            {
+                WorldPoint start=client.getLocalPlayer().getWorldLocation();
+                runOrder=RunOrder.plan(RunOrder.groups(ready,start),start);
+                pinned=RunOrder.flatten(runOrder);
+            }
+            else pinned=new ArrayList<>(ready); // familiar individual shortcut order
+        }
+        if(pinned!=null)
+        {
+            Map<FarmRunPatch,Integer> rank=new HashMap<>();
+            for(int i=0;i<pinned.size();i++)rank.put(pinned.get(i),i);
+            for(List<FarmRunPatch> list:List.of(ready,plant,visible))
+            {list.removeIf(p->!rank.containsKey(p));list.sort(Comparator.comparingInt(rank::get));}
+        }
         // Keep the active step stable while the player is working, rather than jumping when another patch matures.
         if(current!=null && ready.remove(current)) ready.add(0,current);
         if(current!=null && plant.remove(current)) plant.add(0,current);
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current) { current=next;progress.reset();activeCrop=null; if(current!=null) progress.observe(observations.get(current)); }
+        if(runOrder!=null&&!runOrder.isEmpty()&&(current==null||!runOrder.get(0).patches.contains(current)))
+        {orderFrozen=true;orderProbeId=null;}
         Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current).source==QuestFarmingStateReader.Source.LIVE
             ? Map.of(current,activeCrop):Collections.emptyMap();
         Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,stock,this::priority,this::override,committed);
@@ -394,7 +476,7 @@ public class FarmingHelperPlugin extends Plugin
         recommended.forEach((id,n)->items.add(itemRow(id,n+required.getOrDefault(id,0),carried,true)));
         requiredItems=Set.copyOf(required.keySet());recommendedItems=Set.copyOf(recommended.keySet());
         List<GuideView.Stop> stops=new ArrayList<>();
-        String instruction=!loggedIn?"Log in to start this guide.":eligible==0?"No enabled, unlocked patches remain.":completed.isEmpty()?"Wait for plants to grow.":"Run complete. Close the helper to start another run.";
+        String instruction=!loggedIn?"Log in to start this guide.":eligible==0?"No enabled, unlocked patches remain.":completed.isEmpty()?"No ready patches remain in this run. Close and start another when crops mature.":"Run complete. Close the helper to start another run.";
         activeAction=StepEngine.Action.INSPECT;
         activeLive=false;
         if(current!=null)

@@ -27,7 +27,8 @@ final class FarmingHelperPanel extends PluginPanel
     private final Map<String,JTextArea> itemNames=new HashMap<>(),stepText=new HashMap<>();
     private final Map<String,JLabel> itemQuantities=new HashMap<>();
     private static final Color ACTIVE=new Color(58,74,54), ACTIVE_TEXT=new Color(178,222,159);
-    private final Set<FarmRunType> combined = EnumSet.noneOf(FarmRunType.class);
+    private final Set<String> manual = new java.util.LinkedHashSet<>();
+    private final Set<PatchType> manualExpanded = EnumSet.noneOf(PatchType.class);
 
     FarmingHelperPanel(FarmingHelperPlugin plugin)
     {
@@ -98,26 +99,56 @@ final class FarmingHelperPanel extends PluginPanel
         heading("Farming runs");
         for (FarmRunType type : FarmRunType.values())
             button(type.getDisplayName(), () -> plugin.start(EnumSet.of(type)));
-        button("Combined run…", this::combinedRun);
+        button("Manual Run…", this::openManual);
         button("Preferences…", this::preferences);
         finish();
     }
 
-    private void combinedRun()
+    private void openManual()
     {
-        rows.removeAll();
-        heading("Combined run");
-        for (FarmRunType type : FarmRunType.values())
+        manual.clear();manual.addAll(ManualSelection.decode(plugin.setting("manualPatchChoicesV1",null),plugin.patches()));
+        manualExpanded.clear();manualRun();scroll.getVerticalScrollBar().setValue(0);
+    }
+    private boolean selectable(FarmRunPatch p){return plugin.enabled(p)&&plugin.accessNote(p).isEmpty();}
+    private void saveManual(){plugin.save("manualPatchChoicesV1",ManualSelection.encode(manual));}
+    private void manualRun()
+    {
+        int y=scroll.getVerticalScrollBar().getValue();
+        rows.removeAll();heading("Manual Run");
+        line("Choose crops for this run. Expand a category to exclude individual patches. Permanent preferences still apply.",false);
+        JPanel controls=new JPanel(new java.awt.GridLayout(1,2,4,0));
+        JButton all=new JButton("Select all"),none=new JButton("Clear all");
+        all.addActionListener(e->{ManualSelection.select(manual,plugin.patches(),this::selectable,true);saveManual();manualRun();});
+        none.addActionListener(e->{manual.clear();saveManual();manualRun();});
+        controls.add(all);controls.add(none);addRow(controls);
+        long count=plugin.patches().stream().filter(this::selectable).filter(p->manual.contains(p.key())).count();
+        line(count+" patches selected · growing patches skipped",false);
+        JButton start=new JButton("Start Manual Run");start.setFont(FontManager.getRunescapeBoldFont());start.setEnabled(count>0);
+        start.addActionListener(e->{Set<String> selected=new java.util.LinkedHashSet<>();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&manual.contains(p.key()))selected.add(p.key());plugin.startManual(selected);});addRow(start);
+        for(PatchType type:PatchType.values())
         {
-            JCheckBox select = new JCheckBox(type.getDisplayName(),combined.contains(type));
-            select.addActionListener(e -> {
-                if (select.isSelected()) combined.add(type); else combined.remove(type);
-            });
-            addRow(select);
+            List<FarmRunPatch> list=new ArrayList<>();for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)list.add(p);
+            if(list.isEmpty())continue;
+            long available=list.stream().filter(this::selectable).count();
+            long selected=list.stream().filter(this::selectable).filter(p->manual.contains(p.key())).count();
+            JPanel header=new JPanel(new BorderLayout(2,0));header.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            JCheckBox check=new JCheckBox(type.getDisplayName()+"  ("+selected+"/"+available+")",available>0&&selected==available);
+            check.setFont(FontManager.getRunescapeFont());check.setOpaque(false);check.setEnabled(available>0);
+            check.setToolTipText(selected>0&&selected<available?"Partially selected; click to select all available patches":"Toggle this crop category");
+            check.addActionListener(e->{ManualSelection.select(manual,list,this::selectable,check.isSelected());saveManual();manualRun();});
+            JButton fold=new JButton(manualExpanded.contains(type)?"▾":"▸");fold.setUI(new BasicButtonUI());fold.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            fold.setToolTipText("Expand individual patches");fold.setMargin(new java.awt.Insets(2,5,2,5));
+            fold.addActionListener(e->{if(!manualExpanded.add(type))manualExpanded.remove(type);manualRun();});
+            header.add(check,BorderLayout.CENTER);header.add(fold,BorderLayout.EAST);addRow(header);
+            if(manualExpanded.contains(type))for(FarmRunPatch p:list)
+            {
+                JCheckBox child=new JCheckBox(p.getDisplayName(),selectable(p)&&manual.contains(p.key()));
+                child.setFont(FontManager.getRunescapeFont());child.setBorder(BorderFactory.createEmptyBorder(2,12,2,0));
+                child.setEnabled(selectable(p));child.setToolTipText(!plugin.enabled(p)?"Disabled in permanent preferences":plugin.accessNote(p));
+                child.addActionListener(e->{if(child.isSelected())manual.add(p.key());else manual.remove(p.key());saveManual();manualRun();});addRow(child);
+            }
         }
-        button("Start", () -> { if (!combined.isEmpty()) plugin.start(EnumSet.copyOf(combined)); });
-        button("Back",this::home);
-        finish();
+        button("Back",this::home);finish();SwingUtilities.invokeLater(()->scroll.getVerticalScrollBar().setValue(y));
     }
 
     /* Layout adapted from Quest Helper QuestOverviewPanel, QuestRequirementsPanel
@@ -223,7 +254,7 @@ final class FarmingHelperPanel extends PluginPanel
             JPanel section=new JPanel(new BorderLayout(0,1));section.setBorder(BorderFactory.createEmptyBorder(5,0,0,0));
             boolean open=expanded.getOrDefault(stop.patch.key(),stop.active);
             Color bg=stop.active?ACTIVE:ColorScheme.DARKER_GRAY_COLOR.darker();
-            JButton fold=new JButton((open?"▾ ":"▸ ")+(stop.done?"✓ ":"")+stop.patch.guideLabel());
+            JButton fold=new JButton((open?"▾ ":"▸ ")+(stop.done?"✓ ":"")+stop.patch.guideLabel()+(view.title.equals("Manual Run")?" · "+stop.patch.getPatchType().getDisplayName():""));
             fold.setUI(new BasicButtonUI());fold.setFont(FontManager.getRunescapeBoldFont());fold.setHorizontalAlignment(SwingConstants.LEFT);
             fold.setBackground(bg);fold.setForeground(stop.active?ACTIVE_TEXT:Color.WHITE);
             fold.setBorder(BorderFactory.createEmptyBorder(7,7,5,7));
