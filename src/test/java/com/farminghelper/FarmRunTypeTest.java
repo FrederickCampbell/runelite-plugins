@@ -53,12 +53,12 @@ public class FarmRunTypeTest
 			PatchType.SEAWEED,
 			PatchType.CELASTRUS,
 			PatchType.REDWOOD,
-			PatchType.CRYSTAL_TREE,
-			PatchType.CORAL);
+			PatchType.CRYSTAL_TREE);
 		EnumSet<PatchType> noCareFlags = EnumSet.of(
 			PatchType.GRAPEVINE,
 			PatchType.HESPORI,
-			PatchType.ANIMA);
+			PatchType.ANIMA,
+			PatchType.CORAL);
 
 		EnumSet<PatchType> audited = EnumSet.noneOf(PatchType.class);
 		audited.addAll(compostAndWater);
