@@ -41,7 +41,7 @@ final class PatchHighlight extends Overlay
     {
         String n=name(c);
         return n.contains("cave entrance") || n.contains("cave exit") || n.equals("steps") || n.contains("rowboat")
-            || n.contains("mooring") || n.contains("gangplank") || hasAction(c,"Surface") || hasAction(c,"Dive");
+            || n.contains("mooring") || n.contains("gangplank") || n.contains("mushtree") || hasAction(c,"Surface") || hasAction(c,"Dive");
     }
     private ObjectComposition transformed(ObjectComposition c)
     {return c==null || c.getImpostorIds()==null?c:c.getImpostor();}
@@ -169,6 +169,19 @@ final class PatchHighlight extends Overlay
             for(GameObject o:objects)if(sameView(o) && transitionMatches(leg.interaction,o))
             {int d=o.getWorldLocation().distanceTo(anchor);if(d<distance && d<=18){selected=o;distance=d;}}
             if(selected!=null)draw(graphics,selected.getClickbox());return null;
+        }
+        TransportHint transport=helper.birdhouseTransport();
+        if(transport!=null)
+        {
+            GameObject best=null;int distance=Integer.MAX_VALUE;
+            for(GameObject o:objects)if(sameView(o))
+            {
+                ObjectComposition actual=transformed(client.getObjectDefinition(o.getId()));
+                if(o.getId()!=transport.objectId&&(actual==null||actual.getId()!=transport.objectId))continue;
+                int d=o.getWorldLocation().distanceTo(transport.origin);
+                if(d<distance&&d<=6){distance=d;best=o;}
+            }
+            if(best!=null){draw(graphics,best.getClickbox());return null;}
         }
         FarmRunPatch patch=helper.activePatch();if(patch==null)return null;
         StepEngine.Action action=helper.activeAction();

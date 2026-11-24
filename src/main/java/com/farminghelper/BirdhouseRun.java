@@ -15,16 +15,17 @@ import com.farminghelper.queststate.QuestFarmingStateReader.Source;
  * Native varp states and config keys: runelite timetracking/hunter/BirdHouseTracker,
  * BirdHouseSpace and BirdHouseState (BSD-2-Clause; see LICENSE-BIRDHOUSE).
  * Local object IDs: hong-niu/runelite-birdhouse-overlay BirdhouseOverlayPlugin.
- * Mushtree approach points: RuneLite TransportationPointLocation.
+ * Site coordinates corroborated by public BirdhouseLocation data (Rune-Server thread 708731);
+ * live scene object ID remains authoritative; Shortest Path may select an adjacent walkable tile.
  * No native config writes or game interactions. */
 final class BirdhouseRun
 {
     enum Site
     {
-        VALLEY_NORTH("Verdant Valley (Northeast)",VarPlayerID.BIRDHOUSE_TRANSMIT_C,30567,3757,3756),
-        VALLEY_SOUTH("Verdant Valley (Southwest)",VarPlayerID.BIRDHOUSE_TRANSMIT_D,30568,3757,3756),
-        MEADOW_NORTH("Mushroom Meadow (North)",VarPlayerID.BIRDHOUSE_TRANSMIT_A,30565,3674,3871),
-        MEADOW_SOUTH("Tar Swamp entrance",VarPlayerID.BIRDHOUSE_TRANSMIT_B,30566,3676,3755);
+        MEADOW_SOUTH("Tar Swamp entrance",VarPlayerID.BIRDHOUSE_TRANSMIT_B,30566,3679,3815),
+        MEADOW_NORTH("Mushroom Meadow (North)",VarPlayerID.BIRDHOUSE_TRANSMIT_A,30565,3677,3882),
+        VALLEY_SOUTH("Verdant Valley (Southwest)",VarPlayerID.BIRDHOUSE_TRANSMIT_D,30568,3763,3755),
+        VALLEY_NORTH("Verdant Valley (Northeast)",VarPlayerID.BIRDHOUSE_TRANSMIT_C,30567,3768,3761);
         final String label;final int varp,object;final WorldPoint approach;
         Site(String label,int varp,int object,int x,int y){this.label=label;this.varp=varp;this.object=object;this.approach=new WorldPoint(x,y,0);}
     }
@@ -36,6 +37,7 @@ final class BirdhouseRun
     }
     static Site site(FarmRunPatch p)
     {for(Site s:Site.values())if(s.label.equals(p.getName()))return s;return null;}
+    static int order(FarmRunPatch p){Site s=site(p);return s==null?Integer.MAX_VALUE:s.ordinal();}
     static boolean isObject(int id)
     {for(Site s:Site.values())if(s.object==id)return true;return false;}
     static boolean seeded(int raw){return raw>0&&raw<=27&&raw%3==0;}

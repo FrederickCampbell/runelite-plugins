@@ -41,6 +41,9 @@ public class FarmingHelperPlugin extends Plugin
     @Inject private PluginManager plugins;
     private NavigationBridge navigation;
     private SeedVaultViews vaultViews;
+    private ActiveRunBank runBank;
+    @Inject private net.runelite.client.plugins.banktags.TagManager bankTags;
+    @Inject private net.runelite.client.plugins.bank.BankSearch bankSearch;
     private volatile long preferenceRevision;
     private volatile RouteLeg activeLeg;
     @Inject private ClientThread thread;
@@ -115,6 +118,7 @@ public class FarmingHelperPlugin extends Plugin
         running = true;
         navigation=new NavigationBridge(bus::post);
         if(itemManager!=null)vaultViews=new SeedVaultViews(client,itemManager,this);
+        if(bankTags!=null&&bankSearch!=null&&itemManager!=null)runBank=new ActiveRunBank(client,plugins,bankTags,bankSearch,itemManager);
         shortestPathAvailable=plugins.getPlugins().stream().anyMatch(p ->
             "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
         navigation.enabled(shortestPathAvailable);
@@ -134,6 +138,7 @@ public class FarmingHelperPlugin extends Plugin
     @Override protected void shutDown()
     {
         running = false;
+        if(runBank!=null){ActiveRunBank old=runBank;runBank=null;thread.invokeLater(old::close);}
         if(vaultViews!=null){SeedVaultViews view=vaultViews;vaultViews=null;thread.invokeLater(() -> {view.close();view.flushScrollbar();});}
         reset();
         toolbar.removeNavigation(nav);
@@ -205,6 +210,7 @@ public class FarmingHelperPlugin extends Plugin
     private void clearRun()
     {
         run = Collections.emptySet();
+        if(runBank!=null)runBank.close();
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;referenceOrder=null;optimizeManual=false;
         initialPrepChecked=false;preparing=false;entranaOffered=false;visitedStorage=false;resupplyOffered.clear();preparationBank=null;preparationReason="";
@@ -384,6 +390,7 @@ public class FarmingHelperPlugin extends Plugin
             refineOrder();
         }
         if(vaultViews!=null)vaultViews.tick();
+        if(runBank!=null)runBank.tick(vaultRunItems(),flag("activeRunBank",true));
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
     }
 
@@ -417,6 +424,12 @@ public class FarmingHelperPlugin extends Plugin
         return Set.copyOf(ids);
     }
 
+    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(vaultRunItems());}});}
+    TransportHint birdhouseTransport()
+    {
+        if(!guideRequested||diseaseTarget!=null||preparing||current==null||current.getPatchType()!=PatchType.BIRDHOUSE||navigation==null||client.getLocalPlayer()==null)return null;
+        return navigation.nearbyTransport(client.getLocalPlayer().getWorldLocation());
+    }
     long preferenceRevision(){return preferenceRevision;}
     Set<PatchType> vaultAllowed(int level)
     {
@@ -883,6 +896,8 @@ public class FarmingHelperPlugin extends Plugin
         stepItems=!preparing&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&atAction?localStepItems:Collections.emptySet();
         if(navigation!=null)navigation.request(actual,leg.point,leg.probe);
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
+        TransportHint transport=birdhouseTransport();
+        if(transport!=null)instruction=transport.instruction()+"\n"+instruction;
         String routeNote=navigation==null?"":navigation.status();
         if(!routeNote.isEmpty())instruction+="\n"+routeNote;
         if(current!=null)

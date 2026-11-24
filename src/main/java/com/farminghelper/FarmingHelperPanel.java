@@ -329,6 +329,7 @@ final class FarmingHelperPanel extends PluginPanel
             resetStock.setToolTipText("Forget saved bank and Seed Vault observations only. No game items are changed. Reopen both storage interfaces before relying on the seedless filter.");
             resetStock.addActionListener(e->{int choice=JOptionPane.showConfirmDialog(this,"Forget cached bank and Seed Vault quantities? Reopen both before relying on the seedless filter. Your actual items are unchanged.","Reset observed stock",JOptionPane.OK_CANCEL_OPTION);if(choice==JOptionPane.OK_OPTION)plugin.resetObservedStock();});addRow(resetStock);
         }
+        button("Show Active Run in bank",plugin::showActiveRunBank);
         if(!view.preparation.isEmpty())
         {
             heading("Preparation / resupply");line(view.preparation,true);
@@ -385,6 +386,8 @@ final class FarmingHelperPanel extends PluginPanel
             protect.addActionListener(e->plugin.save("directorProtectTrees",String.valueOf(protect.isSelected())));addRow(protect);
             JCheckBox vaultViews = new JCheckBox("Seed Vault views",plugin.flag("seedVaultViews",true));
             vaultViews.addActionListener(e->plugin.save("seedVaultViews",String.valueOf(vaultViews.isSelected())));addRow(vaultViews);
+            JCheckBox activeBank = new JCheckBox("Active Run bank filter",plugin.flag("activeRunBank",true));
+            activeBank.addActionListener(e->plugin.save("activeRunBank",String.valueOf(activeBank.isSelected())));addRow(activeBank);
             heading("Grouped run components");
             for(RunPreset preset:RunPreset.values())button(preset.title,()->presetPreferences(preset));
             heading("Crop priorities and patches");

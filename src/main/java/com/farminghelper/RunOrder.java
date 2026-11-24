@@ -54,6 +54,10 @@ final class RunOrder
             List<FarmRunPatch> ordered=new ArrayList<>(entry.getValue());
             ordered.sort(Comparator.comparingInt(p->interior(p)?3:p.getPatchType()==PatchType.COMPOST_BIN?2:
                 "Gnome Stronghold".equals(entry.getKey())&&p.getPatchType()==PatchType.FRUIT_TREE?0:1));
+            // Sort the birdhouse subset without disturbing other patch types or the interior-last rule.
+            List<FarmRunPatch> birds=new ArrayList<>();for(FarmRunPatch p:ordered)if(p.getPatchType()==PatchType.BIRDHOUSE)birds.add(p);
+            birds.sort(Comparator.comparingInt(BirdhouseRun::order));
+            int bird=0;for(int i=0;i<ordered.size();i++)if(ordered.get(i).getPatchType()==PatchType.BIRDHOUSE)ordered.set(i,birds.get(bird++));
             result.add(new Group(entry.getKey(),ordered));
         }
         return result;

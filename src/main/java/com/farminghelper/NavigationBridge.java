@@ -14,6 +14,8 @@ final class NavigationBridge
     private boolean enabled, owned, probe, refreshPending, modern;
     private int ticks, sequence;
     private String queryId, targetId, status="";
+    private List<TransportHint> hints=Collections.emptyList();
+    TransportHint nearbyTransport(WorldPoint player){return enabled&&owned?TransportHint.nearby(hints,player):null;}
     NavigationBridge(Consumer<PluginMessage> send){this.send=send;}
     void enabled(boolean value){if(enabled!=value){reset(false);modern=false;enabled=value;}}
     String status(){return status;}
@@ -26,7 +28,7 @@ final class NavigationBridge
     {
         if(clear && enabled && owned && displayed!=null)post("clear",null);
         requested=null;displayed=null;start=null;owned=false;probe=false;refreshPending=false;
-        queryId=null;targetId=null;status="";ticks=0;
+        queryId=null;targetId=null;status="";ticks=0;hints=Collections.emptyList();
     }
     void request(WorldPoint from,WorldPoint to,boolean verify)
     {
@@ -34,7 +36,7 @@ final class NavigationBridge
         if(Objects.equals(requested,to) && probe==verify)return;
         if(owned && displayed!=null)post("clear",null);
         requested=from==null?null:to;displayed=null;owned=false;start=from;probe=verify;ticks=0;status="";
-        queryId=null;targetId=null;refreshPending=false;
+        queryId=null;targetId=null;refreshPending=false;hints=Collections.emptyList();
         if(to==null || from==null)return;
         if(verify)
         {
@@ -84,6 +86,7 @@ final class NavigationBridge
         if("result".equals(event.getName()) && queryId!=null && queryId.equals(id))
         {
             modern=true;queryId=null;targetId=null;
+            hints=TransportHint.read(data.get("transports"));
             if(Boolean.TRUE.equals(data.get("reached"))){display(requested);return;}
             // A small reachable approach is preferable to a blocked object tile.
             Object near=data.get("closest");
@@ -101,7 +104,7 @@ final class NavigationBridge
             boolean same=Boolean.TRUE.equals(data.get("set")) && (Objects.equals(displayed,target)
                 || target instanceof Collection && ((Collection<?>)target).contains(displayed));
             // Respect a user's cancellation or another helper replacing the route.
-            if(!same){owned=false;return;}
+            if(!same){owned=false;hints=Collections.emptyList();return;}
             // One fresh calculation after the next game tick so Shortest Path has
             // had a chance to refresh its inventory/equipment transport facts.
             if(refresh)display(displayed);

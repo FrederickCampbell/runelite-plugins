@@ -1,3 +1,9 @@
+## v0.29-beta.1 — Active Run bank and birdhouse navigation
+
+- Native transient Bank Tags predicate for current guide requirements; auto opens once per bank visit and allows ordinary browsing or manual reopening. No permanent item tags or automated withdrawal.
+- Tar Swamp, Mushroom Meadow, southwest valley, northeast valley. Distinct site coordinates and live object approaches.
+- Use Shortest Path query transport metadata to outline nearby rowboats and mushtrees and show their next interaction. Legacy versions retain native route-only fallback.
+
 ## v0.28.1-beta.1 — Universal disease priority interrupt
 
 - Verify live disease on an identified local patch before ordinary planning, even in resupply and birdhouse phases.
