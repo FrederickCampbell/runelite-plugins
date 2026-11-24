@@ -1,3 +1,9 @@
+## v0.40-beta.1 — Final visual release candidate
+
+- Replace the Plugin Hub (48×48) and sidebar (16×16) PNGs with the selected AI-generated RuneScape-inspired branding, cropped and resized for their actual UI sizes.
+- Retain the existing RuneLite image loading, all v0.39 fixes, and all other UI and gameplay behavior. No Java changes.
+- Final staging compilation, complete regression suite, and live-client acceptance testing are required before Plugin Hub submission.
+
 ## v0.39-beta.4 — Icons and regression correction
 
 - Add a custom 48×48 Plugin Hub icon and a matching transparent 16×16 sidebar icon. Load the sidebar resource through RuneLite ImageUtil.
