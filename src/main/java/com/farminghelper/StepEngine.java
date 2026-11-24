@@ -34,7 +34,8 @@ final class StepEngine
     {
         return type == PatchType.TREE || type == PatchType.FRUIT_TREE ||
             type == PatchType.CALQUAT || type == PatchType.HARDWOOD_TREE ||
-            type == PatchType.CELASTRUS || type == PatchType.REDWOOD || type == PatchType.CORAL || type == PatchType.SEAWEED;
+            type == PatchType.CELASTRUS || type == PatchType.REDWOOD || type == PatchType.CORAL || type == PatchType.SEAWEED ||
+            type == PatchType.ALLOTMENT || type == PatchType.HOPS || type == PatchType.BUSH || type == PatchType.CACTUS || type == PatchType.SPIRIT_TREE;
     }
 
     static boolean isTreeType(PatchType type)
@@ -157,7 +158,7 @@ final class StepEngine
             case COMPOST:
                 return "Apply compost to this patch. Continue when confirmed, or use Skip if already treated and the patch has not advanced.";
             case PROTECT_TREE:
-                return "Ask the gardener to protect the tree. Continue automatically "
+                return "Ask the gardener to protect the crop. Continue automatically "
                     + "when protection is detected, or use Skip if protection was applied but not detected.";
             case COMPLETE:
                 return crop == null && isTreeType(type) ? "Existing tree checked; leave it planted."

@@ -28,7 +28,7 @@ final class Supplies
     static Map<Integer, Integer> required(List<FarmRunPatch> patches, int compostItem, boolean carriedSecateurs, boolean payRemoval)
     {
         Map<Integer, Integer> items = new LinkedHashMap<>();
-        if (patches.isEmpty() || patches.stream().allMatch(p->p.getPatchType()==PatchType.COMPOST_BIN)) return items;
+        if (patches.isEmpty() || patches.stream().allMatch(p->p.getPatchType()==PatchType.COMPOST_BIN||p.getPatchType()==PatchType.BIRDHOUSE)) return items;
         items.put(ItemID.RAKE, 1);
         items.put(ItemID.SPADE, 1);
         if (patches.stream().anyMatch(p -> p.getPatchType().usesDibber()))

@@ -677,7 +677,7 @@ public class FarmingHelperPlugin extends Plugin
             if(!initialPrepChecked)
             {
                 initialPrepChecked=true;resupplyOffered.add(RunOrder.site(current));
-                if(Preparation.storedShortage(required,carried,storage))beginPreparation(true,false,"Gather the listed supplies at the bank / Seed Vault. Continue when ready; missing items never block the guide.");
+                if(!prepSeeds.isEmpty()||Preparation.storedShortage(required,carried,storage))beginPreparation(true,false,"Gather the listed supplies at the bank / Seed Vault. Continue when ready; missing items never block the guide.");
             }
             if(!preparing&&resupplyOffered.add(RunOrder.site(current))&&activeCrop!=null&&
                 bag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()&&storage.getOrDefault(activeCrop.getItemId(),0)>0)
@@ -698,7 +698,7 @@ public class FarmingHelperPlugin extends Plugin
             boolean atStorage=storageOpen();visitedStorage|=atStorage;
             // Existing bank or vault is sufficient: never require leaving an open bank for a specific one.
             prepMessage=preparationReason+"\n"+(visitedStorage?"Use the storage you visited; continue when ready.":"Suggested bank: "+preparationBank.name+" (or any accessible bank).");
-            if(!Preparation.missing(required,carried)&&!preparationReason.startsWith("Entrana")&&!preparationReason.startsWith("Resupply"))
+            if(prepSeeds.isEmpty()&&!Preparation.missing(required,carried)&&!preparationReason.startsWith("Entrana")&&!preparationReason.startsWith("Resupply"))
             {preparing=false;prepMessage="";}
             else
             {

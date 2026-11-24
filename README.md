@@ -1,5 +1,9 @@
 # Farming Helper v0.23-beta.1
 
+### v0.23 candidate
+
+Per-run care and tree-removal preferences are saved by character and run type (grouped and individual have distinct keys). Raw seeds are allocation-only virtual stock, and actual saplings remain required. Active Run is a separate temporary vault category. Manual templates include Fossil Island, hardwood trees, seaweed and birdhouses. Birdhouse readiness reads native Time Tracking snapshots; unknown timers require inspection, and remote navigation uses verified mushtree approach markers rather than unverified exact trap tiles. Existing native controls and manual gameplay remain unchanged.
+
 A standalone Quest Helper-style farming guide. Choose a run, bring the items listed in the sidebar if desired, and follow the active patch instructions. Missing items never prevent navigation. The guide’s × explicitly ends the session and clears its route and highlights. Hiding the sidebar or switching to another plugin keeps the session, route and highlights active. Logout, world hopping, profile changes and plugin shutdown still reset the guide. Crop preferences, enabled patches and last observed storage contents are saved per character; no run progress is saved.
 
 - Automatic crop selection uses observed inventory, bank and Seed Vault stock; unknown/missing stock still produces an item requirement. Custom rankings take precedence over automatic fallback, and individual preferences reserve available stock and fall through to category priorities and then the highest estimated XP per planting item. Missing-stock fallback is advisory.
