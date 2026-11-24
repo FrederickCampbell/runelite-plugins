@@ -1,3 +1,7 @@
+## v0.36-beta.2 — Lifecycle regression expectation
+
+- Correct the startup route assertion to require no unconditional Shortest Path clear. Keep the explicit end-of-run clear assertion and all other lifecycle checks. Production Java is unchanged from v0.36-beta.1.
+
 ## v0.36-beta.1 — UI reliability and compliance hardening
 
 - Preserve selected Seed Vault view and local scroll across native refresh scripts; defer reapplication to the next client tick outside the script stack. Quantity-only changes with unchanged physical ID membership, widget identities, and ordered selection avoid custom relayout. Native rebuilds and changed selection still require reapplication.

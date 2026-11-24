@@ -1,4 +1,4 @@
-# Farming Helper — review notes (v0.36-beta.1)
+# Farming Helper — review notes (v0.36-beta.2)
 
 The guide observes client state and provides instructions; the player performs every game action. No automatic banking, planting, travel, world hopping or input injection.
 

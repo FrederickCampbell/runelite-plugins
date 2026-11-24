@@ -1,4 +1,4 @@
-# Farming Helper v0.36-beta.1
+# Farming Helper v0.36-beta.2
 
 ## v0.36-beta.1 — UI reliability and compliance hardening
 

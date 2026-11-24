@@ -78,7 +78,9 @@ public class GuideLifecycleTest
         assertEquals("Ardougne",plugin.activePatch().getLocation());
         verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2670,3374,0))));
         plugin.onGameTick(null);
-        verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
+        // Starting a guide must not clear an unrelated Shortest Path route.
+        // Explicit guide termination below must still clear our own route.
+        verify(bus,never()).post(new PluginMessage("shortestpath","clear"));
         ArgumentCaptor<NavigationButton> navigationButton=ArgumentCaptor.forClass(NavigationButton.class);
         verify(toolbar).addNavigation(navigationButton.capture());
         FarmingHelperPanel sidebar=(FarmingHelperPanel)navigationButton.getValue().getPanel();
