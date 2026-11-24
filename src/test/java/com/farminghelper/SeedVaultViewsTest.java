@@ -1,5 +1,8 @@
 package com.farminghelper;
 
+import net.runelite.api.Client;
+import net.runelite.api.ScriptID;
+import net.runelite.client.game.ItemManager;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetType;
 import org.junit.Test;
@@ -8,6 +11,48 @@ import static org.mockito.Mockito.*;
 
 public class SeedVaultViewsTest
 {
+    @Test public void refreshRunsAtOutermostNativeScriptCompletionWithoutNestedScrollbarScript()
+    {
+        Client client=mock(Client.class);
+        FarmingHelperPlugin plugin=mock(FarmingHelperPlugin.class);
+        ItemManager items=mock(ItemManager.class);
+        SeedVaultViews views=spy(new SeedVaultViews(client,items,plugin));
+        doNothing().when(views).refresh();
+        views.beforeScript(SeedVaultViews.CATEGORY);
+        views.beforeScript(ScriptID.SEED_VAULT_BUILD);
+        views.afterScript(ScriptID.SEED_VAULT_BUILD);
+        verify(views,never()).refresh();
+        views.afterScript(SeedVaultViews.CATEGORY);
+        verify(views).refresh();
+        verify(views,never()).flushScrollbar();
+        verify(client,never()).runScript(any(Object[].class));
+        views.postClientTick();
+        verify(views,times(2)).refresh();
+        verify(views).flushScrollbar();
+    }
+    @Test public void unrelatedScriptsDoNotTriggerProjectionRefresh()
+    {
+        Client client=mock(Client.class);
+        SeedVaultViews views=spy(new SeedVaultViews(client,mock(ItemManager.class),mock(FarmingHelperPlugin.class)));
+        doNothing().when(views).refresh();
+        views.beforeScript(ScriptID.UPDATE_SCROLLBAR);
+        views.afterScript(ScriptID.UPDATE_SCROLLBAR);
+        views.postClientTick();
+        verify(views,never()).refresh();
+    }
+    @Test public void quantityUpdatesAreHandledBeforeTheNextGameTick()
+    {
+        SeedVaultViews views=spy(new SeedVaultViews(mock(Client.class),mock(ItemManager.class),mock(FarmingHelperPlugin.class)));
+        doNothing().when(views).refresh();
+        views.invalidate();
+        views.postClientTick();
+        verify(views).refresh();
+    }
+    @Test public void missingNativeGeometryDoesNotReportSuccessfulProjection()
+    {
+        SeedVaultViews views=new SeedVaultViews(mock(Client.class),mock(ItemManager.class),mock(FarmingHelperPlugin.class));
+        assertFalse(views.filter(99));
+    }
     @Test public void runFilterUsesExactRequestedIdsAndLiveStock()
     {
         java.util.List<VaultRanking.Entry> entries=java.util.List.of(

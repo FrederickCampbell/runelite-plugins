@@ -1,3 +1,9 @@
+## v0.38-beta.1 — Seed Vault refresh lifecycle
+
+- Reapply the verified native-widget projection at outermost Seed Vault script completion instead of waiting for the next ClientTick. Preserve the selected custom view and scroll, retain category controls across ordinary rebuilds, and retry after client scripts if native code overwrites the projection.
+- Handle quantity-only invalidations at PostClientTick; keep the generic scrollbar script outside script callbacks. Failed geometry validation stays dirty. Check native widget identity, item ID and scroll height before reusing a projection.
+- Debug-level lifecycle logging records native pre/post events and projection status. No changes to native item actions, listener ownership, quantities, or farming bank curation. Live validation required.
+
 ## v0.37-beta.2 — Regression test setup
 
 - Create and configure item-container mocks before stubbing client calls. Preserve both ownership assertions and all production Java from v0.37-beta.1.

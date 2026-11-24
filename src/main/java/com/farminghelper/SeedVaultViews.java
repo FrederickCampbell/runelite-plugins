@@ -15,13 +15,16 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetType;
 import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.client.game.ItemManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Plugin-local views, adapted from the visual repositioning technique in
  * RuneLite Bank Tags LayoutManager (BSD-2-Clause). Never replace, reindex or
  * edit native withdrawal widgets, quantities, actions or listeners. */
 final class SeedVaultViews
 {
-    static final int GROUP=631, INIT=2814, CATEGORY=2815, BUILD=2819;
+    static final int GROUP=631, INIT=2814, CATEGORY=2815, BUILD=ScriptID.SEED_VAULT_BUILD;
+    private static final Logger LOG=LoggerFactory.getLogger(SeedVaultViews.class);
     static final int LEFT=(GROUP<<16)|7, CATEGORIES=(GROUP<<16)|9, ITEMS=(GROUP<<16)|18, LABELS=(GROUP<<16)|19;
     static final int HEADERS=(GROUP<<16)|16, LINES=(GROUP<<16)|17, VIEWPORT=(GROUP<<16)|12, SCROLLBAR=(GROUP<<16)|11;
     private static final Set<String> STANDARD_HEADERS=Set.of("allotment","allotments","flowers","flower","herbs","hops","bushes","trees","fruit trees","exotic","anima","saplings","coral");
@@ -59,20 +62,40 @@ final class SeedVaultViews
         // Native scripts own item identity and quantity. Restore before they rebuild,
         // but do not confuse a deposit/withdraw rebuild with a player selecting a tab.
         if(buildDepth++==0){rememberScroll();restore(false);forgetProjection();}
-        if(id==INIT||id==CATEGORY)removeButtons();
+        // INIT can replace the left panel. Ordinary category and item builds
+        // retain our own buttons unless the native interface actually replaces them.
+        if(id==INIT)removeButtons();
         dirty=true;
+        LOG.debug("Farming vault pre {} depth {}",id,buildDepth);
     }
     void afterScript(int id)
     {
         if(!nativeBuild(id))return;
         if(buildDepth>0)--buildDepth;
         dirty=true;nativeRefresh=true;
+        LOG.debug("Farming vault post {} depth {}",id,buildDepth);
+        // Like RuneLite's Anti Drag seed-vault hook, work with freshly rebuilt
+        // native widgets at script completion. Do not invoke any clientscript here.
+        if(buildDepth==0)refresh();
     }
-    void clientTick()
+    void postClientTick()
     {
-        // Reapply outside the script stack, at client-frame cadence instead of
-        // displaying the unfiltered native list for a whole 600 ms game tick.
-        if(nativeRefresh&&buildDepth==0){nativeRefresh=false;tick();}
+        if(buildDepth!=0)return;
+        if(nativeRefresh||quantityDirty)
+        {
+            boolean verify=nativeRefresh;nativeRefresh=false;
+            // The containing native script may have made further changes after
+            // our post hook; check once, after all scripts/menu work this tick.
+            if(verify&&active!=null&&!dirty&&(!projectionIntact()||!buttonsIntact()))
+            {
+                dirty=true;
+                LOG.debug("Farming vault projection overwritten; retrying after native scripts");
+            }
+            refresh();
+        }
+        // The script VM is not reentrant. Keep the generic scrollbar script
+        // outside script hooks, even when the layout has already been applied.
+        flushScrollbar();
     }
     private void forgetProjection()
     {
@@ -99,17 +122,23 @@ final class SeedVaultViews
         return active==VaultRanking.View.RUN?VaultRanking.selectRun(entries,runItems==null?Collections.emptySet():runItems):
             VaultRanking.select(active,entries,level,plugin.vaultAllowed(level),plugin::priority,plugin.vaultOverrides(level));
     }
-    private boolean canKeepProjection(int level)
+    private boolean projectionIntact()
     {
-        Map<Integer,Integer> now=stock();
-        if(now==null||lastStockIds==null||!lastStockIds.equals(now.keySet())||
-            lastItemParent!=client.getWidget(ITEMS)||scrollParent==null||scrollParent!=client.getWidget(VIEWPORT))return false;
+        if(lastItemParent==null||lastItemParent!=client.getWidget(ITEMS)||
+            scrollParent==null||scrollParent!=client.getWidget(VIEWPORT)||
+            scrollParent.getScrollHeight()!=appliedHeight)return false;
         for(Map.Entry<Widget,WidgetState> e:changed.entrySet())
         {
             Widget w=e.getKey(),p=client.getWidget(w.getId());int i=w.getIndex();
             Widget[] children=p==null?null:p.getChildren();
             if(children==null||i<0||i>=children.length||children[i]!=w||!e.getValue().matches(w))return false;
         }
+        return true;
+    }
+    private boolean canKeepProjection(int level)
+    {
+        Map<Integer,Integer> now=stock();
+        if(now==null||lastStockIds==null||!lastStockIds.equals(now.keySet())||!projectionIntact())return false;
         return lastOrder.equals(new ArrayList<>(selection(withQuantities(lastEntries,now),level)));
     }
     void nativeMenu(int component)
@@ -122,7 +151,15 @@ final class SeedVaultViews
 
     void tick()
     {
-        if(client.getGameState()!=GameState.LOGGED_IN||!plugin.flag("seedVaultViews",true)) {close();flushScrollbar();return;}
+        refresh();
+        if(buildDepth==0)flushScrollbar();
+    }
+
+    /** Widget-only work; safe for a native ScriptPostFired callback. */
+    void refresh()
+    {
+        if(buildDepth>0)return;
+        if(client.getGameState()!=GameState.LOGGED_IN||!plugin.flag("seedVaultViews",true)) {close();return;}
         Widget root=client.getWidget(InterfaceID.SeedVault.UNIVERSE);
         if(root==null||root.isHidden()){close();return;}
         if(buildDepth>0)return;
@@ -151,8 +188,14 @@ final class SeedVaultViews
             quantityDirty=false;
             if(active!=null&&!dirty&&!canKeepProjection(level))dirty=true;
         }
-        if(dirty&&active!=null){dirty=false;rememberScroll();filter(level);}
-        flushScrollbar();
+        if(dirty&&active!=null)
+        {
+            rememberScroll();
+            // Failed geometry validation leaves the refresh pending for the
+            // post-client-tick fallback or next game tick.
+            dirty=!filter(level);
+            LOG.debug("Farming vault projection {} for {}",dirty?"not ready":"applied",active);
+        }
     }
 
     void flushScrollbar()
@@ -240,7 +283,7 @@ final class SeedVaultViews
         w.revalidate();decorations.add(w);
     }
     void select(VaultRanking.View view)
-    {if(view==VaultRanking.View.RUN&&runItems==null)return;if(active!=view){restore(true);customScroll=0;}active=view;dirty=true;paintButtons();}
+    {if(view==VaultRanking.View.RUN&&runItems==null)return;if(active!=view){restore(true);customScroll=0;}active=view;dirty=true;nativeRefresh=true;paintButtons();}
     private void paintButtons()
     {for(Map.Entry<VaultRanking.View,Widget> e:buttons.entrySet())e.getValue().setTextColor(e.getKey()==active?0xffffff:0xff981f);}
 
@@ -271,19 +314,20 @@ final class SeedVaultViews
 
     private static final class WidgetState
     {
-        final int x,y;final boolean hidden;
+        final int x,y,itemId;final boolean hidden;
         int appliedX,appliedY;boolean appliedHidden;
-        WidgetState(Widget w){x=appliedX=w.getOriginalX();y=appliedY=w.getOriginalY();hidden=appliedHidden=w.isSelfHidden();}
+        WidgetState(Widget w){x=appliedX=w.getOriginalX();y=appliedY=w.getOriginalY();hidden=appliedHidden=w.isSelfHidden();itemId=w.getItemId();}
         void apply(Widget w,int x,int y,boolean hide)
         {
             appliedX=x;appliedY=y;appliedHidden=hide;
             if(w.getOriginalX()!=x||w.getOriginalY()!=y||w.isSelfHidden()!=hide)
             {w.setOriginalX(x);w.setOriginalY(y);w.setHidden(hide);w.revalidate();}
         }
-        boolean matches(Widget w){return w.getOriginalX()==appliedX&&w.getOriginalY()==appliedY&&w.isSelfHidden()==appliedHidden;}
+        boolean matches(Widget w){return w.getItemId()==itemId&&w.getOriginalX()==appliedX&&w.getOriginalY()==appliedY&&w.isSelfHidden()==appliedHidden;}
         void restore(Widget w)
         {
             // Respect a native rebuild or another plugin that changed a property.
+            if(w.getItemId()!=itemId)return;
             boolean changed=false;
             if(w.getOriginalX()==appliedX&&appliedX!=x){w.setOriginalX(x);changed=true;}
             if(w.getOriginalY()==appliedY&&appliedY!=y){w.setOriginalY(y);changed=true;}
@@ -339,16 +383,16 @@ final class SeedVaultViews
     {
         Section result=null;for(Section section:sections){if(section.y>y)break;result=section;}return result;
     }
-    void filter(int level)
+    boolean filter(int level)
     {
         restore(false);
         forgetProjection();
         Widget itemParent=client.getWidget(ITEMS),textParent=client.getWidget(LABELS),headerParent=client.getWidget(HEADERS),lineParent=client.getWidget(LINES),viewport=client.getWidget(VIEWPORT);
-        if(itemParent==null||textParent==null||headerParent==null||viewport==null)return;
+        if(itemParent==null||textParent==null||headerParent==null||viewport==null)return false;
         int headerOffset=yOffset(headerParent,itemParent);
-        if(headerOffset==Integer.MIN_VALUE||yOffset(textParent,itemParent)!=0)return;
+        if(headerOffset==Integer.MIN_VALUE||yOffset(textParent,itemParent)!=0)return false;
         Point iconBase=itemParent.getCanvasLocation(),labelBase=textParent.getCanvasLocation();
-        if(iconBase==null||labelBase==null||iconBase.getX()!=labelBase.getX())return;
+        if(iconBase==null||labelBase==null||iconBase.getX()!=labelBase.getX())return false;
         List<Section> sections=new ArrayList<>();
         boolean unknownHeader=false;
         for(Widget w:children(headerParent))if(w!=null&&!w.isSelfHidden()&&w.getType()==WidgetType.TEXT)
@@ -358,8 +402,8 @@ final class SeedVaultViews
             else if(!name.isEmpty()&&!name.equals("farming contract")&&!name.equals("favourite slots"))unknownHeader=true;
         }
         sections.sort(Comparator.comparingInt(a->a.y));
-        if(sections.isEmpty()||unknownHeader)return; // cannot distinguish ordinary items from native contract/favourite controls
-        for(int i=1;i<sections.size();i++)if(sections.get(i).y<=sections.get(i-1).y)return;
+        if(sections.isEmpty()||unknownHeader)return false; // cannot distinguish ordinary items from native contract/favourite controls
+        for(int i=1;i<sections.size();i++)if(sections.get(i).y<=sections.get(i-1).y)return false;
         Widget[] icons=children(itemParent),labels=children(textParent);
         Set<Widget> matched=Collections.newSetFromMap(new IdentityHashMap<>());
         List<VaultRanking.Entry> entries=new ArrayList<>();
@@ -461,6 +505,7 @@ final class SeedVaultViews
             lastEntries=List.copyOf(entries);lastOrder=List.copyOf(keep);
             lastStockIds=Set.copyOf(observed.keySet());lastItemParent=itemParent;
         }
+        return true;
     }
     static boolean pair(Widget icon,Widget label)
     {

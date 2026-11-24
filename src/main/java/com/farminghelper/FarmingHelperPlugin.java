@@ -436,8 +436,8 @@ public class FarmingHelperPlugin extends Plugin
         if(vaultViews!=null&&event.getContainerId()==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
     }
 
-    @Subscribe public void onClientTick(ClientTick event)
-    {if(vaultViews!=null)vaultViews.clientTick();}
+    @Subscribe public void onPostClientTick(PostClientTick event)
+    {if(vaultViews!=null)vaultViews.postClientTick();}
 
     @Subscribe public void onScriptPreFired(ScriptPreFired event)
     {if(vaultViews!=null)vaultViews.beforeScript(event.getScriptId());}

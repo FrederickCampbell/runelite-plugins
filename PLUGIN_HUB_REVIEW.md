@@ -18,3 +18,6 @@ The guide observes client state and provides instructions; the player performs e
 
 ## v0.37 bank ownership
 The live shelf uses bank, inventory and equipment stock. Native layout cells for owned items outside the bank are visual placeholders only; they do not count as bank stock, trigger withdrawals or write a permanent tag. Check fully withdrawn stacks, worn-only gear, item deposits and switching farming/birdhouse stages in the live client.
+
+## v0.38 Seed Vault lifecycle
+Visual widget updates now run at outermost native script completion, following the native Anti Drag SEED_VAULT_BUILD post-hook pattern; the existing generic scrollbar script is called only outside the native script stack. Native item identities, actions and listeners are unchanged. PostClientTick checks for later native overwrites and retries. Live frame-level flicker and compatibility must be checked; no claim of verified in-game elimination.
