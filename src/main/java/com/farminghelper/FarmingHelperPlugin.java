@@ -291,13 +291,13 @@ public class FarmingHelperPlugin extends Plugin
         if (client.getGameState() != GameState.LOGGED_IN) return;
         loadStock();
         sampleStorage();
-        if(vaultViews!=null)vaultViews.tick();
         if (!run.isEmpty() && guideRequested)
         {
             if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(client.getLocalPlayer().getWorldLocation());
             update();
             refineOrder();
         }
+        if(vaultViews!=null)vaultViews.tick();
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
     }
 
@@ -322,6 +322,14 @@ public class FarmingHelperPlugin extends Plugin
     {if(vaultViews!=null&&event.getGroupId()==SeedVaultViews.GROUP)vaultViews.close();}
     @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
     {if(vaultViews!=null)vaultViews.nativeMenu(event.getParam1());}
+
+    // Null means ordinary vault browsing; an empty set is a live run with no planting supplies.
+    Set<Integer> vaultRunItems()
+    {
+        if(!guideRequested||run.isEmpty()||current==null)return null;
+        Set<Integer> ids=new HashSet<>(requiredItems);ids.addAll(recommendedItems);
+        return Set.copyOf(ids);
+    }
 
     long preferenceRevision(){return preferenceRevision;}
     Set<PatchType> vaultAllowed(int level)

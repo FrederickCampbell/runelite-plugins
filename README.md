@@ -1,4 +1,4 @@
-# Farming Helper v0.21-beta.1
+# Farming Helper v0.22-beta.1
 
 A standalone Quest Helper-style farming guide. Choose a run, bring the items listed in the sidebar if desired, and follow the active patch instructions. Missing items never prevent navigation. The guide’s × explicitly ends the session and clears its route and highlights. Hiding the sidebar or switching to another plugin keeps the session, route and highlights active. Logout, world hopping, profile changes and plugin shutdown still reset the guide. Crop preferences, enabled patches and last observed storage contents are saved per character; no run progress is saved.
 
@@ -38,3 +38,7 @@ Seed Vault visual widget repositioning follows [RuneLite Bank Tags LayoutManager
 
 ### Compost Run (v0.21)
 Individual Runs → Compost Run, or opt into Compost in Crop Run preferences / Manual Run. The Guild's 30-item bin and seven regular bins share the same native farming tracker and route planner. Use compatible ordinary or supercompostable produce, close full bins, skip decomposition, open ripe bins, add one compost potion dose if regular, and 25/50 volcanic ash if super. Collect manually, optionally with a compatible bottomless bucket. Supply recommendations use a small verified list of cheap materials; other compatible produce may be used manually. Unknown bin states require inspection. Kastori flower completion now requires nearby native object confirmation, not cached cross-region data.
+
+## v0.22 Seed Vault run context
+
+Opening the vault during an unfinished run selects Custom View automatically. All three custom views show exact remaining guide item IDs in stock, including recommended supplies present in the vault. No alias substitution. Native categories remain available; click a native category to browse normally. Ending the run restores ordinary ranking/browsing. Contract and favourite controls remain native; unverified geometry is preserved. Custom rows follow native alternating background styling with a small divider. Live validation remains required.

@@ -1,3 +1,8 @@
+## v0.22-beta.1 — Run-aware Seed Vault
+
+- Use exact remaining guide requirements in custom vault views; open to Custom View during a run, native categories remain accessible.
+- Alternate native row backgrounds and add a small separator; preserve withdrawal handlers and restore native widgets.
+
 ## v0.21-beta.1 — Compost runs and Kastori flower state validation
 
 - Eight native compost bins; optional Crop Run component and Manual Run selection. Live contents determine fill, close, upgrade, and collection steps.

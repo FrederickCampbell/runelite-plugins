@@ -76,5 +76,12 @@ final class VaultRanking
         }
         return selected;
     }
+    /** Exact guide item IDs, not crop aliases or a second allocation. */
+    static Set<Integer> selectRun(List<Entry> entries,Set<Integer> required)
+    {
+        Set<Integer> result=new LinkedHashSet<>();
+        for(Entry entry:entries)if(entry.quantity>0&&required.contains(entry.id))result.add(entry.id);
+        return result;
+    }
     private VaultRanking(){}
 }

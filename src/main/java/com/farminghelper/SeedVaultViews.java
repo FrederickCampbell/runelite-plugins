@@ -30,6 +30,9 @@ final class SeedVaultViews
     private int nativeHeight,nativeScroll,nativeVarScroll,appliedHeight=-1,customScroll,lastWidth=-1;
     private boolean scrollbarDirty;
     private final EnumMap<VaultRanking.View,Widget> buttons=new EnumMap<>(VaultRanking.View.class);
+    private final List<Widget> decorations=new ArrayList<>();
+    private Set<Integer> runItems;
+    private boolean autoRunView;
     private Widget parent;
     private int originalScrollHeight=-1,originalChildCount;
     private VaultRanking.View active;
@@ -54,8 +57,8 @@ final class SeedVaultViews
     {
         if(component==CATEGORIES||component==InterfaceID.SeedVault.SEARCH)leave();
     }
-    void close(){leave();removeButtons();building=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastWidth=-1;dirty=true;}
-    void leave(){restore(true);active=null;paintButtons();dirty=true;customScroll=0;}
+    void close(){leave();removeButtons();building=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastWidth=-1;runItems=null;autoRunView=false;dirty=true;}
+    void leave(){restore(true);active=null;autoRunView=false;paintButtons();dirty=true;customScroll=0;}
     private void rememberScroll(){if(active!=null&&scrollParent!=null&&client.getWidget(VIEWPORT)==scrollParent)customScroll=scrollParent.getScrollY();}
 
     void tick()
@@ -71,6 +74,14 @@ final class SeedVaultViews
             rememberScroll();restore(false);removeButtons();
             if(!addButtons(left,categories))return;
             dirty=true;
+        }
+        Set<Integer> nextRun=plugin.vaultRunItems();
+        if(!Objects.equals(runItems,nextRun))
+        {
+            boolean starting=runItems==null&&nextRun!=null;
+            runItems=nextRun;dirty=true;
+            if(starting&&active==null){select(VaultRanking.View.CUSTOM);autoRunView=true;}
+            else if(nextRun==null&&autoRunView)leave();
         }
         int level=client.getRealSkillLevel(Skill.FARMING);
         long revision=plugin.preferenceRevision();
@@ -98,6 +109,7 @@ final class SeedVaultViews
         Widget[] children=parent.getChildren();
         if(children==null)return false;
         for(Widget w:buttons.values())if(w.getIndex()<0||w.getIndex()>=children.length||children[w.getIndex()]!=w)return false;
+        for(Widget w:decorations)if(w.getIndex()<0||w.getIndex()>=children.length||children[w.getIndex()]!=w)return false;
         return true;
     }
     private boolean addButtons(Widget left,Widget categories)
@@ -112,10 +124,25 @@ final class SeedVaultViews
         int y=categories.getRelativeY()+coral.getRelativeY()+coral.getHeight();
         int x=categories.getRelativeX()+coral.getRelativeX();
         int height=coral.getHeight(),width=coral.getWidth();
+        // Separate native categories from ours, preserving the alternating row phase.
+        int dividerY=y+2; int gap=5;
+        Widget dark=nativeBackground(categories,coral);
+        Widget light=null;
+        for(Widget row:nativeRows)if(row!=null&&"Saplings".equalsIgnoreCase(clean(row.getText())))light=nativeBackground(categories,row);
+        decoration(left,WidgetType.RECTANGLE,Math.max(0,x-3),dividerY,Math.max(1,width-2),1,null,0x78654b,115);
+        y+=gap;
         // Do not alter native scrolling scripts; extend only if necessary.
         if(y+height*3>left.getScrollHeight()&&y+height*3>left.getHeight())left.setScrollHeight(y+height*3);
         for(VaultRanking.View view:VaultRanking.View.values())
         {
+            boolean darker=view==VaultRanking.View.TOP_THREE;
+            Widget template=darker?dark:light;
+            if(template!=null||darker)
+            {
+                int bx=template==null?categories.getRelativeX():x-coral.getRelativeX()+template.getRelativeX();
+                int bw=template==null?categories.getWidth():template.getWidth();
+                decoration(left,template==null?WidgetType.RECTANGLE:template.getType(),bx,y,bw,height,template,0x000000,192);
+            }
             Widget w=left.createChild(-1,WidgetType.TEXT);
             w.setText(view.label).setFontId(coral.getFontId()).setTextColor(0xff981f).setTextShadowed(true)
                 .setOriginalX(x).setOriginalY(y).setOriginalWidth(width).setOriginalHeight(height);
@@ -126,8 +153,29 @@ final class SeedVaultViews
         }
         paintButtons();return true;
     }
+    private Widget nativeBackground(Widget categories,Widget row)
+    {
+        Widget layer=client.getWidget((GROUP<<16)|8);
+        if(layer==null)return null;
+        int rowY=categories.getRelativeY()+row.getRelativeY();
+        for(Widget w:children(layer))if(w!=null&&!w.isSelfHidden()&&
+            (w.getType()==WidgetType.RECTANGLE||w.getType()==WidgetType.GRAPHIC)&&
+            Math.abs(layer.getRelativeY()+w.getRelativeY()-rowY)<=1&&
+            Math.abs(w.getHeight()-row.getHeight())<=2&&w.getWidth()>0)return w;
+        return null;
+    }
+    private void decoration(Widget left,int type,int x,int y,int width,int height,Widget template,int color,int opacity)
+    {
+        Widget w=left.createChild(-1,type);
+        w.setOriginalX(x).setOriginalY(y).setOriginalWidth(width).setOriginalHeight(height);
+        if(type==WidgetType.GRAPHIC&&template!=null)
+        {w.setSpriteId(template.getSpriteId());w.setSpriteTiling(template.getSpriteTiling());w.setOpacity(template.getOpacity());}
+        else
+        {w.setFilled(true);w.setTextColor(template==null?color:template.getTextColor());w.setOpacity(template==null?opacity:template.getOpacity());}
+        w.revalidate();decorations.add(w);
+    }
     void select(VaultRanking.View view)
-    {if(active!=view){restore(true);customScroll=0;}active=view;dirty=true;paintButtons();}
+    {autoRunView=false;if(active!=view){restore(true);customScroll=0;}active=view;dirty=true;paintButtons();}
     private void paintButtons()
     {for(Map.Entry<VaultRanking.View,Widget> e:buttons.entrySet())e.getValue().setTextColor(e.getKey()==active?0xffffff:0xff981f);}
 
@@ -139,7 +187,8 @@ final class SeedVaultViews
             if(children!=null)
             {
                 Widget[] copy=children.clone();boolean changed=false;
-                for(Widget w:buttons.values())
+                List<Widget> owned=new ArrayList<>(buttons.values());owned.addAll(decorations);
+                for(Widget w:owned)
                 {
                     int i=w.getIndex();
                     if(i>=0&&i<copy.length&&copy[i]==w){w.setHidden(true);copy[i]=null;changed=true;}
@@ -152,7 +201,7 @@ final class SeedVaultViews
                 }
             }
         }
-        buttons.clear();parent=null;originalScrollHeight=-1;
+        buttons.clear();decorations.clear();parent=null;originalScrollHeight=-1;
     }
 
     private static final class WidgetState
@@ -256,7 +305,8 @@ final class SeedVaultViews
         }
         for(Widget label:labels)if(label!=null&&!label.isSelfHidden()&&!matched.contains(label))
         {Section section=sectionAt(sections,label.getOriginalY());if(section!=null)section.safe=false;}
-        Set<Integer> keep=VaultRanking.select(active,entries,level,plugin.vaultAllowed(level),plugin::priority,plugin.vaultOverrides(level));
+        Set<Integer> keep=runItems==null?VaultRanking.select(active,entries,level,plugin.vaultAllowed(level),plugin::priority,plugin.vaultOverrides(level)):
+            VaultRanking.selectRun(entries,runItems);
         Map<Integer,Integer> rank=new HashMap<>();int index=0;for(int id:keep)rank.put(id,index++);
         // Full compaction requires all section widgets to be accounted for and the
         // native divider paired by index and nearby original Y. Otherwise compact
