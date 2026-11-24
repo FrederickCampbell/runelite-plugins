@@ -31,6 +31,8 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.game.ItemManager;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JLabel;
 
 @PluginDescriptor(name = "Farming Helper", description = "Farming guides with stock-aware seed choices",
     tags = {"farming", "seed", "herb", "tree"})

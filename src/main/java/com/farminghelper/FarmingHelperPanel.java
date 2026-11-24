@@ -143,6 +143,7 @@ final class FarmingHelperPanel extends PluginPanel
         toolbar.removeAll();
         if(back!=null)toolbar.add(FarmingIcons.button(BACK,"Back",FarmingTheme.MUTED,back),BorderLayout.WEST);
         JLabel label=new JLabel(title);label.setFont(FarmingTheme.font(Font.BOLD,14));label.setForeground(FarmingTheme.TEXT);label.setToolTipText(title);
+        if(back==null&&navigation.page()==HOME){label.setIcon(FarmingIcons.of(LEAF,FarmingTheme.SUCCESS));label.setIconTextGap(5);}
         toolbar.add(label,BorderLayout.CENTER);
         JPanel actions=new JPanel(new FlowLayout(FlowLayout.RIGHT,1,0));actions.setOpaque(false);
         if(gear!=null)actions.add(FarmingIcons.button(GEAR,"Settings",FarmingTheme.MUTED,gear));

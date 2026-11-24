@@ -25,6 +25,11 @@ public class FarmingHelperPreviewTest
                     new GuideView.ItemRow(2,"Ultracompost",4,6,10,0,true)),
                 List.of(new GuideView.Stop(patch,"Harvest the herbs, then plant Ranarr.",true,false),
                     new GuideView.Stop(new FarmRunPatch("Ardougne","",PatchType.HERB),"Plant ranarr.",false,false)),patch),1L);
+            assertNotNull(findButton(panel,"End farming run"));
+            assertNull("Active guides must not have a Home/Back exit",findButton(panel,"Back"));
+            JButton settings=findButton(panel,"Settings");assertNotNull(settings);settings.doClick(0);
+            JButton back=findButton(panel,"Back");assertNotNull(back);back.doClick(0);
+            assertNotNull(findButton(panel,"End farming run"));assertNull(findButton(panel,"Back"));
             panel.setSize(image.getWidth(),image.getHeight());
             layout(panel);
             Graphics2D graphics = image.createGraphics();
@@ -36,6 +41,27 @@ public class FarmingHelperPreviewTest
         assertTrue(ImageIO.write(image,"png",output.toFile()));
     }
 
+    @Test public void rendersHomeAtSidebarWidth() throws Exception
+    {
+        BufferedImage image=new BufferedImage(225,500,BufferedImage.TYPE_INT_RGB);
+        SwingUtilities.invokeAndWait(()->{
+            com.formdev.flatlaf.FlatDarkLaf.setup();
+            FarmingHelperPanel panel=new FarmingHelperPanel(new FarmingHelperPlugin());panel.home();
+            assertNotNull(findButton(panel,"Settings"));assertNull(findButton(panel,"End farming run"));
+            panel.setSize(image.getWidth(),image.getHeight());layout(panel);
+            Graphics2D g=image.createGraphics();panel.printAll(g);g.dispose();
+        });
+        Path output=Paths.get("build/reports/farming-helper-home-preview.png");Files.createDirectories(output.getParent());assertTrue(ImageIO.write(image,"png",output.toFile()));
+    }
+    private static JButton findButton(Container root,String tooltip)
+    {
+        for(Component child:root.getComponents())
+        {
+            if(child instanceof JButton&&tooltip.equals(((JButton)child).getToolTipText()))return (JButton)child;
+            if(child instanceof Container){JButton result=findButton((Container)child,tooltip);if(result!=null)return result;}
+        }
+        return null;
+    }
     private void layout(Container c)
     {
         c.doLayout();
