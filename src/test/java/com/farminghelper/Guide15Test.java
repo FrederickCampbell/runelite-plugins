@@ -4,6 +4,7 @@ import com.farminghelper.queststate.CropState;
 import com.farminghelper.queststate.QuestFarmingStateReader;
 import java.util.*;
 import org.junit.Test;
+import net.runelite.api.coords.WorldPoint;
 import static org.junit.Assert.*;
 
 public class Guide15Test
@@ -38,5 +39,19 @@ public class Guide15Test
         GuideProgress progress=new GuideProgress();progress.observe(live(CropState.EMPTY,false));
         QuestFarmingStateReader.Observation predicted=new QuestFarmingStateReader.Observation(CropState.GROWING,QuestFarmingStateReader.Source.TIME_TRACKING,1,false,"");
         progress.observe(predicted);assertFalse(progress.planted());assertFalse(progress.finished(PatchType.HERB,predicted,false,false));
+    }
+    @Test public void specialtyRoutesUseSurfaceApproachesAndStopAtHespori()
+    {
+        WorldPoint outside=new WorldPoint(3200,3200,0);
+        FarmRunPatch hespori=new FarmRunPatch("Farming Guild","Hespori",PatchType.HESPORI);
+        FarmRunPatch seaweed=new FarmRunPatch("Seaweed","North",PatchType.SEAWEED);
+        FarmRunPatch coral=new FarmRunPatch("Great Conch","East",PatchType.CORAL);
+        assertEquals(new WorldPoint(1230,3730,0),Waypoints.navigationTarget(hespori,outside));
+        assertNull(Waypoints.navigationTarget(hespori,new WorldPoint((5021>>8)*64+32,(5021&255)*64+32,0)));
+        assertEquals(new WorldPoint(3764,3899,0),Waypoints.navigationTarget(seaweed,outside));
+        assertEquals(new WorldPoint(3271,2463,0),Waypoints.navigationTarget(coral,outside));
+        assertEquals(Waypoints.destination(seaweed),Waypoints.navigationTarget(seaweed,Waypoints.destination(seaweed)));
+        assertEquals(Waypoints.destination(coral),Waypoints.navigationTarget(coral,Waypoints.destination(coral)));
+        assertFalse(PatchType.CORAL.usesCompost());
     }
 }
