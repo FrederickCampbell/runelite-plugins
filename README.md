@@ -1,60 +1,23 @@
-# Farming Helper v0.36-beta.2
+# Farming Helper
 
-## v0.36-beta.1 — UI reliability and compliance hardening
+Quest Helper for your farm runs!
 
-- Preserve selected Seed Vault view and local scroll across native refresh scripts; defer reapplication to the next client tick outside the script stack. Quantity-only changes with unchanged physical ID membership, widget identities, and ordered selection avoid custom relayout. Native rebuilds and changed selection still require reapplication.
-- Keep native Bank Tags shelves and withdrawal positions. The registered predicate admits only physical IDs already present in the supplied layout, preventing plugin-originated unmatched additions; never explicitly save or delete Bank Tags configuration. No permanent tag tab is created. Native Bank Tags still manages its own remembered-tab configuration; live verification of implicit native persistence is required.
-- Bank view and Seed Vault view remain independent character preferences. Explicit Show farming bank respects its toggle. Closing the bank unregisters the temporary predicate. Beginning a guide no longer unconditionally clears another helper's Shortest Path destination.
-- The only Seed Vault script invoked by Farming Helper is UPDATE_SCROLLBAR for visual scrolling; no game actions, packet calls or withdrawal listener changes. Native geometry and script IDs not verified against generated names remain unchanged. Plugin Hub approval and live client validation remain outstanding.
+## Features
+- Grouped, individual and custom farm runs.
+- Step-by-step farming, compost and birdhouse guides.
+- Seed selection based on available supplies and your preferences.
+- Highlights for patches, tools and required items.
+- Optional farming bank and Seed Vault views.
+- Customizable crops and patch locations.
+- Optional Shortest Path integration.
 
+Choose a run, gather your supplies and follow the guide. All gameplay actions are manual.
 
-### v0.24 candidate
+## Credits
+Built using work from Quest Helper (Zoinkwiz and contributors) and Farming Patch Advisor (Seadeadmeat). Thanks to the RuneLite, Shortest Path and Farm Run Autopilot contributors. See the [technical notes](docs/IMPLEMENTATION.md) for upstream sources and licensing details.
 
-Health-check action values for all documented tree and bush species are normalized before route planning and prediction. Completion requires confirmed local work, not merely a growing state; cure transitions and permanent crops are preserved. Gnome Stronghold routes visit the fruit tree before the regular tree. See the health-check and replacement regression tests.
+Developed with AI assistance.
 
-### v0.23 candidate
+[Changelog](CHANGELOG.md) · [Plugin Hub review notes](PLUGIN_HUB_REVIEW.md)
 
-Per-run care and tree-removal preferences are saved by character and run type (grouped and individual have distinct keys). Raw seeds are allocation-only virtual stock, and actual saplings remain required. Active Run is a separate temporary vault category. Manual templates include Fossil Island, hardwood trees, seaweed and birdhouses. Birdhouse readiness reads native Time Tracking snapshots; unknown timers require inspection, and remote navigation uses verified mushtree approach markers rather than unverified exact trap tiles. Existing native controls and manual gameplay remain unchanged.
-
-A standalone Quest Helper-style farming guide. Choose a run, bring the items listed in the sidebar if desired, and follow the active patch instructions. Missing items never prevent navigation. The guide’s × explicitly ends the session and clears its route and highlights. Hiding the sidebar or switching to another plugin keeps the session, route and highlights active. Logout, world hopping, profile changes and plugin shutdown still reset the guide. Crop preferences, enabled patches and last observed storage contents are saved per character; no run progress is saved.
-
-- Automatic crop selection uses observed inventory, bank and Seed Vault stock; unknown/missing stock still produces an item requirement. Custom rankings take precedence over automatic fallback, and individual preferences reserve available stock and fall through to category priorities and then the highest estimated XP per planting item. Missing-stock fallback is advisory.
-- Required and recommended items display live carried quantities. The bank and Seed Vault show outlines, not additional tabs or withdrawal automation. Storage counts are observed snapshots, not hidden queries.
-- The guide uses the vendored farming registry, live varbits and RuneLite Time Tracking predictions, when available. It filters known growing, locked, disabled, completed and skipped patches. Unknown state remains inspectable.
-- Optional Shortest Path integration uses active-leg destinations only. Modern versions support reachability queries, bounded nearby fallback, and route-ownership checks; legacy versions receive normal path messages. Hespori, seaweed and coral include explicit approach/exit transitions; Anglers’ Retreat recognizes the rowboat unlock and mooring stages. Manual interactions remain required. Local object transform varbits, canonical regions and Advisor-style connected groups identify actual patch objects; local collision data supplies perimeter candidates. Non-exact map markers are not asserted to be walkable object tiles. Ambiguous object groups receive instructions rather than misleading highlights.
-- Preferences: compost, gardener removal/protection, ordered seed priorities, individual crop overrides and enabled patches. Manual Run offers individual crop categories and collapsible physical-patch selections. Select All respects permanent exclusions and known access restrictions; selections are remembered per character, not run progress. Grouped and individual presets use reference routes with the eligible Guild cluster first; Manual Run uses spatial ordering. Manual and multi-category runs group initially actionable patches by location, complete surface work before underground work, then use a bounded spatial-score ordering (Held-Karp for up to 12 groups, nearest-neighbour/2-opt/or-opt above that). This score is not a travel-time estimate. One optional Shortest Path multi-target query (up to four candidate destinations) can refine the next group while the first group is active; thereafter the order is pinned. Older or absent Shortest Path uses the fallback order, and actual leg routing always belongs to Shortest Path. There is no run persistence, loadout system, hard inventory cap or independent teleport planner.
-
-## v0.20 grouped and individual runs
-
-Grouped Runs contains Tree, Crop, Hops & Bush, Specialty and Manual Run. Each preset selects existing physical patch keys; the same engine handles every run. Preferences toggles preset components without altering permanent exclusions or Manual Run. Flowers and grapes default off in their grouped presets. All 21 individual patch types and the former allotment/flower and fruit/calquat shortcuts remain available. Spirit trees, Hespori and anima are available individually or manually; productive spirit trees are never removed automatically.
-
-Reference orders use the supplied Farming runs Wiki export, with existing internal aliases (Ortus Farm = Civitas illa Fortis, McGrubor’s Wood = Seers’ Village, Locus Oasis = Avium Savannah, Nemus Retreat = Auburnvale, Summer Shore = Great Conch calquat). The Guild group is always first when actionable; other reference groups are stable and eligible only, with optional bounded native Shortest Path next-stop refinement. Manual Run retains its geographic optimizer. No independent pathfinder. Immature patches and permanent protection retain previous handling.
-
-Preparation is suggested when requirements are missing but observed storage contains supplies. At 45 Farming or higher the Guild main bank is the default preparation destination; otherwise suggest a public bank, using a small list of known bank approach coordinates from Shortest Path `destinations/game_features/bank.tsv`. Any already-open bank/vault is sufficient. Continue is always available. Later shortages may offer one resupply per site, or click Resupply on demand. The minimum required inventory load is estimated using native item stackability; it is not a guaranteed full loadout or a 28-slot gate. Entrana receives an advisory gear check and Draynor banking option; item stats are a heuristic, not an exhaustive restricted-item whitelist. No automatic withdrawals, deposits, clicks, teleport selections or full inventory packing. Grapevine requirements include saltpetre and gardening trowel (Wiki item IDs 13421 and 5325). The existing single XP-per-seed ranking plus custom preferences remains; no four-strategy selector.
-
-## v0.18 crop ranking and Seed Vault
-
-Automatic runs now sort by healthy-cycle Farming XP per planting item (planting + check-health + harvest XP, divided by seeds consumed). Exact totals use the provided November 24 crop tables; variable yields use the handoff's documented high-level estimates. No player-specific yield, disease, diary, cape or Attas adjustment is claimed. Unknown harvest yields use a planting/check-health lower-bound score. Existing preferences and stock exhaustion still take precedence. Raw tree seeds are recognized as crop aliases in the vault; the guide still requires prepared saplings, never counts raw seeds as ready-to-plant stock. Gout tubers remain excluded. Living white lilies and matching Farming Guild contract crops are preserved; diseased plants can still be cured.
-
-The native Seed Vault adds Highest XP, Top 3 and Custom View. Custom View uses the existing crop priorities and eligible individual preferences; native rows remain native. Views are character-toggleable in Preferences. The v0.19 adapter moves verified native item and label pairs into existing grid positions in rank order (Bank Tags-inspired). It compacts sections and scroll bounds only if headers, dividers and native geometry are safely matched; otherwise it compacts verified sections in place or retains native positions. Original child indices, item IDs, quantities, menu actions and withdrawal handlers are not modified. Native category/search exits and rebuilds restore the original positions first. Contract and favourite controls are left intact. Generic scrollbar refresh uses RuneLite's UPDATE_SCROLLBAR with the observed 631.11/631.12 components. Live menu and scrollbar compatibility still require RuneLite testing. A crop's seed and sapling aliases occupy one ranking slot but retain distinct native items.
-
-## Development
-
-Use JDK 21 and run `gradlew.bat clean test build` on Windows or `bash gradlew clean test build` on Linux/macOS. Java target remains 11. In RuneLite Dev Manager, refresh Source Files, select Farming Helper, build and launch. Live client validation is separate from CI.
-
-Farming Patch Advisor by Seadeadmeat supplies original farming catalogs. Quest Helper by Zoinkwiz and contributors supplies the registry, decoder, herb/tree conditional steps and exact targets (original upstream commit b9b93706618a7b7fe7e5ea30e9a9ef35ba09673e). The sidebar follows Quest Helper's QuestOverviewPanel, QuestRequirementsPanel and QuestStepPanel structure. See LICENSE and LICENSE-QUEST-HELPER; vendored RuneLite decoder copyright notices are preserved. Special-area approach points are sourced from Shortest Path's `boats.tsv` and `transports.tsv`; see [upstream data](https://github.com/Skretzo/shortest-path/tree/master/src/main/resources/transports).
-
-## v0.16 validation scope
-
-The automated tests exercise allocation, snapshots, route-message lifecycle, transport stages and crop state decoding. In-game path reachability depends on Shortest Path’s installed version, unlocked transports, collision data and player location. Exact unresolved object identities are not invented; use live highlighting where matched. The route bridge does not automate gameplay or add a new pathfinder.
-
-Ordering algorithms adapted from [Farm Run Autopilot RoutePlanner](https://github.com/elzerma/farm-run-autopilot/blob/master/src/main/java/com/farmrunautopilot/route/RoutePlanner.java), BSD-2-Clause; see LICENSE-FARM-RUN-AUTOPILOT. Place grouping inspired by Codex Rounds; pinning inspired by Better Farming. No upstream travel planner or bank system is imported.
-
-Seed Vault visual widget repositioning follows [RuneLite Bank Tags LayoutManager](https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/banktags/tabs/LayoutManager.java); see LICENSE-BANK-TAGS. Bank-specific action remapping, synthetic item widgets, and drag/reorder handlers are deliberately not imported.
-
-### Compost Run (v0.21)
-Individual Runs → Compost Run, or opt into Compost in Crop Run preferences / Manual Run. The Guild's 30-item bin and seven regular bins share the same native farming tracker and route planner. Use compatible ordinary or supercompostable produce, close full bins, skip decomposition, open ripe bins, add one compost potion dose if regular, and 25/50 volcanic ash if super. Collect manually, optionally with a compatible bottomless bucket. Supply recommendations use a small verified list of cheap materials; other compatible produce may be used manually. Unknown bin states require inspection. Kastori flower completion now requires nearby native object confirmation, not cached cross-region data.
-
-## v0.22 Seed Vault run context
-
-Opening the vault during an unfinished run selects Custom View automatically. All three custom views show exact remaining guide item IDs in stock, including recommended supplies present in the vault. No alias substitution. Native categories remain available; click a native category to browse normally. Ending the run restores ordinary ranking/browsing. Contract and favourite controls remain native; unverified geometry is preserved. Custom rows follow native alternating background styling with a small divider. Live validation remains required.
+Happy farming!
