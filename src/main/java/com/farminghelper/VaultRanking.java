@@ -9,7 +9,7 @@ final class VaultRanking
 {
     enum View
     {
-        HIGHEST("Highest XP"), TOP_THREE("Top 3"), CUSTOM("Custom View");
+        HIGHEST("Highest XP"), TOP_THREE("Top 3"), CUSTOM("Custom View"), RUN("Active Run");
         final String label;
         View(String label){this.label=label;}
     }
@@ -43,6 +43,7 @@ final class VaultRanking
     static Set<Integer> select(View view,List<Entry> entries,int level,Set<PatchType> allowed,
         Function<PatchType,String> priorities,Map<PatchType,Set<Crop>> overrides)
     {
+        if(view==View.RUN)return Collections.emptySet();
         Map<Crop,Map<Integer,Integer>> stock=new LinkedHashMap<>();
         for(Entry entry:entries)
         {
@@ -76,11 +77,12 @@ final class VaultRanking
         }
         return selected;
     }
-    /** Exact guide item IDs, not crop aliases or a second allocation. */
+    /** Exact guide items plus raw seeds corresponding to allocated saplings. */
     static Set<Integer> selectRun(List<Entry> entries,Set<Integer> required)
     {
         Set<Integer> result=new LinkedHashSet<>();
-        for(Entry entry:entries)if(entry.quantity>0&&required.contains(entry.id))result.add(entry.id);
+        for(Entry entry:entries)if(entry.quantity>0&&(required.contains(entry.id)||
+            entry.crop!=null&&entry.crop.getName().endsWith(" sapling")&&required.contains(entry.crop.getItemId())))result.add(entry.id);
         return result;
     }
     private VaultRanking(){}

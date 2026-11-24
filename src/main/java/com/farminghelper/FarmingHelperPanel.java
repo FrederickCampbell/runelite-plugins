@@ -158,6 +158,20 @@ final class FarmingHelperPanel extends PluginPanel
         int y=scroll.getVerticalScrollBar().getValue();
         rows.removeAll();heading("Manual Run");
         line("Choose crops for this run. Expand a category to exclude individual patches. Permanent preferences still apply.",false);
+        java.util.Map<String,Set<String>> templates=new java.util.LinkedHashMap<>();
+        templates.put("Start from preset…",null);
+        for(RunPreset preset:RunPreset.values())templates.put(preset.title+" (grouped)",preset.select(plugin.patches(),plugin::flag));
+        for(PatchType type:PatchType.values())
+        {
+            Set<String> keys=new java.util.LinkedHashSet<>();
+            for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)keys.add(p.key());
+            templates.put(RunPreset.individualTitle(type)+" (individual)",keys);
+        }
+        Set<String> fossil=new java.util.LinkedHashSet<>();
+        for(FarmRunPatch p:plugin.patches())if("Fossil Island".equals(RunOrder.site(p))&&(p.getPatchType()==PatchType.HARDWOOD_TREE||p.getPatchType()==PatchType.SEAWEED))fossil.add(p.key());
+        templates.put("Fossil Island (trees + seaweed)",fossil);
+        JComboBox<String> template=new JComboBox<>(templates.keySet().toArray(new String[0]));
+        template.addActionListener(e->{Set<String> keys=templates.get(template.getSelectedItem());if(keys==null)return;manual.clear();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&keys.contains(p.key()))manual.add(p.key());saveManual();manualRun();});addRow(template);
         JPanel controls=new JPanel(new java.awt.GridLayout(1,2,4,0));
         JButton all=new JButton("Select all"),none=new JButton("Clear all");
         all.addActionListener(e->{ManualSelection.select(manual,plugin.patches(),this::selectable,true);saveManual();manualRun();});
@@ -297,8 +311,13 @@ final class FarmingHelperPanel extends PluginPanel
         close.setToolTipText("End farming run");close.addActionListener(e->plugin.stop());header.add(close,BorderLayout.EAST);addRow(header);
         JCheckBox seedless=new JCheckBox("Hide Seedless Patches",plugin.hideSeedless());
         seedless.setFont(FontManager.getRunescapeFont());seedless.setOpaque(false);
-        seedless.setToolTipText("Skip replanting patches without enough plant-ready stock; uses observed bank, vault and inventory. Applies only to this run.");
+        seedless.setToolTipText("Skip replanting patches without enough seeds or saplings; uses observed bank, vault and inventory. Applies only to this run.");
         seedless.addActionListener(e->plugin.setHideSeedless(seedless.isSelected()));addRow(seedless);
+        JComboBox<RunPolicy> care=new JComboBox<>(RunPolicy.values());care.setSelectedItem(plugin.runPolicy());care.setToolTipText("Compost and crop protection for this run type");care.addActionListener(e->plugin.setRunPolicy((RunPolicy)care.getSelectedItem(),null));addRow(care);
+        if(plugin.runHasTrees())
+        {
+            JComboBox<String> removal=new JComboBox<>(new String[]{"Pay to remove","Manual removal"});removal.setSelectedIndex(plugin.runPayRemoval()?0:1);removal.setToolTipText("Tree removal for this run type");removal.addActionListener(e->plugin.setRunPolicy(null,removal.getSelectedIndex()==0));addRow(removal);
+        }
         requirements("Item requirements:",view.items,false);
         requirements("Recommended items:",view.items,true);
         if(!view.supplyNote.isEmpty())line(view.supplyNote,false);

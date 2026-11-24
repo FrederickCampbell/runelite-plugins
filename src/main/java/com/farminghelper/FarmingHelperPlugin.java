@@ -68,6 +68,9 @@ public class FarmingHelperPlugin extends Plugin
     private Set<FarmRunType> run = Collections.emptySet();
     private Set<String> manualKeys; // physical selections, never persisted as a session
     private String runLabel;
+    private String runPolicyKey;
+    private volatile RunPolicy runPolicy=RunPolicy.BOTH;
+    private volatile boolean runPayRemoval=true, runHasTrees;
     private List<String> referenceOrder;
     private boolean optimizeManual, initialPrepChecked, entranaOffered;
     private volatile boolean preparing, hideSeedless;
@@ -128,33 +131,33 @@ public class FarmingHelperPlugin extends Plugin
 
     void start(Set<FarmRunType> types)
     {
-        start(types,null,null,null,false);
+        start(types,null,null,null,false,"legacy_"+types.toString());
     }
 
     void startPreset(RunPreset preset)
-    { startSelected(preset.select(patches,this::flag),preset.title,preset.reference,false); }
+    { startSelected(preset.select(patches,this::flag),preset.title,preset.reference,false,"group_"+preset.name()); }
     void startIndividual(PatchType type)
     {
         Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getPatchType()==type)keys.add(p.key());
-        startSelected(keys,RunPreset.individualTitle(type),RunPreset.individual(type),false);
+        startSelected(keys,RunPreset.individualTitle(type),RunPreset.individual(type),false,"individual_"+type.name());
     }
     void startCombinedShortcut(FarmRunType type)
     {
         Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getFarmRunType()==type)keys.add(p.key());
-        startSelected(keys,type.getDisplayName(),type==FarmRunType.ALLOTMENT_FLOWER?RunPreset.CROP.reference:RunPreset.TREE.reference,false);
+        startSelected(keys,type.getDisplayName(),type==FarmRunType.ALLOTMENT_FLOWER?RunPreset.CROP.reference:RunPreset.TREE.reference,false,"shortcut_"+type.name());
     }
     void startManual(Set<String> keys)
-    {startSelected(keys,"Manual Run",List.of(),true);}
-    private void startSelected(Set<String> keys,String label,List<String> reference,boolean optimize)
+    {startSelected(keys,"Manual Run",List.of(),true,"manual");}
+    private void startSelected(Set<String> keys,String label,List<String> reference,boolean optimize,String policyKey)
     {
         Set<String> chosen=Set.copyOf(keys);
         Set<FarmRunType> types=EnumSet.noneOf(FarmRunType.class);
         for(FarmRunPatch p:patches)if(chosen.contains(p.key())&&enabled(p))types.add(p.getFarmRunType());
         if(types.isEmpty()) {SwingUtilities.invokeLater(()->panel.emptySelection());return;}
-        start(types,chosen,label,reference,optimize);
+        start(types,chosen,label,reference,optimize,policyKey);
     }
 
-    private void start(Set<FarmRunType> types,Set<String> keys,String label,List<String> reference,boolean optimize)
+    private void start(Set<FarmRunType> types,Set<String> keys,String label,List<String> reference,boolean optimize,String policyKey)
     {
         if (types.isEmpty()) return;
         Set<FarmRunType> selected=EnumSet.copyOf(types);
@@ -165,6 +168,10 @@ public class FarmingHelperPlugin extends Plugin
             clearRun();
             run = selected;
             manualKeys=keys;runLabel=label;referenceOrder=reference;optimizeManual=optimize;
+            runPolicyKey=policyKey;
+            runPolicy=RunPolicy.load(setting("runPolicy_"+policyKey,""),CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true))!=CompostChoice.NONE,flag("directorProtectTrees",true));
+            runPayRemoval=flag("runPayRemoval_"+policyKey,flag("directorPayRemoval",true));
+            runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&StepEngine.isTreeType(p.getPatchType()));
             loadStock();
             sampleStorage();
             navigation.begin();
@@ -182,7 +189,7 @@ public class FarmingHelperPlugin extends Plugin
     private void clearRun()
     {
         run = Collections.emptySet();
-        hideSeedless=false;
+        hideSeedless=false;runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;referenceOrder=null;optimizeManual=false;
         initialPrepChecked=false;preparing=false;entranaOffered=false;visitedStorage=false;resupplyOffered.clear();preparationBank=null;preparationReason="";
         runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
@@ -220,6 +227,20 @@ public class FarmingHelperPlugin extends Plugin
         end();
     }
 
+    RunPolicy runPolicy(){return runPolicy;}
+    boolean runPayRemoval(){return runPayRemoval;}
+    boolean runHasTrees(){return runHasTrees;}
+    void setRunPolicy(RunPolicy policy,Boolean pay)
+    {
+        long id=session;thread.invokeLater(()->{
+            if(id!=session||!guideRequested||runPolicyKey==null)return;
+            if(policy!=null){runPolicy=policy;save("runPolicy_"+runPolicyKey,policy.name());}
+            if(pay!=null){runPayRemoval=pay;save("runPayRemoval_"+runPolicyKey,String.valueOf(pay));}
+            lastView=null;update();
+        });
+    }
+    private String observedItemName(int id)
+    {if(itemManager==null)return "";var item=itemManager.getItemComposition(id);return item==null||item.getNote()!=-1?"":item.getName();}
     boolean hideSeedless(){return hideSeedless;}
     void setHideSeedless(boolean value)
     {
@@ -454,9 +475,12 @@ public class FarmingHelperPlugin extends Plugin
         carried.putAll(bag);equipped.forEach((id,n)->carried.merge(id,n,Integer::sum));
         Map<Integer,Integer> storage=new HashMap<>(bank);vault.forEach((id,n)->storage.merge(id,n,Integer::sum));
         Map<Integer,Integer> stock=new HashMap<>(bag);storage.forEach((id,n)->stock.merge(id,n,Integer::sum));
-        boolean protect=flag("directorProtectTrees",true), pay=flag("directorPayRemoval",true);
+        boolean protect=runPolicy.protection, pay=runPayRemoval;
+        Map<Integer,Integer> aliases=TreePreparation.aliases(stock,this::observedItemName);
+        Map<Integer,Integer> allocationStock=TreePreparation.allocationStock(stock,aliases);
         CompostChoice compost=CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));
-        int compostId=compost.resolve(stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED));
+        if(runPolicy.compost&&compost==CompostChoice.NONE)compost=CompostChoice.BOTTOMLESS;
+        int compostId=runPolicy.compost?compost.resolve(stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)):-1;
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new LinkedHashMap<>();
         int eligible=0;
@@ -528,7 +552,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current)!=null &&
             observations.get(current).source==QuestFarmingStateReader.Source.LIVE
             ? Map.of(current,activeCrop):Collections.emptyMap();
-        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,stock,this::priority,this::override,committed,hideSeedless);
+        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,allocationStock,this::priority,this::override,committed,hideSeedless);
         int seedlessCount=0;
         if(hideSeedless)
         {
@@ -558,13 +582,18 @@ public class FarmingHelperPlugin extends Plugin
         }
         Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
         CompostRun.addSupplies(required,ready,observations,stock,binPlans);
-        int compostCount=0,coins=0;
+        int compostCount=0,coins=0;boolean needsAxe=false;
         for(FarmRunPatch p:ready)
         {
             Crop c=seeds.get(p);PatchType type=p.getPatchType();
             if(c!=null) required.merge(c.getItemId(),c.getQuantity(),Integer::sum);
             if(c!=null && type.usesCompost()) compostCount++;
-            if(pay && c!=null && StepEngine.isTreeType(type) && reader.gardenerId(type.name(),p.getLocation(),p.getName())>0) coins+=200;
+            if(c!=null&&StepEngine.isTreeType(type)&&type!=PatchType.CRYSTAL_TREE)
+            {
+                var o=observations.get(p);
+                if(o!=null&&(o.state==null||o.state==CropState.UNCHECKED||o.state==CropState.HARVESTABLE))
+                {if(pay&&reader.gardenerId(type.name(),p.getLocation(),p.getName())>0)coins+=200;else needsAxe=true;}
+            }
             if(protect && (c!=null || (p==current && progress.planted() && activeCrop!=null)))
             {
                 Crop paymentCrop=c!=null?c:activeCrop;
@@ -573,6 +602,16 @@ public class FarmingHelperPlugin extends Plugin
             }
         }
         if(coins>0) recommended.merge(ItemID.COINS,coins,Integer::sum);
+        if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);recommended.put(axe>0?axe:1351,1);}
+        Map<Integer,Integer> prepSeeds=TreePreparation.preparation(seeds,stock,aliases);
+        if(!prepSeeds.isEmpty())
+        {
+            prepSeeds.forEach((id,n)->recommended.merge(id,n,Integer::sum));
+            recommended.put(TreePreparation.FILLED_POT,prepSeeds.values().stream().mapToInt(Integer::intValue).sum());
+            recommended.put(Supplies.GARDENING_TROWEL,1);
+            int can=stock.keySet().stream().filter(id->observedItemName(id).matches("(?i)watering can\\([1-8]\\)|Gricoller.s can")).findFirst().orElse(5333);
+            recommended.put(can,1);
+        }
         int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
         if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
@@ -612,11 +651,11 @@ public class FarmingHelperPlugin extends Plugin
         boolean aboard=loggedIn && client.getVarbitValue(VarbitID.SAILING_BOARDED_BOAT)!=0;
         boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
         WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
-        String supplyNote="";
+        String supplyNote=prepSeeds.isEmpty()?"":"Prepare "+prepSeeds.values().stream().mapToInt(Integer::intValue).sum()+" sapling(s) from the listed raw seeds: filled pots, trowel, water, then wait for growth. Saplings remain required for planting.";
         if(runLabel!=null && loggedIn && current!=null)
         {
             int slots=Preparation.slots(required,equipped,this::stackable);
-            if(slots>28)supplyNote="Required supplies need at least "+slots+" inventory slots. Take a portion, note harvests and resupply as needed. No inventory limit blocks the guide.";
+            if(slots>28)supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Required supplies need at least "+slots+" inventory slots. Take a portion, note harvests and resupply as needed. No inventory limit blocks the guide.";
             if(!initialPrepChecked)
             {
                 initialPrepChecked=true;resupplyOffered.add(RunOrder.site(current));
@@ -724,7 +763,9 @@ public class FarmingHelperPlugin extends Plugin
     private GuideView.ItemRow itemRow(int id,int count,Map<Integer,Integer> carried,boolean recommended)
     {
         Crop crop=CropCatalog.findByItemId(id);
-        return new GuideView.ItemRow(id,crop==null?Supplies.name(id):crop.getItemName(),carried.getOrDefault(id,0),count,
+        String name=crop==null?Supplies.name(id):crop.getItemName();
+        if(name.startsWith("Item #")){String actual=observedItemName(id);if(!actual.isEmpty())name=actual;}
+        return new GuideView.ItemRow(id,name,carried.getOrDefault(id,0),count,
             bank.getOrDefault(id,0),vault.getOrDefault(id,0),recommended);
     }
 

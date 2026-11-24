@@ -1,3 +1,9 @@
+## v0.23-beta.1 — Run preferences, dedicated vault view and templates
+
+- Character-local policies for individual/grouped/manual runs; optional protection, compost and removal.
+- Raw tree seeds contribute to allocation, with separate sapling preparation supplies.
+- Active Run vault category and manual preset templates, including Fossil Island trees + seaweed.
+
 ## v0.22.1-beta.1 — Run stock toggle and sidebar layout
 
 - Optional per-run Hide Seedless Patches reserves actual observed planting stock, preserving non-replanting work and restoring hidden stops when disabled.
