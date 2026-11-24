@@ -1,8 +1,8 @@
-# Farming Helper v0.18.0-beta.1
+# Farming Helper v0.19.0-beta.1
 
-- Shared automatic XP-per-seed ranking with stock-aware fallback.
-- Three optional native Seed Vault views: Highest XP, Top 3, Custom View.
-- Correct jute planting quantity; protect existing white lilies and matching contract crops.
-- No new strategy selector, navigation system, or banking page.
+- Native Seed Vault compaction inspired by RuneLite Bank Tags. Move existing native icon/label pairs together and retain original indices, quantities, actions and listeners.
+- Rank within native sections; compact verified empty sections and scrollbar geometry. Ambiguous sections retain their original geometry.
+- Restore native positions before rebuild, search, category exit and disable. Contract and favourites are preserved.
+- Shared XP ranking, Manual Run and Shortest Path guidance are unchanged.
 
-Seed Vault filtering is an initial hide-only beta; layout compaction and live withdrawal/menu compatibility are not certified by CI. Variable yields are reference estimates, not exact player-specific predictions. Raw seeds must be prepared before the guide treats them as saplings.
+This beta is not live-certified for every withdrawal mode or scrollbar layout. Test with a small withdrawal first.

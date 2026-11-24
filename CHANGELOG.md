@@ -1,3 +1,10 @@
+## 0.19.0-beta.1
+
+- Bank Tags-inspired native Seed Vault repositioning: compact and rank verified icon/label pairs without remapping native indices or withdrawal actions.
+- Collapse verified empty sections and update scroll height; preserve native layout for ambiguous geometry.
+- Restore original positions, visibility and scroll on native rebuild or exit. Preserve contract/favourite controls.
+- Added pure layout and native widget lifecycle regression tests. Live withdrawal and responsive layout validation remain required.
+
 ## 0.18.0-beta.1
 
 - Shared healthy-cycle XP-per-seed crop scoring with documented yield estimates and unknown-yield lower bounds.

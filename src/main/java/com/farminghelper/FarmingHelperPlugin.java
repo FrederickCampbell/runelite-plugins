@@ -109,7 +109,7 @@ public class FarmingHelperPlugin extends Plugin
     @Override protected void shutDown()
     {
         running = false;
-        if(vaultViews!=null){SeedVaultViews view=vaultViews;vaultViews=null;thread.invokeLater(view::close);}
+        if(vaultViews!=null){SeedVaultViews view=vaultViews;vaultViews=null;thread.invokeLater(() -> {view.close();view.flushScrollbar();});}
         reset();
         toolbar.removeNavigation(nav);
         overlays.remove(highlight);
