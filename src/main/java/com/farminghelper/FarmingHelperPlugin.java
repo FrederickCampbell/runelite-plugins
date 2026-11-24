@@ -56,6 +56,8 @@ public class FarmingHelperPlugin extends Plugin
     private final List<FarmRunPatch> patches = new ArrayList<>();
     private final Set<FarmRunPatch> skipped = new HashSet<>(), completed = new HashSet<>();
     private final GuideProgress progress = new GuideProgress();
+    private final Set<FarmRunPatch> birdhouseTouched=new HashSet<>();
+    private final Map<Integer,String> itemNamesCache=new HashMap<>();
     private Crop activeCrop;
     private volatile StepEngine.Action activeAction = StepEngine.Action.INSPECT;
     private volatile boolean activeLive;
@@ -108,6 +110,7 @@ public class FarmingHelperPlugin extends Plugin
         for (FarmRunPatch group : FarmRunCatalog.patches())
             patches.addAll(PatchNames.expand(group,
                 reader.patchNamesForType(group.getPatchType().name(), group.getLocation())));
+        patches.addAll(BirdhouseRun.patches());
         panel = new FarmingHelperPanel(this);
         nav = NavigationButton.builder().tooltip("Farming Helper").icon(createNavigationIcon())
             .panel(panel).priority(8).build();
@@ -194,6 +197,7 @@ public class FarmingHelperPlugin extends Plugin
         initialPrepChecked=false;preparing=false;entranaOffered=false;visitedStorage=false;resupplyOffered.clear();preparationBank=null;preparationReason="";
         runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
         current = null;
+        birdhouseTouched.clear();
         skipped.clear();
         completed.clear();
         progress.reset();
@@ -240,7 +244,7 @@ public class FarmingHelperPlugin extends Plugin
         });
     }
     private String observedItemName(int id)
-    {if(itemManager==null)return "";var item=itemManager.getItemComposition(id);return item==null||item.getNote()!=-1?"":item.getName();}
+    {if(itemManager==null)return "";return itemNamesCache.computeIfAbsent(id,i->{var item=itemManager.getItemComposition(i);return item==null||item.getNote()!=-1?"":item.getName();});}
     boolean hideSeedless(){return hideSeedless;}
     void setHideSeedless(boolean value)
     {
@@ -451,7 +455,7 @@ public class FarmingHelperPlugin extends Plugin
         for (FarmRunPatch patch : patches)
         {
             String issue = Waypoints.accessIssue(client,patch.getPatchType(),patch.getLocation(),level,false);
-            if (issue == null && patch.getPatchType()!=PatchType.COMPOST_BIN && CropCatalog.recommend(patch.getPatchType(),level) == null) issue = "Farming level too low";
+            if (issue == null && patch.getPatchType()!=PatchType.COMPOST_BIN && patch.getPatchType()!=PatchType.BIRDHOUSE && CropCatalog.recommend(patch.getPatchType(),level) == null) issue = "Farming level too low";
             if (issue != null) notes.put(patch.key(),issue);
         }
         accessNotes = Collections.unmodifiableMap(notes);
@@ -459,6 +463,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private QuestFarmingStateReader.Observation observe(FarmRunPatch p)
     {
+        if(p.getPatchType()==PatchType.BIRDHOUSE)return BirdhouseRun.observe(client,config,p,highlight!=null&&!highlight.resolve(p).isEmpty());
         return reader.observeType(p.getPatchType().name(),p.getLocation(),p.getName(),
             p.getPatchType()==PatchType.HESPORI ? null : Waypoints.destination(p));
     }
@@ -493,12 +498,23 @@ public class FarmingHelperPlugin extends Plugin
         {
             PatchType type=p.getPatchType();
             if(!ManualSelection.includes(p,run,manualKeys) || !enabled(p) || skipped.contains(p) ||
-                Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || (type!=PatchType.COMPOST_BIN && CropCatalog.recommend(type,level)==null)) continue;
+                Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || (type!=PatchType.COMPOST_BIN && type!=PatchType.BIRDHOUSE && CropCatalog.recommend(type,level)==null)) continue;
             eligible++;
             if(pinned!=null && !pinned.contains(p))continue;
             QuestFarmingStateReader.Observation o=observe(p);
             if(o==null) continue;
             observations.put(p,o);
+            if(type==PatchType.BIRDHOUSE)
+            {
+                if(completed.contains(p)){visible.add(p);continue;}
+                if(p==current&&o.source==QuestFarmingStateReader.Source.LIVE)
+                {
+                    if(o.rawValue>=0&&!BirdhouseRun.seeded(o.rawValue))birdhouseTouched.add(p);
+                    if(BirdhouseRun.seeded(o.rawValue)&&birdhouseTouched.contains(p)){completed.add(p);visible.add(p);continue;}
+                }
+                if(o.state!=CropState.GROWING){ready.add(p);visible.add(p);}
+                continue;
+            }
             if(type==PatchType.COMPOST_BIN)
             {
                 if(completed.contains(p)){visible.add(p);continue;}
@@ -566,7 +582,7 @@ public class FarmingHelperPlugin extends Plugin
         if(runOrder!=null&&!runOrder.isEmpty()&&(current==null||!runOrder.get(0).patches.contains(current)))
         {orderFrozen=true;orderProbeId=null;}
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
-        Map<Integer,Integer> required=Supplies.guideKit(ready,-1,false,false,
+        Map<Integer,Integer> required=Supplies.guideKit(ready.stream().filter(p->p.getPatchType()!=PatchType.BIRDHOUSE).collect(java.util.stream.Collectors.toList()),-1,false,false,
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
             loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
         Map<Integer,Integer> recommended=new LinkedHashMap<>();
@@ -616,6 +632,7 @@ public class FarmingHelperPlugin extends Plugin
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
         if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
         if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB || p.getPatchType()==PatchType.CORAL) && !required.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
+        Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,stock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
         List<GuideView.ItemRow> items=new ArrayList<>();
         required.forEach((id,n)->items.add(itemRow(id,n,carried,false)));
         recommended.forEach((id,n)->items.add(itemRow(id,n+required.getOrDefault(id,0),carried,true)));
@@ -635,12 +652,13 @@ public class FarmingHelperPlugin extends Plugin
                 action=StepEngine.refine(action,pay,reader.gardenerId(type.name(),current.getLocation(),current.getName())>0,false);
             if(action==StepEngine.Action.PLANT && o.source==QuestFarmingStateReader.Source.LIVE && reader.hasWeeds(type.name(),o.rawValue)) action=StepEngine.Action.RAKE;
             activeAction=action;
-            instruction=type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,compostId>=0);
+            instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,compostId>=0);
+            if(type==PatchType.BIRDHOUSE){activeAction=StepEngine.Action.INSPECT;instruction=current.getName()+": "+instruction;}
         }
         for(FarmRunPatch p:visible)
         {
             Crop c=seeds.get(p);
-            String line=p==current?instruction:completed.contains(p)?"Completed":binPlans.containsKey(p)?binPlans.get(p).instruction:c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
+            String line=p==current?instruction:completed.contains(p)?"Completed":birdhousePlans.containsKey(p)?birdhousePlans.get(p):binPlans.containsKey(p)?binPlans.get(p).instruction:c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
             stops.add(new GuideView.Stop(p,line,p==current,completed.contains(p)));
         }
         WorldPoint actual=loggedIn?client.getLocalPlayer().getWorldLocation():null;

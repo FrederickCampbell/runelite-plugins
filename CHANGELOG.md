@@ -2,7 +2,8 @@
 
 - Character-local policies for individual/grouped/manual runs; optional protection, compost and removal.
 - Raw tree seeds contribute to allocation, with separate sapling preparation supplies.
-- Active Run vault category and manual preset templates, including Fossil Island trees + seaweed.
+- Active Run vault category and manual preset templates, including Fossil Island trees + seaweed + birdhouses.
+- Four birdhouse stops, native tracker readiness, material and bait estimates, and local object guidance. Remote routing uses mushtree approach points until the exact object loads.
 
 ## v0.22.1-beta.1 — Run stock toggle and sidebar layout
 

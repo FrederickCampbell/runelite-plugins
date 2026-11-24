@@ -154,6 +154,7 @@ final class Waypoints
 
     static WorldPoint destination(FarmRunPatch patch)
     {
+        if(patch.getPatchType()==PatchType.BIRDHOUSE){BirdhouseRun.Site s=BirdhouseRun.site(patch);return s==null?null:s.approach;}
         WorldPoint area = farmArea(patch);
         return area == null ? exactPoint(patch) : area;
     }
@@ -274,6 +275,7 @@ final class Waypoints
                 return client.getRealSkillLevel(Skill.SAILING) >= 51
                     ? available("51 Sailing requirement met.") : locked("51 Sailing required.");
             case "Fossil Island": case "Seaweed":
+                if(type==PatchType.BIRDHOUSE&&client!=null&&client.getRealSkillLevel(Skill.HUNTER)<5)return locked("5 Hunter required.");
                 return quest(client, Quest.BONE_VOYAGE, "Bone Voyage", false);
             case "Prifddinas":
                 return quest(client, Quest.SONG_OF_THE_ELVES, "Song of the Elves", false);

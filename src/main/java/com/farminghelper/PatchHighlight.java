@@ -25,7 +25,7 @@ final class PatchHighlight extends Overlay
     {
         if(object==null)return;
         ObjectComposition c=client.getObjectDefinition(object.getId());
-        if(PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || isBin(c))
+        if(BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || isBin(c))
         {objects.add(object);return;}
         if(c!=null && c.getImpostorIds()!=null)
             for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || isBin(client.getObjectDefinition(id))){objects.add(object);return;}
@@ -52,6 +52,12 @@ final class PatchHighlight extends Overlay
     private List<GameObject> resolve(FarmRunPatch patch)
     {
         if(patch==null || client.getLocalPlayer()==null)return Collections.emptyList();
+        if(patch.getPatchType()==PatchType.BIRDHOUSE)
+        {
+            BirdhouseRun.Site site=BirdhouseRun.site(patch);if(site==null)return Collections.emptyList();
+            List<GameObject> matched=new ArrayList<>();for(GameObject o:objects)if(o.getId()==site.object&&sameView(o))matched.add(o);
+            return matched;
+        }
         FarmingHelperPlugin helper=plugin.get();
         WorldPoint marker=Waypoints.destination(patch);
         QuestTargets.Definition exact=QuestTargets.get(patch);

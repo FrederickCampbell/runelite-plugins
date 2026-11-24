@@ -168,8 +168,8 @@ final class FarmingHelperPanel extends PluginPanel
             templates.put(RunPreset.individualTitle(type)+" (individual)",keys);
         }
         Set<String> fossil=new java.util.LinkedHashSet<>();
-        for(FarmRunPatch p:plugin.patches())if("Fossil Island".equals(RunOrder.site(p))&&(p.getPatchType()==PatchType.HARDWOOD_TREE||p.getPatchType()==PatchType.SEAWEED))fossil.add(p.key());
-        templates.put("Fossil Island (trees + seaweed)",fossil);
+        for(FarmRunPatch p:plugin.patches())if("Fossil Island".equals(RunOrder.site(p))&&(p.getPatchType()==PatchType.HARDWOOD_TREE||p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.BIRDHOUSE))fossil.add(p.key());
+        templates.put("Fossil Island (trees + seaweed + birds)",fossil);
         JComboBox<String> template=new JComboBox<>(templates.keySet().toArray(new String[0]));
         template.addActionListener(e->{Set<String> keys=templates.get(template.getSelectedItem());if(keys==null)return;manual.clear();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&keys.contains(p.key()))manual.add(p.key());saveManual();manualRun();});addRow(template);
         JPanel controls=new JPanel(new java.awt.GridLayout(1,2,4,0));
@@ -411,9 +411,9 @@ final class FarmingHelperPanel extends PluginPanel
     private void patches(PatchType type)
     {
         rows.removeAll();heading(type.getDisplayName());
-        if(type==PatchType.COMPOST_BIN)
+        if(type==PatchType.COMPOST_BIN||type==PatchType.BIRDHOUSE)
         {
-            line("Select compost bins to visit. Supplies follow the current contents.",false);
+            line(type==PatchType.BIRDHOUSE?"Select birdhouse sites to visit. Readiness follows native Time Tracking.":"Select compost bins to visit. Supplies follow the current contents.",false);
             for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)
             {JCheckBox box=new JCheckBox(p.getDisplayName(),plugin.enabled(p));box.addActionListener(e->plugin.save("patchEnabled_"+p.key(),String.valueOf(box.isSelected())));addRow(box);}
             button("Back",this::preferences);finish();return;
