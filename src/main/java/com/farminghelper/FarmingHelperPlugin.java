@@ -42,8 +42,6 @@ public class FarmingHelperPlugin extends Plugin
     private NavigationBridge navigation;
     private SeedVaultViews vaultViews;
     private ActiveRunBank runBank;
-    @Inject private net.runelite.client.plugins.banktags.TagManager bankTags;
-    @Inject private net.runelite.client.plugins.bank.BankSearch bankSearch;
     private volatile long preferenceRevision;
     private volatile RouteLeg activeLeg;
     @Inject private ClientThread thread;
@@ -118,7 +116,7 @@ public class FarmingHelperPlugin extends Plugin
         running = true;
         navigation=new NavigationBridge(bus::post);
         if(itemManager!=null)vaultViews=new SeedVaultViews(client,itemManager,this);
-        if(bankTags!=null&&bankSearch!=null&&itemManager!=null)runBank=new ActiveRunBank(client,plugins,bankTags,bankSearch,itemManager);
+        if(itemManager!=null)runBank=new ActiveRunBank(client,plugins,itemManager);
         shortestPathAvailable=plugins.getPlugins().stream().anyMatch(p ->
             "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
         navigation.enabled(shortestPathAvailable);

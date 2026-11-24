@@ -18,16 +18,23 @@ final class ActiveRunBank
     static final String TAG="farming helper active run";
     private final Client client;
     private final PluginManager plugins;
-    private final TagManager tags;
-    private final BankSearch search;
+    private TagManager tags;
+    private BankSearch search;
     private final ItemManager items;
     private Set<Integer> ids=Collections.emptySet();
     private boolean registered,opened,offered;
-    ActiveRunBank(Client client,PluginManager plugins,TagManager tags,BankSearch search,ItemManager items)
-    {this.client=client;this.plugins=plugins;this.tags=tags;this.search=search;this.items=items;}
+    ActiveRunBank(Client client,PluginManager plugins,ItemManager items)
+    {this.client=client;this.plugins=plugins;this.items=items;}
     private BankTagsService service()
     {
-        for(var p:plugins.getPlugins())if(p instanceof BankTagsPlugin&&plugins.isPluginActive(p))return (BankTagsService)p;
+        for(var p:plugins.getPlugins())if(p instanceof BankTagsPlugin&&plugins.isPluginActive(p))
+        {
+            // TagManager is deliberately bound inside the native plugin injector.
+            // Reuse that exact instance without requiring Bank Tags as a dependency.
+            TagManager actual=p.getInjector().getInstance(TagManager.class);
+            if(tags!=actual){if(registered&&tags!=null)tags.unregisterTag(TAG);registered=false;tags=actual;search=p.getInjector().getInstance(BankSearch.class);}
+            return (BankTagsService)p;
+        }
         return null;
     }
     boolean bankOpen()
@@ -64,7 +71,7 @@ final class ActiveRunBank
     {
         BankTagsService api=service();
         if(registered&&api!=null&&TAG.equals(api.getActiveTag()))api.closeBankTag();
-        if(registered)tags.unregisterTag(TAG);
+        if(registered&&tags!=null)tags.unregisterTag(TAG);
         registered=false;opened=false;offered=false;ids=Collections.emptySet();
     }
 }
