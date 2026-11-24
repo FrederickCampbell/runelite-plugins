@@ -15,7 +15,7 @@ final class CuratedBank
     private static final Pattern CONDITION=Pattern.compile("(\\d+)(=|>=|<=|>|<|&)(\\d+)");
     private static final String TRAVEL=".*graceful (?:hood|top|legs|gloves|boots|cape).*|strung rabbit foot|(?:divine )?rune pouch|(?:air|water|earth|fire|law|astral|nature|blood|death|soul|cosmic|mind|body|steam|mist|dust|mud|smoke|lava) rune|staff of (?:air|water|earth|fire)|(?:air|water|earth|fire|steam|mist|dust|mud|smoke|lava) battlestaff|mystic .* staff|tome of (?:fire|water|earth).*|coins";
     private static final Pattern BIRD=Pattern.compile("(?i)^(?:"+TRAVEL+")$");
-    private static final Pattern GEAR=Pattern.compile("(?i)^(?:"+TRAVEL+"|farmer.s (?:strawhat|jacket|shirt|boro trousers|breeches|boots|trousers)|magic secateurs|secateurs|herb sack|silklined herb sack|reagent pouch|seed box|gricoller.s can|watering can(?:\\([0-8]\\))?|spade|rake|seed dibber|gardening trowel|plant cure|bottomless compost bucket.*|ultracompost|supercompost|compost|empty bucket|bucket|volcanic ash|compost potion.*|basket|sack|amulet of bounty.*|amulet of nature|pre-nature amulet|fishbowl helmet|diving apparatus|medallion of the deep|flippers|(?:bronze|iron|steel|black|mithril|adamant|rune|dragon|crystal|infernal|3rd age) axe.*|imcando hammer|hammer|chisel)$");
+    private static final Pattern GEAR=Pattern.compile("(?i)^(?:"+TRAVEL+"|farmer.s (?:strawhat|jacket|shirt|boro trousers|breeches|boots|trousers)|magic secateurs|secateurs|herb sack|silklined herb sack|reagent pouch|seed box|gricoller.s can|watering can(?:\\([0-8]\\))?|spade|rake|seed dibber|gardening trowel|plant cure|bottomless compost bucket.*|ultracompost|supercompost|compost|empty bucket|bucket|volcanic ash|compost potion.*|basket|sack|amulet of bounty.*|amulet of nature|pre-nature amulet|fishbowl helmet|diving apparatus|medallion of the deep|flippers|(?:bronze|iron|steel|black|mithril|adamant|rune|dragon|crystal|infernal|3rd age) axe.*|empty plant pot|filled plant pot|plant pot|(?:empty )?bottomless compost bucket.*)$");
     private static final List<String[]> ROWS=load();
     private static final Map<Integer,List<String[]>> EXACT=index(false), FAMILIES=index(true);
     private static final Pattern CHARGED_NAME=Pattern.compile("(?i)^(.+?)\\s*\\(([1-9][0-9]*)\\)$");
@@ -67,8 +67,13 @@ final class CuratedBank
         for(String[] row:rows)if("F".equals(row[2]))return BankShelfLayout.PERMANENT;
         return BankShelfLayout.CHARGED;
     }
+    static boolean saplingPreparation(String name)
+    {
+        if(name==null)return false;String n=name.trim().toLowerCase(Locale.ROOT);
+        return n.equals("plant pot")||n.equals("empty plant pot")||n.equals("filled plant pot")||n.endsWith(" seedling")||n.endsWith(" seedling (w)")||n.endsWith(" seedling(w)");
+    }
     static boolean equipment(String name,boolean bird)
-    {return name!=null&&(bird?BIRD:GEAR).matcher(name).matches();}
+    {return name!=null&&((bird?BIRD:GEAR).matcher(name).matches()||!bird&&saplingPreparation(name));}
     static boolean modeAllows(String mode,boolean consumable)
     {
         String normalized=mode==null?"INVENTORY_NON_CONSUMABLE":mode.toUpperCase(Locale.ROOT);

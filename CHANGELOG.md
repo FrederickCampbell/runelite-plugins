@@ -1,3 +1,10 @@
+## v0.34-beta.1 — One curated farming bank
+
+- Keep one automatic native Bank Tags view; no favorites, hidden items, additional tabs or customization settings.
+- Include owned empty/filled plant pots and seedlings (including watered seedlings) in a separate preparation shelf, alongside the existing compost supplies and selected planting items.
+- Group empty buckets with compost rather than farming tools. Remove hammer and chisel from general equipment; explicit birdhouse requirements still include them in the birdhouse stage.
+- Preserve only previously observed physical bank IDs as temporary withdrawal placeholders. Unowned items remain absent and placeholders never become stock.
+
 ## v0.33-beta.1 — Structured farming bank and expanded travel catalogue
 
 - Native eight-column positional layout: Graceful/Farmer mannequins, cape/diving/diary blocks, jewellery families sorted by charge, rune matrix alongside staves and tomes, tablets, tools, compost, protection payments and crop-specific seed groups.

@@ -14,8 +14,8 @@ final class BankShelfLayout
     static final int PERMANENT=20,CHARGED=21,CONSUMABLE=22,TOOLS=23,COMPOST=24,SEEDS=25;
     private static final Pattern CHARGE=Pattern.compile("\\s*\\(([0-9]+)\\)$");
     private static final String[] RUNES={"air","water","earth","fire","law","nature","astral","cosmic","mist","dust","mud","smoke","steam","lava","blood","soul","death","mind","body"};
-    private static final String[] TOOL_ORDER={"spade","rake","seed dibber","gardening trowel","watering can","gricoller","magic secateurs","secateurs","herb sack","silklined herb sack","seed box","reagent pouch","plant cure","axe","basket","sack","plant pot","hammer","chisel","clockwork","bird house","birdhouse","logs","bucket"};
-    private static final String[] COMPOST_ORDER={"bottomless compost","ultracompost","supercompost","compost","volcanic ash","saltpetre","coins"};
+    private static final String[] TOOL_ORDER={"spade","rake","seed dibber","gardening trowel","watering can","gricoller","magic secateurs","secateurs","herb sack","silklined herb sack","seed box","reagent pouch","plant cure","axe","basket","sack","hammer","chisel","clockwork","bird house","birdhouse","logs"};
+    private static final String[] COMPOST_ORDER={"empty bucket","bucket","empty bottomless compost","bottomless compost","compost","supercompost","ultracompost","volcanic ash","compost potion","saltpetre","coins"};
     private BankShelfLayout(){}
     private static String name(IntFunction<String> names,int id){return Objects.toString(names.apply(id),"").toLowerCase(Locale.ROOT);}
     private static String family(String n){return CHARGE.matcher(n).replaceFirst("").replaceFirst(" \\(i\\)$","").trim();}
@@ -112,8 +112,10 @@ final class BankShelfLayout
             for(int id:cells)out.add(id);block(out,spare);
         }
         block(out,take(left,id->consumableTeleport(name(names,id))||name(names,id).equals("master scroll book"),byName));
-        block(out,take(left,id->{String n=name(names,id);return order(n,TOOL_ORDER)<TOOL_ORDER.length||n.contains(" axe")||n.endsWith(" logs")||n.contains("plant pot")||n.contains("watering can");},Comparator.comparingInt((Integer id)->order(name(names,id),TOOL_ORDER)).thenComparing(byName)));
+        block(out,take(left,id->{String n=name(names,id);return order(n,TOOL_ORDER)<TOOL_ORDER.length||n.contains(" axe")||n.endsWith(" logs")||n.contains("watering can");},Comparator.comparingInt((Integer id)->order(name(names,id),TOOL_ORDER)).thenComparing(byName)));
         block(out,take(left,id->order(name(names,id),COMPOST_ORDER)<COMPOST_ORDER.length||name(names,id).contains("compost"),Comparator.comparingInt((Integer id)->order(name(names,id),COMPOST_ORDER)).thenComparing(byName)));
+        // Pot/seedling preparation is a separate shelf, not a new crop allocation.
+        block(out,take(left,id->CuratedBank.saplingPreparation(name(names,id)),Comparator.comparingInt((Integer id)->{String n=name(names,id);return n.equals("plant pot")||n.equals("empty plant pot")?0:n.equals("filled plant pot")?1:n.endsWith("(w)")?3:2;}).thenComparing(byName)));
         Map<String,List<Integer>> crops=new TreeMap<>();
         for(int id:take(left,id->{String n=name(names,id);return CropCatalog.findByItemId(id)!=null||n.endsWith(" seed")||n.endsWith(" seeds")||n.contains("sapling")||n.endsWith(" spore")||n.endsWith(" spores");},byName))
         {

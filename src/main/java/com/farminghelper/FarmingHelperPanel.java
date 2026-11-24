@@ -213,7 +213,7 @@ final class FarmingHelperPanel extends PluginPanel
             fillIndividual(results);addRow(results);
         }
         addRow(navRow("Manual Run","Choose your own patches",LIST,-1,false,this::openManual));
-        JLabel version=new JLabel("Farming Helper · v0.33",SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
+        JLabel version=new JLabel("Farming Helper · v0.34",SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
         footer.add(version);finish();
     }
     private static int patchSprite(PatchType type)

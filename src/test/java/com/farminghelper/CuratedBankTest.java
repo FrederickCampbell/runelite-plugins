@@ -27,6 +27,12 @@ public class CuratedBankTest
         for(int id:new int[]{13122,13124,13140,13115,13280,13342,9948,19476})assertFalse("Missing exact teleport ID "+id,CuratedBank.teleportRows(id,x->"").isEmpty());
         assertTrue(CuratedBank.equipment("Reagent pouch",false));
     }
+    @Test public void preparationShelfIsNotBirdhouseShelf()
+    {
+        for(String n:List.of("Plant pot","Empty plant pot","Filled plant pot","Magic seedling","Magic seedling (w)","Volcanic ash","Compost potion(4)","Empty bottomless compost bucket","Bucket"))
+        {assertTrue(n,CuratedBank.equipment(n,false));assertFalse(n,CuratedBank.equipment(n,true));}
+        assertFalse(CuratedBank.equipment("Hammer",false));assertFalse(CuratedBank.equipment("Chisel",false));
+    }
     @Test public void restrictionsAndModes()
     {
         assertEquals(Set.of(4251,13393),CuratedBank.blocked("4251, 13393@42, 11105:5"));
