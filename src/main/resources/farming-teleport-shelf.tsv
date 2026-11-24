@@ -1,0 +1,659 @@
+# Selected farming transport candidates from Skretzo/shortest-path, teleportation_items.tsv and quetzal_whistle.tsv. See LICENSE-SHORTEST-PATH.
+13121	13121	F			4458=1		item	Ardougne cloak: Kandarin Monastery
+13122	13121	F			4458=1		item	Ardougne cloak: Kandarin Monastery
+13123	13121	F			4458=1		item	Ardougne cloak: Kandarin Monastery
+13124	13121	F			4458=1		item	Ardougne cloak: Kandarin Monastery
+20760	13121	F			4458=1		item	Ardougne cloak: Kandarin Monastery
+13122	13121	T			4459=1;6069<3		item	Ardougne cloak: Ardougne Farm
+13123	13121	T			4460=1;6069<5		item	Ardougne cloak: Ardougne Farm
+13124	13121	F			4461=1		item	Ardougne cloak: Ardougne Farm
+20760	13121	F			4461=1		item	Ardougne cloak: Ardougne Farm
+13126	13126	T			4496=1;4552<3		item	Explorer's ring 2: Teleport
+13127	13126	F			4497=1		item	Explorer's ring: Teleport
+13128	13126	F			4497=1		item	Explorer's ring: Teleport
+22941	22941	T			7925=1;7937<3		item	Rada's blessing: Kourend Woodland
+22943	22941	T			7926=1;7937<5		item	Rada's blessing: Kourend Woodland
+22945	22941	F			7927=1		item	Rada's blessing: Kourend Woodland
+22947	22941	F			7927=1		item	Rada's blessing: Kourend Woodland
+22945	22941	T			7927=1;7938<3		item	Rada's blessing: Mount Karuulm
+22947	22941	F			7928=1		item	Rada's blessing: Mount Karuulm
+3853	3853	T					item	Games necklace: Barbarian Outpost
+3855	3853	T					item	Games necklace: Barbarian Outpost
+3857	3853	T					item	Games necklace: Barbarian Outpost
+3859	3853	T					item	Games necklace: Barbarian Outpost
+3861	3853	T					item	Games necklace: Barbarian Outpost
+3863	3853	T					item	Games necklace: Barbarian Outpost
+3865	3853	T					item	Games necklace: Barbarian Outpost
+3867	3853	T					item	Games necklace: Barbarian Outpost
+3853	3853	T					item	Games necklace: Burthorpe
+3855	3853	T					item	Games necklace: Burthorpe
+3857	3853	T					item	Games necklace: Burthorpe
+3859	3853	T					item	Games necklace: Burthorpe
+3861	3853	T					item	Games necklace: Burthorpe
+3863	3853	T					item	Games necklace: Burthorpe
+3865	3853	T					item	Games necklace: Burthorpe
+3867	3853	T					item	Games necklace: Burthorpe
+3853	3853	T					item	Games necklace: Corporeal Beast
+3855	3853	T					item	Games necklace: Corporeal Beast
+3857	3853	T					item	Games necklace: Corporeal Beast
+3859	3853	T					item	Games necklace: Corporeal Beast
+3861	3853	T					item	Games necklace: Corporeal Beast
+3863	3853	T					item	Games necklace: Corporeal Beast
+3865	3853	T					item	Games necklace: Corporeal Beast
+3867	3853	T					item	Games necklace: Corporeal Beast
+3853	3853	T			451>1		item	Games necklace: Tears of Guthix
+3855	3853	T			451>1		item	Games necklace: Tears of Guthix
+3857	3853	T			451>1		item	Games necklace: Tears of Guthix
+3859	3853	T			451>1		item	Games necklace: Tears of Guthix
+3861	3853	T			451>1		item	Games necklace: Tears of Guthix
+3863	3853	T			451>1		item	Games necklace: Tears of Guthix
+3865	3853	T			451>1		item	Games necklace: Tears of Guthix
+3867	3853	T			451>1		item	Games necklace: Tears of Guthix
+3853	3853	T			5619>0		item	Games necklace: Wintertodt
+3855	3853	T			5619>0		item	Games necklace: Wintertodt
+3857	3853	T			5619>0		item	Games necklace: Wintertodt
+3859	3853	T			5619>0		item	Games necklace: Wintertodt
+3861	3853	T			5619>0		item	Games necklace: Wintertodt
+3863	3853	T			5619>0		item	Games necklace: Wintertodt
+3865	3853	T			5619>0		item	Games necklace: Wintertodt
+3867	3853	T			5619>0		item	Games necklace: Wintertodt
+2566	2552	T					item	Ring of dueling: Emir's Arena
+2564	2552	T					item	Ring of dueling: Emir's Arena
+2562	2552	T					item	Ring of dueling: Emir's Arena
+2560	2552	T					item	Ring of dueling: Emir's Arena
+2558	2552	T					item	Ring of dueling: Emir's Arena
+2556	2552	T					item	Ring of dueling: Emir's Arena
+2554	2552	T					item	Ring of dueling: Emir's Arena
+2552	2552	T					item	Ring of dueling: Emir's Arena
+2566	2552	T					item	Ring of dueling: Castle Wars
+2564	2552	T					item	Ring of dueling: Castle Wars
+2562	2552	T					item	Ring of dueling: Castle Wars
+2560	2552	T					item	Ring of dueling: Castle Wars
+2558	2552	T					item	Ring of dueling: Castle Wars
+2556	2552	T					item	Ring of dueling: Castle Wars
+2554	2552	T					item	Ring of dueling: Castle Wars
+2552	2552	T					item	Ring of dueling: Castle Wars
+2566	2552	T					item	Ring of dueling: Ferox Enclave
+2564	2552	T					item	Ring of dueling: Ferox Enclave
+2562	2552	T					item	Ring of dueling: Ferox Enclave
+2560	2552	T					item	Ring of dueling: Ferox Enclave
+2558	2552	T					item	Ring of dueling: Ferox Enclave
+2556	2552	T					item	Ring of dueling: Ferox Enclave
+2554	2552	T					item	Ring of dueling: Ferox Enclave
+2552	2552	T					item	Ring of dueling: Ferox Enclave
+2566	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+2564	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+2562	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+2560	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+2558	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+2556	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+2554	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+2552	2552	T			11410>8		item	Ring of dueling: Fortis Colosseum
+11118	11118	T					item	Combat bracelet: Warriors' Guild
+11120	11118	T					item	Combat bracelet: Warriors' Guild
+11122	11118	T					item	Combat bracelet: Warriors' Guild
+11124	11118	T					item	Combat bracelet: Warriors' Guild
+11972	11118	T					item	Combat bracelet: Warriors' Guild
+11974	11118	T					item	Combat bracelet: Warriors' Guild
+11118	11118	T					item	Combat bracelet: Champions' Guild
+11120	11118	T					item	Combat bracelet: Champions' Guild
+11122	11118	T					item	Combat bracelet: Champions' Guild
+11124	11118	T					item	Combat bracelet: Champions' Guild
+11972	11118	T					item	Combat bracelet: Champions' Guild
+11974	11118	T					item	Combat bracelet: Champions' Guild
+11118	11118	T					item	Combat bracelet: Monastery
+11120	11118	T					item	Combat bracelet: Monastery
+11122	11118	T					item	Combat bracelet: Monastery
+11124	11118	T					item	Combat bracelet: Monastery
+11972	11118	T					item	Combat bracelet: Monastery
+11974	11118	T					item	Combat bracelet: Monastery
+11118	11118	T					item	Combat bracelet: Ranging Guild
+11120	11118	T					item	Combat bracelet: Ranging Guild
+11122	11118	T					item	Combat bracelet: Ranging Guild
+11124	11118	T					item	Combat bracelet: Ranging Guild
+11972	11118	T					item	Combat bracelet: Ranging Guild
+11974	11118	T					item	Combat bracelet: Ranging Guild
+11105	11105	T					item	Skills necklace: Fishing Guild
+11107	11105	T					item	Skills necklace: Fishing Guild
+11109	11105	T					item	Skills necklace: Fishing Guild
+11111	11105	T					item	Skills necklace: Fishing Guild
+11968	11105	T					item	Skills necklace: Fishing Guild
+11970	11105	T					item	Skills necklace: Fishing Guild
+11105	11105	T					item	Skills necklace: Mining Guild
+11107	11105	T					item	Skills necklace: Mining Guild
+11109	11105	T					item	Skills necklace: Mining Guild
+11111	11105	T					item	Skills necklace: Mining Guild
+11968	11105	T					item	Skills necklace: Mining Guild
+11970	11105	T					item	Skills necklace: Mining Guild
+11105	11105	T					item	Skills necklace: Crafting Guild
+11107	11105	T					item	Skills necklace: Crafting Guild
+11109	11105	T					item	Skills necklace: Crafting Guild
+11111	11105	T					item	Skills necklace: Crafting Guild
+11968	11105	T					item	Skills necklace: Crafting Guild
+11970	11105	T					item	Skills necklace: Crafting Guild
+11105	11105	T					item	Skills necklace: Cooking Guild
+11107	11105	T					item	Skills necklace: Cooking Guild
+11109	11105	T					item	Skills necklace: Cooking Guild
+11111	11105	T					item	Skills necklace: Cooking Guild
+11968	11105	T					item	Skills necklace: Cooking Guild
+11970	11105	T					item	Skills necklace: Cooking Guild
+11105	11105	T					item	Skills necklace: Woodcutting Guild
+11107	11105	T					item	Skills necklace: Woodcutting Guild
+11109	11105	T					item	Skills necklace: Woodcutting Guild
+11111	11105	T					item	Skills necklace: Woodcutting Guild
+11968	11105	T					item	Skills necklace: Woodcutting Guild
+11970	11105	T					item	Skills necklace: Woodcutting Guild
+11105	11105	T					item	Skills necklace: Farming Guild
+11107	11105	T					item	Skills necklace: Farming Guild
+11109	11105	T					item	Skills necklace: Farming Guild
+11111	11105	T					item	Skills necklace: Farming Guild
+11968	11105	T					item	Skills necklace: Farming Guild
+11970	11105	T					item	Skills necklace: Farming Guild
+11105	11105	T	45 Farming				item	Skills necklace: Farming Guild
+11107	11105	T	45 Farming				item	Skills necklace: Farming Guild
+11109	11105	T	45 Farming				item	Skills necklace: Farming Guild
+11111	11105	T	45 Farming				item	Skills necklace: Farming Guild
+11968	11105	T	45 Farming				item	Skills necklace: Farming Guild
+11970	11105	T	45 Farming				item	Skills necklace: Farming Guild
+1706	1706	T					item	Amulet of glory: Edgeville
+1708	1706	T					item	Amulet of glory: Edgeville
+1710	1706	T					item	Amulet of glory: Edgeville
+1712	1706	T					item	Amulet of glory: Edgeville
+11976	1706	T					item	Amulet of glory: Edgeville
+11978	1706	T					item	Amulet of glory: Edgeville
+10360	1706	T					item	Amulet of glory: Edgeville
+10358	1706	T					item	Amulet of glory: Edgeville
+10356	1706	T					item	Amulet of glory: Edgeville
+10354	1706	T					item	Amulet of glory: Edgeville
+11966	1706	T					item	Amulet of glory: Edgeville
+11964	1706	T					item	Amulet of glory: Edgeville
+1706	1706	T					item	Amulet of glory: Karamja
+1708	1706	T					item	Amulet of glory: Karamja
+1710	1706	T					item	Amulet of glory: Karamja
+1712	1706	T					item	Amulet of glory: Karamja
+11976	1706	T					item	Amulet of glory: Karamja
+11978	1706	T					item	Amulet of glory: Karamja
+10360	1706	T					item	Amulet of glory: Karamja
+10358	1706	T					item	Amulet of glory: Karamja
+10356	1706	T					item	Amulet of glory: Karamja
+10354	1706	T					item	Amulet of glory: Karamja
+11966	1706	T					item	Amulet of glory: Karamja
+11964	1706	T					item	Amulet of glory: Karamja
+1706	1706	T					item	Amulet of glory: Draynor Village
+1708	1706	T					item	Amulet of glory: Draynor Village
+1710	1706	T					item	Amulet of glory: Draynor Village
+1712	1706	T					item	Amulet of glory: Draynor Village
+11976	1706	T					item	Amulet of glory: Draynor Village
+11978	1706	T					item	Amulet of glory: Draynor Village
+10360	1706	T					item	Amulet of glory: Draynor Village
+10358	1706	T					item	Amulet of glory: Draynor Village
+10356	1706	T					item	Amulet of glory: Draynor Village
+10354	1706	T					item	Amulet of glory: Draynor Village
+11966	1706	T					item	Amulet of glory: Draynor Village
+11964	1706	T					item	Amulet of glory: Draynor Village
+1706	1706	T					item	Amulet of glory: Al Kharid
+1708	1706	T					item	Amulet of glory: Al Kharid
+1710	1706	T					item	Amulet of glory: Al Kharid
+1712	1706	T					item	Amulet of glory: Al Kharid
+11976	1706	T					item	Amulet of glory: Al Kharid
+11978	1706	T					item	Amulet of glory: Al Kharid
+10360	1706	T					item	Amulet of glory: Al Kharid
+10358	1706	T					item	Amulet of glory: Al Kharid
+10356	1706	T					item	Amulet of glory: Al Kharid
+10354	1706	T					item	Amulet of glory: Al Kharid
+11966	1706	T					item	Amulet of glory: Al Kharid
+11964	1706	T					item	Amulet of glory: Al Kharid
+19707	19707	F					item	Amulet of glory: Edgeville
+19707	19707	F					item	Amulet of glory: Karamja
+19707	19707	F					item	Amulet of glory: Draynor Village
+19707	19707	F					item	Amulet of glory: Al Kharid
+11988	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+11986	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+11984	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+11982	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+11980	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+20790	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+20789	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+20788	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+20787	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+20786	11980	T		Throne of Miscellania		359=100	item	Ring of wealth: Miscellania
+11988	11980	T					item	Ring of wealth: Grand Exchange
+11986	11980	T					item	Ring of wealth: Grand Exchange
+11984	11980	T					item	Ring of wealth: Grand Exchange
+11982	11980	T					item	Ring of wealth: Grand Exchange
+11980	11980	T					item	Ring of wealth: Grand Exchange
+20790	11980	T					item	Ring of wealth: Grand Exchange
+20789	11980	T					item	Ring of wealth: Grand Exchange
+20788	11980	T					item	Ring of wealth: Grand Exchange
+20787	11980	T					item	Ring of wealth: Grand Exchange
+20786	11980	T					item	Ring of wealth: Grand Exchange
+11988	11980	T					item	Ring of wealth: Falador Park
+11986	11980	T					item	Ring of wealth: Falador Park
+11984	11980	T					item	Ring of wealth: Falador Park
+11982	11980	T					item	Ring of wealth: Falador Park
+11980	11980	T					item	Ring of wealth: Falador Park
+20790	11980	T					item	Ring of wealth: Falador Park
+20789	11980	T					item	Ring of wealth: Falador Park
+20788	11980	T					item	Ring of wealth: Falador Park
+20787	11980	T					item	Ring of wealth: Falador Park
+20786	11980	T					item	Ring of wealth: Falador Park
+11988	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+11986	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+11984	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+11982	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+11980	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+20790	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+20789	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+20788	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+20787	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+20786	11980	T		Between a Rock...	299=10		item	Ring of wealth: Dondakan
+11866	11866	T					item	Slayer ring: Stronghold
+11867	11866	T					item	Slayer ring: Stronghold
+11868	11866	T					item	Slayer ring: Stronghold
+11869	11866	T					item	Slayer ring: Stronghold
+11870	11866	T					item	Slayer ring: Stronghold
+11871	11866	T					item	Slayer ring: Stronghold
+11872	11866	T					item	Slayer ring: Stronghold
+11873	11866	T					item	Slayer ring: Stronghold
+11866	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11867	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11868	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11869	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11870	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11871	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11872	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11873	11866	T		Priest in Peril			item	Slayer ring: Slayer Tower
+11866	11866	T					item	Slayer ring: Fremennik
+11867	11866	T					item	Slayer ring: Fremennik
+11868	11866	T					item	Slayer ring: Fremennik
+11869	11866	T					item	Slayer ring: Fremennik
+11870	11866	T					item	Slayer ring: Fremennik
+11871	11866	T					item	Slayer ring: Fremennik
+11872	11866	T					item	Slayer ring: Fremennik
+11873	11866	T					item	Slayer ring: Fremennik
+11866	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11867	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11868	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11869	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11870	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11871	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11872	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11873	11866	T		Haunted Mine			item	Slayer ring: Tarn's Lair
+11866	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11867	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11868	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11869	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11870	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11871	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11872	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11873	11866	T		Mourning's End Part II			item	Slayer ring: Dark Beasts
+11866	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11867	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11868	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11869	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11870	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11871	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11872	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11873	11866	T		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+21268	21268	F					item	Slayer ring: Stronghold
+21268	21268	F		Priest in Peril			item	Slayer ring: Slayer Tower
+21268	21268	F					item	Slayer ring: Fremennik
+21268	21268	F		Haunted Mine			item	Slayer ring: Tarn's Lair
+21268	21268	F		Mourning's End Part II			item	Slayer ring: Dark Beasts
+21268	21268	F		Fallen From Grace			item	Slayer ring: Wyrmscraig Cavern
+11190	11190	T					item	Digsite pendant: Digsite
+11191	11190	T					item	Digsite pendant: Digsite
+11192	11190	T					item	Digsite pendant: Digsite
+11193	11190	T					item	Digsite pendant: Digsite
+11194	11190	T					item	Digsite pendant: Digsite
+11190	11190	T		Bone Voyage			item	Digsite pendant: Fossil Island
+11191	11190	T		Bone Voyage			item	Digsite pendant: Fossil Island
+11192	11190	T		Bone Voyage			item	Digsite pendant: Fossil Island
+11193	11190	T		Bone Voyage			item	Digsite pendant: Fossil Island
+11194	11190	T		Bone Voyage			item	Digsite pendant: Fossil Island
+11190	11190	T		Dragon Slayer II			item	Digsite pendant: Lithkren
+11191	11190	T		Dragon Slayer II			item	Digsite pendant: Lithkren
+11192	11190	T		Dragon Slayer II			item	Digsite pendant: Lithkren
+11193	11190	T		Dragon Slayer II			item	Digsite pendant: Lithkren
+11194	11190	T		Dragon Slayer II			item	Digsite pendant: Lithkren
+21146	21146	T					item	Necklace of passage: Wizards' Tower
+21149	21146	T					item	Necklace of passage: Wizards' Tower
+21151	21146	T					item	Necklace of passage: Wizards' Tower
+21153	21146	T					item	Necklace of passage: Wizards' Tower
+21155	21146	T					item	Necklace of passage: Wizards' Tower
+21146	21146	T					item	Necklace of passage: The Outpost
+21149	21146	T					item	Necklace of passage: The Outpost
+21151	21146	T					item	Necklace of passage: The Outpost
+21153	21146	T					item	Necklace of passage: The Outpost
+21155	21146	T					item	Necklace of passage: The Outpost
+21146	21146	T					item	Necklace of passage: Eagle's Eyrie
+21149	21146	T					item	Necklace of passage: Eagle's Eyrie
+21151	21146	T					item	Necklace of passage: Eagle's Eyrie
+21153	21146	T					item	Necklace of passage: Eagle's Eyrie
+21155	21146	T					item	Necklace of passage: Eagle's Eyrie
+21146	21146	T		Fallen From Grace			item	Necklace of passage: Wyrmscraig
+21149	21146	T		Fallen From Grace			item	Necklace of passage: Wyrmscraig
+21151	21146	T		Fallen From Grace			item	Necklace of passage: Wyrmscraig
+21153	21146	T		Fallen From Grace			item	Necklace of passage: Wyrmscraig
+21155	21146	T		Fallen From Grace			item	Necklace of passage: Wyrmscraig
+8013	8013	T			4744=0		item	Teleport to House tablet: Inside the house
+8013	8013	T			4744=1		item	Teleport to House tablet (Inside): Inside the house
+8013	8013	T			2187=1;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=1;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=2;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=2;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=3;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=3;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=4;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=4;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=5;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=5;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=6;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=6;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=8;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=8;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=9;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=9;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8013	8013	T			2187=13;4744=1		item	Teleport to House tablet: Outside the house
+8013	8013	T			2187=13;4744=0		item	Teleport to House tablet (Outside): Outside the house
+8007	8007	T					item	Varrock tablet
+8007	8007	T			4480=1		item	Varrock tablet: GE
+8009	8007	T					item	Falador tablet
+8008	8007	T					item	Lumbridge tablet
+8010	8007	T					item	Camelot tablet
+8010	8007	T			4477=1		item	Camelot tablet: Seers' Village
+28824	8007	T		Twilight's Promise			item	Civitas illa Fortis tablet
+8011	8007	T		Plague City			item	Ardougne tablet
+8012	8007	T		Watchtower			item	Watchtower tablet
+8012	8007	T		Watchtower	4460=1		item	Watchtower tablet: Yanille
+11741	8007	T					item	Rimmington tablet
+11742	8007	T					item	Taverley tablet
+11745	8007	T					item	Brimhaven tablet
+11746	8007	T					item	Yanille tablet
+19651	8007	T					item	Hosidius tablet
+23771	8007	T					item	Prifddinas tablet
+24961	8007	T					item	Catherby tablet
+19615	8007	T					item	Draynor Manor tablet
+19619	8007	T		Priest in Peril			item	Salve Graveyard tablet
+19621	8007	T		Priest in Peril			item	Fenkenstrain's Castle tablet
+19625	8007	T		The Great Brain Robbery			item	Harmony Island tablet
+12409	12402	T		Tai Bwo Wannai Trio			item	Tai bwo wannai teleport
+21389	12402	T		Tai Bwo Wannai Trio	5679>0		item	Master scroll book: Tai bwo wannai teleport
+9780	9780	F	99 Crafting				item	Crafting cape: Teleport
+9781	9780	F	99 Crafting				item	Crafting cape: Teleport
+9789	9789	F	99 Construction		4744=0		item	Construction cape: Tele to POH
+9790	9789	F	99 Construction		4744=0		item	Construction cape: Tele to POH
+9789	9789	F	99 Construction		2187=1;4744=1		item	Construction cape: Rimmington
+9790	9789	F	99 Construction		2187=1;4744=1		item	Construction cape: Rimmington
+9789	9789	F	99 Construction		2187=2;4744=1		item	Construction cape: Taverley
+9790	9789	F	99 Construction		2187=2;4744=1		item	Construction cape: Taverley
+9789	9789	F	99 Construction		2187=3;4744=1		item	Construction cape: Pollnivneach
+9790	9789	F	99 Construction		2187=3;4744=1		item	Construction cape: Pollnivneach
+9789	9789	F	99 Construction		2187=4;4744=1		item	Construction cape: Rellekka
+9790	9789	F	99 Construction		2187=4;4744=1		item	Construction cape: Rellekka
+9789	9789	F	99 Construction		2187=5;4744=1		item	Construction cape: Brimhaven
+9790	9789	F	99 Construction		2187=5;4744=1		item	Construction cape: Brimhaven
+9789	9789	F	99 Construction		2187=6;4744=1		item	Construction cape: Yanille
+9790	9789	F	99 Construction		2187=6;4744=1		item	Construction cape: Yanille
+9789	9789	F	99 Construction		2187=8;4744=1		item	Construction cape: Hosidius
+9790	9789	F	99 Construction		2187=8;4744=1		item	Construction cape: Hosidius
+9789	9789	F	99 Construction		2187=9;4744=1		item	Construction cape: Prifddinas
+9790	9789	F	99 Construction		2187=9;4744=1		item	Construction cape: Prifddinas
+9789	9789	F	99 Construction		2187=13;4744=1		item	Construction cape: Aldarin
+9790	9789	F	99 Construction		2187=13;4744=1		item	Construction cape: Aldarin
+9789	9789	F	99 Construction				item	Construction cape: Rimmington
+9790	9789	F	99 Construction				item	Construction cape: Rimmington
+9789	9789	F	99 Construction				item	Construction cape: Taverley
+9790	9789	F	99 Construction				item	Construction cape: Taverley
+9789	9789	F	99 Construction				item	Construction cape: Pollnivneach
+9790	9789	F	99 Construction				item	Construction cape: Pollnivneach
+9789	9789	F	99 Construction				item	Construction cape: Hosidius
+9790	9789	F	99 Construction				item	Construction cape: Hosidius
+9789	9789	F	99 Construction				item	Construction cape: Rellekka
+9790	9789	F	99 Construction				item	Construction cape: Rellekka
+9789	9789	F	99 Construction				item	Construction cape: Brimhaven
+9790	9789	F	99 Construction				item	Construction cape: Brimhaven
+9789	9789	F	99 Construction				item	Construction cape: Yanille
+9790	9789	F	99 Construction				item	Construction cape: Yanille
+9789	9789	F	99 Construction				item	Construction cape: Prifddinas
+9790	9789	F	99 Construction				item	Construction cape: Prifddinas
+9789	9789	F	99 Construction				item	Construction cape: Aldarin
+9790	9789	F	99 Construction				item	Construction cape: Aldarin
+9810	9810	F	99 Farming				item	Farming cape: Farming Guild
+9811	9810	F	99 Farming				item	Farming cape: Farming Guild
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 1. Two-pints
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 1. Two-pints
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 2. Jarr
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 2. Jarr
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 3. Sir Rebral
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 3. Sir Rebral
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 4. Thorodin
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 4. Thorodin
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 5. Flax keeper
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 5. Flax keeper
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 6. Pirate Jackie the Fruit
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 6. Pirate Jackie the Fruit
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 7. Kaleb Paramaya
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 7. Kaleb Paramaya
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 8. Jungle forester
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 8. Jungle forester
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 9. TzHaar-Mej
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: 9. TzHaar-Mej
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: A. Elise
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: A. Elise
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: B. Mikasi
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: B. Mikasi
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: C. Le-sabrè
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: C. Le-sabrè
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: D. Toby
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: D. Toby
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: E. Lesser Fanatic
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: E. Lesser Fanatic
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: F. Elder Gnome child
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: F. Elder Gnome child
+13069	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: G. Twiggy O'Korn
+19476	13069	F			4461=1;4465=1;4469=1;4474=1;4478=1;4482=1;4486=1;4490=1;4494=1;4498=1;4566=1		item	Achievement diary cape: G. Twiggy O'Korn
+4251	4251	F					item	Ectophial
+4252	4251	F					item	Ectophial
+6099	6099	T					item	Teleport crystal: Lletya
+6100	6099	T					item	Teleport crystal: Lletya
+6101	6099	T					item	Teleport crystal: Lletya
+6102	6099	T					item	Teleport crystal: Lletya
+13102	6099	T					item	Teleport crystal: Lletya
+6099	6099	T		Song of the Elves			item	Teleport crystal: Prifddinas
+6100	6099	T		Song of the Elves			item	Teleport crystal: Prifddinas
+6101	6099	T		Song of the Elves			item	Teleport crystal: Prifddinas
+6102	6099	T		Song of the Elves			item	Teleport crystal: Prifddinas
+13102	6099	T		Song of the Elves			item	Teleport crystal: Prifddinas
+23946	23946	F					item	Eternal teleport crystal: Lletya
+23946	23946	F		Song of the Elves			item	Eternal teleport crystal: Prifddinas
+19564	19564	F					item	Royal seed pod: Grand Tree
+21760	21760	T			6028=1;6035>0		item	Kharedst's memoirs: Lunch by the Lancalliums
+21760	21760	T			6038=1;6035>0		item	Kharedst's memoirs: The Fisher's Flute
+21760	21760	T			6359=1;6035>0		item	Kharedst's memoirs: History and Hearsay
+21760	21760	T			7801=1;6035>0		item	Kharedst's memoirs: Jewelry of Jubilation
+21760	21760	T			7857=1;6035>0		item	Kharedst's memoirs: A Dark Disposition
+25818	25818	T			6028=1;6035>0		item	Book of the dead: Lunch by the Lancalliums
+25818	25818	T			6038=1;6035>0		item	Book of the dead: The Fisher's Flute
+25818	25818	T			6359=1;6035>0		item	Book of the dead: History and Hearsay
+25818	25818	T			7801=1;6035>0		item	Book of the dead: Jewelry of Jubilation
+25818	25818	T			7857=1;6035>0		item	Book of the dead: A Dark Disposition
+22601	22601	T		Making Friends with My Arm			item	Stony basalt
+22601	22601	T	73 Agility	Making Friends with My Arm	4493=1		item	Stony basalt: Roof
+22599	22599	T		Making Friends with My Arm			item	Icy basalt
+13393	13393	T					item	Xeric's talisman: 1. Xeric's Lookout
+13393	13393	T					item	Xeric's talisman: 2. Xeric's Glade
+13393	13393	T					item	Xeric's talisman: 3. Xeric's Inferno
+13393	13393	T					item	Xeric's talisman: 4. Xeric's Heart
+13660	13660	T					item	Chronicle
+29893	29893	T			11175=1		item	Pendant of ates: 1. The Darkfrost
+29893	29893	T			11176=1		item	Pendant of ates: 2. Twilight Temple
+29893	29893	T			11177=1		item	Pendant of ates: 3. Ralos' Rise
+29893	29893	T			11178=1		item	Pendant of ates: 4. North Aldarin
+29893	29893	T			16752=1		item	Pendant of ates: 5. Kastori
+29893	29893	T			16757=1		item	Pendant of ates: 6. Nemus Retreat
+32399	32399	T			19543=1		item	Sailors' amulet: Deepfin Point
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Tree Gnome Village
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Gnome Stronghold
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Battlefield of Khazard
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Grand Exchange
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Feldip Hills
+28564	28564	F		Tree Gnome Village;Song of the Elves			item	Trinket of fairies: Spirit Tree - Prifddinas
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Port Sarim (planted)
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Etceteria (planted)
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Brimhaven (planted)
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Hosidius (planted)
+28564	28564	F		Tree Gnome Village			item	Trinket of fairies: Spirit Tree - Farming Guild (planted)
+28564	28564	F		The Path of Glouphrie			item	Trinket of fairies: Spirit Tree - Poison Waste
+28564	28564	F		Pandemonium			item	Trinket of fairies: Spirit Tree - Laguna Aurorae
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AIQ (Mudskipper Point)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AIR (South-east of Ardougne)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AIS (Auburn Valley)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AJR (Slayer cave SE of Rellekka)
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Fairy Ring - AJP (Avium Savannah)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AJS (Penguins near Miscellania)
+28564	28564	F		Death to the Dorgeshuun			item	Trinket of fairies: Fairy Ring - AJQ (Cave south of Dorgesh-Kaan)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AKP (Necropolis)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AKQ (Piscatoris Hunter area)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AKS (Feldip Hunter area)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - AKR (Hosidius Vinery)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - ALP (Lighthouse)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - ALQ (Haunted Woods east of Canifis)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - ALS (McGrubor's Wood)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BIP (South-west of Mort Myre)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BIQ (Near Kalphite Hive)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BIS (Ardougne Zoo unicorns)
+28564	28564	F		Holy Grail			item	Trinket of fairies: Fairy Ring - BJR (Fisher Realm)
+28564	28564	F		Regicide			item	Trinket of fairies: Fairy Ring - BJS (Near Zul-Andra)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BJP (Isle of Souls)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BKP (South of Castle Wars)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BKR (Mort Myre south of Canifis)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BKS (Zanaris)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BKQ (Enchanted Valley)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BLP (TzHaar area)
+28564	28564	F			13599>49		item	Trinket of fairies: Fairy Ring - BLQ (Yu'biusk)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BLR (Legends' Guild)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - BLS (South of Mount Quidamortem)
+28564	28564	F		The Fremennik Trials			item	Trinket of fairies: Fairy Ring - CIP (Miscellania)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CIQ (North-west of Yanille)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CIR (South of Mount Karuulm)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CIS (Arceuus Library)
+28564	28564	F		Troubled Tortugans			item	Trinket of fairies: Fairy Ring - CJQ (The Great Conch)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CJR (Sinclair Mansion)
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Fairy Ring - CKQ (Aldarin)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CKR (South of Tai Bwo Wannai)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CKS (Canifis)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CKP (Cosmic Entity's Plane)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CLP (Draynor Island)
+28564	28564	F		Monkey Madness I			item	Trinket of fairies: Fairy Ring - CLR (Ape Atoll)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - CLS (Hazelmere's home)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DIP (Abyssal Nexus)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DIR (Gorak's Plane)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DIS (Wizard's Tower)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DJP (Tower of Life)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DJR (Chasm of Fire)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DKR (Edgeville)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DKP (Gnome Glider)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DKS (Polar Hunter area)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DLQ (North of Nardah)
+28564	28564	F					item	Trinket of fairies: Fairy Ring - DLR (Poison Waste south of Isafdar)
+28564	28564	F		In Search of the Myreque			item	Trinket of fairies: Fairy Ring - DLS (Myreque hideout)
+28564	28564	F					item	Trinket of fairies: Tool Lep - Al Kharid
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Tool Lep - Aldarin
+28564	28564	F					item	Trinket of fairies: Tool Lep - Ardougne Monastery
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Tool Lep - Auburnvale
+28564	28564	F					item	Trinket of fairies: Tool Lep - Brimhaven
+28564	28564	F					item	Trinket of fairies: Tool Lep - West of Canifis
+28564	28564	F					item	Trinket of fairies: Tool Lep - Catherby
+28564	28564	F					item	Trinket of fairies: Tool Lep - Champions Guild
+28564	28564	F					item	Trinket of fairies: Tool Lep - Draynor Manor
+28564	28564	F					item	Trinket of fairies: Tool Lep - Entrana
+28564	28564	F					item	Trinket of fairies: Tool Lep - Etceteria
+28564	28564	F					item	Trinket of fairies: Tool Lep - Falador Farm
+28564	28564	F					item	Trinket of fairies: Tool Lep - Falador Park
+28564	28564	F					item	Trinket of fairies: Tool Lep - Farming Guild
+28564	28564	F					item	Trinket of fairies: Tool Lep - Fossil Island
+28564	28564	F		The Great Brain Robbery			item	Trinket of fairies: Tool Lep - Harmony Island
+28564	28564	F					item	Trinket of fairies: Tool Lep - Hosidius Allotment
+28564	28564	F					item	Trinket of fairies: Tool Lep - Hosidius Saltpetre
+28564	28564	F					item	Trinket of fairies: Tool Lep - Hosidius Vinery
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Tool Lep - Kastori North
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Tool Lep - Kastori South
+28564	28564	F		Mourning's End Part I			item	Trinket of fairies: Tool Lep - Lletya
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Tool Lep - Locus Oasis
+28564	28564	F					item	Trinket of fairies: Tool Lep - Lumbridge
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Tool Lep - Nemus Retreat
+28564	28564	F					item	Trinket of fairies: Tool Lep - North of Ardougne
+28564	28564	F					item	Trinket of fairies: Tool Lep - North of McGrubor's Wood
+28564	28564	F					item	Trinket of fairies: Tool Lep - North of Seth Groats' Farm
+28564	28564	F		Children of the Sun			item	Trinket of fairies: Tool Lep - Ortus Farm
+28564	28564	F					item	Trinket of fairies: Tool Lep - Port Phasmatys
+28564	28564	F					item	Trinket of fairies: Tool Lep - Port Sarim
+28564	28564	F		Song of the Elves			item	Trinket of fairies: Tool Lep - Prifddinas
+28564	28564	F					item	Trinket of fairies: Tool Lep - Rimmington
+28564	28564	F					item	Trinket of fairies: Tool Lep - Tai Bwo Wannai
+28564	28564	F					item	Trinket of fairies: Tool Lep - Taverley
+28564	28564	F					item	Trinket of fairies: Tool Lep - Tree Gnome Stronghold East
+28564	28564	F					item	Trinket of fairies: Tool Lep - Tree Gnome Stronghold West
+28564	28564	F					item	Trinket of fairies: Tool Lep - Tree Gnome Village
+28564	28564	F		My Arm's Big Adventure			item	Trinket of fairies: Tool Lep - Troll Stronghold
+28564	28564	F					item	Trinket of fairies: Tool Lep - Varrock
+28564	28564	F		Making Friends with My Arm			item	Trinket of fairies: Tool Lep - Weiss
+28564	28564	F					item	Trinket of fairies: Tool Lep - White Wolf Mountain
+28564	28564	F					item	Trinket of fairies: Tool Lep - Yanille
+29271	29271	T					whistle	Quetzal whistle: Aldarin
+29273	29273	T					whistle	Quetzal whistle: Aldarin
+29275	29275	T					whistle	Quetzal whistle: Aldarin
+33120	33120	F					whistle	Perfected quetzal whistle(i): Aldarin
+29271	29271	T					whistle	Quetzal whistle: Auburnvale
+29273	29273	T					whistle	Quetzal whistle: Auburnvale
+29275	29275	T					whistle	Quetzal whistle: Auburnvale
+33120	33120	F					whistle	Perfected quetzal whistle(i): Auburnvale
+29271	29271	T					whistle	Quetzal whistle: Civitas illa Fortis
+29273	29273	T					whistle	Quetzal whistle: Civitas illa Fortis
+29275	29275	T					whistle	Quetzal whistle: Civitas illa Fortis
+33120	33120	F					whistle	Perfected quetzal whistle(i): Civitas illa Fortis
+29271	29271	T					whistle	Quetzal whistle: Hunter Guild
+29273	29273	T					whistle	Quetzal whistle: Hunter Guild
+29275	29275	T					whistle	Quetzal whistle: Hunter Guild
+33120	33120	F					whistle	Perfected quetzal whistle(i): Hunter Guild
+29271	29271	T					whistle	Quetzal whistle: Quetzacalli Gorge
+29273	29273	T					whistle	Quetzal whistle: Quetzacalli Gorge
+29275	29275	T					whistle	Quetzal whistle: Quetzacalli Gorge
+33120	33120	F					whistle	Perfected quetzal whistle(i): Quetzacalli Gorge
+29271	29271	T					whistle	Quetzal whistle: Sunset Coast
+29273	29273	T					whistle	Quetzal whistle: Sunset Coast
+29275	29275	T					whistle	Quetzal whistle: Sunset Coast
+33120	33120	F					whistle	Perfected quetzal whistle(i): Sunset Coast
+29271	29271	T					whistle	Quetzal whistle: Tal Teklan
+29273	29273	T					whistle	Quetzal whistle: Tal Teklan
+29275	29275	T					whistle	Quetzal whistle: Tal Teklan
+33120	33120	F					whistle	Perfected quetzal whistle(i): Tal Teklan
+29271	29271	T					whistle	Quetzal whistle: The Teomat
+29273	29273	T					whistle	Quetzal whistle: The Teomat
+29275	29275	T					whistle	Quetzal whistle: The Teomat
+33120	33120	F					whistle	Perfected quetzal whistle(i): The Teomat
+29271	29271	T				4182&256	whistle	Quetzal whistle: Fortis Colosseum
+29273	29273	T				4182&256	whistle	Quetzal whistle: Fortis Colosseum
+29275	29275	T				4182&256	whistle	Quetzal whistle: Fortis Colosseum
+33120	33120	F				4182&256	whistle	Perfected quetzal whistle(i): Fortis Colosseum
+29271	29271	T				4182&16384	whistle	Quetzal whistle: Kastori
+29273	29273	T				4182&16384	whistle	Quetzal whistle: Kastori
+29275	29275	T				4182&16384	whistle	Quetzal whistle: Kastori
+33120	33120	F				4182&16384	whistle	Perfected quetzal whistle(i): Kastori
+29271	29271	T				4182&128	whistle	Quetzal whistle: Outer Fortis
+29273	29273	T				4182&128	whistle	Quetzal whistle: Outer Fortis
+29275	29275	T				4182&128	whistle	Quetzal whistle: Outer Fortis
+33120	33120	F				4182&128	whistle	Perfected quetzal whistle(i): Outer Fortis
+29271	29271	T				4182&64	whistle	Quetzal whistle: Colossal Wyrm Remains
+29273	29273	T				4182&64	whistle	Quetzal whistle: Colossal Wyrm Remains
+29275	29275	T				4182&64	whistle	Quetzal whistle: Colossal Wyrm Remains
+33120	33120	F				4182&64	whistle	Perfected quetzal whistle(i): Colossal Wyrm Remains
+29271	29271	T				4182&32	whistle	Quetzal whistle: Cam Torum
+29273	29273	T				4182&32	whistle	Quetzal whistle: Cam Torum
+29275	29275	T				4182&32	whistle	Quetzal whistle: Cam Torum
+33120	33120	F				4182&32	whistle	Perfected quetzal whistle(i): Cam Torum
+29271	29271	T				4182&2048	whistle	Quetzal whistle: Salvager Overlook
+29273	29273	T				4182&2048	whistle	Quetzal whistle: Salvager Overlook
+29275	29275	T				4182&2048	whistle	Quetzal whistle: Salvager Overlook
+33120	33120	F				4182&2048	whistle	Perfected quetzal whistle(i): Salvager Overlook
