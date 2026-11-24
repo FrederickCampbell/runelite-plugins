@@ -167,9 +167,6 @@ final class FarmingHelperPanel extends PluginPanel
             for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)keys.add(p.key());
             templates.put(RunPreset.individualTitle(type)+" (individual)",keys);
         }
-        Set<String> fossil=new java.util.LinkedHashSet<>();
-        for(FarmRunPatch p:plugin.patches())if("Fossil Island".equals(RunOrder.site(p))&&(p.getPatchType()==PatchType.HARDWOOD_TREE||p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.BIRDHOUSE))fossil.add(p.key());
-        templates.put("Fossil Island (trees + seaweed + birds)",fossil);
         JComboBox<String> template=new JComboBox<>(templates.keySet().toArray(new String[0]));
         template.addActionListener(e->{Set<String> keys=templates.get(template.getSelectedItem());if(keys==null)return;manual.clear();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&keys.contains(p.key()))manual.add(p.key());saveManual();manualRun();});addRow(template);
         JPanel controls=new JPanel(new java.awt.GridLayout(1,2,4,0));

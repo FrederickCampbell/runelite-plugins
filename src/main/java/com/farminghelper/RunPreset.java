@@ -13,8 +13,8 @@ enum RunPreset
         "Farming Guild|South Falador|Morytania|North Ardougne|Catherby|Hosidius|Prifddinas|Harmony Island|Civitas illa Fortis|Troll Stronghold|Weiss|Kastori"),
     HOPS_BUSH("Hops & Bush Run", EnumSet.of(PatchType.HOPS,PatchType.BUSH),
         "Farming Guild|Champions' Guild|Lumbridge|Ardougne Monastery|Aldarin|Seers' Village|Etceteria|Yanille|Rimmington|Entrana"),
-    SPECIALTY("Specialty Run", EnumSet.of(PatchType.CACTUS,PatchType.BELLADONNA,PatchType.MUSHROOM,PatchType.SEAWEED,PatchType.CORAL,PatchType.GRAPEVINE),
-        "Farming Guild|Al Kharid|Draynor Manor|Morytania|Fossil Island|Hosidius Vinery|Auburnvale|Great Conch");
+    SPECIALTY("Specialty Run", EnumSet.of(PatchType.CACTUS,PatchType.BELLADONNA,PatchType.MUSHROOM,PatchType.SEAWEED,PatchType.CORAL,PatchType.GRAPEVINE,PatchType.BIRDHOUSE),
+        "Farming Guild|Al Kharid|Draynor Manor|Morytania|Hosidius Vinery|Auburnvale|Great Conch|Fossil Island");
 
     final String title; final Set<PatchType> types; final List<String> reference;
     RunPreset(String title,Set<PatchType> types,String reference)

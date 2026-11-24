@@ -1,3 +1,11 @@
+## v0.28-beta.1 — Specialty birdhouse finish
+
+- Specialty includes optional birdhouses by default; farms and seaweed first, then a separate inventory phase at Bank Chest-wreck.
+- Keep Fossil Island last and preserve fixed stage order while retaining Shortest Path navigation per leg.
+- Birdhouse requirements appear only after farm work; use carried and bank stock, not inaccessible Seed Vault stock.
+- Prefer potato seeds and cheap alternatives, choose highest usable stocked house/log tier, and recover clockworks from mature houses.
+- Remove the redundant Fossil Island manual template; standalone Birdhouse Run remains.
+
 ## v0.27-beta.1 — Crop care and flower progression
 
 - Optional watering for local dry allotment, flower and hops crops when a usable can is carried.

@@ -59,6 +59,7 @@ public class FarmingHelperPlugin extends Plugin
     private final Set<FarmRunPatch> birdhouseTouched=new HashSet<>();
     private final Set<FarmRunPatch> wateredThisRun=new HashSet<>();
     private boolean activeCareOnly;
+    private boolean specialtyStaged,specialtyBirdPhase,birdBankOffered;
     private final Map<Integer,String> itemNamesCache=new HashMap<>();
     private Crop activeCrop;
     private volatile StepEngine.Action activeAction = StepEngine.Action.INSPECT;
@@ -177,6 +178,7 @@ public class FarmingHelperPlugin extends Plugin
             run = selected;
             manualKeys=keys;runLabel=label;referenceOrder=reference;optimizeManual=optimize;
             runPolicyKey=policyKey;
+            specialtyStaged="group_SPECIALTY".equals(policyKey);
             clearSeedless=flag("clearSeedlessPreferenceV1",true);
             runPolicy=RunPolicy.load(setting("runPolicy_"+policyKey,""),CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true))!=CompostChoice.NONE,flag("directorProtectTrees",true));
             runPayRemoval=flag("runPayRemoval_"+policyKey,flag("directorPayRemoval",true));
@@ -204,6 +206,7 @@ public class FarmingHelperPlugin extends Plugin
         runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
+        specialtyStaged=false;specialtyBirdPhase=false;birdBankOffered=false;
         skipped.clear();
         completed.clear();
         progress.reset();
@@ -549,7 +552,7 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn) for(FarmRunPatch p:patches)
         {
             PatchType type=p.getPatchType();
-            if(!ManualSelection.includes(p,run,manualKeys) || !enabled(p) || skipped.contains(p) ||
+            if(!SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,type)||!ManualSelection.includes(p,run,manualKeys) || !enabled(p) || skipped.contains(p) ||
                 Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || (type!=PatchType.COMPOST_BIN && type!=PatchType.BIRDHOUSE && CropCatalog.recommend(type,level)==null)) continue;
             eligible++;
             if(pinned!=null && !pinned.contains(p))continue;
@@ -619,6 +622,7 @@ public class FarmingHelperPlugin extends Plugin
             {
                 WorldPoint start=client.getLocalPlayer().getWorldLocation();
                 runOrder=referenceOrder!=null?RunOrder.preset(ready,start,referenceOrder,optimizeManual):RunOrder.plan(RunOrder.groups(ready,start),start);
+                if(specialtyStaged){runOrder=SpecialtyStages.fossilLast(runOrder);orderFrozen=true;}
                 pinned=RunOrder.flatten(runOrder);
             }
             else pinned=new ArrayList<>(ready); // familiar individual shortcut order
@@ -633,7 +637,7 @@ public class FarmingHelperPlugin extends Plugin
         // Nearby verified disease is an urgent cure-only detour, even outside the preset.
         // A selected, local dry crop can also be watered without a new planting allocation.
         Set<FarmRunPatch> careOnly=new LinkedHashSet<>();
-        if(loggedIn&&!preparing&&highlight!=null)
+        if(loggedIn&&!preparing&&highlight!=null&&!(specialtyStaged&&specialtyBirdPhase))
         {
             WorldPoint here=client.getLocalPlayer().getWorldLocation();
             for(FarmRunPatch p:patches)
@@ -673,6 +677,14 @@ public class FarmingHelperPlugin extends Plugin
             }
             seedlessCount=seedless.size();
             ready.removeAll(seedless);visible.removeAll(seedless);
+        }
+        // Transition only after the remaining farming/seaweed work is exhausted.
+        // A fresh pinned order is necessary because birdhouses were deliberately absent.
+        if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&ready.isEmpty()&&run.contains(FarmRunType.BIRDHOUSE))
+        {
+            specialtyBirdPhase=true;current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
+            preparing=false;visitedStorage=false;initialPrepChecked=true;runOrder=null;pinned=null;orderProbeId=null;orderFrozen=true;
+            update();return;
         }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current) { current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
@@ -733,7 +745,8 @@ public class FarmingHelperPlugin extends Plugin
         if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
         if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB || p.getPatchType()==PatchType.CORAL) && !required.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
         Map<Integer,Integer> farmingRequirements=new LinkedHashMap<>(required);
-        Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,stock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
+        Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?SpecialtyStages.birdStock(bag,bank):stock;
+        Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=new HashMap<>();
         prepSeeds.forEach((raw,n)->{Integer sapling=aliases.get(raw);if(sapling!=null)pendingSaplings.merge(sapling,n,Integer::sum);});
@@ -778,7 +791,7 @@ public class FarmingHelperPlugin extends Plugin
             if(activeLive)
             {
                 if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
-                else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,stock,bag,farmingRequirements,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
+                else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,birdStock,bag,farmingRequirements,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
                 else if(action==StepEngine.Action.WATER)localStepItems=Set.of(wateringCan);
                 else localStepItems=StepItems.select(action,type,activeCrop,compostId,axeId,bag);
             }
@@ -801,6 +814,13 @@ public class FarmingHelperPlugin extends Plugin
         String supplyNote=prepSeeds.isEmpty()?"":"Prepare "+prepSeeds.values().stream().mapToInt(Integer::intValue).sum()+" sapling(s): filled pots, trowel, water, then wait for growth.\n"+TreePreparation.evidence(prepSeeds,bag,bank,vault,this::observedItemName,bankObservedThisSession,vaultObservedThisSession);
         if(hideSeedless&&(!bankObservedThisSession||!vaultObservedThisSession))
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Storage may be out of date. Open "+(!bankObservedThisSession&&!vaultObservedThisSession?"the bank and Seed Vault":!bankObservedThisSession?"the bank":"the Seed Vault")+" to verify stock this session.";
+        if(specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
+            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Birdhouses follow seaweed. Their supplies will be listed after farming.";
+        if(specialtyStaged&&specialtyBirdPhase&&current!=null&&!birdBankOffered)
+        {
+            birdBankOffered=true;preparing=true;visitedStorage=false;preparationBank=Preparation.FOSSIL_BANK;
+            preparationReason="Birdhouse resupply: deposit farming supplies and harvests, then withdraw the listed logs or houses, hammer, chisel, cheap bait and any missing clockworks. Keep travel items.";
+        }
         if(runLabel!=null && loggedIn && current!=null)
         {
             int slots=Preparation.slots(required,equipped,this::stackable);
@@ -823,6 +843,8 @@ public class FarmingHelperPlugin extends Plugin
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+seedlessCount+" patch"+(seedlessCount==1?"":"es")+" hidden: insufficient planting stock.";
         if(!clearOnly.isEmpty())supplyNote+=(supplyNote.isEmpty()?"":"\n")+clearOnly.size()+" occupied seedless patch(es) retained for clearing.";
         if(current==null)preparing=false;
+        if(specialtyStaged&&specialtyBirdPhase)
+            for(FarmRunPatch p:patches)if(p.getPatchType()!=PatchType.BIRDHOUSE&&completed.contains(p))stops.add(0,new GuideView.Stop(p,"Completed",false,true));
         String prepMessage="";
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
         if(preparing && loggedIn && preparationBank!=null)
@@ -830,7 +852,7 @@ public class FarmingHelperPlugin extends Plugin
             boolean atStorage=storageOpen();visitedStorage|=atStorage;
             // Existing bank or vault is sufficient: never require leaving an open bank for a specific one.
             prepMessage=preparationReason+"\n"+(visitedStorage?"Use the storage you visited; continue when ready.":"Suggested bank: "+preparationBank.name+" (or any accessible bank).");
-            if(prepSeeds.isEmpty()&&!Preparation.missing(required,carried)&&!preparationReason.startsWith("Entrana")&&!preparationReason.startsWith("Resupply"))
+            if(prepSeeds.isEmpty()&&!Preparation.missing(required,carried)&&!preparationReason.startsWith("Entrana")&&!preparationReason.startsWith("Resupply")&&!preparationReason.startsWith("Birdhouse resupply"))
             {preparing=false;prepMessage="";}
             else
             {
@@ -900,7 +922,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     void resupply()
     {
-        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||current==null)return;beginPreparation(false,false,"Resupply at a nearby bank. Continue when ready.");update();});
+        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||current==null)return;beginPreparation(false,false,"Resupply at a nearby bank. Continue when ready.");if(specialtyStaged&&specialtyBirdPhase)preparationBank=Preparation.FOSSIL_BANK;update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)

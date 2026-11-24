@@ -13,6 +13,8 @@ final class Preparation
         final String name;final WorldPoint point;
         Bank(String name,WorldPoint point){this.name=name;this.point=point;}
     }
+    // Existing verified seaweed rowboat approach on the same small bank island.
+    static final Bank FOSSIL_BANK=new Bank("Bank Chest-wreck (north Fossil Island)",SpecialRoutes.SEAWEED_ISLAND);
     private static final Bank GUILD_BANK=new Bank("Farming Guild",GUILD);
     private static final List<Bank> PUBLIC=List.of(new Bank("Draynor Village",DRAYNOR),
         new Bank("Falador east",new WorldPoint(3013,3355,0)),new Bank("Varrock east",new WorldPoint(3253,3420,0)),
