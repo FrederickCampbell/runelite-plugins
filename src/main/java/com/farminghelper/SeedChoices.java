@@ -48,8 +48,7 @@ final class SeedChoices
                 Crop crop = CropCatalog.findByName(type,name.trim());
                 if (crop != null && crop.getLevel() <= level && !candidates.contains(crop)) candidates.add(crop);
             }
-            List<Crop> automatic = new ArrayList<>(CropCatalog.crops(type));
-            automatic.sort(Comparator.comparingInt(Crop::getLevel).reversed());
+            List<Crop> automatic = CropXp.ranked(type,level);
             for (Crop crop : automatic)
                 if (crop.getLevel() <= level && !candidates.contains(crop)) candidates.add(crop);
             if (candidates.isEmpty()) continue;

@@ -40,6 +40,8 @@ public class FarmingHelperPlugin extends Plugin
     @Inject private ItemManager itemManager;
     @Inject private PluginManager plugins;
     private NavigationBridge navigation;
+    private SeedVaultViews vaultViews;
+    private volatile long preferenceRevision;
     private volatile RouteLeg activeLeg;
     @Inject private ClientThread thread;
     @Inject private ConfigManager config;
@@ -88,6 +90,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         running = true;
         navigation=new NavigationBridge(bus::post);
+        if(itemManager!=null)vaultViews=new SeedVaultViews(client,itemManager,this);
         shortestPathAvailable=plugins.getPlugins().stream().anyMatch(p ->
             "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
         navigation.enabled(shortestPathAvailable);
@@ -106,6 +109,7 @@ public class FarmingHelperPlugin extends Plugin
     @Override protected void shutDown()
     {
         running = false;
+        if(vaultViews!=null){SeedVaultViews view=vaultViews;vaultViews=null;thread.invokeLater(view::close);}
         reset();
         toolbar.removeNavigation(nav);
         overlays.remove(highlight);
@@ -180,6 +184,7 @@ public class FarmingHelperPlugin extends Plugin
     private void reset()
     {
         guideRequested = false;
+        if(vaultViews!=null)vaultViews.close();
         ++session;
         lastAccessLevel=-1;
         accessNotes=Collections.emptyMap();
@@ -261,6 +266,7 @@ public class FarmingHelperPlugin extends Plugin
         if (client.getGameState() != GameState.LOGGED_IN) return;
         loadStock();
         sampleStorage();
+        if(vaultViews!=null)vaultViews.tick();
         if (!run.isEmpty() && guideRequested)
         {
             if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(client.getLocalPlayer().getWorldLocation());
@@ -280,8 +286,36 @@ public class FarmingHelperPlugin extends Plugin
     {
         if (event.getContainerId() == InventoryID.BANK.getId() || event.getContainerId() == InventoryID.SEED_VAULT.getId())
             sampleStorage();
+        if(vaultViews!=null&&event.getContainerId()==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
     }
 
+    @Subscribe public void onScriptPreFired(ScriptPreFired event)
+    {if(vaultViews!=null)vaultViews.beforeScript(event.getScriptId());}
+    @Subscribe public void onScriptPostFired(ScriptPostFired event)
+    {if(vaultViews!=null)vaultViews.afterScript(event.getScriptId());}
+    @Subscribe public void onWidgetClosed(WidgetClosed event)
+    {if(vaultViews!=null&&event.getGroupId()==SeedVaultViews.GROUP)vaultViews.close();}
+    @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
+    {if(vaultViews!=null)vaultViews.nativeMenu(event.getParam1());}
+
+    long preferenceRevision(){return preferenceRevision;}
+    Set<PatchType> vaultAllowed(int level)
+    {
+        Set<PatchType> allowed=EnumSet.noneOf(PatchType.class);
+        for(FarmRunPatch p:patches)if(enabled(p)&&Waypoints.accessIssue(client,p.getPatchType(),p.getLocation(),level,false)==null)
+            allowed.add(p.getPatchType());
+        return allowed;
+    }
+    Map<PatchType,Set<Crop>> vaultOverrides(int level)
+    {
+        Map<PatchType,Set<Crop>> result=new EnumMap<>(PatchType.class);
+        for(FarmRunPatch p:patches)if(enabled(p)&&Waypoints.accessIssue(client,p.getPatchType(),p.getLocation(),level,false)==null)
+        {
+            Crop c=CropCatalog.findByName(p.getPatchType(),override(p));
+            if(c!=null&&c.getLevel()<=level)result.computeIfAbsent(p.getPatchType(),t->new LinkedHashSet<>()).add(c);
+        }
+        return result;
+    }
     private void loadStock()
     {
         String profile=config.getRSProfileKey();
@@ -379,6 +413,7 @@ public class FarmingHelperPlugin extends Plugin
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new LinkedHashMap<>();
         int eligible=0;
+        int contract=loggedIn?client.getVarbitValue(VarbitID.FARMGUILD_CONTRACT_TYPE):0;
         int spiritSlots=spiritCapacity(level);
         if(loggedIn && run.contains(FarmRunType.SPECIALTY) && level<99)
             for(FarmRunPatch p:patches) if(p.getPatchType()==PatchType.SPIRIT_TREE)
@@ -393,6 +428,10 @@ public class FarmingHelperPlugin extends Plugin
             QuestFarmingStateReader.Observation o=observe(p);
             if(o==null) continue;
             observations.put(p,o);
+            // Leave living white lilies as permanent allotment protection.
+            if((type==PatchType.FLOWER && QuestFarmingStateReader.isLivingWhiteLily(o)) ||
+                ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
+            {completed.add(p);continue;}
             if(completed.contains(p)) { visible.add(p); continue; }
             if(p==current)
             {
@@ -577,7 +616,7 @@ public class FarmingHelperPlugin extends Plugin
     boolean canSave() { return config.getRSProfileKey() != null; }
     void save(String key, String value)
     {
-        if (canSave()) config.setRSProfileConfiguration("farming-helper",key,value);
+        if (canSave()) {config.setRSProfileConfiguration("farming-helper",key,value);if(!key.startsWith("observed"))preferenceRevision++;}
     }
 
 	private static BufferedImage createNavigationIcon()

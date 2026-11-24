@@ -292,6 +292,8 @@ final class FarmingHelperPanel extends PluginPanel
             remove.addActionListener(e->plugin.save("directorPayRemoval",String.valueOf(remove.isSelected())));addRow(remove);
             JCheckBox protect = new JCheckBox("Pay for tree protection",plugin.flag("directorProtectTrees",true));
             protect.addActionListener(e->plugin.save("directorProtectTrees",String.valueOf(protect.isSelected())));addRow(protect);
+            JCheckBox vaultViews = new JCheckBox("Seed Vault views",plugin.flag("seedVaultViews",true));
+            vaultViews.addActionListener(e->plugin.save("seedVaultViews",String.valueOf(vaultViews.isSelected())));addRow(vaultViews);
             for (PatchType type : PatchType.values()) button(type.getDisplayName(), () -> patches(type));
         }
         button("Back",this::home);
@@ -318,7 +320,7 @@ final class FarmingHelperPanel extends PluginPanel
         rows.removeAll();heading(type.getDisplayName());
         String csv=plugin.priority(type);
         List<String> names=new ArrayList<>();if(!csv.isBlank())names.addAll(Arrays.asList(csv.split(",\\s*")));
-        line(names.isEmpty()?"Automatic · highest plantable crop in stock":"Preferred crops first, then highest available",false);
+        line(names.isEmpty()?"Automatic · highest estimated XP per seed in stock":"Preferred crops first, then highest XP per seed",false);
         for(int i=0;i<names.size();i++)
         {
             final int n=i;

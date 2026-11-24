@@ -105,6 +105,23 @@ public final class QuestFarmingStateReader
             worldPoint, implementation);
     }
 
+    public static boolean isLivingWhiteLily(Observation o)
+    {
+        if(o==null||o.rawValue<0||o.state==null||o.state==CropState.DEAD||o.state==CropState.EMPTY||o.state==CropState.DISEASED)return false;
+        PatchState raw=PatchImplementation.FLOWER.forVarbitValue(o.rawValue);
+        return raw!=null&&raw.getProduce()==Produce.WHITE_LILY;
+    }
+
+    /** Preserve an established crop assigned by Guildmaster Jane. The
+     * contract mapping comes from RuneLite's actual Produce metadata. */
+    public static boolean isLivingContractCrop(String type,Observation o,int contract)
+    {
+        if(contract<=0||o==null||o.rawValue<0||o.state==null||o.state==CropState.DEAD||o.state==CropState.EMPTY||o.state==CropState.DISEASED||o.state==CropState.STUMP)return false;
+        PatchImplementation impl=implementation(type);
+        PatchState state=impl==null?null:impl.forVarbitValue(o.rawValue);
+        return state!=null&&state.getProduce().getContractVarbitValue()==contract;
+    }
+
     public boolean hasWeeds(String type,int value)
     {
         PatchImplementation impl=implementation(type);
@@ -248,7 +265,7 @@ public final class QuestFarmingStateReader
         }
         CropState state = handler.predictObserved(match,profile,raw);
         return new Observation(state, state == null ? Source.NONE : own?Source.OBSERVED:Source.TIME_TRACKING,
-            observedAtMillis, protection, match.getName());
+            observedAtMillis, protection, match.getName(), Integer.parseInt(raw.split(":",2)[0]));
     }
 
     /** Some upstream special patches intentionally use GROWING for their

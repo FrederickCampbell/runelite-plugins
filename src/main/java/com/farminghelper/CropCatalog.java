@@ -19,16 +19,8 @@ final class CropCatalog
 
 	static Crop recommend(PatchType patchType, int farmingLevel)
 	{
-		Crop recommendation = null;
-		for (Crop crop : CROPS.getOrDefault(patchType, Collections.emptyList()))
-		{
-			if (crop.getLevel() <= farmingLevel
-				&& (recommendation == null || crop.getLevel() > recommendation.getLevel()))
-			{
-				recommendation = crop;
-			}
-		}
-		return recommendation;
+		List<Crop> ranked = CropXp.ranked(patchType, farmingLevel);
+		return ranked.isEmpty() ? null : ranked.get(0);
 	}
 
 	static List<Crop> recommendations(int farmingLevel)
@@ -154,7 +146,7 @@ final class CropCatalog
 			seed("Barley", 3, ItemID.BARLEY_SEED),
 			seed("Hammerstone", 4, ItemID.HAMMERSTONE_HOP_SEED),
 			seed("Asgarnian", 8, ItemID.ASGARNIAN_HOP_SEED),
-			seed("Jute", 13, ItemID.JUTE_SEED),
+			seed("Jute", 13, ItemID.JUTE_SEED, 3),
 			seed("Yanillian", 16, ItemID.YANILLIAN_HOP_SEED),
 			seed("Flax", 18, ItemID.FLAX_SEED, 3),
 			seed("Krandorian", 21, ItemID.KRANDORIAN_HOP_SEED),

@@ -1,3 +1,8 @@
-# Farming Helper v0.17.0-beta.1
+# Farming Helper v0.18.0-beta.1
 
-Manual Run with nested selections and unified geographic route ordering. Native Shortest Path remains responsible for travel; the initial ordering uses a spatial proxy and at most one native multi-target refinement. No travel time or in-game reachability guarantee.
+- Shared automatic XP-per-seed ranking with stock-aware fallback.
+- Three optional native Seed Vault views: Highest XP, Top 3, Custom View.
+- Correct jute planting quantity; protect existing white lilies and matching contract crops.
+- No new strategy selector, navigation system, or banking page.
+
+Seed Vault filtering is an initial hide-only beta; layout compaction and live withdrawal/menu compatibility are not certified by CI. Variable yields are reference estimates, not exact player-specific predictions. Raw seeds must be prepared before the guide treats them as saplings.

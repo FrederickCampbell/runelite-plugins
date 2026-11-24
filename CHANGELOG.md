@@ -1,3 +1,10 @@
+## 0.18.0-beta.1
+
+- Shared healthy-cycle XP-per-seed crop scoring with documented yield estimates and unknown-yield lower bounds.
+- Native Seed Vault Highest XP, Top 3, Custom View prototype; preserve native item/menu identity and restore visibility.
+- Preserve living white lilies and matching Farming Guild contract crops.
+- Correct jute seed quantity.
+
 ## 0.17.0-beta.1
 
 - Manual Run replaces Combined Run: crop-level checkboxes, collapsed per-patch choices, select/clear all, per-character remembered selections.
