@@ -10,7 +10,7 @@ final class SpecialRoutes
     static final WorldPoint HESPORI_ENTRANCE=new WorldPoint(1230,3730,0); // approximate; resolve cave object locally
     static final WorldPoint SEAWEED_ISLAND=new WorldPoint(3764,3899,0);
     static final WorldPoint CORAL_ENTRANCE=new WorldPoint(3271,2463,0);
-    static final WorldPoint CORAL_EXIT=new WorldPoint(3288,8868,1);
+    static final WorldPoint CORAL_EXIT_POINT=new WorldPoint(3288,8868,1);
     static final WorldPoint ANGLER_ROWBOAT=new WorldPoint(2543,2844,0);
     static final WorldPoint CORSAIR_MOORING=new WorldPoint(2579,2843,0);
     static final WorldPoint ANGLER_MOORING=new WorldPoint(2467,2721,0);
@@ -36,7 +36,7 @@ final class SpecialRoutes
         if(insideCoral(player))
         {
             if(!isType(patch,PatchType.CORAL))return player.getPlane()==1 && !instance
-                ? RouteLeg.approach(CORAL_EXIT,"Climb the steps to leave the Coral Nurseries.",CORAL_EXIT)
+                ? RouteLeg.approach(CORAL_EXIT_POINT,"Climb the steps to leave the Coral Nurseries.",CORAL_EXIT)
                 : RouteLeg.manual("Return to the nursery exit steps and climb out.",CORAL_EXIT);
             return RouteLeg.walk(instance?null:liveApproach,true);
         }
