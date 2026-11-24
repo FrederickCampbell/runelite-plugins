@@ -59,7 +59,7 @@ final class ActiveRunBank
     {
         Set<Integer> result=new HashSet<>();
         ItemContainer bank=client.getItemContainer(InventoryID.BANK);
-        if(bank!=null)for(Item item:bank.getItems())if(item!=null&&item.getId()>0&&item.getQuantity()>0){ItemComposition def=items.getItemComposition(item.getId());if(def!=null&&def.getPlaceholderTemplateId()==-1)result.add(item.getId());}
+        if(bank!=null)for(Item item:bank.getItems())if(item!=null&&PhysicalStock.available(item.getId(),item.getQuantity(),items::getItemComposition))result.add(item.getId());
         return Set.copyOf(result);
     }
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}

@@ -30,9 +30,10 @@ final class GuideView
     static final class Stats
     {
         static final Stats UNKNOWN=new Stats(-1,-1,-1,-1);
-        final int processed,skipped,deferred,seedless;
-        Stats(int processed,int skipped,int deferred,int seedless){this.processed=processed;this.skipped=skipped;this.deferred=deferred;this.seedless=seedless;}
-        String signature(){return processed+":"+skipped+":"+deferred+":"+seedless;}
+        final int processed,skipped,deferred,seedless,total,pending,preserved;
+        Stats(int processed,int skipped,int deferred,int seedless){this(processed,skipped,deferred,seedless,-1,-1,0);}
+        Stats(int processed,int skipped,int deferred,int seedless,int total,int pending,int preserved){this.processed=processed;this.skipped=skipped;this.deferred=deferred;this.seedless=seedless;this.total=total;this.pending=pending;this.preserved=preserved;}
+        String signature(){return processed+":"+skipped+":"+deferred+":"+seedless+":"+total+":"+pending+":"+preserved;}
     }
     final Stats stats;
     final String title, message, preparation, supplyNote;

@@ -57,7 +57,8 @@ public class FarmingHelperPlugin extends Plugin
     @Inject private QuestFarmingStateReader reader;
 
     private final List<FarmRunPatch> patches = new ArrayList<>();
-    private final Set<FarmRunPatch> skipped = new HashSet<>(), completed = new HashSet<>();
+    private final Set<FarmRunPatch> skipped = new HashSet<>(), completed = new HashSet<>(), preserved = new HashSet<>();
+    private final RunProgress runProgress=new RunProgress();
     private final GuideProgress progress = new GuideProgress();
     private final Set<FarmRunPatch> birdhouseTouched=new HashSet<>();
     private final Set<FarmRunPatch> wateredThisRun=new HashSet<>();
@@ -85,6 +86,11 @@ public class FarmingHelperPlugin extends Plugin
     private String runPolicyKey;
     private volatile RunPolicy runPolicy=RunPolicy.BOTH;
     private volatile boolean runPayRemoval=true, runHasTrees;
+    private RunPolicy temporaryCare;
+    private Boolean temporaryPay;
+    private SeedlessPolicy temporarySeedless;
+    private boolean hopping;
+    private String runProfile;
     private List<String> referenceOrder;
     private boolean optimizeManual, initialPrepChecked, entranaOffered;
     private volatile boolean preparing, hideSeedless, clearSeedless;
@@ -105,7 +111,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile FarmRunPatch current;
     private String lastView;
     private volatile Map<String,String> accessNotes = Collections.emptyMap();
-    private int lastAccessLevel=-1;
+    private int lastAccessLevel=-1,accessTicks;
     private volatile boolean running;
 
     @Provides FarmingHelperConfig provideConfig(ConfigManager manager)
@@ -189,9 +195,9 @@ public class FarmingHelperPlugin extends Plugin
             manualKeys=keys;runLabel=label;referenceOrder=reference;optimizeManual=optimize;
             runPolicyKey=policyKey;
             specialtyStaged=SpecialtyStages.stageBirds(policyKey,run);
-            clearSeedless=flag("clearSeedlessPreferenceV1",true);
-            runPolicy=RunPolicy.load(setting("runPolicy_"+policyKey,""),CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true))!=CompostChoice.NONE,flag("directorProtectTrees",true));
-            runPayRemoval=flag("runPayRemoval_"+policyKey,flag("directorPayRemoval",true));
+            runProfile=config.getRSProfileKey();
+            refreshRunPreferences();
+            updateAccessNotes();
             runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&StepEngine.isTreeType(p.getPatchType()));
             loadStock();
             sampleStorage();
@@ -220,7 +226,8 @@ public class FarmingHelperPlugin extends Plugin
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
         specialtyStaged=false;specialtyBirdPhase=false;birdBankOffered=false;
         skipped.clear();
-        completed.clear();
+        completed.clear();preserved.clear();runProgress.reset();
+        temporaryCare=null;temporaryPay=null;temporarySeedless=null;hopping=false;runProfile=null;
         progress.reset();
         activeCrop = null;
         activeAction = StepEngine.Action.INSPECT;
@@ -253,6 +260,14 @@ public class FarmingHelperPlugin extends Plugin
         end();
     }
 
+    private void refreshRunPreferences()
+    {
+        // Old per-run saved overrides are intentionally ignored; all other preferences remain intact.
+        runPolicy=temporaryCare!=null?temporaryCare:RunPolicy.load("",CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true))!=CompostChoice.NONE,flag("directorProtectTrees",true));
+        runPayRemoval=temporaryPay!=null?temporaryPay:flag("directorPayRemoval",true);
+        SeedlessPolicy choice=temporarySeedless!=null?temporarySeedless:SeedlessPolicy.load(setting("seedlessPolicyV1","GUIDE"));
+        hideSeedless=choice.hide;clearSeedless=choice.hide?choice.clear:flag("clearSeedlessPreferenceV1",true);
+    }
     RunPolicy runPolicy(){return runPolicy;}
     boolean runPayRemoval(){return runPayRemoval;}
     boolean runHasTrees(){return runHasTrees;}
@@ -260,8 +275,9 @@ public class FarmingHelperPlugin extends Plugin
     {
         long id=session;thread.invokeLater(()->{
             if(id!=session||!guideRequested||runPolicyKey==null)return;
-            if(policy!=null){runPolicy=policy;save("runPolicy_"+runPolicyKey,policy.name());}
-            if(pay!=null){runPayRemoval=pay;save("runPayRemoval_"+runPolicyKey,String.valueOf(pay));}
+            if(policy!=null)temporaryCare=policy;
+            if(pay!=null)temporaryPay=pay;
+            refreshRunPreferences();
             lastView=null;update();
         });
     }
@@ -275,7 +291,7 @@ public class FarmingHelperPlugin extends Plugin
         long id=session;thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
             if(!hideSeedless)return;
-            clearSeedless=value;save("clearSeedlessPreferenceV1",Boolean.toString(value));
+            temporarySeedless=SeedlessPolicy.of(true,value);refreshRunPreferences();
             sampleStorage();lastView=null;update();
         });
     }
@@ -300,16 +316,21 @@ public class FarmingHelperPlugin extends Plugin
         final long id=session;
         thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
-            hideSeedless=value;
+            temporarySeedless=SeedlessPolicy.of(value,clearSeedless);refreshRunPreferences();
             sampleStorage();
             lastView=null;
             update();
         });
     }
 
+    void setSeedlessPolicy(SeedlessPolicy policy)
+    {
+        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||run.isEmpty())return;temporarySeedless=policy;refreshRunPreferences();sampleStorage();lastView=null;update();});
+    }
     void skip(FarmRunPatch displayed)
     {
-        thread.invokeLater(() -> {
+        long id=session;thread.invokeLater(() -> {
+            if(id!=session||!guideRequested)return;
             if(diseaseTarget!=null)
             {
                 if(displayed==diseaseTarget){diseasePriority.skip(displayed);diseaseTarget=null;lastView=null;}
@@ -368,21 +389,30 @@ public class FarmingHelperPlugin extends Plugin
 
 
     @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
-    @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { reset(); }
+    @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { if(!hopping||!Objects.equals(runProfile,config.getRSProfileKey()))reset(); }
     @Subscribe public void onGameObjectSpawned(GameObjectSpawned event) { highlight.spawned(event.getGameObject()); }
     @Subscribe public void onGameObjectDespawned(GameObjectDespawned event) { highlight.despawned(event.getGameObject()); }
     @Subscribe public void onGameStateChanged(GameStateChanged event)
     {
         if(event.getGameState()==GameState.LOADING || event.getGameState()==GameState.LOGIN_SCREEN) highlight.clear();
-        if (event.getGameState() == GameState.LOGIN_SCREEN ||
-            event.getGameState() == GameState.HOPPING) reset();
+        if(event.getGameState()==GameState.LOGIN_SCREEN){reset();return;}
+        if(event.getGameState()==GameState.HOPPING&&guideRequested)
+        {
+            // Preserve same-character run decisions, but release scene-local routes/widgets.
+            hopping=true;highlight.clear();if(navigation!=null)navigation.stop();
+            if(runBank!=null)runBank.close();if(vaultViews!=null)vaultViews.close();
+            orderProbeId=null;orderProbeSent=false;activeLive=false;stepItems=Collections.emptySet();lastAccessLevel=-1;
+        }
     }
 
     @Subscribe public void onGameTick(GameTick event)
     {
         if (client.getGameState() != GameState.LOGGED_IN) return;
+        if(hopping){hopping=false;if(!Objects.equals(runProfile,config.getRSProfileKey()))reset();lastView=null;}
         loadStock();
         sampleStorage();
+        // Re-evaluate quest, diary, Hunter and Sailing gates even when Farming is unchanged.
+        if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;updateAccessNotes();}
         if (!run.isEmpty() && guideRequested)
         {
             if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(client.getLocalPlayer().getWorldLocation());
@@ -391,7 +421,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(vaultViews!=null)vaultViews.tick();
         if(runBank!=null)runBank.tick(bankRunItems(),flag("activeRunBank",true),birdBankPhase());
-        if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
+
     }
 
     @Subscribe public void onWidgetLoaded(WidgetLoaded event)
@@ -420,8 +450,7 @@ public class FarmingHelperPlugin extends Plugin
     Set<Integer> vaultRunItems()
     {
         if(!guideRequested||run.isEmpty())return null;
-        Set<Integer> ids=new HashSet<>(requiredItems());ids.addAll(recommendedItems());
-        return Set.copyOf(ids);
+        return requiredItems();
     }
 
     private boolean birdBankPhase(){return specialtyStaged&&specialtyBirdPhase||run.size()==1&&run.contains(FarmRunType.BIRDHOUSE);}
@@ -429,7 +458,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         Set<Integer> runItems=vaultRunItems();
         if(runItems==null)return null;
-        Set<Integer> ids=new HashSet<>(runItems);ids.addAll(requiredItems);ids.addAll(recommendedItems);
+        Set<Integer> ids=new HashSet<>(runItems);
         boolean bird=birdBankPhase();
         if(runBank==null||!runBank.bankOpen())return Set.copyOf(ids);
         return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird);
@@ -557,7 +586,8 @@ public class FarmingHelperPlugin extends Plugin
 
     private void update()
     {
-        if (run.isEmpty() || !guideRequested) return;
+        if (run.isEmpty() || !guideRequested || hopping) return;
+        refreshRunPreferences();
         String title = runLabel!=null ? runLabel : run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         int level = client.getRealSkillLevel(Skill.FARMING);
@@ -588,8 +618,9 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn) for(FarmRunPatch p:patches)
         {
             PatchType type=p.getPatchType();
-            if(!SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,type)||!ManualSelection.includes(p,run,manualKeys) || !enabled(p) || skipped.contains(p) ||
-                Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || (type!=PatchType.COMPOST_BIN && type!=PatchType.BIRDHOUSE && CropCatalog.recommend(type,level)==null)) continue;
+            if(!ManualSelection.includes(p,run,manualKeys)||!enabled(p)||!accessNote(p).isEmpty())continue;
+            runProgress.include(List.of(p));
+            if(!SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,type)||skipped.contains(p))continue;
             eligible++;
             if(pinned!=null && !pinned.contains(p))continue;
             QuestFarmingStateReader.Observation o=observe(p);
@@ -617,7 +648,7 @@ public class FarmingHelperPlugin extends Plugin
             // Preserve lilies, but let a newly planted lily finish watering first.
             if((type==PatchType.FLOWER && QuestFarmingStateReader.isLivingWhiteLily(o) && !(p==current&&progress.planted())) ||
                 ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
-            {completed.add(p);continue;}
+            {preserved.add(p);completed.add(p);continue;}
             if(completed.contains(p)) { visible.add(p); continue; }
             if(p==current)
             {
@@ -705,10 +736,11 @@ public class FarmingHelperPlugin extends Plugin
             ? Map.of(current,activeCrop):Collections.emptyMap();
         Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,allocationStock,this::priority,this::override,committed,hideSeedless);
         int seedlessCount=0;
+        Set<FarmRunPatch> seedless=new HashSet<>();
         Set<FarmRunPatch> clearOnly=new HashSet<>();
         if(hideSeedless)
         {
-            Set<FarmRunPatch> seedless=new HashSet<>(plant);
+            seedless.addAll(plant);
             seedless.removeAll(seeds.keySet());
             if(clearSeedless)
             {
@@ -718,6 +750,7 @@ public class FarmingHelperPlugin extends Plugin
             seedlessCount=seedless.size();
             ready.removeAll(seedless);visible.removeAll(seedless);
         }
+        if(loggedIn)runProgress.update(p->SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,p.getPatchType()),ready,completed,preserved,skipped,seedless);
         // Transition only after the remaining farming/seaweed work is exhausted.
         // A fresh pinned order is necessary because birdhouses were deliberately absent.
         if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&ready.isEmpty()&&run.contains(FarmRunType.BIRDHOUSE))
@@ -737,7 +770,7 @@ public class FarmingHelperPlugin extends Plugin
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
             loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
         if(!clearOnly.isEmpty()&&seeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
-        Map<Integer,Integer> recommended=new LinkedHashMap<>();
+        Map<Integer,Integer> extras=new LinkedHashMap<>();
         for(FarmRunPatch p:ready)
         {
             QuestFarmingStateReader.Observation state=observations.get(p);
@@ -766,25 +799,25 @@ public class FarmingHelperPlugin extends Plugin
             {
                 Crop paymentCrop=c!=null?c:activeCrop;
                 if(StepEngine.supportsProtection(type)) for(ProtectionPayment cost:ProtectionPaymentCatalog.forCrop(paymentCrop))
-                    recommended.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);
+                    extras.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);
             }
         }
-        if(coins>0) recommended.merge(ItemID.COINS,coins,Integer::sum);
-        if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;recommended.put(axeId,1);}
+        if(coins>0) extras.merge(ItemID.COINS,coins,Integer::sum);
+        if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;extras.put(axeId,1);}
         Map<Integer,Integer> prepSeeds=TreePreparation.preparation(seeds,stock,aliases);
         if(!prepSeeds.isEmpty())
         {
-            prepSeeds.forEach((id,n)->recommended.merge(id,n,Integer::sum));
-            recommended.put(TreePreparation.FILLED_POT,prepSeeds.values().stream().mapToInt(Integer::intValue).sum());
-            recommended.put(Supplies.GARDENING_TROWEL,1);
+            prepSeeds.forEach((id,n)->extras.merge(id,n,Integer::sum));
+            extras.put(TreePreparation.FILLED_POT,prepSeeds.values().stream().mapToInt(Integer::intValue).sum());
+            extras.put(Supplies.GARDENING_TROWEL,1);
             int can=stock.keySet().stream().filter(id->observedItemName(id).matches("(?i)watering can\\([1-8]\\)|Gricoller.s can")).findFirst().orElse(5333);
-            recommended.put(can,1);
+            extras.put(can,1);
         }
         int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
-        if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
+        if(compostId>=0 && compostCount>0) extras.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
         // Selected policy costs and sapling preparation are actual supplies, not outfit recommendations.
-        recommended.forEach((id,n)->required.merge(id,n,Integer::sum));recommended.clear();
+        extras.forEach((id,n)->required.merge(id,n,Integer::sum));
         if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.CORAL))
         {
             Map<Integer,Integer> diveStock=new HashMap<>(bank);carried.forEach((id,n)->diveStock.merge(id,n,Integer::sum));
@@ -802,8 +835,7 @@ public class FarmingHelperPlugin extends Plugin
             if(pending>0)row=new GuideView.ItemRow(row.id,row.name+" (prepare "+pending+")",row.owned,row.needed,row.bank,row.vault,row.recommended);
             items.add(row);
         });
-        recommended.forEach((id,n)->items.add(itemRow(id,n+required.getOrDefault(id,0),carried,true)));
-        requiredItems=Set.copyOf(required.keySet());recommendedItems=Set.copyOf(recommended.keySet());
+        requiredItems=Set.copyOf(required.keySet());recommendedItems=Collections.emptySet();
         List<GuideView.Stop> stops=new ArrayList<>();
         String instruction=!loggedIn?"Log in to start this guide.":eligible==0?"No enabled, unlocked patches remain.":deferredGrowing>0?"No ready patches remain. Growing or unconfirmed patches were deferred, not marked completed.":completed.isEmpty()?"No ready patches remain in this run. Close and start another when crops mature.":"Run complete. Close the helper to start another run.";
         activeAction=StepEngine.Action.INSPECT;
@@ -846,7 +878,7 @@ public class FarmingHelperPlugin extends Plugin
         for(FarmRunPatch p:visible)
         {
             Crop c=seeds.get(p);
-            String line=p==current?instruction:careOnly.contains(p)?(observations.get(p).state==CropState.DISEASED?"Nearby disease — cure only.":"Water the growing crop."):completed.contains(p)?"Completed":birdhousePlans.containsKey(p)?birdhousePlans.get(p):binPlans.containsKey(p)?binPlans.get(p).instruction:clearOnly.contains(p)?"Check health / harvest and clear; no replacement.":c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
+            String line=p==current?instruction:careOnly.contains(p)?(observations.get(p).state==CropState.DISEASED?"Nearby disease — cure only.":"Water the growing crop."):completed.contains(p)?(preserved.contains(p)?"Preserved":"Completed"):birdhousePlans.containsKey(p)?birdhousePlans.get(p):binPlans.containsKey(p)?binPlans.get(p).instruction:clearOnly.contains(p)?"Check health / harvest and clear; no replacement.":c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
             stops.add(new GuideView.Stop(p,line,p==current,completed.contains(p)&&!careOnly.contains(p)));
         }
         // Show the selected birdhouse leg at the bottom without adding its supplies to the farming phase.
@@ -897,8 +929,9 @@ public class FarmingHelperPlugin extends Plugin
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+seedlessCount+" patch"+(seedlessCount==1?"":"es")+" hidden: insufficient planting stock.";
         if(!clearOnly.isEmpty())supplyNote+=(supplyNote.isEmpty()?"":"\n")+clearOnly.size()+" occupied seedless patch(es) retained for clearing.";
         if(current==null)preparing=false;
-        if(specialtyStaged&&specialtyBirdPhase)
-            for(FarmRunPatch p:patches)if(p.getPatchType()!=PatchType.BIRDHOUSE&&completed.contains(p))stops.add(0,new GuideView.Stop(p,"Completed",false,true));
+        // All processed patches remain visible in the completed history across stages.
+        Set<FarmRunPatch> listed=new HashSet<>();for(GuideView.Stop stop:stops)listed.add(stop.patch);
+        for(FarmRunPatch p:patches)if(completed.contains(p)&&!listed.contains(p))stops.add(new GuideView.Stop(p,preserved.contains(p)?"Preserved":"Completed",false,true));
         String prepMessage="";
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
         if(preparing && loggedIn && preparationBank!=null)
@@ -935,7 +968,7 @@ public class FarmingHelperPlugin extends Plugin
             for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,!preparing,false));
         if(preparing&&!routeNote.isEmpty())prepMessage+="\n"+routeNote;
         cacheIcons(items);
-        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST,new GuideView.Stats(completed.size(),skipped.size(),deferredGrowing,seedlessCount));
+        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST,runProgress.stats());
         normalView=view;
         publishView(view);
     }
@@ -1094,11 +1127,11 @@ public class FarmingHelperPlugin extends Plugin
     boolean flag(String key, boolean fallback) { return Boolean.parseBoolean(setting(key,String.valueOf(fallback))); }
     String setting(String key, String fallback)
     {
-        String value = config.getRSProfileKey() == null ? null : config.getRSProfileConfiguration("farming-helper",key);
+        String value = config==null||config.getRSProfileKey() == null ? null : config.getRSProfileConfiguration("farming-helper",key);
         return value == null ? fallback : value;
     }
     boolean integrationActive(String name){return plugins.getPlugins().stream().anyMatch(p->name.equals(p.getName())&&plugins.isPluginActive(p));}
-    boolean canSave() { return config.getRSProfileKey() != null; }
+    boolean canSave() { return config!=null&&config.getRSProfileKey() != null; }
     void save(String key, String value)
     {
         if (canSave()) {config.setRSProfileConfiguration("farming-helper",key,value);if(!key.startsWith("observed"))preferenceRevision++;}
