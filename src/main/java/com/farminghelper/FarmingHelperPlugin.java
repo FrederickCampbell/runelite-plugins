@@ -611,6 +611,7 @@ public class FarmingHelperPlugin extends Plugin
         refreshRunPreferences();
         String title = runLabel!=null ? runLabel : run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
+        LocationContext location=LocationContext.capture(client);
         int level = client.getRealSkillLevel(Skill.FARMING);
         Map<Integer,Integer> bag=new HashMap<>(), equipped=new HashMap<>();
         addItems(bag,client.getItemContainer(InventoryID.INVENTORY));
@@ -727,7 +728,6 @@ public class FarmingHelperPlugin extends Plugin
         Set<FarmRunPatch> careOnly=new LinkedHashSet<>();
         if(loggedIn&&!preparing&&highlight!=null&&!(specialtyStaged&&specialtyBirdPhase))
         {
-            WorldPoint here=client.getLocalPlayer().getWorldLocation();
             for(FarmRunPatch p:patches)
             {
                 PatchType type=p.getPatchType();
@@ -906,7 +906,6 @@ public class FarmingHelperPlugin extends Plugin
             birds.sort(Comparator.comparingInt(BirdhouseRun::order));
             for(FarmRunPatch p:birds)stops.add(new GuideView.Stop(p,"Final birdhouse stage — readiness checked after farming; supplies listed at resupply.",false,false));
         }
-        LocationContext location=LocationContext.capture(client);
         WorldPoint player=loggedIn?location.normalized:null;
         boolean instance=loggedIn&&location.instance;
         boolean aboard=loggedIn && client.getVarbitValue(VarbitID.SAILING_BOARDED_BOAT)!=0;
@@ -1024,7 +1023,7 @@ public class FarmingHelperPlugin extends Plugin
         for(FarmRunPatch p:patches)
         {
             PatchType type=p.getPatchType();
-            if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),here))continue;
+            if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),location.normalized))continue;
             QuestFarmingStateReader.Observation o=observe(p);
             if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.DISEASED||!highlight.hasVerifiedDisease(p))continue;
             verified.put(p,o);approaches.put(p,highlight.approach(p));

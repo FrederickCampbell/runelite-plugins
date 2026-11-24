@@ -1,3 +1,7 @@
+## v0.39-beta.2 — Compilation correction
+
+- Capture the shared location context before its first use in the guide update; use normalized coordinates consistently in local watering and disease checks. No new features.
+
 ## v0.39-beta.1 — Consolidation and travel integration
 
 - Cache Seed Vault patch eligibility on ordinary game updates, never invoke quest scripts inside native Seed Vault build callbacks, and invalidate the view when access changes.
