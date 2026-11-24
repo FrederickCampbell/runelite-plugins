@@ -486,7 +486,7 @@ final class FarmingHelperPanel extends PluginPanel
             addRow(navRow("Grouped runs","Customize presets",LAYERS,-1,false,this::groupedPreferences));
             addRow(navRow("Patches","Manage locations",PIN,-1,false,this::patchBrowser));
             addRow(navRow("Crop priorities","Preferred seeds",LEAF,-1,false,this::priorities));
-            addRow(navRow("Bank & Seed Vault","Storage integration",STORAGE,-1,false,this::storagePreferences));
+            addRow(navRow("Bank & Seed Vault","Storage integration",FarmingIcons.Kind.STORAGE,-1,false,this::storagePreferences));
             addRow(navRow("Advanced","Diagnostics & maintenance",TOOLS,-1,false,this::advanced));
             caption("Preferences save automatically.");
         }
@@ -522,7 +522,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void storagePreferences()
     {
-        page(STORAGE,"Bank & Seed Vault",this::preferences,null,latestGuide!=null);
+        page(SidebarNavigation.Page.STORAGE,"Bank & Seed Vault",this::preferences,null,latestGuide!=null);
         heading("Bank");preferenceCheck("Farming bank view","activeRunBank",true);caption("Open organized supplies during a run.");
         heading("Seed Vault");preferenceCheck("Custom Seed Vault views","seedVaultViews",true);caption("Highest XP · Top 3 · Custom · Active Run");finish();
     }
