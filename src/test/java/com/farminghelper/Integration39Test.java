@@ -48,6 +48,26 @@ public class Integration39Test
         assertTrue(sent.stream().anyMatch(e->"path".equals(e.getName())&&NavigationBridge.matchesTarget(
             Map.of("point",patch,"requirements",List.of(Map.of(5295,1))),e.getData().get("target"))));
     }
+    @Test public void modernClearChecksCurrentOwnership()
+    {
+        List<PluginMessage> sent=new ArrayList<>();
+        NavigationBridge bridge=new NavigationBridge(sent::add);bridge.enabled(true);
+        WorldPoint start=new WorldPoint(3100,3200,0),target=new WorldPoint(2848,3934,0),other=new WorldPoint(3000,3000,0);
+        bridge.request(start,target,true);
+        Object query=sent.get(0).getData().get("id");
+        bridge.message(new PluginMessage("shortestpath","result",Map.of("id",query,"reached",true)));
+        sent.clear();bridge.stop();
+        assertEquals("getTarget",sent.get(0).getName());
+        Object check=sent.get(0).getData().get("id");
+        bridge.message(new PluginMessage("shortestpath","currentTarget",Map.of("id",check,"set",true,"target",List.of(other))));
+        assertFalse(sent.stream().anyMatch(e->"clear".equals(e.getName())));
+        bridge.request(start,target,true);
+        PluginMessage pending=sent.stream().filter(e->"query".equals(e.getName())).findFirst().get();
+        bridge.message(new PluginMessage("shortestpath","result",Map.of("id",pending.getData().get("id"),"reached",true)));
+        sent.clear();bridge.stop();check=sent.get(0).getData().get("id");
+        bridge.message(new PluginMessage("shortestpath","currentTarget",Map.of("id",check,"set",true,"target",List.of(target))));
+        assertTrue(sent.stream().anyMatch(e->"clear".equals(e.getName())));
+    }
     @Test public void recognizesAdditionalVerifiedTransportObjects()
     {
         WorldPoint from=new WorldPoint(3100,3200,0),to=new WorldPoint(2848,3934,0);

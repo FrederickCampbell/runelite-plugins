@@ -731,7 +731,7 @@ public class FarmingHelperPlugin extends Plugin
             for(FarmRunPatch p:patches)
             {
                 PatchType type=p.getPatchType();
-                if(skipped.contains(p)||type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),here))continue;
+                if(skipped.contains(p)||type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),location.normalized))continue;
                 // Do not let routine watering pull Fossil Island ahead of remaining mainland work.
                 // Verified disease interruptions remain independent and can still interrupt.
                 if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
@@ -975,7 +975,7 @@ public class FarmingHelperPlugin extends Plugin
         stepItems=!preparing&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&atAction?localStepItems:Collections.emptySet();
         // Delegate only definite ordinary-bank planting shortages. Guild/vault,
         // birdhouse, Entrana and special-instance preparation retain their own guidance.
-        boolean nativeResupply=preparing&&!visitedStorage&&preparationBank!=null&&current!=null&&activeCrop!=null&&
+        boolean nativeResupply=preparing&&!visitedStorage&&preparationBank!=null&&current!=null&&activeCrop!=null&&Waypoints.destination(current)!=null&&
             preparationReason.startsWith("Resupply: the next crop")&&!instance&&!aboard&&
             !SpecialRoutes.insideHespori(player)&&!SpecialRoutes.insideSeaweed(player)&&!SpecialRoutes.insideCoral(player)&&
             !SpecialRoutes.anglers(current)&&current.getPatchType()!=PatchType.SEAWEED&&current.getPatchType()!=PatchType.CORAL&&current.getPatchType()!=PatchType.HESPORI&&
@@ -1017,7 +1017,8 @@ public class FarmingHelperPlugin extends Plugin
     private boolean showDiseaseInterrupt(String title,Map<Integer,Integer> bag,Map<Integer,Integer> carried)
     {
         if(highlight==null)return false;
-        WorldPoint here=client.getLocalPlayer().getWorldLocation();
+        LocationContext location=LocationContext.capture(client);
+        WorldPoint here=location.actual;
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> verified=new LinkedHashMap<>();
         Map<FarmRunPatch,WorldPoint> approaches=new HashMap<>();
         for(FarmRunPatch p:patches)
@@ -1045,7 +1046,7 @@ public class FarmingHelperPlugin extends Plugin
         WorldPoint approach=approaches.get(target);
         diseaseLeg=RouteLeg.walk(approach,false);
         diseaseTarget=target;
-        if(navigation!=null)navigation.request(here,approach,false);
+        if(navigation!=null)navigation.request(location.pathStart(),approach,false);
         String instruction=CropCare.prunes(type)?"Prune the diseased crop with secateurs.":"Use plant cure on the diseased crop.";
         if(carried.getOrDefault(cure,0)==0)instruction+=CropCare.prunes(type)?" Obtain secateurs or skip this cure.":" Obtain plant cure from a nearby farmer or shop if available, or skip this cure.";
         String resume=preparing?"Preparation / resupply":current==null?"The remaining run":current.getDisplayName();

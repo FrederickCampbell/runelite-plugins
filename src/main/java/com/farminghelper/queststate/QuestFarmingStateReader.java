@@ -280,7 +280,7 @@ public final class QuestFarmingStateReader
 
         WorldPoint player = client.getLocalPlayer() == null ? null
             : client.getLocalPlayer().getWorldLocation();
-        if (client.getLocalPlayer()!=null && client.getLocalPlayer().getWorldView()!=null && client.getLocalPlayer().getWorldView().isInstance() && client.getLocalPlayer().getLocalLocation()!=null)
+        if (client.getLocalPlayer()!=null && client.getLocalPlayer().getLocalLocation()!=null)
             player = LocationContext.normalize(client,client.getLocalPlayer().getLocalLocation(),player);
         boolean near = player != null && inPatchRegion(implementation==null?match.getImplementation().name():implementation.name(),location,patchName,player) &&
             (worldPoint == null

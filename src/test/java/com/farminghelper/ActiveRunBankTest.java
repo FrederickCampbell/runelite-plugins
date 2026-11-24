@@ -51,6 +51,17 @@ public class ActiveRunBankTest
         when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(empty,equipment);
         assertEquals(ActiveRunBank.ownedStock(client,id->real),ActiveRunBank.ownedStock(client,id->real));
     }
+    @Test public void wornCanonicalizationDoesNotDuplicateOrNormalizeOtherSources()
+    {
+        Client client=mock(Client.class);
+        ItemComposition real=mock(ItemComposition.class);
+        when(real.getPlaceholderTemplateId()).thenReturn(-1);
+        ItemContainer bank=container(new Item(11850,1)),bag=container(new Item(952,1)),worn=container(new Item(11851,1));
+        when(client.getItemContainer(InventoryID.BANK)).thenReturn(bank);
+        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(bag);
+        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(worn);
+        assertEquals(Map.of(11850,2,952,1),ActiveRunBank.ownedStock(client,id->real,id->id==11851?11850:id));
+    }
     @Test public void combinedStockKeepsInputsAndAddsQuantities()
     {
         Map<Integer,Integer> a=Map.of(952,1,556,10),b=Map.of(556,20);

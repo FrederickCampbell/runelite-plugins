@@ -2,6 +2,7 @@ package com.farminghelper;
 
 import java.util.*;
 import java.util.function.IntFunction;
+import java.util.function.IntUnaryOperator;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.ItemComposition;
@@ -55,22 +56,18 @@ final class ActiveRunBank
     /** One live ownership snapshot for both curation and positional layout.
      * Seed Vault stock and native bank placeholders are not bank shelf items. */
     static Map<Integer,Integer> ownedStock(Client client,IntFunction<ItemComposition> definition)
-    {
-        Map<Integer,Integer> result=new HashMap<>();
-        for(InventoryID source:List.of(InventoryID.BANK,InventoryID.INVENTORY,InventoryID.EQUIPMENT))
-            PhysicalStock.collect(result,client.getItemContainer(source),definition);
-        return Map.copyOf(result);
-    }
-    Map<Integer,Integer> ownedStock()
+    {return ownedStock(client,definition,id->id);}
+    static Map<Integer,Integer> ownedStock(Client client,IntFunction<ItemComposition> definition,IntUnaryOperator canonicalizeWorn)
     {
         Map<Integer,Integer> result=new HashMap<>(),worn=new HashMap<>();
-        PhysicalStock.collect(result,client.getItemContainer(InventoryID.BANK),items::getItemComposition);
-        PhysicalStock.collect(result,client.getItemContainer(InventoryID.INVENTORY),items::getItemComposition);
-        PhysicalStock.collect(worn,client.getItemContainer(InventoryID.EQUIPMENT),items::getItemComposition);
+        PhysicalStock.collect(result,client.getItemContainer(InventoryID.BANK),definition);
+        PhysicalStock.collect(result,client.getItemContainer(InventoryID.INVENTORY),definition);
+        PhysicalStock.collect(worn,client.getItemContainer(InventoryID.EQUIPMENT),definition);
         // Only normalize worn IDs for this visual shelf; exact supply stock is unchanged.
-        worn.forEach((id,n)->result.merge(items.canonicalize(id),n,Integer::sum));
+        worn.forEach((id,n)->result.merge(canonicalizeWorn.applyAsInt(id),n,Integer::sum));
         return Map.copyOf(result);
     }
+    Map<Integer,Integer> ownedStock(){return ownedStock(client,items::getItemComposition,items::canonicalize);}
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
     private int slot(int id){var s=items.getItemStats(id);return s==null||s.getEquipment()==null?-1:s.getEquipment().getSlot();}
     static Set<Integer> admittedIds(int[] layout)
@@ -121,8 +118,8 @@ final class ActiveRunBank
     {
         // Native Bank Tags can restore its remembered tag on reopen even after
         // our in-memory registration was released. Close only our exact tag.
-        if(api!=null&&TAG.equals(api.getActiveTag())&&bankOpen())api.closeBankTag();
-        release();
+        try{if(api!=null&&TAG.equals(api.getActiveTag())&&bankOpen())api.closeBankTag();}
+        finally{release();}
     }
     private void release()
     {

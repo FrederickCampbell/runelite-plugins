@@ -1,3 +1,11 @@
+## v0.39-beta.1 — Consolidation and travel integration
+
+- Cache Seed Vault patch eligibility on ordinary game updates, never invoke quest scripts inside native Seed Vault build callbacks, and invalidate the view when access changes.
+- Share physical stock readers; canonicalize worn items for bank presentation only. Preserve exact crop stock and charged jewellery shelf positions. Release temporary registration and close an orphaned remembered farming tag without touching other tags.
+- Share Quest Helper-derived coordinate conversion; recognize known POH templates and delegate travel to Shortest Path, with manual guidance when unavailable. Keep verified cave, underwater and sailing transitions.
+- Accept additional valid native transport metadata. For confirmed ordinary-bank planting shortages, query Shortest Path's item-aware destination API and fall back to the existing advisory bank if unsupported. Check current target before clearing a modern route; legacy compatibility retained.
+- Preserve all settings, presets and manual gameplay. Added targeted regression tests. Requires full staging build, live client checks and Plugin Hub packaging validation.
+
 ## v0.38-beta.1 — Seed Vault refresh lifecycle
 
 - Reapply the verified native-widget projection at outermost Seed Vault script completion instead of waiting for the next ClientTick. Preserve the selected custom view and scroll, retain category controls across ordinary rebuilds, and retry after client scripts if native code overwrites the projection.

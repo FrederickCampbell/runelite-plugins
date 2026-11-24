@@ -15,7 +15,8 @@ final class NavigationBridge
     private Object shownTarget;
     private boolean enabled, owned, probe, refreshPending, modern;
     private int ticks, sequence;
-    private String queryId, targetId, status="";
+    private String queryId, targetId, clearId, status="";
+    private Object clearTarget;
     private List<TransportHint> hints=Collections.emptyList();
     TransportHint nearbyTransport(WorldPoint player){return enabled&&owned?TransportHint.nearby(hints,player):null;}
     NavigationBridge(Consumer<PluginMessage> send){this.send=send;}
@@ -28,7 +29,8 @@ final class NavigationBridge
     void stop(){reset(true);}
     private void reset(boolean clear)
     {
-        if(clear && enabled && owned && displayed!=null)post("clear",null);
+        if(clear)releaseDisplayed();
+        else {clearId=null;clearTarget=null;}
         requested=null;displayed=null;start=null;owned=false;probe=false;refreshPending=false;
         fallbackBank=null;bankRequirements=Map.of();shownTarget=null;
         queryId=null;targetId=null;status="";ticks=0;hints=Collections.emptyList();
@@ -41,7 +43,7 @@ final class NavigationBridge
     {
         if(!enabled)return;
         if(Objects.equals(requested,to)&&probe==verify&&Objects.equals(fallbackBank,fallback)&&bankRequirements.equals(requirements))return;
-        if(owned && displayed!=null)post("clear",null);
+        releaseDisplayed();
         requested=from==null?null:to;displayed=null;owned=false;start=from;probe=verify;ticks=0;status="";
         fallbackBank=fallback;bankRequirements=requirements;shownTarget=null;
         queryId=null;targetId=null;refreshPending=false;hints=Collections.emptyList();
@@ -57,10 +59,22 @@ final class NavigationBridge
         }
         else {display(to);refreshPending=true;}
     }
+    private void releaseDisplayed()
+    {
+        if(!enabled||!owned||displayed==null)return;
+        if(!modern){post("clear",null);return;}
+        // No exclusive ownership token exists in the public API. Recheck the
+        // complete target immediately before clearing; a new display cancels
+        // the pending release. Legacy clients retain their original behavior.
+        clearId="farming-helper-clear-"+(++sequence);
+        clearTarget=shownTarget;
+        post("getTarget",Map.of("id",clearId));
+    }
     private void display(WorldPoint point){display(point,point);}
     private void display(WorldPoint point,Object target)
     {
         if(start==null||point==null)return;
+        clearId=null;clearTarget=null;
         displayed=point;shownTarget=target;owned=true;status="";
         post("path",Map.of("start",start,"target",target));
     }
@@ -72,6 +86,7 @@ final class NavigationBridge
     }
     private void bankFallback()
     {
+        hints=Collections.emptyList();
         display(fallbackBank);
         status="Use the suggested bank or any accessible bank, then continue.";
     }
@@ -124,6 +139,12 @@ final class NavigationBridge
     {
         if(!enabled || !"shortestpath".equals(event.getNamespace()) || event.getData()==null)return;
         Map<String,Object> data=event.getData();Object id=data.get("id");
+        if("currentTarget".equals(event.getName())&&clearId!=null&&clearId.equals(id))
+        {
+            Object expected=clearTarget;clearId=null;clearTarget=null;
+            if(Boolean.TRUE.equals(data.get("set"))&&matchesTarget(expected,data.get("target")))post("clear",null);
+            return;
+        }
         if("result".equals(event.getName()) && queryId!=null && queryId.equals(id))
         {
             modern=true;queryId=null;targetId=null;

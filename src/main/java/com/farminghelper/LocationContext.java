@@ -32,7 +32,7 @@ public final class LocationContext
         if(!view.isTopLevel())
         {
             WorldView top=client.getTopLevelWorldView();
-            if(top==null)return fallback;
+            if(top==null||top.worldEntities()==null)return fallback;
             var entity=top.worldEntities().byIndex(view.getId());
             if(entity==null)return fallback;
             LocalPoint main=entity.transformToMainWorld(local);
