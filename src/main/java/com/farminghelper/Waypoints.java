@@ -62,6 +62,12 @@ final class Waypoints
 
         // RuneLite FarmingPatchLocation map markers (not exact object tiles).
         // https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/worldmap/FarmingPatchLocation.java
+        for (PatchType type : new PatchType[]{PatchType.ALLOTMENT,PatchType.FLOWER})
+        {
+            area(type,"Falador",3052,3309);area(type,"Ardougne",2663,3375);
+            area(type,"Catherby",2810,3462);area(type,"Morytania",3598,3524);
+            area(type,"Kourend",1729,3558);area(type,"Civitas illa Fortis",1587,3101);
+        }
         area(PatchType.ALLOTMENT, "Prifddinas", 3289, 6100);
         area(PatchType.FLOWER, "Prifddinas", 3289, 6100);
         area(PatchType.ALLOTMENT, "Farming Guild", 1269, 3730);
@@ -92,8 +98,8 @@ final class Waypoints
         area(PatchType.CORAL, "Great Conch", 3296, 8861);
         area(PatchType.SPIRIT_TREE, "Port Sarim", 3056, 3259);
         area(PatchType.SPIRIT_TREE, "Kourend", 1690, 3540);
-        // The Etceteria map marker disagrees with the region registry; use the verified local bush area.
-        area(PatchType.SPIRIT_TREE, "Etceteria", 2589, 3862);
+        // Shortest Path spirit_trees.tsv lists the planted-tree destination.
+        area(PatchType.SPIRIT_TREE, "Etceteria", 2613, 3855);
         area(PatchType.SPIRIT_TREE, "Brimhaven", 2799, 3205);
         area(PatchType.SPIRIT_TREE, "Farming Guild", 1254, 3753);
     }

@@ -1,3 +1,3 @@
-# Farming Helper 0.15.0-beta.1
+# Farming Helper v0.16.0-beta.1
 
-Restore Quest Helper-style requirement groups and collapsible active-step sections without reintroducing Advisor, saved sessions, banking tabs or independent teleport planning. Add missing-stock requirements, editable priorities, patch overrides, live item highlights, session-local completion, optional gardener protection and special-area approach routing. Requires successful build/regression validation and manual RuneLite testing.
+Refinement of the v0.15 standalone guide. See README and CHANGELOG. No banking UI, saved sessions, independent teleport planning or automated game actions.

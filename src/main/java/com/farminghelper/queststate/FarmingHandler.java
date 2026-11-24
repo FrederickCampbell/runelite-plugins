@@ -52,11 +52,12 @@ public class FarmingHandler
 	@Nullable
 	public CropState predictPatch(FarmingPatch patch, String profile)
 	{
-		long unixNow = Instant.now().getEpochSecond();
+        return predictObserved(patch,profile,configManager.getConfiguration("timetracking",profile,patch.configKey()));
+    }
 
-		String key = patch.configKey();
-		String storedValue = configManager.getConfiguration("timetracking", profile, key);
-
+    CropState predictObserved(FarmingPatch patch,String profile,String storedValue)
+    {
+        long unixNow=Instant.now().getEpochSecond();
 		if (storedValue == null)
 		{
 			return null;

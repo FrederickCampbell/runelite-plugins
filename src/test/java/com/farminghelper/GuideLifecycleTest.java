@@ -76,7 +76,7 @@ public class GuideLifecycleTest
         assertEquals("Ardougne",plugin.activePatch().getLocation());
         verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2670,3374,0))));
         plugin.onGameTick(null);
-        verifyNoMoreInteractions(bus);
+        verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
         plugin.skip(plugin.activePatch());
         assertEquals("Catherby",plugin.activePatch().getLocation());
         verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2813,3463,0))));
@@ -90,8 +90,7 @@ public class GuideLifecycleTest
         plugin.stop();
         assertNull(plugin.activePatch());
         plugin.onGameTick(null);
-        verify(bus).post(new PluginMessage("shortestpath","clear"));
-        verifyNoMoreInteractions(bus);
+        verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
         plugin.start(EnumSet.of(FarmRunType.HERB));
         assertEquals("Ardougne",plugin.activePatch().getLocation());
         plugin.stop();

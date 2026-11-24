@@ -32,6 +32,8 @@ public final class QuestFarmingStateReader
     private final ConfigManager config;
     private final FarmingWorld world;
     private final FarmingHandler handler;
+    private final Map<String,String> recent=new HashMap<>();
+    private String recentProfile;
 
     @Inject
     public QuestFarmingStateReader(Client client, ConfigManager config)
@@ -44,7 +46,7 @@ public final class QuestFarmingStateReader
 
     public enum Source
     {
-        LIVE, TIME_TRACKING, ADVISOR, NONE
+        LIVE, TIME_TRACKING, OBSERVED, ADVISOR, NONE
     }
 
     public static final class Observation
@@ -120,6 +122,24 @@ public final class QuestFarmingStateReader
         return patch == null ? -1 : patch.getFarmer();
     }
 
+    public int patchVarbit(String type,String location,String name)
+    {
+        PatchImplementation impl=implementation(type);
+        FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
+        return patch==null?-1:patch.getVarbit();
+    }
+
+    public boolean inPatchRegion(String type,String location,String name,WorldPoint point)
+    {
+        if(point==null)return false;
+        PatchImplementation impl=implementation(type);
+        FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
+        if(patch==null)return false;
+        if(impl==PatchImplementation.CORAL && point.getRegionID()!=13194)return false;
+        if(impl==PatchImplementation.HESPORI && point.getRegionID()!=5021)return false;
+        return world.getRegionsForLocation(point).contains(patch.getRegion());
+    }
+
     public List<String> patchNamesForType(String patchType, String location)
     {
         PatchImplementation impl = implementation(patchType);
@@ -180,6 +200,8 @@ public final class QuestFarmingStateReader
             return new Observation(null, Source.NONE, 0, null, "");
         }
 
+        String profile=config.getRSProfileKey();
+        if(!java.util.Objects.equals(profile,recentProfile)){recent.clear();recentProfile=profile;}
         FarmingPatch match = find(world, tab, location, patchName, implementation);
         if (match == null)
         {
@@ -190,14 +212,13 @@ public final class QuestFarmingStateReader
 
         WorldPoint player = client.getLocalPlayer() == null ? null
             : client.getLocalPlayer().getWorldLocation();
-        if (implementation == PatchImplementation.HESPORI && client.getLocalPlayer()!=null && client.getLocalPlayer().getLocalLocation()!=null)
+        if (client.getLocalPlayer()!=null && client.getLocalPlayer().getWorldView()!=null && client.getLocalPlayer().getWorldView().isInstance() && client.getLocalPlayer().getLocalLocation()!=null)
             player = WorldPoint.fromLocalInstance(client,client.getLocalPlayer().getLocalLocation());
-        boolean near = player != null && world.getRegionsForLocation(player)
-            .contains(match.getRegion()) &&
+        boolean near = player != null && inPatchRegion(implementation==null?match.getImplementation().name():implementation.name(),location,patchName,player) &&
             (worldPoint == null
                 ? player.getRegionID() == match.getRegion().getRegionID()
-                : player.getPlane() == worldPoint.getPlane() &&
-                    player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS);
+                : (implementation==PatchImplementation.CORAL ? player.distanceTo2D(worldPoint)<=LIVE_TILE_RADIUS :
+                    player.getPlane() == worldPoint.getPlane() && player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS));
         if (near)
         {
             int value = client.getVarbitValue(match.getVarbit());
@@ -205,13 +226,17 @@ public final class QuestFarmingStateReader
             if (raw != null)
             {
                 CropState state = normalizedState(match.getImplementation(), value, raw);
+                String old=recent.get(match.configKey());
+                if(old==null || !old.startsWith(value+":"))recent.put(match.configKey(),value+":"+(System.currentTimeMillis()/1000));
                 return new Observation(state, Source.LIVE, System.currentTimeMillis(),
                     protection, match.getName(), value);
             }
         }
 
-        String raw = config.getConfiguration(TIME_TRACKING, config.getRSProfileKey(),
-            match.configKey());
+        String raw = config.getConfiguration(TIME_TRACKING, profile, match.configKey());
+        String observed=recent.get(match.configKey());
+        boolean own=timestampMillis(observed)>timestampMillis(raw);
+        if(own)raw=observed;
         if (raw == null)
         {
             return new Observation(null, Source.NONE, 0, protection, match.getName());
@@ -221,8 +246,8 @@ public final class QuestFarmingStateReader
         {
             return new Observation(null, Source.NONE, 0, protection, match.getName());
         }
-        CropState state = handler.predictPatch(match);
-        return new Observation(state, state == null ? Source.NONE : Source.TIME_TRACKING,
+        CropState state = handler.predictObserved(match,profile,raw);
+        return new Observation(state, state == null ? Source.NONE : own?Source.OBSERVED:Source.TIME_TRACKING,
             observedAtMillis, protection, match.getName());
     }
 
@@ -233,6 +258,7 @@ public final class QuestFarmingStateReader
     {
         if (raw == null) return null;
         if (raw.getProduce() == Produce.WEEDS) return CropState.EMPTY;
+        if (implementation == PatchImplementation.CORAL && (value==8 || value==19 || value==30)) return CropState.HARVESTABLE;
         if (implementation == PatchImplementation.ANIMA &&
             (value == 16 || value == 25 || value == 34)) return CropState.DEAD;
         if (implementation == PatchImplementation.SPIRIT_TREE && value == 44 ||

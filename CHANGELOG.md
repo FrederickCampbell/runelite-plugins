@@ -1,3 +1,12 @@
+# v0.16.0-beta.1 — crop intelligence, navigation and presentation
+
+- Stock-aware individual and category priorities with automatic fallback; persistent character-local storage observations.
+- Optional Shortest Path reachability queries, stale-route refresh and ownership checks; explicit cave/underwater entry/exit and Sailing mooring stages.
+- Keep Quest Helper exact coordinates; reconcile Etceteria with Shortest Path, use live varbit-matched object identities and collision-aware perimeter approaches.
+- Correct mature coral and permanent-tree handling; cure supplies and stable active seed allocation.
+- Native item sprites and compact guide sections; update quantity/instruction rows in place.
+- Add regression tests; live specialty routes remain subject to in-client testing.
+
 # v0.15.0-beta.1 — Quest Helper presentation and interaction pass
 
 - Separate live required/recommended counts and stock hints; eligible missing crop requirements remain visible.

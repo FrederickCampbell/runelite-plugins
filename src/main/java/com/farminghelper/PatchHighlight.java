@@ -1,110 +1,165 @@
 package com.farminghelper;
 
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
-import java.awt.Polygon;
-import java.awt.Shape;
-import java.util.ArrayList;
+import java.awt.*;
+import java.util.*;
 import java.util.List;
-import java.util.Locale;
-import java.util.HashSet;
-import java.util.Set;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.*;
-import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.OverlayUtil;
 
-/** Quest Helper ObjectStep/NpcStep-style highlights, restricted to known targets. */
+/** Quest Helper object targets and Advisor-style grouping, with region + varbit identity.
+ * The anchor is the actual object, not the tile on which to stand. */
 final class PatchHighlight extends Overlay
 {
     private final Client client;
     private final Provider<FarmingHelperPlugin> plugin;
     private final Set<GameObject> objects=new HashSet<>();
-    @Inject PatchHighlight(Client client, Provider<FarmingHelperPlugin> plugin)
+    @Inject PatchHighlight(Client client,Provider<FarmingHelperPlugin> plugin)
+    {this.client=client;this.plugin=plugin;setPosition(OverlayPosition.DYNAMIC);}
+    void spawned(GameObject object)
     {
-        this.client=client;this.plugin=plugin;setPosition(OverlayPosition.DYNAMIC);
-    }
-    void spawned(GameObject o)
-    {
-        if(o==null)return;
-        if(PatchObjects.known(o.getId())){objects.add(o);return;}
-        ObjectComposition c=client.getObjectDefinition(o.getId());
+        if(object==null)return;
+        ObjectComposition c=client.getObjectDefinition(object.getId());
+        if(PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c))
+        {objects.add(object);return;}
         if(c!=null && c.getImpostorIds()!=null)
-            for(int id:c.getImpostorIds()) if(PatchObjects.known(id)){objects.add(o);return;}
-        // Exact Quest Helper base patch IDs may not appear in decoder comments.
-        if(QuestTargets.known(o.getId())) objects.add(o);
+            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id)){objects.add(object);return;}
     }
     void despawned(GameObject o){objects.remove(o);}
     void clear(){objects.clear();}
+    private static String name(ObjectComposition c){return c==null || c.getName()==null?"":c.getName().toLowerCase(Locale.ROOT);}
+    private static boolean isVine(ObjectComposition c){String n=name(c);return n.contains("grape") || n.contains("vine patch");}
+    private static boolean hasAction(ObjectComposition c,String action)
+    {if(c==null || c.getActions()==null)return false;for(String a:c.getActions())if(a!=null && a.equalsIgnoreCase(action))return true;return false;}
+    private static boolean isTransition(ObjectComposition c)
+    {
+        String n=name(c);
+        return n.contains("cave entrance") || n.contains("cave exit") || n.equals("steps") || n.contains("rowboat")
+            || n.contains("mooring") || n.contains("gangplank") || hasAction(c,"Surface") || hasAction(c,"Dive");
+    }
+    private ObjectComposition transformed(ObjectComposition c)
+    {return c==null || c.getImpostorIds()==null?c:c.getImpostor();}
+    private boolean sameView(GameObject o)
+    {return client.getLocalPlayer()!=null && o.getWorldView()==client.getLocalPlayer().getWorldView() && o.getPlane()==client.getPlane();}
+    private WorldPoint template(GameObject o)
+    {return o.getWorldView()!=null && o.getWorldView().isInstance() && o.getLocalLocation()!=null?WorldPoint.fromLocalInstance(client,o.getLocalLocation(),o.getPlane()):o.getWorldLocation();}
+    private List<GameObject> resolve(FarmRunPatch patch)
+    {
+        if(patch==null || client.getLocalPlayer()==null)return Collections.emptyList();
+        FarmingHelperPlugin helper=plugin.get();
+        WorldPoint marker=Waypoints.destination(patch);
+        QuestTargets.Definition exact=QuestTargets.get(patch);
+        int varbit=helper.patchVarbit(patch);
+        List<GameObject> verified=new ArrayList<>(),candidates=new ArrayList<>();
+        for(GameObject o:objects)
+        {
+            if(!sameView(o))continue;
+            WorldPoint point=template(o);if(point==null)continue;
+            ObjectComposition base=client.getObjectDefinition(o.getId()), imp=transformed(base);
+            boolean exactId=exact!=null && (o.getId()==exact.objectId || imp!=null && imp.getId()==exact.objectId);
+            if(exactId && point.distanceTo(Waypoints.exactPoint(patch))<=3){verified.add(o);continue;}
+            if(!helper.inPatchRegion(patch,point))continue;
+            boolean type=PatchObjects.matches(patch.getPatchType(),o.getId()) || imp!=null && PatchObjects.matches(patch.getPatchType(),imp.getId())
+                || patch.getPatchType()==PatchType.GRAPEVINE && (isVine(base)||isVine(imp));
+            if(!type)continue;
+            // The base object's transform varbit can directly bind a numbered or compass patch.
+            if(varbit>0 && base!=null && base.getVarbitId()==varbit){verified.add(o);continue;}
+            if(patch.getPatchType()==PatchType.HESPORI || patch.getPatchType()==PatchType.CORAL || marker!=null && point.distanceTo2D(marker)<=25)candidates.add(o);
+        }
+        if(!verified.isEmpty())return verified;
+        if(exact!=null)return Collections.emptyList();
+        // Advisor's connected-object technique, applied only to verified farming regions.
+        List<List<GameObject>> groups=new ArrayList<>();List<WorldPoint> positions=new ArrayList<>();
+        while(!candidates.isEmpty())
+        {
+            List<GameObject> group=new ArrayList<>();group.add(candidates.remove(candidates.size()-1));
+            for(int i=0;i<group.size();i++)for(int j=candidates.size()-1;j>=0;j--)
+                if(group.get(i).getWorldLocation().distanceTo(candidates.get(j).getWorldLocation())<=1)group.add(candidates.remove(j));
+            int x=0,y=0;for(GameObject o:group){x+=o.getWorldLocation().getX();y+=o.getWorldLocation().getY();}
+            positions.add(new WorldPoint(x/group.size(),y/group.size(),group.get(0).getPlane()));groups.add(group);
+        }
+        int chosen=select(patch.getName(),positions,helper.patchCount(patch));
+        return chosen<0?Collections.emptyList():groups.get(chosen);
+    }
+    /** Find a nearby walkable perimeter tile. Do not return a guessed tile if collision data is absent. */
+    WorldPoint approach(FarmRunPatch patch)
+    {
+        List<GameObject> group=resolve(patch);
+        if(group.isEmpty() || client.getLocalPlayer()==null)return null;
+        WorldView view=group.get(0).getWorldView();
+        if(view==null || view.isInstance() || !view.isTopLevel())return null;
+        CollisionData[] maps=view.getCollisionMaps();int plane=group.get(0).getPlane();
+        if(maps==null || plane<0 || plane>=maps.length || maps[plane]==null)return null;
+        int[][] flags=maps[plane].getFlags();if(flags==null)return null;
+        int minX=Integer.MAX_VALUE,minY=Integer.MAX_VALUE,maxX=Integer.MIN_VALUE,maxY=Integer.MIN_VALUE;
+        for(GameObject o:group)
+        {WorldPoint p=o.getWorldLocation();int x=p.getX()-(o.sizeX()-1)/2,y=p.getY()-(o.sizeY()-1)/2;
+            minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x+Math.max(1,o.sizeX())-1);maxY=Math.max(maxY,y+Math.max(1,o.sizeY())-1);}
+        WorldPoint reference=Waypoints.destination(patch),best=null;int score=Integer.MAX_VALUE;
+        if(reference==null || reference.getPlane()!=plane)reference=group.get(0).getWorldLocation();
+        for(int x=minX-1;x<=maxX+1;x++)for(int y=minY-1;y<=maxY+1;y++)
+        {
+            if(x>=minX && x<=maxX && y>=minY && y<=maxY)continue;
+            // Cardinal perimeter tiles are proper interaction approaches.
+            if((x<minX || x>maxX) && (y<minY || y>maxY))continue;
+            int sx=x-view.getBaseX(),sy=y-view.getBaseY();
+            if(sx<0 || sx>=flags.length || sy<0 || sy>=flags[sx].length || (flags[sx][sy]&CollisionDataFlag.BLOCK_MOVEMENT_FULL)!=0)continue;
+            WorldPoint p=new WorldPoint(x,y,plane);int d=reference.distanceTo(p);
+            if(d<score){best=p;score=d;}
+        }
+        return best;
+    }
+    private boolean transitionMatches(RouteLeg.Interaction interaction,GameObject object)
+    {
+        ObjectComposition base=client.getObjectDefinition(object.getId()),c=transformed(base);if(c==null)c=base;
+        String n=name(c);int id=object.getId();
+        switch(interaction)
+        {
+            case HESPORI_ENTER:return n.contains("cave entrance");
+            case HESPORI_EXIT:return n.contains("cave exit") || n.contains("cave entrance") && hasAction(c,"Exit");
+            case DIVE:return id==30919 || n.contains("rowboat") && hasAction(c,"Dive");
+            case SURFACE:return hasAction(c,"Surface") || hasAction(c,"Climb-up") && n.contains("rope");
+            case CORAL_ENTER:return id==57904 || c!=null && c.getId()==57904;
+            case CORAL_EXIT:return id==57903 || c!=null && c.getId()==57903;
+            case BOARD:return n.contains("gangplank") && (hasAction(c,"Board") || hasAction(c,"Cross"));
+            case MOOR:return n.contains("mooring") || n.contains("gangplank");
+            default:return false;
+        }
+    }
     @Override public Dimension render(Graphics2D graphics)
     {
-        FarmingHelperPlugin helper=plugin.get();FarmRunPatch patch=helper.activePatch();
-        if(patch==null || client.getLocalPlayer()==null)return null;
+        FarmingHelperPlugin helper=plugin.get();if(client.getLocalPlayer()==null)return null;
+        RouteLeg leg=helper.activeLeg();
+        if(leg!=null && leg.interaction!=RouteLeg.Interaction.NONE)
+        {
+            GameObject selected=null;int distance=Integer.MAX_VALUE;
+            WorldPoint anchor=leg.point==null?client.getLocalPlayer().getWorldLocation():leg.point;
+            for(GameObject o:objects)if(sameView(o) && transitionMatches(leg.interaction,o))
+            {int d=o.getWorldLocation().distanceTo(anchor);if(d<distance && d<=18){selected=o;distance=d;}}
+            if(selected!=null)draw(graphics,selected.getClickbox());return null;
+        }
+        FarmRunPatch patch=helper.activePatch();if(patch==null)return null;
         StepEngine.Action action=helper.activeAction();
-        WorldPoint point=Waypoints.destination(patch);
-        if(point==null || client.getPlane()!=point.getPlane())return null;
         if(patch.getPatchType()==PatchType.HESPORI && action==StepEngine.Action.HARVEST)return null;
         if(action==StepEngine.Action.PAY_REMOVE || action==StepEngine.Action.PROTECT_TREE)
         {
             int gardener=helper.gardener(patch);
-            if(gardener>0 && client.getTopLevelWorldView()!=null)
-                for(NPC npc:client.getTopLevelWorldView().npcs())
-                    if(npc.getId()==gardener && npc.getWorldLocation().distanceTo(point)<=12)
-                    {draw(graphics,npc.getConvexHull());return null;}
+            if(gardener>0 && helper.activeLive() && client.getTopLevelWorldView()!=null)
+                for(NPC npc:client.getTopLevelWorldView().npcs())if(npc.getId()==gardener && npc.getWorldLocation().distanceTo(client.getLocalPlayer().getWorldLocation())<=25)
+                {draw(graphics,npc.getConvexHull());return null;}
             return null;
         }
-        QuestTargets.Definition definition=QuestTargets.get(patch);
-        if(definition!=null)
+        List<GameObject> group=resolve(patch);
+        for(GameObject o:group)draw(graphics,o.getClickbox());
+        if(group.isEmpty() && QuestTargets.get(patch)!=null)
         {
-            for(GameObject object:objects)
-            {
-                if(object.getWorldView()!=client.getLocalPlayer().getWorldView() || object.getWorldLocation().distanceTo(point)>2)continue;
-                ObjectComposition composition=client.getObjectDefinition(object.getId());
-                ObjectComposition impostor=composition==null || composition.getImpostorIds()==null?null:composition.getImpostor();
-                if(object.getId()==definition.objectId || (impostor!=null && impostor.getId()==definition.objectId))
-                {draw(graphics,object.getClickbox());return null;}
-            }
-            LocalPoint local=LocalPoint.fromWorld(client,point);
-            if(local!=null)
-            {
-                Polygon tile=Perspective.getCanvasTilePoly(client,local);
-                if(tile!=null)OverlayUtil.renderPolygon(graphics,tile,Color.CYAN);
-            }
-        }
-        else if(helper.activeLive())
-        {
-            // Resolve only the live area's objects. Directional names are used only
-            // when every physical patch in the pair is observed. Otherwise retain
-            // the sidebar instruction without a potentially misleading outline.
-            WorldPoint anchor=patch.getPatchType()==PatchType.HESPORI?client.getLocalPlayer().getWorldLocation():point;
-            List<List<GameObject>> groups=new ArrayList<>();
-            List<GameObject> candidates=new ArrayList<>();
-            for(GameObject object:objects)
-            {
-                if(object.getWorldView()!=client.getLocalPlayer().getWorldView() || object.getWorldLocation().distanceTo(anchor)>18)continue;
-                ObjectComposition c=client.getObjectDefinition(object.getId());
-                ObjectComposition imp=c==null || c.getImpostorIds()==null?null:c.getImpostor();
-                if(PatchObjects.matches(patch.getPatchType(),object.getId()) || imp!=null && PatchObjects.matches(patch.getPatchType(),imp.getId())) candidates.add(object);
-            }
-            List<WorldPoint> positions=new ArrayList<>();
-            while(!candidates.isEmpty())
-            {
-                List<GameObject> group=new ArrayList<>();group.add(candidates.remove(candidates.size()-1));
-                for(int i=0;i<group.size();i++)
-                    for(int j=candidates.size()-1;j>=0;j--)
-                        if(group.get(i).getWorldLocation().distanceTo(candidates.get(j).getWorldLocation())<=1)group.add(candidates.remove(j));
-                int x=0,y=0;for(GameObject o:group){x+=o.getWorldLocation().getX();y+=o.getWorldLocation().getY();}
-                positions.add(new WorldPoint(x/group.size(),y/group.size(),group.get(0).getWorldLocation().getPlane()));groups.add(group);
-            }
-            int selected=select(patch.getName(),positions,helper.patchCount(patch));
-            if(selected>=0)for(GameObject object:groups.get(selected))draw(graphics,object.getClickbox());
+            WorldPoint point=Waypoints.exactPoint(patch);LocalPoint local=LocalPoint.fromWorld(client,point);
+            if(local!=null){Polygon tile=Perspective.getCanvasTilePoly(client,local);if(tile!=null)OverlayUtil.renderPolygon(graphics,tile,Color.CYAN);}
         }
         return null;
     }

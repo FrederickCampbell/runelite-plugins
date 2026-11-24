@@ -29,14 +29,18 @@ import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.game.ItemManager;
+import javax.swing.ImageIcon;
 
 @PluginDescriptor(name = "Farming Helper", description = "Farming guides with stock-aware seed choices",
     tags = {"farming", "seed", "herb", "tree"})
 public class FarmingHelperPlugin extends Plugin
 {
     @Inject private Client client;
+    @Inject private ItemManager itemManager;
     @Inject private PluginManager plugins;
-    private boolean routingAvailable;
+    private NavigationBridge navigation;
+    private volatile RouteLeg activeLeg;
     @Inject private ClientThread thread;
     @Inject private ConfigManager config;
     @Inject private FarmingHelperConfig legacy;
@@ -57,10 +61,11 @@ public class FarmingHelperPlugin extends Plugin
     private volatile long session;
     private volatile boolean guideRequested;
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
+    private String stockProfile;
+    private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
     private Set<FarmRunType> run = Collections.emptySet();
     private FarmingHelperPanel panel;
     private NavigationButton nav;
-    private WorldPoint destination;
     private volatile FarmRunPatch current;
     private String lastView;
     private volatile Map<String,String> accessNotes = Collections.emptyMap();
@@ -75,8 +80,9 @@ public class FarmingHelperPlugin extends Plugin
     @Override protected void startUp()
     {
         running = true;
-        routingAvailable = plugins.getPlugins().stream().anyMatch(p ->
-            "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
+        navigation=new NavigationBridge(bus::post);
+        navigation.enabled(plugins.getPlugins().stream().anyMatch(p ->
+            "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p)));
         for (FarmRunPatch group : FarmRunCatalog.patches())
             patches.addAll(PatchNames.expand(group,
                 reader.patchNamesForType(group.getPatchType().name(), group.getLocation())));
@@ -109,7 +115,9 @@ public class FarmingHelperPlugin extends Plugin
             if (!running || !guideRequested || requested != session) return;
             clearRun();
             run = EnumSet.copyOf(types);
+            loadStock();
             sampleStorage();
+            navigation.begin();
             update();
         });
     }
@@ -134,7 +142,8 @@ public class FarmingHelperPlugin extends Plugin
         requiredItems = Collections.emptySet();
         recommendedItems = Collections.emptySet();
         lastView = null;
-        navigate(null);
+        activeLeg=null;
+        if(navigation!=null)navigation.stop();
     }
 
     private void end()
@@ -152,6 +161,7 @@ public class FarmingHelperPlugin extends Plugin
         accessNotes=Collections.emptyMap();
         bank.clear();
         vault.clear();
+        stockProfile=null;
         end();
     }
 
@@ -168,11 +178,13 @@ public class FarmingHelperPlugin extends Plugin
         if (!"Shortest Path".equals(event.getPlugin().getName())) return;
         thread.invokeLater(() -> {
             if (!running) return;
-            routingAvailable = event.isLoaded();
-            destination = null;
+            navigation.enabled(event.isLoaded());
             if (!run.isEmpty()) update();
         });
     }
+
+    @Subscribe public void onPluginMessage(PluginMessage event)
+    {if(navigation!=null)navigation.message(event);}
 
     @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
     @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { reset(); }
@@ -188,7 +200,13 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onGameTick(GameTick event)
     {
         if (client.getGameState() != GameState.LOGGED_IN) return;
-        if (!run.isEmpty() && guideRequested) update();
+        loadStock();
+        sampleStorage();
+        if (!run.isEmpty() && guideRequested)
+        {
+            if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(client.getLocalPlayer().getWorldLocation());
+            update();
+        }
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
     }
 
@@ -204,19 +222,39 @@ public class FarmingHelperPlugin extends Plugin
             sampleStorage();
     }
 
-    private void sampleStorage()
+    private void loadStock()
     {
-        observeStorage(InterfaceID.Bankmain.UNIVERSE, InventoryID.BANK, bank);
-        observeStorage(InterfaceID.SeedVault.UNIVERSE, InventoryID.SEED_VAULT, vault);
+        String profile=config.getRSProfileKey();
+        if(Objects.equals(profile,stockProfile))return;
+        bank.clear();vault.clear();stockProfile=profile;
+        if(profile!=null)
+        {
+            bank.putAll(StockSnapshot.decode(setting("observedBankV1","")));
+            vault.putAll(StockSnapshot.decode(setting("observedVaultV1","")));
+        }
     }
 
-    private void observeStorage(int component, InventoryID id, Map<Integer,Integer> snapshot)
+    private void sampleStorage()
+    {
+        if(client.getGameState()!=GameState.LOGGED_IN)return;
+        loadStock();
+        if(stockProfile==null)return;
+        observeStorage(InterfaceID.Bankmain.UNIVERSE, InventoryID.BANK, bank,"observedBankV1");
+        observeStorage(InterfaceID.SeedVault.UNIVERSE, InventoryID.SEED_VAULT, vault,"observedVaultV1");
+    }
+
+    private void observeStorage(int component, InventoryID id, Map<Integer,Integer> snapshot,String key)
     {
         if (client.getWidget(component) == null || client.getWidget(component).isHidden()) return;
         ItemContainer container = client.getItemContainer(id);
         if (container == null) return;
-        snapshot.clear();
-        addItems(snapshot, container);
+        Map<Integer,Integer> observed=new HashMap<>();
+        addItems(observed,container);
+        if(!observed.equals(snapshot))
+        {
+            snapshot.clear();snapshot.putAll(observed);
+            if(Objects.equals(stockProfile,config.getRSProfileKey()))save(key,StockSnapshot.encode(snapshot));
+        }
     }
 
     private static void addItems(Map<Integer,Integer> stock, ItemContainer container)
@@ -229,7 +267,8 @@ public class FarmingHelperPlugin extends Plugin
 
     static boolean actionable(PatchType type, CropState state)
     {
-        return state != CropState.GROWING && state != CropState.FILLING;
+        return state != CropState.GROWING && state != CropState.FILLING &&
+            !(state==CropState.HARVESTABLE && (type==PatchType.REDWOOD || type==PatchType.SPIRIT_TREE));
     }
 
     static int spiritCapacity(int level)
@@ -308,19 +347,31 @@ public class FarmingHelperPlugin extends Plugin
             if(!actionable(type,o.state)) continue;
             if(type==PatchType.SPIRIT_TREE && !StepEngine.keepExisting(type,o.state) && spiritSlots<=0) continue;
             ready.add(p);visible.add(p);
-            if(!StepEngine.keepExisting(type,o.state)) { plant.add(p); if(type==PatchType.SPIRIT_TREE) spiritSlots--; }
+            if(!StepEngine.keepExisting(type,o.state) && o.state!=CropState.DISEASED) { plant.add(p); if(type==PatchType.SPIRIT_TREE) spiritSlots--; }
         }
         // Keep the active step stable while the player is working, rather than jumping when another patch matures.
         if(current!=null && ready.remove(current)) ready.add(0,current);
         if(current!=null && plant.remove(current)) plant.add(0,current);
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current) { current=next;progress.reset();activeCrop=null; if(current!=null) progress.observe(observations.get(current)); }
-        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,stock,this::priority,this::override);
+        Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current).source==QuestFarmingStateReader.Source.LIVE
+            ? Map.of(current,activeCrop):Collections.emptyMap();
+        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,stock,this::priority,this::override,committed);
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
         Map<Integer,Integer> required=Supplies.guideKit(ready,-1,false,false,
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
             loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
         Map<Integer,Integer> recommended=new LinkedHashMap<>();
+        for(FarmRunPatch p:ready)
+        {
+            QuestFarmingStateReader.Observation state=observations.get(p);
+            if(state!=null && state.state==CropState.DISEASED)
+            {
+                if(StepEngine.isTreeType(p.getPatchType()) || p.getPatchType()==PatchType.CORAL)
+                    required.put(carried.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)?ItemID.FAIRY_ENCHANTED_SECATEURS:ItemID.SECATEURS,1);
+                else required.merge(ItemID.PLANT_CURE,1,Integer::sum);
+            }
+        }
         int compostCount=0,coins=0;
         for(FarmRunPatch p:ready)
         {
@@ -337,7 +388,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(coins>0) recommended.merge(ItemID.COINS,coins,Integer::sum);
         if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
-        if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
+        if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB || p.getPatchType()==PatchType.CORAL) && !required.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
         List<GuideView.ItemRow> items=new ArrayList<>();
         required.forEach((id,n)->items.add(itemRow(id,n,carried,false)));
         recommended.forEach((id,n)->items.add(itemRow(id,n+required.getOrDefault(id,0),carried,true)));
@@ -365,20 +416,23 @@ public class FarmingHelperPlugin extends Plugin
             String line=p==current?instruction:completed.contains(p)?"Completed":c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
             stops.add(new GuideView.Stop(p,line,p==current,completed.contains(p)));
         }
-        WorldPoint player=loggedIn?client.getLocalPlayer().getWorldLocation():null;
-        if(loggedIn && current!=null && current.getPatchType()==PatchType.HESPORI && client.getLocalPlayer().getLocalLocation()!=null)
+        WorldPoint actual=loggedIn?client.getLocalPlayer().getWorldLocation():null;
+        WorldPoint player=actual;
+        boolean instance=loggedIn && client.getLocalPlayer().getWorldView()!=null && client.getLocalPlayer().getWorldView().isInstance();
+        if(instance && client.getLocalPlayer().getLocalLocation()!=null)
             player=WorldPoint.fromLocalInstance(client,client.getLocalPlayer().getLocalLocation());
-        WorldPoint point=current==null?null:Waypoints.navigationTarget(current,player);
+        boolean aboard=loggedIn && client.getVarbitValue(VarbitID.SAILING_BOARDED_BOAT)!=0;
+        boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
+        WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
+        RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
+        activeLeg=leg;
+        if(navigation!=null)navigation.request(actual,leg.point,leg.probe);
+        if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
+        String routeNote=navigation==null?"":navigation.status();
+        if(!routeNote.isEmpty())instruction+="\n"+routeNote;
         if(current!=null)
-        {
-            String entrance=Waypoints.entranceInstruction(current,player);
-            if(!entrance.isEmpty())
-            {
-                instruction=entrance+" "+instruction;
-                for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,true,false));
-            }
-        }
-        navigate(point);
+            for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,true,false));
+        cacheIcons(items);
         GuideView view=new GuideView(title,instruction,items,stops,current);
         String signature=view.signature();
         if(!signature.equals(lastView))
@@ -387,6 +441,16 @@ public class FarmingHelperPlugin extends Plugin
             SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view); });
         }
     }
+
+    private void cacheIcons(List<GuideView.ItemRow> rows)
+    {
+        if(itemManager==null)return;
+        Map<Integer,ImageIcon> next=new HashMap<>(icons);
+        for(GuideView.ItemRow row:rows) if(!next.containsKey(row.id))
+            next.put(row.id,new ImageIcon(itemManager.getImage(row.id)));
+        icons=Map.copyOf(next);
+    }
+    ImageIcon icon(int itemId) { return icons.get(itemId); }
 
     private GuideView.ItemRow itemRow(int id,int count,Map<Integer,Integer> carried,boolean recommended)
     {
@@ -404,15 +468,9 @@ public class FarmingHelperPlugin extends Plugin
     Set<Integer> recommendedItems() { return guideRequested ? recommendedItems : Collections.emptySet(); }
     int gardener(FarmRunPatch p) { return reader.gardenerId(p.getPatchType().name(),p.getLocation(),p.getName()); }
 
-    private void navigate(WorldPoint point)
-    {
-        if (!routingAvailable || Objects.equals(destination,point)) return;
-        if (destination != null) bus.post(new PluginMessage("shortestpath","clear"));
-        destination = point;
-        if (point != null && client.getLocalPlayer() != null)
-            bus.post(new PluginMessage("shortestpath","path",
-                Map.of("start",client.getLocalPlayer().getWorldLocation(),"target",point)));
-    }
+    RouteLeg activeLeg(){return guideRequested?activeLeg:null;}
+    int patchVarbit(FarmRunPatch p){return reader.patchVarbit(p.getPatchType().name(),p.getLocation(),p.getName());}
+    boolean inPatchRegion(FarmRunPatch p,WorldPoint point){return reader.inPatchRegion(p.getPatchType().name(),p.getLocation(),p.getName(),point);}
 
     FarmRunPatch activePatch() { return guideRequested ? current : null; }
 

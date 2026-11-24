@@ -18,6 +18,13 @@ public class SpecialStateTest
         assertEquals(CropState.EMPTY, state(PatchImplementation.ANIMA, 0));
     }
 
+    @Test public void matureCoralIsHarvestable()
+    {
+        assertEquals(CropState.HARVESTABLE,state(PatchImplementation.CORAL,8));
+        assertEquals(CropState.HARVESTABLE,state(PatchImplementation.CORAL,19));
+        assertEquals(CropState.HARVESTABLE,state(PatchImplementation.CORAL,30));
+    }
+
     private CropState state(PatchImplementation type, int value)
     {
         return QuestFarmingStateReader.normalizedState(type, value, type.forVarbitValue(value));

@@ -34,7 +34,7 @@ final class StepEngine
     {
         return type == PatchType.TREE || type == PatchType.FRUIT_TREE ||
             type == PatchType.CALQUAT || type == PatchType.HARDWOOD_TREE ||
-            type == PatchType.CELASTRUS || type == PatchType.REDWOOD;
+            type == PatchType.CELASTRUS || type == PatchType.REDWOOD || type == PatchType.CORAL || type == PatchType.SEAWEED;
     }
 
     static boolean isTreeType(PatchType type)
@@ -75,8 +75,8 @@ final class StepEngine
             case UNCHECKED:
                 return isTreeType(type) || type == PatchType.CACTUS ? Action.CHECK_HEALTH : Action.HARVEST;
             case HARVESTABLE:
-                if (type == PatchType.SPIRIT_TREE) return Action.INSPECT;
-                if (type == PatchType.CELASTRUS) return Action.HARVEST;
+                if (type == PatchType.SPIRIT_TREE || type == PatchType.REDWOOD) return Action.COMPLETE;
+                if (type == PatchType.CELASTRUS || type == PatchType.CRYSTAL_TREE) return Action.HARVEST;
                 return isTreeType(type) ? Action.REMOVE_TREE : Action.HARVEST;
             case GROWING:
                 if (supportsProtection(type) && requireProtection
@@ -118,6 +118,8 @@ final class StepEngine
             case HARVEST:
                 if (type == PatchType.HESPORI)
                     return "Prepare for Hespori combat if alive; harvest only after defeating it. Replant manually when appropriate.";
+                if (type == PatchType.CORAL) return "Collect the mature coral, then replant if the nursery is empty.";
+                if (type == PatchType.CRYSTAL_TREE) return "Harvest the crystal shards, then plant a crystal sapling if the patch is empty.";
                 if (type == PatchType.CELASTRUS)
                     return crop == null ? "Harvest the bark and leave the tree planted; no replacement allocated."
                         : "Harvest the bark if available, then remove the harvested tree and replant if desired.";
@@ -145,7 +147,7 @@ final class StepEngine
             case CLEAR_DEAD:
                 return "Clear the dead crop, then plant " + name + ".";
             case CURE:
-                return isTreeType(type) ? "Prune the diseased tree with secateurs."
+                return type == PatchType.CORAL ? "Prune the diseased coral with secateurs." : isTreeType(type) ? "Prune the diseased tree with secateurs."
                     : "Cure the diseased crop before harvesting.";
             case PLANT:
                 if (type == PatchType.GRAPEVINE && crop != null) return "Prepare the vine patch with saltpetre and a gardening trowel, then plant " + name + ".";
