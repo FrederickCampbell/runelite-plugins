@@ -1,3 +1,9 @@
+## v0.32.1-beta.1 — Fossil Island final leg
+
+- Manual and Specialty runs keep all selected Fossil Island work after mainland/other locations. Hardwoods precede seaweed; birdhouses are last in their own resupply stage when mixed with farming.
+- Selected birdhouses appear as pending guide rows without prematurely adding birdhouse supplies. Readiness is evaluated in the birdhouse phase. No new unselected patches are added.
+- Freeze the island-last route against native route reordering. Nearby verified disease interrupts still have priority.
+
 ## v0.32-beta.1 — Visual identity and polish
 
 - Native asynchronous OSRS item sprites on grouped/individual run selection and crop priority rows; no new runtime dependencies.

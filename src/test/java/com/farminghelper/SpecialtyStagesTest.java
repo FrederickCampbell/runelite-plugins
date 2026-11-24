@@ -21,6 +21,23 @@ public class SpecialtyStagesTest
         assertEquals(Map.of(1,5,2,1),SpecialtyStages.birdStock(Map.of(1,2),Map.of(1,3,2,1)));
         assertEquals(SpecialRoutes.SEAWEED_ISLAND,Preparation.FOSSIL_BANK.point);
     }
+    @Test public void manualFossilIslandOrderAndBirdStage()
+    {
+        FarmRunPatch herb=new FarmRunPatch("Catherby","",PatchType.HERB);
+        FarmRunPatch outside=new FarmRunPatch("Avium Savannah","",PatchType.HARDWOOD_TREE);
+        FarmRunPatch hardwood=new FarmRunPatch("Fossil Island","East",PatchType.HARDWOOD_TREE);
+        FarmRunPatch seaweed=new FarmRunPatch("Seaweed","North",PatchType.SEAWEED);
+        List<FarmRunPatch> birds=BirdhouseRun.patches();
+        List<FarmRunPatch> scrambled=new ArrayList<>(List.of(birds.get(3),seaweed,herb,birds.get(0),hardwood,outside));
+        List<FarmRunPatch> ordered=RunOrder.flatten(SpecialtyStages.fossilLast(RunOrder.groups(scrambled,null)));
+        assertEquals(List.of(herb,outside,hardwood,seaweed,birds.get(0),birds.get(3)),ordered);
+        assertTrue(SpecialtyStages.stageBirds("manual",EnumSet.of(FarmRunType.HERB,FarmRunType.BIRDHOUSE)));
+        assertFalse(SpecialtyStages.stageBirds("manual",EnumSet.of(FarmRunType.BIRDHOUSE)));
+        assertFalse(SpecialtyStages.stageBirds("manual",EnumSet.of(FarmRunType.HERB,FarmRunType.HARDWOOD_TREE)));
+        assertTrue(SpecialtyStages.fossilLastRequired("manual"));
+        assertFalse(SpecialtyStages.fossil(outside));
+        assertTrue(SpecialtyStages.fossil(seaweed));
+    }
     @Test public void readyFourBirdsUseBestCraftableLogsAndPotatoSeeds()
     {
         List<FarmRunPatch> birds=BirdhouseRun.patches();

@@ -188,7 +188,7 @@ public class FarmingHelperPlugin extends Plugin
             run = selected;
             manualKeys=keys;runLabel=label;referenceOrder=reference;optimizeManual=optimize;
             runPolicyKey=policyKey;
-            specialtyStaged="group_SPECIALTY".equals(policyKey);
+            specialtyStaged=SpecialtyStages.stageBirds(policyKey,run);
             clearSeedless=flag("clearSeedlessPreferenceV1",true);
             runPolicy=RunPolicy.load(setting("runPolicy_"+policyKey,""),CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true))!=CompostChoice.NONE,flag("directorProtectTrees",true));
             runPayRemoval=flag("runPayRemoval_"+policyKey,flag("directorPayRemoval",true));
@@ -657,7 +657,9 @@ public class FarmingHelperPlugin extends Plugin
             {
                 WorldPoint start=client.getLocalPlayer().getWorldLocation();
                 runOrder=referenceOrder!=null?RunOrder.preset(ready,start,referenceOrder,optimizeManual):RunOrder.plan(RunOrder.groups(ready,start),start);
-                if(specialtyStaged){runOrder=SpecialtyStages.fossilLast(runOrder);orderFrozen=true;}
+                if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&runOrder.stream().anyMatch(g->"Fossil Island".equals(g.site)))
+                {runOrder=SpecialtyStages.fossilLast(runOrder);orderFrozen=true;}
+                if(specialtyStaged&&specialtyBirdPhase)orderFrozen=true;
                 pinned=RunOrder.flatten(runOrder);
             }
             else pinned=new ArrayList<>(ready); // familiar individual shortcut order
@@ -679,6 +681,9 @@ public class FarmingHelperPlugin extends Plugin
             {
                 PatchType type=p.getPatchType();
                 if(skipped.contains(p)||type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),here))continue;
+                // Do not let routine watering pull Fossil Island ahead of remaining mainland work.
+                // Verified disease interruptions remain independent and can still interrupt.
+                if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
                 QuestFarmingStateReader.Observation o=observations.get(p);
                 if(o==null)o=observe(p);
                 boolean water=ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,wateringCan)&&highlight.hasLocalPatch(p);
@@ -843,6 +848,14 @@ public class FarmingHelperPlugin extends Plugin
             String line=p==current?instruction:careOnly.contains(p)?(observations.get(p).state==CropState.DISEASED?"Nearby disease — cure only.":"Water the growing crop."):completed.contains(p)?"Completed":birdhousePlans.containsKey(p)?birdhousePlans.get(p):binPlans.containsKey(p)?binPlans.get(p).instruction:clearOnly.contains(p)?"Check health / harvest and clear; no replacement.":c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
             stops.add(new GuideView.Stop(p,line,p==current,completed.contains(p)&&!careOnly.contains(p)));
         }
+        // Show the selected birdhouse leg at the bottom without adding its supplies to the farming phase.
+        if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
+        {
+            List<FarmRunPatch> birds=new ArrayList<>();
+            for(FarmRunPatch p:patches)if(p.getPatchType()==PatchType.BIRDHOUSE&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!skipped.contains(p)&&Waypoints.accessIssue(client,p.getPatchType(),p.getLocation(),level,false)==null)birds.add(p);
+            birds.sort(Comparator.comparingInt(BirdhouseRun::order));
+            for(FarmRunPatch p:birds)stops.add(new GuideView.Stop(p,"Final birdhouse stage — readiness checked after farming; supplies listed at resupply.",false,false));
+        }
         WorldPoint actual=loggedIn?client.getLocalPlayer().getWorldLocation():null;
         WorldPoint player=actual;
         boolean instance=loggedIn && client.getLocalPlayer().getWorldView()!=null && client.getLocalPlayer().getWorldView().isInstance();
@@ -855,7 +868,7 @@ public class FarmingHelperPlugin extends Plugin
         if(hideSeedless&&(!bankObservedThisSession||!vaultObservedThisSession))
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Storage may be out of date. Open "+(!bankObservedThisSession&&!vaultObservedThisSession?"the bank and Seed Vault":!bankObservedThisSession?"the bank":"the Seed Vault")+" to verify stock this session.";
         if(specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
-            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Birdhouses follow seaweed. Their supplies will be listed after farming.";
+            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Birdhouses are last. Resupply after all other selected farming patches.";
         if(specialtyStaged&&specialtyBirdPhase&&current!=null&&!birdBankOffered)
         {
             birdBankOffered=true;preparing=true;visitedStorage=false;preparationBank=Preparation.FOSSIL_BANK;
