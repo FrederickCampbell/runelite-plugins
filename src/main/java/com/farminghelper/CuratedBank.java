@@ -27,6 +27,12 @@ final class CuratedBank
         }catch(IOException ignored){}
         return List.copyOf(result);
     }
+    static int transportCategory(int id)
+    {
+        boolean found=false;
+        for(String[] row:ROWS)if(Integer.parseInt(row[0])==id){found=true;if("F".equals(row[2]))return BankShelfLayout.PERMANENT;}
+        return found?BankShelfLayout.CHARGED:-1;
+    }
     static boolean equipment(String name,boolean bird)
     {return name!=null&&(bird?BIRD:GEAR).matcher(name).matches();}
     static boolean modeAllows(String mode,boolean consumable)

@@ -1,3 +1,9 @@
+## v0.30.1-beta.1 — Slot-ordered bank shelf
+
+- Native transient Bank Tags Layout, sorted by equipment slot then separate rows for permanent teleports, charged jewellery, rune/tablet supplies, tools, compost/payments and seeds. Empty categories are omitted; long categories wrap to the next row.
+- Layout contains only physical bank stock; no virtual missing-item slots or duplicate items. Manual bank browsing and existing skip/guide behavior retained.
+- No changes to actual bank order. Remove the reserved tag's temporary layout at run end.
+
 ## v0.30-beta.1 — Curated farming bank shelf
 
 - Shared owned farming gear and teleport candidates across run types, selected run supplies, narrower birdhouse resupply view. No optional recommendation panel or Farming Helper bank highlights.
