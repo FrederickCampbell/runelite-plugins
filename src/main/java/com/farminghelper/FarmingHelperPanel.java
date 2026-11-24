@@ -28,6 +28,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final Map<String,JLabel> itemQuantities=new HashMap<>();
     private static final Color ACTIVE=new Color(58,74,54), ACTIVE_TEXT=new Color(178,222,159);
     private final Set<String> manual = new java.util.LinkedHashSet<>();
+    private boolean groupedOpen=true,individualOpen=false;
     private final Set<PatchType> manualExpanded = EnumSet.noneOf(PatchType.class);
 
     FarmingHelperPanel(FarmingHelperPlugin plugin)
@@ -97,13 +98,24 @@ final class FarmingHelperPanel extends PluginPanel
         lastActive = null;
         previousGuide=null;
         heading("Farming runs");
-        for (FarmRunType type : FarmRunType.values())
-            button(type.getDisplayName(), () -> plugin.start(EnumSet.of(type)));
-        button("Manual Run…", this::openManual);
+        button((groupedOpen?"▾ ":"▸ ")+"Grouped Runs",()->{groupedOpen=!groupedOpen;home();});
+        if(groupedOpen)
+        {
+            for(RunPreset preset:RunPreset.values())button(preset.title,()->plugin.startPreset(preset));
+            button("Manual Run…",this::openManual);
+        }
+        button((individualOpen?"▾ ":"▸ ")+"Individual Runs",()->{individualOpen=!individualOpen;home();});
+        if(individualOpen)
+        {
+            for(PatchType type:PatchType.values())button(RunPreset.individualTitle(type),()->plugin.startIndividual(type));
+            button("Allotment & Flower Run",()->plugin.startCombinedShortcut(FarmRunType.ALLOTMENT_FLOWER));
+            button("Fruit Tree & Calquat Run",()->plugin.startCombinedShortcut(FarmRunType.FRUIT_TREE_CALQUAT));
+        }
         button("Preferences…", this::preferences);
         finish();
     }
 
+    void emptySelection(){home();line("No enabled patches for this run. Check your preferences.",false);finish();}
     private void openManual()
     {
         manual.clear();manual.addAll(ManualSelection.decode(plugin.setting("manualPatchChoicesV1",null),plugin.patches()));
@@ -186,7 +198,7 @@ final class FarmingHelperPanel extends PluginPanel
     private static String stockTip(GuideView.ItemRow row){return "Last observed bank: "+row.bank+" · Seed Vault: "+row.vault;}
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || a.active==null || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || a.active==null || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)if(!rowKey(a.items.get(i)).equals(rowKey(b.items.get(i))))return false;
         for(int i=0;i<a.stops.size();i++)if(a.stops.get(i).patch!=b.stops.get(i).patch || a.stops.get(i).done!=b.stops.get(i).done || a.stops.get(i).active!=b.stops.get(i).active)return false;
         return true;
@@ -248,13 +260,20 @@ final class FarmingHelperPanel extends PluginPanel
         close.setToolTipText("Close helper");close.addActionListener(e->plugin.stop());header.add(close,BorderLayout.EAST);addRow(header);
         requirements("Item requirements:",view.items,false);
         requirements("Recommended items:",view.items,true);
-        if(view.active==null)line(view.message,true);
+        if(!view.supplyNote.isEmpty())line(view.supplyNote,false);
+        if(!view.preparation.isEmpty())
+        {
+            heading("Preparation / resupply");line(view.preparation,true);
+            button("Continue run",plugin::continueRun);
+        }
+        else if(view.active!=null)button("Resupply…",plugin::resupply);
+        else line(view.message,true);
         for(GuideView.Stop stop:view.stops)
         {
             JPanel section=new JPanel(new BorderLayout(0,1));section.setBorder(BorderFactory.createEmptyBorder(5,0,0,0));
             boolean open=expanded.getOrDefault(stop.patch.key(),stop.active);
             Color bg=stop.active?ACTIVE:ColorScheme.DARKER_GRAY_COLOR.darker();
-            JButton fold=new JButton((open?"▾ ":"▸ ")+(stop.done?"✓ ":"")+stop.patch.guideLabel()+(view.title.equals("Manual Run")?" · "+stop.patch.getPatchType().getDisplayName():""));
+            JButton fold=new JButton((open?"▾ ":"▸ ")+(stop.done?"✓ ":"")+stop.patch.guideLabel()+(" · "+stop.patch.getPatchType().getDisplayName()));
             fold.setUI(new BasicButtonUI());fold.setFont(FontManager.getRunescapeBoldFont());fold.setHorizontalAlignment(SwingConstants.LEFT);
             fold.setBackground(bg);fold.setForeground(stop.active?ACTIVE_TEXT:Color.WHITE);
             fold.setBorder(BorderFactory.createEmptyBorder(7,7,5,7));
@@ -294,12 +313,25 @@ final class FarmingHelperPanel extends PluginPanel
             protect.addActionListener(e->plugin.save("directorProtectTrees",String.valueOf(protect.isSelected())));addRow(protect);
             JCheckBox vaultViews = new JCheckBox("Seed Vault views",plugin.flag("seedVaultViews",true));
             vaultViews.addActionListener(e->plugin.save("seedVaultViews",String.valueOf(vaultViews.isSelected())));addRow(vaultViews);
+            heading("Grouped run components");
+            for(RunPreset preset:RunPreset.values())button(preset.title,()->presetPreferences(preset));
+            heading("Crop priorities and patches");
             for (PatchType type : PatchType.values()) button(type.getDisplayName(), () -> patches(type));
         }
         button("Back",this::home);
         finish();
     }
 
+    private void presetPreferences(RunPreset preset)
+    {
+        rows.removeAll();heading(preset.title);line("Applies to this preset only. Individual and Manual Run are unaffected.",false);
+        for(PatchType type:preset.types)
+        {
+            JCheckBox box=new JCheckBox(type.getDisplayName(),plugin.flag(preset.key(type),preset.defaultEnabled(type)));
+            box.addActionListener(e->plugin.save(preset.key(type),String.valueOf(box.isSelected())));addRow(box);
+        }
+        button("Back",this::preferences);finish();
+    }
     private JComboBox<String> crops(PatchType type,String first)
     {
         JComboBox<String> combo = new JComboBox<>();

@@ -66,7 +66,15 @@ public class FarmingHelperPlugin extends Plugin
     private String stockProfile;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
     private Set<FarmRunType> run = Collections.emptySet();
-    private Set<String> manualKeys; // null = normal shortcut, never persisted as a session
+    private Set<String> manualKeys; // physical selections, never persisted as a session
+    private String runLabel;
+    private List<String> referenceOrder;
+    private boolean optimizeManual, initialPrepChecked, entranaOffered;
+    private volatile boolean preparing;
+    private boolean visitedStorage;
+    private final Set<String> resupplyOffered=new HashSet<>();
+    private Preparation.Bank preparationBank;
+    private String preparationReason="";
     private List<RunOrder.Group> runOrder;
     private List<FarmRunPatch> pinned;
     private boolean orderProbeSent,orderFrozen;
@@ -120,18 +128,33 @@ public class FarmingHelperPlugin extends Plugin
 
     void start(Set<FarmRunType> types)
     {
-        start(types,null);
+        start(types,null,null,null,false);
     }
 
+    void startPreset(RunPreset preset)
+    { startSelected(preset.select(patches,this::flag),preset.title,preset.reference,false); }
+    void startIndividual(PatchType type)
+    {
+        Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getPatchType()==type)keys.add(p.key());
+        startSelected(keys,RunPreset.individualTitle(type),RunPreset.individual(type),false);
+    }
+    void startCombinedShortcut(FarmRunType type)
+    {
+        Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getFarmRunType()==type)keys.add(p.key());
+        startSelected(keys,type.getDisplayName(),type==FarmRunType.ALLOTMENT_FLOWER?RunPreset.CROP.reference:RunPreset.TREE.reference,false);
+    }
     void startManual(Set<String> keys)
+    {startSelected(keys,"Manual Run",List.of(),true);}
+    private void startSelected(Set<String> keys,String label,List<String> reference,boolean optimize)
     {
         Set<String> chosen=Set.copyOf(keys);
         Set<FarmRunType> types=EnumSet.noneOf(FarmRunType.class);
         for(FarmRunPatch p:patches)if(chosen.contains(p.key())&&enabled(p))types.add(p.getFarmRunType());
-        start(types,chosen);
+        if(types.isEmpty()) {SwingUtilities.invokeLater(()->panel.emptySelection());return;}
+        start(types,chosen,label,reference,optimize);
     }
 
-    private void start(Set<FarmRunType> types,Set<String> keys)
+    private void start(Set<FarmRunType> types,Set<String> keys,String label,List<String> reference,boolean optimize)
     {
         if (types.isEmpty()) return;
         Set<FarmRunType> selected=EnumSet.copyOf(types);
@@ -141,7 +164,7 @@ public class FarmingHelperPlugin extends Plugin
             if (!running || !guideRequested || requested != session) return;
             clearRun();
             run = selected;
-            manualKeys=keys;
+            manualKeys=keys;runLabel=label;referenceOrder=reference;optimizeManual=optimize;
             loadStock();
             sampleStorage();
             navigation.begin();
@@ -159,7 +182,9 @@ public class FarmingHelperPlugin extends Plugin
     private void clearRun()
     {
         run = Collections.emptySet();
-        manualKeys=null;runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
+        manualKeys=null;runLabel=null;referenceOrder=null;optimizeManual=false;
+        initialPrepChecked=false;preparing=false;entranaOffered=false;visitedStorage=false;resupplyOffered.clear();preparationBank=null;preparationReason="";
+        runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
         current = null;
         skipped.clear();
         completed.clear();
@@ -233,7 +258,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private void refineOrder()
     {
-        if(orderFrozen||orderProbeSent||!shortestPathAvailable||runOrder==null||runOrder.isEmpty()||current==null)return;
+        if(preparing||orderFrozen||orderProbeSent||!shortestPathAvailable||runOrder==null||runOrder.isEmpty()||current==null)return;
         if(!runOrder.get(0).patches.contains(current)){orderFrozen=true;return;}
         if(++orderTicks<3 || navigation==null || !navigation.canProbeOrder())return;
         // Do not compete with the initial long-distance route. Probe while the
@@ -398,15 +423,15 @@ public class FarmingHelperPlugin extends Plugin
     private void update()
     {
         if (run.isEmpty() || !guideRequested) return;
-        String title = manualKeys!=null ? "Manual Run" : run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
+        String title = runLabel!=null ? runLabel : run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         int level = client.getRealSkillLevel(Skill.FARMING);
         Map<Integer,Integer> bag=new HashMap<>(), carried=new HashMap<>();
         addItems(bag,client.getItemContainer(InventoryID.INVENTORY));
-        carried.putAll(bag); addItems(carried,client.getItemContainer(InventoryID.EQUIPMENT));
-        Map<Integer,Integer> stock=new HashMap<>(bag);
-        bank.forEach((id,n)->stock.merge(id,n,Integer::sum));
-        vault.forEach((id,n)->stock.merge(id,n,Integer::sum));
+        Map<Integer,Integer> equipped=new HashMap<>();addItems(equipped,client.getItemContainer(InventoryID.EQUIPMENT));
+        carried.putAll(bag);equipped.forEach((id,n)->carried.merge(id,n,Integer::sum));
+        Map<Integer,Integer> storage=new HashMap<>(bank);vault.forEach((id,n)->storage.merge(id,n,Integer::sum));
+        Map<Integer,Integer> stock=new HashMap<>(bag);storage.forEach((id,n)->stock.merge(id,n,Integer::sum));
         boolean protect=flag("directorProtectTrees",true), pay=flag("directorPayRemoval",true);
         CompostChoice compost=CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));
         int compostId=compost.resolve(stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED));
@@ -456,7 +481,7 @@ public class FarmingHelperPlugin extends Plugin
             if(manualKeys!=null || run.size()>1)
             {
                 WorldPoint start=client.getLocalPlayer().getWorldLocation();
-                runOrder=RunOrder.plan(RunOrder.groups(ready,start),start);
+                runOrder=referenceOrder!=null?RunOrder.preset(ready,start,referenceOrder,optimizeManual):RunOrder.plan(RunOrder.groups(ready,start),start);
                 pinned=RunOrder.flatten(runOrder);
             }
             else pinned=new ArrayList<>(ready); // familiar individual shortcut order
@@ -508,6 +533,8 @@ public class FarmingHelperPlugin extends Plugin
             }
         }
         if(coins>0) recommended.merge(ItemID.COINS,coins,Integer::sum);
+        int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
+        if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
         if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
         if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB || p.getPatchType()==PatchType.CORAL) && !required.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
         List<GuideView.ItemRow> items=new ArrayList<>();
@@ -545,22 +572,101 @@ public class FarmingHelperPlugin extends Plugin
         boolean aboard=loggedIn && client.getVarbitValue(VarbitID.SAILING_BOARDED_BOAT)!=0;
         boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
         WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
+        String supplyNote="";
+        if(runLabel!=null && loggedIn && current!=null)
+        {
+            int slots=Preparation.slots(required,equipped,this::stackable);
+            if(slots>28)supplyNote="Required supplies need at least "+slots+" inventory slots. Take a portion, note harvests and resupply as needed. No inventory limit blocks the guide.";
+            if(!initialPrepChecked)
+            {
+                initialPrepChecked=true;resupplyOffered.add(RunOrder.site(current));
+                if(Preparation.storedShortage(required,carried,storage))beginPreparation(true,false,"Gather the listed supplies at the bank / Seed Vault. Continue when ready; missing items never block the guide.");
+            }
+            if(!preparing&&resupplyOffered.add(RunOrder.site(current))&&activeCrop!=null&&
+                bag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()&&storage.getOrDefault(activeCrop.getItemId(),0)>0)
+                beginPreparation(false,false,"Resupply: the next crop is short on planting items. Take what you need, or continue without banking.");
+            if(!preparing && !entranaOffered && "Entrana".equals(current.getLocation()) && !reader.inPatchRegion(current.getPatchType().name(),current.getLocation(),current.getName(),player))
+            {
+                entranaOffered=true;
+                if(potentialEntranaGear(carried))beginPreparation(false,true,"Entrana restricts weapons and armour. Bank potentially restricted equipment before boarding, then continue. The monks make the final access check.");
+            }
+        }
+        if(current==null)preparing=false;
+        String prepMessage="";
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
+        if(preparing && loggedIn && preparationBank!=null)
+        {
+            boolean atStorage=storageOpen();visitedStorage|=atStorage;
+            // Existing bank or vault is sufficient: never require leaving an open bank for a specific one.
+            prepMessage=preparationReason+"\n"+(visitedStorage?"Use the storage you visited; continue when ready.":"Suggested bank: "+preparationBank.name+" (or any accessible bank).");
+            if(!Preparation.missing(required,carried)&&!preparationReason.startsWith("Entrana")&&!preparationReason.startsWith("Resupply"))
+            {preparing=false;prepMessage="";}
+            else
+            {
+                RouteLeg exit=SpecialRoutes.leg(null,player,aboard,rowboat,instance,null);
+                if(visitedStorage)leg=RouteLeg.walk(null,false);
+                else if(aboard||instance||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
+                    leg=exit.instruction.isEmpty()?RouteLeg.manual("Leave the current instance before banking.",RouteLeg.Interaction.NONE):exit;
+                else leg=RouteLeg.approach(preparationBank.point,"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
+                if(!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
+            }
+        }
+        if(!preparing&&current!=null&&"Entrana".equals(current.getLocation()))instruction="Entrana: deposit prohibited weapons and armour before travel.\n"+instruction;
         activeLeg=leg;
         if(navigation!=null)navigation.request(actual,leg.point,leg.probe);
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
         String routeNote=navigation==null?"":navigation.status();
         if(!routeNote.isEmpty())instruction+="\n"+routeNote;
         if(current!=null)
-            for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,true,false));
+            for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,!preparing,false));
+        if(preparing&&!routeNote.isEmpty())prepMessage+="\n"+routeNote;
         cacheIcons(items);
-        GuideView view=new GuideView(title,instruction,items,stops,current);
+        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote);
         String signature=view.signature();
         if(!signature.equals(lastView))
         {
             lastView=signature;final long id=session;
             SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view); });
         }
+    }
+
+    private boolean stackable(int id)
+    {
+        if(itemManager==null)return false;
+        ItemComposition item=itemManager.getItemComposition(id);return item!=null&&item.isStackable();
+    }
+    private boolean potentialEntranaGear(Map<Integer,Integer> carried)
+    {
+        if(itemManager==null)return false;
+        for(int id:carried.keySet())
+        {
+            if(id==ItemID.FAIRY_ENCHANTED_SECATEURS||id==ItemID.SECATEURS)continue;
+            var stats=itemManager.getItemStats(id);if(stats==null||stats.getEquipment()==null)continue;
+            var e=stats.getEquipment();
+            // Heuristic only: no separate Entrana item whitelist. Flag likely combat gear;
+            // no automated deposits and no guarantee all items are allowed.
+            if(e.getAstab()>0||e.getAslash()>0||e.getAcrush()>0||e.getAmagic()>0||e.getArange()>0||e.getDstab()>0||e.getDslash()>0||e.getDcrush()>0||e.getDmagic()>0||e.getDrange()>0||e.getStr()>0||e.getRstr()>0)return true;
+        }
+        return false;
+    }
+    private boolean storageOpen()
+    {
+        var b=client.getWidget(InterfaceID.Bankmain.UNIVERSE);var v=client.getWidget(InterfaceID.SeedVault.UNIVERSE);
+        return b!=null&&!b.isHidden()||v!=null&&!v.isHidden();
+    }
+    private void beginPreparation(boolean initial,boolean entrana,String reason)
+    {
+        WorldPoint from=client.getLocalPlayer()==null?null:client.getLocalPlayer().getWorldLocation();
+        preparationBank=Preparation.choose(client.getRealSkillLevel(Skill.FARMING),from,initial,entrana);
+        preparing=true;visitedStorage=false;preparationReason=reason;
+    }
+    void continueRun()
+    {
+        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested)return;preparing=false;update();});
+    }
+    void resupply()
+    {
+        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||current==null)return;beginPreparation(false,false,"Resupply at a nearby bank. Continue when ready.");update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
@@ -583,7 +689,7 @@ public class FarmingHelperPlugin extends Plugin
     String override(FarmRunPatch p) { return setting("directorCrop_"+p.key(),""); }
     String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
     StepEngine.Action activeAction() { return activeAction; }
-    boolean activeLive() { return activeLive && guideRequested; }
+    boolean activeLive() { return activeLive && guideRequested && !preparing; }
     int patchCount(FarmRunPatch p) { return reader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
     Set<Integer> requiredItems() { return guideRequested ? requiredItems : Collections.emptySet(); }
     Set<Integer> recommendedItems() { return guideRequested ? recommendedItems : Collections.emptySet(); }
@@ -593,7 +699,7 @@ public class FarmingHelperPlugin extends Plugin
     int patchVarbit(FarmRunPatch p){return reader.patchVarbit(p.getPatchType().name(),p.getLocation(),p.getName());}
     boolean inPatchRegion(FarmRunPatch p,WorldPoint point){return reader.inPatchRegion(p.getPatchType().name(),p.getLocation(),p.getName(),point);}
 
-    FarmRunPatch activePatch() { return guideRequested ? current : null; }
+    FarmRunPatch activePatch() { return guideRequested && !preparing ? current : null; }
 
     List<FarmRunPatch> patches() { return Collections.unmodifiableList(patches); }
 

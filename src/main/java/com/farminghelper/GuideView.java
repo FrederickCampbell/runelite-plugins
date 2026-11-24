@@ -26,15 +26,17 @@ final class GuideView
         { this.patch=patch; this.instruction=instruction; this.active=active; this.done=done; }
         String signature() { return patch.key()+":"+instruction+":"+active+":"+done; }
     }
-    final String title, message;
+    final String title, message, preparation, supplyNote;
     final List<ItemRow> items;
     final List<Stop> stops;
     final FarmRunPatch active;
     GuideView(String title,String message,List<ItemRow> items,List<Stop> stops,FarmRunPatch active)
-    { this.title=title;this.message=message;this.items=List.copyOf(items);this.stops=List.copyOf(stops);this.active=active; }
+    { this(title,message,items,stops,active,"",""); }
+    GuideView(String title,String message,List<ItemRow> items,List<Stop> stops,FarmRunPatch active,String preparation,String supplyNote)
+    { this.title=title;this.message=message;this.items=List.copyOf(items);this.stops=List.copyOf(stops);this.active=active;this.preparation=preparation;this.supplyNote=supplyNote; }
     String signature()
     {
-        StringBuilder b=new StringBuilder(title).append('|').append(message);
+        StringBuilder b=new StringBuilder(title).append('|').append(message).append('|').append(preparation).append('|').append(supplyNote);
         for(ItemRow r:items)b.append('|').append(r.signature());
         for(Stop s:stops)b.append('|').append(s.signature());
         return b.toString();

@@ -1,3 +1,10 @@
+## v0.20.0-beta.1 — Grouped and individual presets
+
+- Four configurable grouped presets plus Manual Run, all individual crop-type shortcuts, and two collapsible home sections.
+- Guild-first reference routes, optional native refinement, existing eligibility and crop ranking.
+- Advisory preparation/resupply, required-slot estimate, Entrana equipment warning and Vinery supplies.
+- Default flowers and grapes off in grouped presets; spirit trees remain optional.
+
 ## 0.19.0-beta.1
 
 - Bank Tags-inspired native Seed Vault repositioning: compact and rank verified icon/label pairs without remapping native indices or withdrawal actions.

@@ -1,8 +1,3 @@
-# Farming Helper v0.19.0-beta.1
+# Farming Helper v0.20.0-beta.1
 
-- Native Seed Vault compaction inspired by RuneLite Bank Tags. Move existing native icon/label pairs together and retain original indices, quantities, actions and listeners.
-- Rank within native sections; compact verified empty sections and scrollbar geometry. Ambiguous sections retain their original geometry.
-- Restore native positions before rebuild, search, category exit and disable. Contract and favourites are preserved.
-- Shared XP ranking, Manual Run and Shortest Path guidance are unchanged.
-
-This beta is not live-certified for every withdrawal mode or scrollbar layout. Test with a small withdrawal first.
+Grouped and individual runs with Guild-first preparation and reference ordering. Existing XP-per-seed crop engine, Seed Vault views and Shortest Path integration retained. Advisory banking and equipment checks; no automatic gameplay. Live testing remains required.

@@ -10,6 +10,8 @@ final class Supplies
 {
     private Supplies() {}
 
+    // Wiki item IDs: saltpetre and gardening trowel, used together at the Vinery.
+    static final int SALTPETRE=13421, GARDENING_TROWEL=5325;
     static Map<Integer, Integer> required(List<FarmRunPatch> patches,
                                           boolean compost, boolean filledBucket,
                                           boolean carriedSecateurs)
@@ -62,6 +64,8 @@ final class Supplies
     {
         switch (id)
         {
+            case SALTPETRE: return "Saltpetre";
+            case GARDENING_TROWEL: return "Gardening trowel";
             case ItemID.COINS: return "Coins for tree removal";
             case ItemID.RAKE: return "Rake";
             case ItemID.SPADE: return "Spade";

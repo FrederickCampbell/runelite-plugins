@@ -77,6 +77,19 @@ final class RunOrder
         int[] order=optimize(first,legs);
         List<Group> result=new ArrayList<>();for(int i:order)result.add(groups.get(i));return result;
     }
+    /** Guild is a fixed first cluster, not a destination visited again after leaving. */
+    static List<Group> preset(List<FarmRunPatch> patches,WorldPoint start,List<String> reference,boolean optimize)
+    {
+        List<Group> all=groups(patches,start);
+        all.sort(Comparator.comparingInt(g->{int i=reference.indexOf(g.site);return i<0?Integer.MAX_VALUE:i;}));
+        Group guild=all.stream().filter(g->g.site.equals("Farming Guild")).findFirst().orElse(null);
+        if(guild!=null)all.remove(guild);
+        List<Group> result=new ArrayList<>();if(guild!=null)result.add(guild);
+        // Reference order is the stable fallback. The spatial optimizer can improve
+        // manual runs; native Shortest Path can refine the next stop in any group run.
+        result.addAll(optimize?plan(all,guild==null?start:guild.exit()):all);
+        return result;
+    }
     static int[] optimize(double[] first,double[][] legs)
     {return first.length<=EXACT_LIMIT?exact(first,legs):heuristic(first,legs);}
     private static int[] exact(double[] first,double[][] legs)
