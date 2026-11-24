@@ -28,9 +28,12 @@ public class ActiveRunBankTest
         ItemComposition real=mock(ItemComposition.class),placeholder=mock(ItemComposition.class);
         when(real.getPlaceholderTemplateId()).thenReturn(-1);
         when(placeholder.getPlaceholderTemplateId()).thenReturn(14401);
-        when(client.getItemContainer(InventoryID.BANK)).thenReturn(container(new Item(952,1),new Item(556,90),new Item(999,1),new Item(555,0)));
-        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(container(new Item(556,10),new Item(7409,1)));
-        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(container(new Item(11850,1)));
+        ItemContainer bank=container(new Item(952,1),new Item(556,90),new Item(999,1),new Item(555,0));
+        ItemContainer inventory=container(new Item(556,10),new Item(7409,1));
+        ItemContainer equipment=container(new Item(11850,1));
+        when(client.getItemContainer(InventoryID.BANK)).thenReturn(bank);
+        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(inventory);
+        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(equipment);
         assertEquals(Map.of(952,1,556,100,7409,1,11850,1),
             ActiveRunBank.ownedStock(client,id->id==999?placeholder:real));
     }
@@ -39,9 +42,13 @@ public class ActiveRunBankTest
         Client client=mock(Client.class);
         ItemComposition real=mock(ItemComposition.class);
         when(real.getPlaceholderTemplateId()).thenReturn(-1);
-        when(client.getItemContainer(InventoryID.BANK)).thenReturn(container(new Item(11850,1),new Item(952,1)),container());
-        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(container(),container(new Item(952,1)));
-        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(container(),container(new Item(11850,1)));
+        ItemContainer initialBank=container(new Item(11850,1),new Item(952,1));
+        ItemContainer empty=container();
+        ItemContainer inventory=container(new Item(952,1));
+        ItemContainer equipment=container(new Item(11850,1));
+        when(client.getItemContainer(InventoryID.BANK)).thenReturn(initialBank,empty);
+        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(empty,inventory);
+        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(empty,equipment);
         assertEquals(ActiveRunBank.ownedStock(client,id->real),ActiveRunBank.ownedStock(client,id->real));
     }
     @Test public void filtersExactPhysicalItemIds()

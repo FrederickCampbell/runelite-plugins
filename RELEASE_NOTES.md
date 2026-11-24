@@ -1,3 +1,7 @@
+## v0.37-beta.2 — Regression test setup
+
+- Create and configure item-container mocks before stubbing client calls. Preserve both ownership assertions and all production Java from v0.37-beta.1.
+
 ## v0.37-beta.1 — Farming bank ownership
 
 - Build the farming bank shelves from relevant items actually owned in the bank, inventory or equipment. Carried/worn items without a bank stack use native visual placeholders. Moving the same item between these locations does not change shelf membership or trigger a plugin layout rebuild.
