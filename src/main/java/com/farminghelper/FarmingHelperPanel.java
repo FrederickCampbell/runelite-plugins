@@ -23,6 +23,30 @@ final class FarmingHelperPanel extends PluginPanel
     private FarmRunPatch lastActive;
     private final JPanel rows = new JPanel();
     private final JScrollPane scroll;
+    // BorderLayout.NORTH alone does not constrain a normal JPanel's preferred width.
+    // Scrollable explicitly follows the viewport, including the scrollbar's width.
+    static final class GuideScrollContent extends JPanel implements Scrollable
+    {
+        GuideScrollContent(){super(new BorderLayout());}
+        @Override public Dimension getPreferredScrollableViewportSize(){return getPreferredSize();}
+        @Override public int getScrollableUnitIncrement(java.awt.Rectangle r,int orientation,int direction){return 16;}
+        @Override public int getScrollableBlockIncrement(java.awt.Rectangle r,int orientation,int direction){return Math.max(16,r.height-16);}
+        @Override public boolean getScrollableTracksViewportWidth(){return true;}
+        @Override public boolean getScrollableTracksViewportHeight(){return false;}
+    }
+    private static final Icon SATISFIED=new Icon()
+    {
+        public int getIconWidth(){return 14;}
+        public int getIconHeight(){return 14;}
+        public void paintIcon(java.awt.Component c,java.awt.Graphics g,int x,int y)
+        {
+            java.awt.Graphics2D p=(java.awt.Graphics2D)g.create();
+            p.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            p.setColor(new Color(124,209,119));
+            p.setStroke(new java.awt.BasicStroke(2f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND));
+            p.drawLine(x+2,y+7,x+6,y+11);p.drawLine(x+6,y+11,x+12,y+3);p.dispose();
+        }
+    };
     private GuideView previousGuide;
     private final Map<String,JTextArea> itemNames=new HashMap<>(),stepText=new HashMap<>();
     private final Map<String,JLabel> itemQuantities=new HashMap<>();
@@ -38,7 +62,7 @@ final class FarmingHelperPanel extends PluginPanel
         setLayout(new BorderLayout());
         rows.setLayout(new BoxLayout(rows,BoxLayout.Y_AXIS));
         rows.setBorder(BorderFactory.createEmptyBorder(6,6,6,6));
-        JPanel top = new JPanel(new BorderLayout());
+        JPanel top = new GuideScrollContent();
         top.add(rows, BorderLayout.NORTH);
         scroll = new JScrollPane(top);
         scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -49,7 +73,12 @@ final class FarmingHelperPanel extends PluginPanel
 
     private void addRow(JComponent row)
     {
-        JPanel wrapper = new JPanel(new BorderLayout());
+        JPanel wrapper = new JPanel(new BorderLayout())
+        {
+            @Override public Dimension getMinimumSize(){return new Dimension(0,super.getMinimumSize().height);}
+            @Override public Dimension getMaximumSize(){return new Dimension(Integer.MAX_VALUE,getPreferredSize().height);}
+        };
+        wrapper.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
         wrapper.setOpaque(false);
         wrapper.add(row);
         wrapper.setBorder(BorderFactory.createEmptyBorder(2,0,2,0));
@@ -66,8 +95,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private void line(String text, boolean active)
     {
-        String escaped = text.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>");
-        JLabel label = new JLabel("<html><body style='width:132pt'>" + escaped + "</body></html>");
+        JTextArea label = text(text,active ? ColorScheme.BRAND_ORANGE : Color.LIGHT_GRAY);
         label.setOpaque(active);
         label.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         label.setForeground(active ? ColorScheme.BRAND_ORANGE : Color.LIGHT_GRAY);
@@ -197,7 +225,14 @@ final class FarmingHelperPanel extends PluginPanel
 
     private static String rowKey(GuideView.ItemRow row){return row.id+":"+row.recommended;}
     private static Color itemColor(GuideView.ItemRow row){return row.owned>=row.needed?new Color(124,209,119):new Color(236,125,120);}
-    private static String stockTip(GuideView.ItemRow row){return "Last observed bank: "+row.bank+" · Seed Vault: "+row.vault;}
+    private static String stockTip(GuideView.ItemRow row){return "Carried: "+row.owned+" / "+row.needed+" · Last observed bank: "+row.bank+" · Seed Vault: "+row.vault;}
+    static void updateQuantity(JLabel label,GuideView.ItemRow row)
+    {
+        boolean enough=row.owned>=row.needed;
+        label.setText(enough?"":row.owned+"/"+row.needed);
+        label.setIcon(enough?SATISFIED:null);
+        label.setForeground(itemColor(row));label.setToolTipText(stockTip(row));
+    }
     private boolean sameStructure(GuideView a,GuideView b)
     {
         if(a==null || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || a.active==null || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
@@ -212,7 +247,7 @@ final class FarmingHelperPanel extends PluginPanel
             JTextArea name=itemNames.get(rowKey(r));JLabel quantity=itemQuantities.get(rowKey(r));
             if(name==null || quantity==null)continue;
             name.setText(r.name);name.setForeground(itemColor(r));name.setToolTipText(stockTip(r));
-            quantity.setText(r.owned+"/"+r.needed);quantity.setForeground(itemColor(r));quantity.setToolTipText(stockTip(r));
+            updateQuantity(quantity,r);
         }
         for(GuideView.Stop stop:view.stops){JTextArea label=stepText.get(stop.patch.key());if(label!=null)label.setText((stop.active?"▶ ":"")+stop.instruction);}
         finish();
@@ -227,7 +262,7 @@ final class FarmingHelperPanel extends PluginPanel
             JPanel row=new JPanel(new BorderLayout(4,0));row.setOpaque(false);
             Color c=itemColor(r);
             JTextArea label=text(r.name,c);
-            JLabel quantity=new JLabel(r.owned+"/"+r.needed);quantity.setForeground(c);
+            JLabel quantity=new JLabel();updateQuantity(quantity,r);
             quantity.setFont(FontManager.getRunescapeFont());
             String tip=stockTip(r);
             itemNames.put(rowKey(r),label);itemQuantities.put(rowKey(r),quantity);
@@ -260,6 +295,10 @@ final class FarmingHelperPanel extends PluginPanel
         header.add(title,BorderLayout.CENTER);
         JButton close=new JButton("×");close.setUI(new BasicButtonUI());close.setBorderPainted(false);close.setContentAreaFilled(false);
         close.setToolTipText("End farming run");close.addActionListener(e->plugin.stop());header.add(close,BorderLayout.EAST);addRow(header);
+        JCheckBox seedless=new JCheckBox("Hide Seedless Patches",plugin.hideSeedless());
+        seedless.setFont(FontManager.getRunescapeFont());seedless.setOpaque(false);
+        seedless.setToolTipText("Skip replanting patches without enough plant-ready stock; uses observed bank, vault and inventory. Applies only to this run.");
+        seedless.addActionListener(e->plugin.setHideSeedless(seedless.isSelected()));addRow(seedless);
         requirements("Item requirements:",view.items,false);
         requirements("Recommended items:",view.items,true);
         if(!view.supplyNote.isEmpty())line(view.supplyNote,false);
@@ -276,6 +315,7 @@ final class FarmingHelperPanel extends PluginPanel
             boolean open=expanded.getOrDefault(stop.patch.key(),stop.active);
             Color bg=stop.active?ACTIVE:ColorScheme.DARKER_GRAY_COLOR.darker();
             JButton fold=new JButton((open?"▾ ":"▸ ")+(stop.done?"✓ ":"")+stop.patch.guideLabel()+(" · "+stop.patch.getPatchType().getDisplayName()));
+            fold.setToolTipText(fold.getText());
             fold.setUI(new BasicButtonUI());fold.setFont(FontManager.getRunescapeBoldFont());fold.setHorizontalAlignment(SwingConstants.LEFT);
             fold.setBackground(bg);fold.setForeground(stop.active?ACTIVE_TEXT:Color.WHITE);
             fold.setBorder(BorderFactory.createEmptyBorder(7,7,5,7));

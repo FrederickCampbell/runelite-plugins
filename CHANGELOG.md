@@ -1,3 +1,8 @@
+## v0.22.1-beta.1 — Run stock toggle and sidebar layout
+
+- Optional per-run Hide Seedless Patches reserves actual observed planting stock, preserving non-replanting work and restoring hidden stops when disabled.
+- Sidebar tracks viewport width; satisfied supply counts use a green icon with exact counts in tooltip.
+
 ## v0.22-beta.1 — Run-aware Seed Vault
 
 - Use exact remaining guide requirements in custom vault views; open to Custom View during a run, native categories remain accessible.

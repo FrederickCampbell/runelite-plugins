@@ -22,6 +22,12 @@ final class SeedChoices
     static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
         Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed)
     {
+        return allocate(patches,level,stock,priorities,overrides,committed,false);
+    }
+
+    static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
+        Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,boolean stockedOnly)
+    {
         Map<Integer,Integer> remaining = new HashMap<>(stock);
         Map<FarmRunPatch,Crop> result = new LinkedHashMap<>();
         // Reserve a live, already-selected crop first, but never force an exhausted crop.
@@ -53,7 +59,8 @@ final class SeedChoices
                 if (crop.getLevel() <= level && !candidates.contains(crop)) candidates.add(crop);
             if (candidates.isEmpty()) continue;
             Crop choice = candidates.stream().filter(c -> remaining.getOrDefault(c.getItemId(),0) >= c.getQuantity())
-                .findFirst().orElse(candidates.get(0));
+                .findFirst().orElse(stockedOnly?null:candidates.get(0));
+            if(choice==null)continue;
             assign(patch,choice,remaining,result);
         }
         Map<FarmRunPatch,Crop> ordered = new LinkedHashMap<>();

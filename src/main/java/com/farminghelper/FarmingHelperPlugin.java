@@ -70,7 +70,7 @@ public class FarmingHelperPlugin extends Plugin
     private String runLabel;
     private List<String> referenceOrder;
     private boolean optimizeManual, initialPrepChecked, entranaOffered;
-    private volatile boolean preparing;
+    private volatile boolean preparing, hideSeedless;
     private boolean visitedStorage;
     private final Set<String> resupplyOffered=new HashSet<>();
     private Preparation.Bank preparationBank;
@@ -182,6 +182,7 @@ public class FarmingHelperPlugin extends Plugin
     private void clearRun()
     {
         run = Collections.emptySet();
+        hideSeedless=false;
         manualKeys=null;runLabel=null;referenceOrder=null;optimizeManual=false;
         initialPrepChecked=false;preparing=false;entranaOffered=false;visitedStorage=false;resupplyOffered.clear();preparationBank=null;preparationReason="";
         runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
@@ -217,6 +218,18 @@ public class FarmingHelperPlugin extends Plugin
         vault.clear();
         stockProfile=null;
         end();
+    }
+
+    boolean hideSeedless(){return hideSeedless;}
+    void setHideSeedless(boolean value)
+    {
+        final long id=session;
+        thread.invokeLater(()->{
+            if(id!=session||!guideRequested||run.isEmpty())return;
+            hideSeedless=value;
+            lastView=null;
+            update();
+        });
     }
 
     void skip(FarmRunPatch displayed)
@@ -326,7 +339,7 @@ public class FarmingHelperPlugin extends Plugin
     // Null means ordinary vault browsing; an empty set is a live run with no planting supplies.
     Set<Integer> vaultRunItems()
     {
-        if(!guideRequested||run.isEmpty()||current==null)return null;
+        if(!guideRequested||run.isEmpty())return null;
         Set<Integer> ids=new HashSet<>(requiredItems);ids.addAll(recommendedItems);
         return Set.copyOf(ids);
     }
@@ -512,13 +525,22 @@ public class FarmingHelperPlugin extends Plugin
         // Keep the active step stable while the player is working, rather than jumping when another patch matures.
         if(current!=null && ready.remove(current)) ready.add(0,current);
         if(current!=null && plant.remove(current)) plant.add(0,current);
+        Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current)!=null &&
+            observations.get(current).source==QuestFarmingStateReader.Source.LIVE
+            ? Map.of(current,activeCrop):Collections.emptyMap();
+        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,stock,this::priority,this::override,committed,hideSeedless);
+        int seedlessCount=0;
+        if(hideSeedless)
+        {
+            Set<FarmRunPatch> seedless=new HashSet<>(plant);
+            seedless.removeAll(seeds.keySet());
+            seedlessCount=seedless.size();
+            ready.removeAll(seedless);visible.removeAll(seedless);
+        }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current) { current=next;progress.reset();activeCrop=null; if(current!=null) progress.observe(observations.get(current)); }
         if(runOrder!=null&&!runOrder.isEmpty()&&(current==null||!runOrder.get(0).patches.contains(current)))
         {orderFrozen=true;orderProbeId=null;}
-        Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current).source==QuestFarmingStateReader.Source.LIVE
-            ? Map.of(current,activeCrop):Collections.emptyMap();
-        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,stock,this::priority,this::override,committed);
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
         Map<Integer,Integer> required=Supplies.guideKit(ready,-1,false,false,
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
@@ -609,6 +631,8 @@ public class FarmingHelperPlugin extends Plugin
                 if(potentialEntranaGear(carried))beginPreparation(false,true,"Entrana restricts weapons and armour. Bank potentially restricted equipment before boarding, then continue. The monks make the final access check.");
             }
         }
+        if(seedlessCount>0)
+            supplyNote+=(supplyNote.isEmpty()?"":"\n")+seedlessCount+" patch"+(seedlessCount==1?"":"es")+" hidden: insufficient planting stock.";
         if(current==null)preparing=false;
         String prepMessage="";
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
