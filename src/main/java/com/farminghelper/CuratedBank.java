@@ -147,9 +147,9 @@ final class CuratedBank
         return true;
     }
     private static boolean divingEquipment(String n){return n.equals("fishbowl helmet")||n.equals("diving apparatus")||n.equals("medallion of the deep")||n.equals("flippers");}
-    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> bank,IntFunction<String> names,Client client,ConfigManager config,boolean bird)
-    {return shelf(run,bank,names,client,config,bird,!bird,!bird);}
-    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> bank,IntFunction<String> names,Client client,ConfigManager config,boolean bird,boolean trees,boolean diving)
+    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config,boolean bird)
+    {return shelf(run,owned,names,client,config,bird,!bird,!bird);}
+    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config,boolean bird,boolean trees,boolean diving)
     {
         if(run==null)return null;
         Set<Integer> result=new HashSet<>(run);
@@ -157,14 +157,14 @@ final class CuratedBank
         Set<Integer> blocked=blocked(config(config,"blockedTeleportItems"));
         boolean fairy=!"false".equalsIgnoreCase(config(config,"useFairyRings"));
         boolean quetzal=!"false".equalsIgnoreCase(config(config,"useQuetzals"));
-        for(var entry:bank.entrySet())
+        for(var entry:owned.entrySet())
         {
             if(entry.getValue()<=0)continue;
             int id=entry.getKey();String name=names.apply(id);
             if(contextualEquipment(id,names,bird,trees,diving))result.add(id);
             if(fairy&&!blocked.contains(id)&&(id==772||id==9084)&&fairyAccess(client))result.add(id);
         }
-        for(var entry:bank.entrySet())if(entry.getValue()>0)for(String[] row:teleportRows(entry.getKey(),names))
+        for(var entry:owned.entrySet())if(entry.getValue()>0)for(String[] row:teleportRows(entry.getKey(),names))
         {
             int id=entry.getKey(),source=Integer.parseInt(row[0]),family=Integer.parseInt(row[1]);
             if(blocked.contains(id)||blocked.contains(source)||blocked.contains(family)||!modeAllows(mode,"T".equals(row[2])))continue;

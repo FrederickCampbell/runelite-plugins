@@ -15,6 +15,14 @@ public class BankShelfLayoutTest
         assertTrue(position(layout,952)<position(layout,21483));assertTrue(position(layout,21483)<position(layout,5295));
         assertEquals(names.size(),Arrays.stream(layout).filter(id->id>=0).count());
     }
+    @Test public void bankBagAndWornItemsShareOneStableShelf()
+    {
+        Map<Integer,String> names=Map.of(11850,"Graceful hood",952,"Spade",7409,"Magic secateurs");
+        Set<Integer> owned=names.keySet();
+        int[] layout=BankShelfLayout.build(owned,names::get,id->-1,id->-1);
+        assertTrue(position(layout,11850)>=0);assertTrue(position(layout,952)>=0);assertTrue(position(layout,7409)>=0);
+        assertArrayEquals(layout,BankShelfLayout.reconcile(layout,owned,owned,names::get,id->-1,id->-1));
+    }
     @Test public void noGhostItemsInitiallyAndStableWithdrawals()
     {
         assertArrayEquals(new int[0],BankShelfLayout.build(Set.of(),id->"",id->-1,id->-1));

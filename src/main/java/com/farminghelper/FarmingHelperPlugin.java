@@ -419,7 +419,7 @@ public class FarmingHelperPlugin extends Plugin
             refineOrder();
         }
         if(vaultViews!=null)vaultViews.tick();
-        if(runBank!=null)runBank.tick(bankRunItems(),flag("activeRunBank",true),birdBankPhase());
+        updateRunBank(false);
 
     }
 
@@ -456,17 +456,27 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     private boolean birdBankPhase(){return specialtyStaged&&specialtyBirdPhase||run.size()==1&&run.contains(FarmRunType.BIRDHOUSE);}
-    private Set<Integer> bankRunItems()
+    private Set<Integer> bankRunItems(Map<Integer,Integer> owned)
     {
         Set<Integer> runItems=vaultRunItems();
         if(runItems==null)return null;
         Set<Integer> ids=new HashSet<>(runItems);
         boolean bird=birdBankPhase();
-        if(runBank==null||!runBank.bankOpen())return Set.copyOf(ids);
         boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
-        return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving);
+        return CuratedBank.shelf(ids,owned,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving);
     }
-    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested&&flag("activeRunBank",true)){sampleStorage();update();runBank.show(bankRunItems(),birdBankPhase());}});}
+    private void updateRunBank(boolean manual)
+    {
+        if(runBank==null)return;
+        boolean enabled=flag("activeRunBank",true);
+        if(!enabled||!guideRequested||run.isEmpty()||!runBank.bankOpen())
+        {runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return;}
+        Map<Integer,Integer> owned=runBank.ownedStock();
+        Set<Integer> eligible=bankRunItems(owned);
+        if(manual)runBank.show(eligible,owned.keySet(),birdBankPhase());
+        else runBank.tick(eligible,owned.keySet(),enabled,birdBankPhase());
+    }
+    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested&&flag("activeRunBank",true)){sampleStorage();update();updateRunBank(true);}});}
     TransportHint birdhouseTransport()
     {
         if(!guideRequested||diseaseTarget!=null||preparing||current==null||current.getPatchType()!=PatchType.BIRDHOUSE||navigation==null||client.getLocalPlayer()==null)return null;

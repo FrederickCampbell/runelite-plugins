@@ -1,4 +1,4 @@
-# Farming Helper — review notes (v0.36-beta.2)
+# Farming Helper — review notes (v0.37-beta.1)
 
 The guide observes client state and provides instructions; the player performs every game action. No automatic banking, planting, travel, world hopping or input injection.
 
@@ -15,3 +15,6 @@ The guide observes client state and provides instructions; the player performs e
 3. Change native categories and search; close/reopen vault and disable plugin while a view is active.
 4. Open farming bank, withdraw/deposit owned items, switch native tags, close/reopen with remember-tab enabled; inspect for any unintended persistent layout/tag. Existing user tags must stay intact.
 5. Check route replacement, user cancellation, hop and logout. No gameplay automation.
+
+## v0.37 bank ownership
+The live shelf uses bank, inventory and equipment stock. Native layout cells for owned items outside the bank are visual placeholders only; they do not count as bank stock, trigger withdrawals or write a permanent tag. Check fully withdrawn stacks, worn-only gear, item deposits and switching farming/birdhouse stages in the live client.

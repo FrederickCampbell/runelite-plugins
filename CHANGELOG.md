@@ -1,3 +1,9 @@
+## v0.37-beta.1 — Farming bank ownership
+
+- Build the farming bank shelves from relevant items actually owned in the bank, inventory or equipment. Carried/worn items without a bank stack use native visual placeholders. Moving the same item between these locations does not change shelf membership or trigger a plugin layout rebuild.
+- Preserve curated categories, run requirements, farming/birdhouse stage filters, temporary native Bank Tags registration and independent bank/Seed Vault switches. Seed Vault-only items and never-owned items are not added to the bank.
+- Keep existing within-visit withdrawal placeholders. Stock allocation and manual gameplay remain unchanged. Added ownership and stable-layout regression tests; live native placeholder behavior requires testing.
+
 ## v0.36-beta.2 — Lifecycle regression expectation
 
 - Correct the startup route assertion to require no unconditional Shortest Path clear. Keep the explicit end-of-run clear assertion and all other lifecycle checks. Production Java is unchanged from v0.36-beta.1.

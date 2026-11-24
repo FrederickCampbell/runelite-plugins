@@ -1,6 +1,7 @@
 package com.farminghelper;
 
 import java.util.*;
+import java.util.function.IntFunction;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.ItemComposition;
@@ -53,13 +54,22 @@ final class ActiveRunBank
     {
         if(!registered){tags.registerTag(TAG,id->includes(admitted,id,items.getItemComposition(id))&&ids.contains(id));registered=true;}
     }
-    private Set<Integer> physical()
+    /** One live ownership snapshot for both curation and positional layout.
+     * Seed Vault stock and native bank placeholders are not bank shelf items. */
+    static Map<Integer,Integer> ownedStock(Client client,IntFunction<ItemComposition> definition)
     {
-        Set<Integer> result=new HashSet<>();
-        ItemContainer bank=client.getItemContainer(InventoryID.BANK);
-        if(bank!=null)for(Item item:bank.getItems())if(item!=null&&PhysicalStock.available(item.getId(),item.getQuantity(),items::getItemComposition))result.add(item.getId());
-        return Set.copyOf(result);
+        Map<Integer,Integer> result=new HashMap<>();
+        for(InventoryID source:List.of(InventoryID.BANK,InventoryID.INVENTORY,InventoryID.EQUIPMENT))
+        {
+            ItemContainer container=client.getItemContainer(source);
+            if(container==null||container.getItems()==null)continue;
+            for(Item item:container.getItems())
+                if(item!=null&&PhysicalStock.available(item.getId(),item.getQuantity(),definition))
+                    result.merge(item.getId(),item.getQuantity(),Integer::sum);
+        }
+        return Map.copyOf(result);
     }
+    Map<Integer,Integer> ownedStock(){return ownedStock(client,items::getItemComposition);}
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
     private int slot(int id){var s=items.getItemStats(id);return s==null||s.getEquipment()==null?-1:s.getEquipment().getSlot();}
     static Set<Integer> admittedIds(int[] layout)
@@ -75,30 +85,30 @@ final class ActiveRunBank
         lastLayout=layout.clone();admitted=admittedIds(layout);
         api.openTag(TAG,new Layout(TAG,layout),BankTagsService.OPTION_ITEMS_NOT_IN_LAYOUT_AT_BOTTOM);
     }
-    void tick(Set<Integer> next,boolean enabled,boolean bird)
+    void tick(Set<Integer> next,Set<Integer> owned,boolean enabled,boolean bird)
     {
         BankTagsPlugin api=service();
         if(!enabled||next==null||api==null){close();return;}
         if(!bankOpen()){if(registered)close();return;}
-        Set<Integer> physical=physical();Set<Integer> filtered=new HashSet<>(physical);filtered.retainAll(next);
+        Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);
         boolean changed=!ids.equals(filtered);ids=Set.copyOf(filtered);register();
         if(!opened){opened=true;offered=false;lastLayout=new int[0];}
         boolean stageChanged=birdPhase!=bird;birdPhase=bird;
         if(stageChanged)lastLayout=new int[0];
         if(offered&&!TAG.equals(api.getActiveTag()))return; // Respect manual browsing.
-        int[] layout=BankShelfLayout.reconcile(lastLayout,ids,physical,this::name,this::slot,CuratedBank::transportCategory);
+        int[] layout=BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory);
         if(!offered&&!ids.isEmpty()){offered=true;open(api,layout);}
         else if(offered&&(stageChanged||!Arrays.equals(layout,lastLayout)))open(api,layout);
         else if(offered&&changed&&search!=null)search.layoutBank();
     }
-    void show(Set<Integer> next,boolean bird)
+    void show(Set<Integer> next,Set<Integer> owned,boolean bird)
     {
         BankTagsPlugin api=service();
         if(api==null||next==null||next.isEmpty()||!bankOpen())return;
-        Set<Integer> physical=physical();Set<Integer> filtered=new HashSet<>(physical);filtered.retainAll(next);ids=Set.copyOf(filtered);
+        Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);ids=Set.copyOf(filtered);
         if(!opened||birdPhase!=bird)lastLayout=new int[0];birdPhase=bird;
         register();opened=true;offered=true;
-        open(api,BankShelfLayout.reconcile(lastLayout,ids,physical,this::name,this::slot,CuratedBank::transportCategory));
+        open(api,BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory));
     }
     void close()
     {

@@ -129,15 +129,15 @@ final class BankShelfLayout
         return out.stream().mapToInt(Integer::intValue).toArray();
     }
     /** Keep withdrawal positions for this bank visit. New stock appends as a
-     * structured block; newly ineligible physical stock is removed. Empty
+     * structured block; newly ineligible owned stock is removed. Empty
      * layout cells never enter the stock/requirement calculations. */
-    static int[] reconcile(int[] prior,Set<Integer> eligible,Set<Integer> physical,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport)
+    static int[] reconcile(int[] prior,Set<Integer> eligible,Set<Integer> owned,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport)
     {
         if(prior.length==0)return build(eligible,names,equipment,transport);
         List<Integer> out=new ArrayList<>();Set<Integer> fresh=new HashSet<>(eligible);
         for(int id:prior)
         {
-            if(id>=0&&physical.contains(id)&&!eligible.contains(id))out.add(-1);
+            if(id>=0&&owned.contains(id)&&!eligible.contains(id))out.add(-1);
             else{out.add(id);fresh.remove(id);}
         }
         if(!fresh.isEmpty()){pad(out);for(int id:build(fresh,names,equipment,transport))out.add(id);}
