@@ -919,7 +919,7 @@ public class FarmingHelperPlugin extends Plugin
             for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,!preparing,false));
         if(preparing&&!routeNote.isEmpty())prepMessage+="\n"+routeNote;
         cacheIcons(items);
-        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST);
+        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST,new GuideView.Stats(completed.size(),skipped.size(),deferredGrowing,seedlessCount));
         normalView=view;
         publishView(view);
     }
@@ -974,7 +974,7 @@ public class FarmingHelperPlugin extends Plugin
         stops.set(0,new GuideView.Stop(target,instruction,true,false));
         if(normalView!=null)for(GuideView.Stop stop:normalView.stops)if(stop.patch!=target)stops.add(new GuideView.Stop(stop.patch,stop.active?"Paused: "+stop.instruction:stop.instruction,false,stop.done));
         cacheIcons(items);
-        publishView(new GuideView(title,"Disease priority",items,stops,target,"","Disease detected — current guide paused. Resume: "+resume+". Cure only; no harvest or replant.",hideSeedless,clearSeedless,false));
+        publishView(new GuideView(title,"Disease priority",items,stops,target,"","Disease detected — current guide paused. Resume: "+resume+". Cure only; no harvest or replant.",hideSeedless,clearSeedless,false,normalView==null?GuideView.Stats.UNKNOWN:normalView.stats));
         return true;
     }
 
@@ -1070,6 +1070,7 @@ public class FarmingHelperPlugin extends Plugin
         String value = config.getRSProfileKey() == null ? null : config.getRSProfileConfiguration("farming-helper",key);
         return value == null ? fallback : value;
     }
+    boolean integrationActive(String name){return plugins.getPlugins().stream().anyMatch(p->name.equals(p.getName())&&plugins.isPluginActive(p));}
     boolean canSave() { return config.getRSProfileKey() != null; }
     void save(String key, String value)
     {

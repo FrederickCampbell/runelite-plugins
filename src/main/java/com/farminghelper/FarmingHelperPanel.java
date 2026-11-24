@@ -258,7 +258,7 @@ final class FarmingHelperPanel extends PluginPanel
             group.add(FarmingIcons.button(manualGroups.contains(key)?COLLAPSE:EXPAND,"Expand patches",FarmingTheme.MUTED,()->{if(!manualGroups.add(key))manualGroups.remove(key);manualRun();}),BorderLayout.EAST);addRow(group);
             if(manualGroups.contains(key))for(FarmRunPatch p:list)
             {
-                JCheckBox child=new JCheckBox("<html>"+escape(patchLabel(p,manualByLocation))+"</html>",manual.contains(p.key()));
+                JCheckBox child=new JCheckBox("<html><div style='width:145px'>"+escape(patchLabel(p,manualByLocation))+"</div></html>",manual.contains(p.key()));
                 child.setBorder(BorderFactory.createEmptyBorder(3,12,3,0));child.addActionListener(e->{if(child.isSelected())manual.add(p.key());else manual.remove(p.key());saveManual();manualRun();});addRow(child);
             }
         }
@@ -311,7 +311,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.signature().equals(b.stats.signature()) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)if(!rowKey(a.items.get(i)).equals(rowKey(b.items.get(i))))return false;
         for(int i=0;i<a.stops.size();i++)if(a.stops.get(i).patch!=b.stops.get(i).patch || a.stops.get(i).done!=b.stops.get(i).done || a.stops.get(i).active!=b.stops.get(i).active)return false;
         return true;
@@ -392,7 +392,9 @@ final class FarmingHelperPanel extends PluginPanel
             heading("Preparation / resupply");line(view.preparation,true);
             button("Continue run",plugin::continueRun);
         }
-        else if(view.active==null){heading("Run status");line(view.message,true);button("Return home",plugin::stop);}
+        else if(view.active==null){heading("Run status");line(view.message,true);
+            if(view.stats.processed>=0){caption("Processed (including preserved): "+view.stats.processed);caption("Skipped manually: "+view.stats.skipped);if(view.stats.deferred>0)caption("Deferred this stage: "+view.stats.deferred);if(view.stats.seedless>0)caption("Hidden for missing seed stock: "+view.stats.seedless);}
+            button("Return home",plugin::stop);}
         if(plugin.diseaseInterruptActive())heading("Disease detected");
         if(done>0)collapse("Completed · "+done,completedOpen,()->{completedOpen=!completedOpen;previousGuide=null;renderGuide(latestGuide);});
         if(completedOpen)for(GuideView.Stop stop:view.stops)if(stop.done)caption("✓ "+stop.patch.guideLabel());
@@ -404,7 +406,7 @@ final class FarmingHelperPanel extends PluginPanel
             JPanel section=new JPanel(new BorderLayout(0,1));section.setBorder(BorderFactory.createEmptyBorder(5,0,0,0));
             boolean open=expanded.getOrDefault(stop.patch.key(),stop.active);
             Color bg=stop.active?ACTIVE:FarmingTheme.CARD.darker();
-            JButton fold=new JButton("<html>"+escape(stop.patch.guideLabel())+"<br><small>"+escape(stop.patch.getPatchType().getDisplayName())+"</small></html>",FarmingIcons.of(open?COLLAPSE:EXPAND,stop.active?FarmingTheme.SUCCESS:FarmingTheme.MUTED));
+            JButton fold=new JButton("<html><div style='width:140px'>"+escape(stop.patch.guideLabel())+"<br><small>"+escape(stop.patch.getPatchType().getDisplayName())+"</small></div></html>",FarmingIcons.of(open?COLLAPSE:EXPAND,stop.active?FarmingTheme.SUCCESS:FarmingTheme.MUTED));
             fold.setToolTipText(stop.patch.getDisplayName());
             fold.setFont(FarmingTheme.font(Font.BOLD,12));fold.setHorizontalAlignment(SwingConstants.LEFT);
             fold.setBackground(bg);fold.putClientProperty("farming.preserveBackground",Boolean.TRUE);fold.setForeground(stop.active?ACTIVE_TEXT:Color.WHITE);
@@ -429,7 +431,7 @@ final class FarmingHelperPanel extends PluginPanel
         }
         if(view.preparation.isEmpty()&&view.active!=null&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
         finish();
-        if(sameActive)SwingUtilities.invokeLater(()->{if(navigation.page()==GUIDE)scroll.getVerticalScrollBar().setValue(scrollY);});
+        SwingUtilities.invokeLater(()->{if(navigation.page()==GUIDE)scroll.getVerticalScrollBar().setValue(sameActive?scrollY:0);});
     }
 
     private static String escape(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");}
@@ -490,6 +492,7 @@ final class FarmingHelperPanel extends PluginPanel
         reset.setToolTipText("Clears cached quantities only; reopen the bank and Seed Vault.");
         reset.addActionListener(e->{if(JOptionPane.showConfirmDialog(this,"Clear cached bank and Seed Vault quantities? Your items are unchanged.","Reset observed stock",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)plugin.resetObservedStock();});addRow(reset);
         if(latestGuide==null)caption("Available during an active run.");
+        heading("Integrations");for(String name:List.of("Shortest Path","Bank Tags","Time Tracking")){boolean active=plugin.integrationActive(name);caption(name+" · "+(active?"Enabled":"Not enabled"));}
         heading("About");caption("Farming Helper · v0.31");finish();
     }
     private void runSettings()
@@ -536,7 +539,7 @@ final class FarmingHelperPanel extends PluginPanel
             if(open)for(FarmRunPatch p:list)
             {
                 JPanel row=new JPanel(new BorderLayout(2,0));row.setOpaque(false);row.setBorder(BorderFactory.createEmptyBorder(2,8,2,0));
-                JCheckBox enabled=new JCheckBox("<html>"+escape(patchLabel(p,patchByLocation))+"</html>",plugin.enabled(p));
+                JCheckBox enabled=new JCheckBox("<html><div style='width:120px'>"+escape(patchLabel(p,patchByLocation))+"</div></html>",plugin.enabled(p));
                 String issue=plugin.accessNote(p);enabled.setToolTipText(issue.isEmpty()?p.getDisplayName():issue);
                 if(!issue.isEmpty())enabled.setForeground(FarmingTheme.MUTED);
                 enabled.addActionListener(e->{plugin.save("patchEnabled_"+p.key(),Boolean.toString(enabled.isSelected()));fillPatches(results);});row.add(enabled);
