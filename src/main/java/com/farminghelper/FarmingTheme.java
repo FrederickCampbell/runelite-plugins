@@ -4,7 +4,6 @@ import java.awt.*;
 import java.util.Arrays;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.plaf.FontUIResource;
 import net.runelite.client.ui.FontManager;
 
 /** Local design tokens. Never modifies UIManager defaults or installs a look and feel. */
@@ -36,7 +35,7 @@ final class FarmingTheme
                 if(j instanceof AbstractButton)
                 {
                     AbstractButton b=(AbstractButton)j;
-                    b.setFont(font(Font.PLAIN,12));
+                    Font old=b.getFont();b.setFont(font(old!=null&&old.isBold()?Font.BOLD:Font.PLAIN,12));
                     if(b instanceof JCheckBox)
                     {
                         b.setOpaque(false);
@@ -45,7 +44,7 @@ final class FarmingTheme
                     else
                     {
                         if(b.getClientProperty("farming.icon")==null)
-                        {b.setBackground(INPUT);style(b,"arc: 8; borderWidth: 1; focusWidth: 1; hoverBackground: #414141; pressedBackground: #303E2C");}
+                        {if(b.getClientProperty("farming.preserveBackground")==null)b.setBackground(INPUT);style(b,"arc: 8; borderWidth: 1; focusWidth: 1; hoverBackground: #414141; pressedBackground: #303E2C");}
                         b.setMargin(new Insets(5,7,5,7));
                     }
                     if(b.getForeground()==null||b.getForeground() instanceof javax.swing.plaf.UIResource)b.setForeground(TEXT);
@@ -63,11 +62,12 @@ final class FarmingTheme
                 else if(j instanceof JLabel||j instanceof JTextArea)
                 {
                     Font old=j.getFont();
-                    if(old==null||!old.getFamily().equalsIgnoreCase("Verdana"))
+                    if(old==null||old instanceof javax.swing.plaf.UIResource)
                         j.setFont(font(old!=null&&old.isBold()?Font.BOLD:Font.PLAIN,12));
                 }
             }
         }
-        if(c instanceof Container)for(Component child:((Container)c).getComponents())apply(child);
+        // Do not style look-and-feel-owned children of composite controls (combo arrows, etc.).
+        if(c instanceof JPanel)for(Component child:((Container)c).getComponents())apply(child);
     }
 }

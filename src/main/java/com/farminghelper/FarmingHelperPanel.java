@@ -35,6 +35,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final SidebarNavigation navigation=new SidebarNavigation();
     private GuideView latestGuide;
     private boolean requiredOpen=true,completedOpen=false;
+    private JButton requirementsHeader;
     private boolean settingsFromRun=false,patchByLocation=true,showLocked=false,manualByLocation=false;
     private String patchSearch="",individualSearch="";
     private final Set<String> patchExpanded=new HashSet<>(),manualGroups=new HashSet<>(),presetExpanded=new HashSet<>();
@@ -165,10 +166,10 @@ final class FarmingHelperPanel extends PluginPanel
             public void insertUpdate(DocumentEvent e){update();} public void removeUpdate(DocumentEvent e){update();} public void changedUpdate(DocumentEvent e){update();}
         });addRow(search);
     }
-    private void collapse(String label,boolean open,Runnable action)
+    private JButton collapse(String label,boolean open,Runnable action)
     {
         JButton b=new JButton(label,FarmingIcons.of(open?COLLAPSE:EXPAND,FarmingTheme.MUTED));b.setHorizontalAlignment(SwingConstants.LEFT);
-        b.addActionListener(e->action.run());addRow(b);
+        b.addActionListener(e->action.run());addRow(b);return b;
     }
     private void caption(String value){JTextArea t=text(value,FarmingTheme.MUTED);t.setFont(FarmingTheme.font(Font.PLAIN,11));addRow(t);}
 
@@ -257,7 +258,7 @@ final class FarmingHelperPanel extends PluginPanel
             group.add(FarmingIcons.button(manualGroups.contains(key)?COLLAPSE:EXPAND,"Expand patches",FarmingTheme.MUTED,()->{if(!manualGroups.add(key))manualGroups.remove(key);manualRun();}),BorderLayout.EAST);addRow(group);
             if(manualGroups.contains(key))for(FarmRunPatch p:list)
             {
-                JCheckBox child=new JCheckBox(patchLabel(p,manualByLocation),manual.contains(p.key()));
+                JCheckBox child=new JCheckBox("<html>"+escape(patchLabel(p,manualByLocation))+"</html>",manual.contains(p.key()));
                 child.setBorder(BorderFactory.createEmptyBorder(3,12,3,0));child.addActionListener(e->{if(child.isSelected())manual.add(p.key());else manual.remove(p.key());saveManual();manualRun();});addRow(child);
             }
         }
@@ -281,7 +282,7 @@ final class FarmingHelperPanel extends PluginPanel
             BorderFactory.createEmptyBorder(5,5,5,5)));
         JLabel label = new JLabel(title);
         label.setFont(FarmingTheme.font(Font.BOLD,12));
-        label.setForeground(Color.WHITE);
+        label.setForeground(FarmingTheme.ACCENT);
         label.setBorder(BorderFactory.createEmptyBorder(1,1,4,1));
         group.add(label,BorderLayout.NORTH);
         return group;
@@ -310,13 +311,14 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || a.active==null || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)if(!rowKey(a.items.get(i)).equals(rowKey(b.items.get(i))))return false;
         for(int i=0;i<a.stops.size();i++)if(a.stops.get(i).patch!=b.stops.get(i).patch || a.stops.get(i).done!=b.stops.get(i).done || a.stops.get(i).active!=b.stops.get(i).active)return false;
         return true;
     }
     private void refreshRows(GuideView view)
     {
+        if(requirementsHeader!=null)requirementsHeader.setText(requirementsTitle(view));
         for(GuideView.ItemRow r:view.items)
         {
             JTextArea name=itemNames.get(rowKey(r));JLabel quantity=itemQuantities.get(rowKey(r));
@@ -355,6 +357,8 @@ final class FarmingHelperPanel extends PluginPanel
         latestGuide=view;
         if(navigation.acceptGuide())renderGuide(view);
     }
+    private String requirementsTitle(GuideView view)
+    {long missing=view.items.stream().filter(r->!r.recommended&&r.owned<r.needed).count();return "Required items"+(missing>0?" · "+missing+" missing":"");}
     private void renderGuide(GuideView view)
     {
         if(sameStructure(previousGuide,view)){previousGuide=view;refreshRows(view);return;}
@@ -368,23 +372,18 @@ final class FarmingHelperPanel extends PluginPanel
             if(view.active!=null)expanded.put(view.active.key(),true);
             lastActive=view.active;
         }
-        rows.removeAll();
         page(GUIDE,view.title,this::showHome,this::runSettings,true);
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
         if(!plugin.diseaseInterruptActive()&&!view.stops.isEmpty())
         {
-            caption(done+" completed · "+pending+" listed remaining");
+            caption(done+" listed complete · "+pending+" remaining");
             JProgressBar progress=new JProgressBar(0,view.stops.size());progress.setValue((int)done);progress.setForeground(FarmingTheme.SUCCESS);
             progress.setPreferredSize(new Dimension(1,6));addRow(progress);
         }
-        long missing=view.items.stream().filter(r->!r.recommended&&r.owned<r.needed).count();
-        collapse("Required items"+(missing>0?" · "+missing+" missing":""),requiredOpen,()->{requiredOpen=!requiredOpen;previousGuide=null;renderGuide(latestGuide);});
-        if(requiredOpen)
-        {
-            requirements("Supplies",view.items,false);
-            button("Show farming bank",plugin::showActiveRunBank);
-        }
+        requirementsHeader=collapse(requirementsTitle(view),requiredOpen,()->{requiredOpen=!requiredOpen;previousGuide=null;renderGuide(latestGuide);});
+        if(requiredOpen)requirements("Supplies",view.items,false);
+        if(requiredOpen||!view.preparation.isEmpty())button("Show farming bank",plugin::showActiveRunBank);
 
 
         if(!view.supplyNote.isEmpty())line(view.supplyNote,false);
@@ -393,7 +392,7 @@ final class FarmingHelperPanel extends PluginPanel
             heading("Preparation / resupply");line(view.preparation,true);
             button("Continue run",plugin::continueRun);
         }
-        else if(view.active==null)line(view.message,true);
+        else if(view.active==null){heading("Run status");line(view.message,true);button("Return home",plugin::stop);}
         if(plugin.diseaseInterruptActive())heading("Disease detected");
         if(done>0)collapse("Completed · "+done,completedOpen,()->{completedOpen=!completedOpen;previousGuide=null;renderGuide(latestGuide);});
         if(completedOpen)for(GuideView.Stop stop:view.stops)if(stop.done)caption("✓ "+stop.patch.guideLabel());
@@ -428,7 +427,6 @@ final class FarmingHelperPanel extends PluginPanel
             }
             addRow(section);
         }
-        finish();
         if(view.preparation.isEmpty()&&view.active!=null&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
         finish();
         if(sameActive)SwingUtilities.invokeLater(()->{if(navigation.page()==GUIDE)scroll.getVerticalScrollBar().setValue(scrollY);});
@@ -595,7 +593,7 @@ final class FarmingHelperPanel extends PluginPanel
             up.addActionListener(e->{java.util.Collections.swap(names,n,n-1);saveRanking(type,names);});
             down.addActionListener(e->{java.util.Collections.swap(names,n,n+1);saveRanking(type,names);});
             remove.addActionListener(e->{names.remove(n);saveRanking(type,names);});
-            for(JButton b:List.of(up,down,remove)){b.setMargin(new java.awt.Insets(1,3,1,3));buttons.add(b);}row.add(buttons,BorderLayout.EAST);addRow(row);
+            for(JButton b:List.of(up,down,remove)){b.putClientProperty("farming.icon",Boolean.TRUE);b.putClientProperty("FlatLaf.styleClass","iconButton legacyIconButton");b.setPreferredSize(new Dimension(26,26));b.setMargin(new java.awt.Insets(1,3,1,3));buttons.add(b);}row.add(buttons,BorderLayout.EAST);addRow(row);
         }
         JComboBox<String> ranking=crops(type,"Add a preferred crop…");
         ranking.addActionListener(e->{if(ranking.getSelectedIndex()>0){String n=(String)ranking.getSelectedItem();if(!names.contains(n))names.add(n);saveRanking(type,names);}});addRow(ranking);

@@ -1,3 +1,11 @@
+## v0.31-beta.1 — Sidebar UX overhaul
+
+- Scoped Verdana/native fallback theme, native Swing/FlatLaf controls, consistent vector icons, fixed navigation header.
+- Persistent screen state; live guide updates no longer replace open settings. Back returns home without ending, explicit End and Resume retained.
+- Searchable individual runs, sortable manual and permanent patch browsers, grouped preset accordions, independent crop-priority settings and storage/advanced menus.
+- Collapsible supplies/completed patches, visible listed progress, context-specific run settings and clear skip wording. Existing configuration keys and farming/banking backend preserved.
+- Progress reflects the visible guide rather than inventing a total run statistic; live-client verification required.
+
 ## v0.30.1-beta.1 — Slot-ordered bank shelf
 
 - Native transient Bank Tags Layout, sorted by equipment slot then separate rows for permanent teleports, charged jewellery, rune/tablet supplies, tools, compost/payments and seeds. Empty categories are omitted; long categories wrap to the next row.
