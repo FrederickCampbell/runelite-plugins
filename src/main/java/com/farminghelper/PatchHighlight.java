@@ -49,6 +49,11 @@ final class PatchHighlight extends Overlay
     {return client.getLocalPlayer()!=null && o.getWorldView()==client.getLocalPlayer().getWorldView() && o.getPlane()==client.getPlane();}
     private WorldPoint template(GameObject o)
     {return o.getWorldView()!=null && o.getWorldView().isInstance() && o.getLocalLocation()!=null?WorldPoint.fromLocalInstance(client,o.getLocalLocation(),o.getPlane()):o.getWorldLocation();}
+    boolean hasLocalPatch(FarmRunPatch patch)
+    {
+        return !resolve(patch).isEmpty();
+    }
+
     private List<GameObject> resolve(FarmRunPatch patch)
     {
         if(patch==null || client.getLocalPlayer()==null)return Collections.emptyList();

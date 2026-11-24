@@ -463,7 +463,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private QuestFarmingStateReader.Observation observe(FarmRunPatch p)
     {
-        if(p.getPatchType()==PatchType.BIRDHOUSE)return BirdhouseRun.observe(client,config,p,highlight!=null&&!highlight.resolve(p).isEmpty());
+        if(p.getPatchType()==PatchType.BIRDHOUSE)return BirdhouseRun.observe(client,config,p,highlight!=null&&highlight.hasLocalPatch(p));
         return reader.observeType(p.getPatchType().name(),p.getLocation(),p.getName(),
             p.getPatchType()==PatchType.HESPORI ? null : Waypoints.destination(p));
     }
