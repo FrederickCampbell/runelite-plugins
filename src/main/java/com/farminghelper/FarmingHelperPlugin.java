@@ -1026,6 +1026,17 @@ public class FarmingHelperPlugin extends Plugin
         icons=Map.copyOf(next);
     }
     ImageIcon icon(int itemId) { return icons.get(itemId); }
+    /** Native cached, asynchronous item sprites; no custom downloads or client-thread blocking. */
+    void decorateSprite(JButton button,int itemId)
+    {
+        if(itemManager==null||itemId<=0)return;
+        var image=itemManager.getImage(itemId);if(image!=null)image.addTo(button);
+    }
+    void decorateSprite(JLabel label,int itemId)
+    {
+        if(itemManager==null||itemId<=0)return;
+        var image=itemManager.getImage(itemId);if(image!=null)image.addTo(label);
+    }
 
     private GuideView.ItemRow itemRow(int id,int count,Map<Integer,Integer> carried,boolean recommended)
     {

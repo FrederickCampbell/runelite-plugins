@@ -22,6 +22,7 @@ import javax.swing.*;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.api.gameval.ItemID;
 
 final class FarmingHelperPanel extends PluginPanel
 {
@@ -81,7 +82,7 @@ final class FarmingHelperPanel extends PluginPanel
         toolbar.setBackground(FarmingTheme.CARD);toolbar.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
         footer.setBackground(FarmingTheme.BACKGROUND);add(toolbar,BorderLayout.NORTH);add(footer,BorderLayout.SOUTH);
         rows.setLayout(new BoxLayout(rows,BoxLayout.Y_AXIS));
-        rows.setBorder(BorderFactory.createEmptyBorder(6,6,6,6));
+        rows.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
         JPanel top = new GuideScrollContent();
         top.add(rows, BorderLayout.NORTH);
         scroll = new JScrollPane(top);
@@ -111,7 +112,7 @@ final class FarmingHelperPanel extends PluginPanel
         JLabel label = new JLabel(text);
         label.setFont(FarmingTheme.font(Font.BOLD,12));
         label.setForeground(FarmingTheme.ACCENT);
-        addRow(label);
+        label.setBorder(BorderFactory.createEmptyBorder(5,3,1,3));addRow(label);
     }
 
     private void line(String text, boolean active)
@@ -154,10 +155,10 @@ final class FarmingHelperPanel extends PluginPanel
     private void resetScroll(){scroll.getVerticalScrollBar().setValue(0);}
     private void start(Runnable action)
     {
-        if(latestGuide!=null&&JOptionPane.showConfirmDialog(this,"End the current run and start a new one?","Replace active run",JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;
+        if(latestGuide!=null)return; // Only the explicit End action returns to run selection.
         navigation.starting();action.run();
     }
-    private void resume(){if(latestGuide!=null){navigation.show(GUIDE);previousGuide=null;renderGuide(latestGuide);}}
+    private void returnToGuide(){if(latestGuide!=null){navigation.show(GUIDE);previousGuide=null;renderGuide(latestGuide);}}
     private void settings(boolean fromRun){settingsFromRun=fromRun;preferences();resetScroll();}
     private void searchField(String value,String placeholder,java.util.function.Consumer<String> change)
     {
@@ -186,24 +187,55 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void showHome()
     {
+        if(latestGuide!=null){returnToGuide();return;}
         page(HOME,"Farming Helper",null,()->settings(false),false);
-        if(latestGuide!=null)
+        // The primary presets are the visual focus; no extra descriptive banner.
+        sectionToggle("Grouped runs",groupedOpen,()->{groupedOpen=!groupedOpen;showHome();});
+        if(groupedOpen)for(RunPreset preset:RunPreset.values())
         {
-            heading(latestGuide.title+" active");button("Resume run",this::resume);
-            JButton end=FarmingIcons.button(END,"End farming run",FarmingTheme.DANGER,plugin::stop);addRow(end);
+            String hint;int sprite;
+            switch(preset)
+            {
+                case TREE:hint="Check, harvest & plant";sprite=ItemID.PLANTPOT_MAGIC_TREE_SAPLING;break;
+                case CROP:hint="Herbs, allotments, flowers";sprite=ItemID.RANARR_SEED;break;
+                case HOPS_BUSH:hint="Hops & secondary crops";sprite=ItemID.POISONIVY_BUSH_SEED;break;
+                default:hint="Special crops & birdhouses";sprite=ItemID.SEAWEED_SEED;break;
+            }
+            addRow(navRow(preset.title,hint,LEAF,sprite,true,()->start(()->plugin.startPreset(preset))));
         }
-        collapse("Grouped runs",groupedOpen,()->{groupedOpen=!groupedOpen;showHome();});
-        if(groupedOpen)for(RunPreset preset:RunPreset.values())button(preset.title,()->start(()->plugin.startPreset(preset)));
-        collapse("Individual runs",individualOpen,()->{individualOpen=!individualOpen;showHome();});
+        addRow(new JSeparator());
+        sectionToggle("Individual runs",individualOpen,()->{individualOpen=!individualOpen;showHome();});
         if(individualOpen)
         {
             JPanel results=new JPanel();results.setOpaque(false);results.setLayout(new BoxLayout(results,BoxLayout.Y_AXIS));
             searchField(individualSearch,"Find a run…",v->{individualSearch=v;fillIndividual(results);});
             fillIndividual(results);addRow(results);
         }
-        button("Manual Run",this::openManual);
-        JLabel version=new JLabel("Farming Helper · v0.31",SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
+        addRow(navRow("Manual Run","Choose your own patches",LIST,-1,false,this::openManual));
+        JLabel version=new JLabel("Farming Helper · v0.32",SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
         footer.add(version);finish();
+    }
+    private static int patchSprite(PatchType type)
+    {
+        List<Crop> crops=CropCatalog.crops(type);if(!crops.isEmpty())return crops.get(0).getItemId();
+        if(type==PatchType.COMPOST_BIN)return ItemID.BUCKET_ULTRACOMPOST;
+        if(type==PatchType.BIRDHOUSE)return 21512; // regular bird house
+        return -1;
+    }
+    private JButton navRow(String title,String subtitle,FarmingIcons.Kind fallback,int sprite,boolean primary,Runnable action)
+    {
+        String label="<html><div style='width:130px'><b>"+escape(title)+"</b>"+(subtitle.isEmpty()?"":"<br><span style='color:#A6A6A6;font-size:10pt;font-weight:normal'>"+escape(subtitle)+"</span>")+"</div></html>";
+        JButton button=new JButton(label,FarmingIcons.of(fallback,FarmingTheme.SUCCESS));button.setHorizontalAlignment(SwingConstants.LEFT);
+        button.putClientProperty("farming.navigation",Boolean.TRUE);button.setBackground(primary?FarmingTheme.RUN_CARD:FarmingTheme.NAV);
+        button.setForeground(FarmingTheme.TEXT);button.setIconTextGap(8);button.setToolTipText(title+(subtitle.isEmpty()?"":" — "+subtitle));
+        button.getAccessibleContext().setAccessibleName(title);button.addActionListener(e->action.run());
+        if(sprite>0)plugin.decorateSprite(button,sprite);return button;
+    }
+    private void sectionToggle(String title,boolean open,Runnable action)
+    {
+        JButton b=new JButton(title,FarmingIcons.of(open?COLLAPSE:EXPAND,FarmingTheme.SUCCESS));b.setForeground(FarmingTheme.SUCCESS);b.setBackground(FarmingTheme.BACKGROUND);
+        b.putClientProperty("farming.navigation",Boolean.TRUE);b.setHorizontalAlignment(SwingConstants.LEFT);b.setFont(FarmingTheme.font(Font.BOLD,12));
+        b.addActionListener(e->action.run());addRow(b);
     }
     private void fillIndividual(JPanel results)
     {
@@ -212,8 +244,11 @@ final class FarmingHelperPanel extends PluginPanel
         choices.put("Allotment & Flower Run",()->plugin.startCombinedShortcut(FarmRunType.ALLOTMENT_FLOWER));
         choices.put("Fruit Tree & Calquat Run",()->plugin.startCombinedShortcut(FarmRunType.FRUIT_TREE_CALQUAT));
         choices.forEach((name,action)->{if(name.toLowerCase(Locale.ROOT).contains(individualSearch.toLowerCase(Locale.ROOT))){
-            JButton b=new JButton(name);b.setHorizontalAlignment(SwingConstants.LEFT);b.setAlignmentX(Component.LEFT_ALIGNMENT);
-            FarmingTheme.apply(b);b.setMaximumSize(new Dimension(Integer.MAX_VALUE,b.getPreferredSize().height));b.addActionListener(e->start(action));results.add(b);results.add(Box.createVerticalStrut(3));}});
+            int sprite=-1;for(PatchType type:PatchType.values())if(RunPreset.individualTitle(type).equals(name)){sprite=patchSprite(type);break;}
+            if(name.equals("Allotment & Flower Run"))sprite=ItemID.MARIGOLD_SEED;
+            if(name.equals("Fruit Tree & Calquat Run"))sprite=ItemID.PLANTPOT_CALQUAT_SAPLING;
+            JButton b=navRow(name,"",LEAF,sprite,false,()->start(action));b.setAlignmentX(Component.LEFT_ALIGNMENT);
+            FarmingTheme.apply(b);b.setMaximumSize(new Dimension(Integer.MAX_VALUE,b.getPreferredSize().height));results.add(b);results.add(Box.createVerticalStrut(3));}});
         results.revalidate();results.repaint();
     }
     void emptySelection(){showHome();line("No enabled patches for this run. Check patch preferences.",false);finish();}
@@ -377,7 +412,7 @@ final class FarmingHelperPanel extends PluginPanel
             if(view.active!=null)expanded.put(view.active.key(),true);
             lastActive=view.active;
         }
-        page(GUIDE,view.title,this::showHome,this::runSettings,true);
+        page(GUIDE,view.title,null,this::runSettings,true);
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
         if(!plugin.diseaseInterruptActive()&&!view.stops.isEmpty())
@@ -446,12 +481,12 @@ final class FarmingHelperPanel extends PluginPanel
         if(!plugin.canSave())caption("Log in to edit character preferences.");
         else
         {
-            button("General",this::general);
-            button("Grouped runs",this::groupedPreferences);
-            button("Patches",this::patchBrowser);
-            button("Crop priorities",this::priorities);
-            button("Bank & Seed Vault",this::storagePreferences);
-            button("Advanced",this::advanced);
+            addRow(navRow("General","Default crop care",SLIDERS,-1,false,this::general));
+            addRow(navRow("Grouped runs","Customize presets",LAYERS,-1,false,this::groupedPreferences));
+            addRow(navRow("Patches","Manage locations",PIN,-1,false,this::patchBrowser));
+            addRow(navRow("Crop priorities","Preferred seeds",LEAF,-1,false,this::priorities));
+            addRow(navRow("Bank & Seed Vault","Storage integration",STORAGE,-1,false,this::storagePreferences));
+            addRow(navRow("Advanced","Diagnostics & maintenance",TOOLS,-1,false,this::advanced));
             caption("Preferences save automatically.");
         }
         finish();
@@ -462,6 +497,7 @@ final class FarmingHelperPanel extends PluginPanel
         heading("Default crop care");caption("Compost type");
         JComboBox<CompostChoice> compost=new JComboBox<>(CompostChoice.values());
         compost.setSelectedItem(CompostChoice.load(plugin.setting("directorCompostChoice",""),plugin.flag("directorUseCompost",true)));
+        compost.setToolTipText("Bottomless bucket uses ultracompost if the bucket is unavailable.");
         compost.addActionListener(e->plugin.save("directorCompostChoice",((CompostChoice)compost.getSelectedItem()).name()));addRow(compost);
         preferenceCheck("Pay for crop protection","directorProtectTrees",true);
         heading("Default tree removal");preferenceCheck("Pay gardener to remove trees","directorPayRemoval",true);
@@ -498,12 +534,12 @@ final class FarmingHelperPanel extends PluginPanel
         reset.addActionListener(e->{if(JOptionPane.showConfirmDialog(this,"Clear cached bank and Seed Vault quantities? Your items are unchanged.","Reset observed stock",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)plugin.resetObservedStock();});addRow(reset);
         if(latestGuide==null)caption("Available during an active run.");
         heading("Integrations");for(String name:List.of("Shortest Path","Bank Tags","Time Tracking")){boolean active=plugin.integrationActive(name);caption(name+" · "+(active?"Enabled":"Not enabled"));}
-        heading("About");caption("Farming Helper · v0.31");finish();
+        finish();
     }
     private void runSettings()
     {
         if(latestGuide==null){showHome();return;}
-        page(RUN_SETTINGS,"Run settings",this::resume,null,true);
+        page(RUN_SETTINGS,"Run settings",this::returnToGuide,null,true);
         GuideView view=latestGuide;
         heading("Patch selection");
         JCheckBox seedless=new JCheckBox("Hide seedless patches",view.hideSeedless);
@@ -566,7 +602,7 @@ final class FarmingHelperPanel extends PluginPanel
         List<PatchType> types=new ArrayList<>(Arrays.asList(PatchType.values()));types.sort(Comparator.comparing(PatchType::getDisplayName,String.CASE_INSENSITIVE_ORDER));
         for(PatchType type:types)if(type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
         {
-            collapse(type.getDisplayName()+(plugin.priority(type).isBlank()?" · Auto":" · Custom"),priorityOpen==type,()->{priorityOpen=priorityOpen==type?null:type;priorities();});
+            addRow(navRow(type.getDisplayName(),plugin.priority(type).isBlank()?"Automatic":"Custom priorities",priorityOpen==type?COLLAPSE:EXPAND,patchSprite(type),false,()->{priorityOpen=priorityOpen==type?null:type;priorities();}));
             if(priorityOpen==type)ranking(type);
         }
         finish();SwingUtilities.invokeLater(()->{if(navigation.page()==PRIORITIES)scroll.getVerticalScrollBar().setValue(y);});
@@ -593,7 +629,7 @@ final class FarmingHelperPanel extends PluginPanel
         for(int i=0;i<names.size();i++)
         {
             final int n=i;
-            JPanel row=new JPanel(new BorderLayout(2,0));row.add(new JLabel((i+1)+". "+names.get(i)),BorderLayout.CENTER);
+            JPanel row=new JPanel(new BorderLayout(2,0));row.setOpaque(false);JLabel name=new JLabel("<html>"+(i+1)+". "+escape(names.get(i))+"</html>");Crop crop=CropCatalog.findByName(type,names.get(i));if(crop!=null)plugin.decorateSprite(name,crop.getItemId());row.add(name,BorderLayout.CENTER);
             JPanel buttons=new JPanel(new FlowLayout(FlowLayout.RIGHT,0,0));buttons.setOpaque(false);
             JButton up=new JButton(FarmingIcons.of(UP,FarmingTheme.MUTED)),down=new JButton(FarmingIcons.of(DOWN,FarmingTheme.MUTED)),remove=new JButton(FarmingIcons.of(END,FarmingTheme.DANGER));
             up.setToolTipText("Move up");down.setToolTipText("Move down");remove.setToolTipText("Remove preference");

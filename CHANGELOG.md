@@ -1,3 +1,10 @@
+## v0.32-beta.1 — Visual identity and polish
+
+- Native asynchronous OSRS item sprites on grouped/individual run selection and crop priority rows; no new runtime dependencies.
+- Green-tinted preset cards, flat icon-led settings navigation, clearer checkbox contrast, shorter compost label with explanatory tooltip.
+- No Resume Run or Home navigation during an active guide. Settings Back returns directly to the live guide; explicit End remains the run exit.
+- All existing farming logic, settings and fuzzy bank behavior retained. No changes to game actions or route computation.
+
 ## v0.31.1-beta.1 — Lifecycle fix and fuzzy bank equipment
 
 - New guide session IDs open the sidebar guide even for direct API starts; same-session ticks preserve the current screen. Restores the explicit End control tested by GuideLifecycleTest.

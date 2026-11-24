@@ -6,7 +6,7 @@ import javax.swing.*;
 /** Small antialiased line icons, drawn at logical Swing coordinates for HiDPI. */
 final class FarmingIcons
 {
-    enum Kind{BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK}
+    enum Kind{BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK,LEAF,LAYERS,PIN,LIST,STORAGE,TOOLS,SLIDERS}
     static Icon of(Kind kind,Color color)
     {
         return new Icon()
@@ -28,9 +28,17 @@ final class FarmingIcons
                     case UP:p.drawLine(4,10,8,6);p.drawLine(8,6,12,10);break;
                     case CHECK:p.drawLine(3,8,6,11);p.drawLine(6,11,13,4);break;
                     case MORE:for(int i=3;i<=13;i+=5)p.fillOval(i-1,7,3,3);break;
+                    case LEAF:p.drawArc(3,2,10,10,0,235);p.drawLine(3,13,11,5);p.drawLine(6,9,6,5);break;
+                    case LAYERS:p.drawPolygon(new int[]{2,8,14,8},new int[]{5,2,5,8},4);p.drawPolyline(new int[]{2,8,14},new int[]{8,11,8},3);p.drawPolyline(new int[]{2,8,14},new int[]{11,14,11},3);break;
+                    case PIN:p.drawOval(4,2,8,8);p.drawOval(7,5,2,2);p.drawLine(4,8,8,14);p.drawLine(12,8,8,14);break;
+                    case LIST:for(int i=4;i<=12;i+=4){p.drawLine(2,i,3,i);p.drawLine(6,i,13,i);}break;
+                    case STORAGE:p.drawRoundRect(2,4,12,10,2,2);p.drawLine(2,8,14,8);p.drawLine(7,8,9,8);break;
+                    case TOOLS:p.drawLine(3,13,10,6);p.drawLine(4,14,11,7);p.drawArc(8,1,6,6,40,235);break;
+                    case SLIDERS:for(int i=4;i<=12;i+=4)p.drawLine(2,i,14,i);p.fillRect(5,2,2,4);p.fillRect(10,6,2,4);p.fillRect(7,10,2,4);break;
                     case GEAR:
-                        p.drawOval(4,4,8,8);p.drawOval(6,6,4,4);
-                        for(int i=0;i<8;i++){double a=i*Math.PI/4; p.drawLine((int)Math.round(8+5*Math.cos(a)),(int)Math.round(8+5*Math.sin(a)),(int)Math.round(8+7*Math.cos(a)),(int)Math.round(8+7*Math.sin(a)));}break;
+                        java.awt.geom.Path2D path=new java.awt.geom.Path2D.Double();
+                        for(int i=0;i<32;i++){double a=(i/4*4+(i%4))*Math.PI/16;double radius=i%4==0||i%4==3?5.4:7.1;double xx=8+radius*Math.cos(a), yy=8+radius*Math.sin(a);if(i==0)path.moveTo(xx,yy);else path.lineTo(xx,yy);}
+                        path.closePath();p.draw(path);p.drawOval(5,5,6,6);break;
                 }
                 p.dispose();
             }

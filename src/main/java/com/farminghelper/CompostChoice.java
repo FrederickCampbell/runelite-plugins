@@ -9,7 +9,7 @@ enum CompostChoice
     NONE("None", -1), REGULAR("Compost", ItemID.BUCKET_COMPOST),
     SUPER("Supercompost", ItemID.BUCKET_SUPERCOMPOST),
     ULTRA("Ultracompost", ItemID.BUCKET_ULTRACOMPOST),
-    BOTTOMLESS("Bottomless bucket (or ultracompost)", ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED);
+    BOTTOMLESS("Bottomless bucket", ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED);
     final String label;
     final int item;
     CompostChoice(String label, int item) { this.label = label; this.item = item; }
