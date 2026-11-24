@@ -48,7 +48,7 @@ final class PatchHighlight extends Overlay
     private boolean sameView(GameObject o)
     {return client.getLocalPlayer()!=null && o.getWorldView()==client.getLocalPlayer().getWorldView() && o.getPlane()==client.getPlane();}
     private WorldPoint template(GameObject o)
-    {return o.getWorldView()!=null && o.getWorldView().isInstance() && o.getLocalLocation()!=null?WorldPoint.fromLocalInstance(client,o.getLocalLocation(),o.getPlane()):o.getWorldLocation();}
+    {return LocationContext.normalize(client,o.getLocalLocation(),o.getWorldLocation());}
     boolean hasVerifiedDisease(FarmRunPatch patch)
     {
         int varbit=plugin.get().patchVarbit(patch);
@@ -170,7 +170,7 @@ final class PatchHighlight extends Overlay
             {int d=o.getWorldLocation().distanceTo(anchor);if(d<distance && d<=18){selected=o;distance=d;}}
             if(selected!=null)draw(graphics,selected.getClickbox());return null;
         }
-        TransportHint transport=helper.birdhouseTransport();
+        TransportHint transport=helper.currentTransport();
         if(transport!=null)
         {
             GameObject best=null;int distance=Integer.MAX_VALUE;

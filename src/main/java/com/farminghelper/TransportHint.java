@@ -22,12 +22,13 @@ final class TransportHint
             if(!(m.get("origin") instanceof WorldPoint)||!(m.get("destination") instanceof WorldPoint)||!(m.get("objectInfo") instanceof String))continue;
             String info=(String)m.get("objectInfo");
             String lower=info.toLowerCase(Locale.ROOT);
-            if(!lower.contains("rowboat")&&!lower.contains("mushtree"))continue;
             int split=info.lastIndexOf(' ');if(split<0)continue;
             try
             {
                 int id=Integer.parseInt(info.substring(split+1));
-                String action=info.substring(0,split);
+                if(id<=0)continue;
+                String action=info.substring(0,split).trim();
+                if(action.isEmpty())continue;
                 String display=m.get("displayInfo") instanceof String?(String)m.get("displayInfo"):"";
                 WorldPoint origin=(WorldPoint)m.get("origin"),destination=(WorldPoint)m.get("destination");
                 if(display.isBlank()&&lower.contains("rowboat")&&id==30919)display="Return to Fossil Island";

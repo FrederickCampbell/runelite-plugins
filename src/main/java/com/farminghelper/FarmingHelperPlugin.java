@@ -418,7 +418,7 @@ public class FarmingHelperPlugin extends Plugin
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;updateAccessNotes();}
         if (!run.isEmpty() && guideRequested)
         {
-            if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(client.getLocalPlayer().getWorldLocation());
+            if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(LocationContext.capture(client).pathStart());
             update();
             refineOrder();
         }
@@ -481,10 +481,10 @@ public class FarmingHelperPlugin extends Plugin
         else runBank.tick(eligible,owned.keySet(),enabled,birdBankPhase());
     }
     void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested&&flag("activeRunBank",true)){sampleStorage();update();updateRunBank(true);}});}
-    TransportHint birdhouseTransport()
+    TransportHint currentTransport()
     {
-        if(!guideRequested||diseaseTarget!=null||preparing||current==null||current.getPatchType()!=PatchType.BIRDHOUSE||navigation==null||client.getLocalPlayer()==null)return null;
-        return navigation.nearbyTransport(client.getLocalPlayer().getWorldLocation());
+        if(!guideRequested||diseaseTarget!=null||preparing||current==null||navigation==null||client.getLocalPlayer()==null)return null;
+        return navigation.nearbyTransport(LocationContext.capture(client).pathStart());
     }
     long preferenceRevision(){return preferenceRevision;}
     long vaultAccessRevision(){return vaultAccessRevision;}
@@ -906,11 +906,9 @@ public class FarmingHelperPlugin extends Plugin
             birds.sort(Comparator.comparingInt(BirdhouseRun::order));
             for(FarmRunPatch p:birds)stops.add(new GuideView.Stop(p,"Final birdhouse stage — readiness checked after farming; supplies listed at resupply.",false,false));
         }
-        WorldPoint actual=loggedIn?client.getLocalPlayer().getWorldLocation():null;
-        WorldPoint player=actual;
-        boolean instance=loggedIn && client.getLocalPlayer().getWorldView()!=null && client.getLocalPlayer().getWorldView().isInstance();
-        if(instance && client.getLocalPlayer().getLocalLocation()!=null)
-            player=WorldPoint.fromLocalInstance(client,client.getLocalPlayer().getLocalLocation());
+        LocationContext location=LocationContext.capture(client);
+        WorldPoint player=loggedIn?location.normalized:null;
+        boolean instance=loggedIn&&location.instance;
         boolean aboard=loggedIn && client.getVarbitValue(VarbitID.SAILING_BOARDED_BOAT)!=0;
         boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
         WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
@@ -962,7 +960,7 @@ public class FarmingHelperPlugin extends Plugin
             {
                 RouteLeg exit=SpecialRoutes.leg(null,player,aboard,rowboat,instance,null);
                 if(visitedStorage)leg=RouteLeg.walk(null,false);
-                else if(aboard||instance||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
+                else if(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
                     leg=exit.instruction.isEmpty()?RouteLeg.manual("Leave the current instance before banking.",RouteLeg.Interaction.NONE):exit;
                 else leg=RouteLeg.approach(preparationBank.point,"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
                 if(!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
@@ -975,9 +973,25 @@ public class FarmingHelperPlugin extends Plugin
         WorldPoint actionPoint=localApproach!=null?localApproach:current==null?null:Waypoints.destination(current);
         boolean atAction=player!=null&&actionPoint!=null&&player.getPlane()==actionPoint.getPlane()&&player.distanceTo(actionPoint)<=5;
         stepItems=!preparing&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&atAction?localStepItems:Collections.emptySet();
-        if(navigation!=null)navigation.request(actual,leg.point,leg.probe);
+        // Delegate only definite ordinary-bank planting shortages. Guild/vault,
+        // birdhouse, Entrana and special-instance preparation retain their own guidance.
+        boolean nativeResupply=preparing&&!visitedStorage&&preparationBank!=null&&current!=null&&activeCrop!=null&&
+            preparationReason.startsWith("Resupply: the next crop")&&!instance&&!aboard&&
+            !SpecialRoutes.insideHespori(player)&&!SpecialRoutes.insideSeaweed(player)&&!SpecialRoutes.insideCoral(player)&&
+            !SpecialRoutes.anglers(current)&&current.getPatchType()!=PatchType.SEAWEED&&current.getPatchType()!=PatchType.CORAL&&current.getPatchType()!=PatchType.HESPORI&&
+            carried.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()&&
+            bank.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity()-carried.getOrDefault(activeCrop.getItemId(),0);
+        if(navigation!=null)
+        {
+            if(nativeResupply)navigation.requestBank(location.pathStart(),Waypoints.destination(current),preparationBank.point,
+                Map.of(activeCrop.getItemId(),activeCrop.getQuantity()));
+            else navigation.request(loggedIn?location.pathStart():null,leg.point,leg.probe);
+        }
+        if(nativeResupply&&shortestPathAvailable)prepMessage=preparationReason+"\nFollow Shortest Path's bank detour if available, or use "+preparationBank.name+". Continue when ready.";
+        if(location.inHouse()&&!shortestPathAvailable&&current!=null&&!preparing)
+            instruction="Use an available house teleport toward the next patch, or leave your house.\n"+instruction;
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
-        TransportHint transport=birdhouseTransport();
+        TransportHint transport=currentTransport();
         if(transport!=null)instruction=transport.instruction()+"\n"+instruction;
         String routeNote=navigation==null?"":navigation.status();
         if(!routeNote.isEmpty())instruction+="\n"+routeNote;

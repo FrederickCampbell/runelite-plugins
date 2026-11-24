@@ -98,6 +98,7 @@ final class ActiveRunBank
         if(offered&&!TAG.equals(api.getActiveTag()))return; // Respect manual browsing.
         int[] layout=BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory);
         if(!offered&&!ids.isEmpty()){offered=true;open(api,layout);}
+        else if(!offered&&TAG.equals(api.getActiveTag()))api.closeBankTag();
         else if(offered&&(stageChanged||!Arrays.equals(layout,lastLayout)))open(api,layout);
         else if(offered&&changed&&search!=null)search.layoutBank();
     }

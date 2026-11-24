@@ -46,7 +46,8 @@ final class SpecialRoutes
             if(anglers(patch))return new RouteLeg(ANGLER_MOORING,"Sail to Anglers' Retreat, moor and disembark.",MOOR,false);
             return RouteLeg.manual("Moor and disembark before continuing to the next farm.",MOOR);
         }
-        if(instance)return RouteLeg.manual("Leave the current instance to resume travel.",NONE);
+        boolean house=instance&&LocationContext.isHouse(player);
+        if(instance&&!house)return RouteLeg.manual("Leave the current instance to resume travel.",NONE);
         if(isType(patch,PatchType.HESPORI))return RouteLeg.approach(HESPORI_ENTRANCE,"Enter the cave beside Arno in the west wing.",HESPORI_ENTER);
         if(isType(patch,PatchType.SEAWEED))return RouteLeg.approach(SEAWEED_ISLAND,"Travel to the bank island and choose Dive on the rowboat.",DIVE);
         if(isType(patch,PatchType.CORAL))return RouteLeg.approach(CORAL_ENTRANCE,"Climb down the steps at the eastern dock. Bring diving equipment or a Medallion of the deep.",CORAL_ENTER);
@@ -59,6 +60,6 @@ final class SpecialRoutes
         if(onAnglers(player) && !anglers(patch) && !rowboat)
             return RouteLeg.approach(ANGLER_MOORING,"Board your boat, sail to a mainland port and disembark.",BOARD);
         WorldPoint target=liveApproach==null?Waypoints.destination(patch):liveApproach;
-        return RouteLeg.walk(target,QuestTargets.get(patch)==null || liveApproach!=null);
+        return RouteLeg.walk(target,house || QuestTargets.get(patch)==null || liveApproach!=null);
     }
 }
