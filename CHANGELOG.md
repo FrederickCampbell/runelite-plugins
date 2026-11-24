@@ -1,3 +1,19 @@
+# v0.15.0-beta.1 — Quest Helper presentation and interaction pass
+
+- Separate live required/recommended counts and stock hints; eligible missing crop requirements remain visible.
+- Editable priorities, individual overrides and minimal compost/gardener preferences.
+- Session-local completion, close lifecycle, and conservative object/seed highlights.
+- Separate surface approaches for Hespori, Seaweed and Coral; remove independent Falador teleport hint.
+- Add regression scenarios; live client validation remains necessary.
+
+# 0.14.0-beta.1
+
+Keep character-specific crop priorities and individual patch toggles. The guide advances independently of Quest Helper and Shortest Path. Expand the items and patches sections as needed. Closing the guide ends the run.
+
+# 0.13.0-beta.1
+
+Simplified the plugin to run selection, guide and preferences. Restored Quest Helper herb destinations and ordering, delegated travel to Shortest Path, and separated seed allocation from patch eligibility.
+
 # Farming Helper development history
 
 ## v0.12.0-beta.1 — Patch coverage and lifecycle reliability

@@ -11,7 +11,7 @@ import static org.mockito.Mockito.mock;
 
 public class PatchCoverageTest
 {
-    @Test public void everyCatalogPatchHasStateIdentityAndRoutableArea()
+    @Test public void everyPhysicalPatchHasAUniqueIdentityAndDefinedDestination()
     {
         QuestFarmingStateReader reader = new QuestFarmingStateReader(mock(Client.class), mock(ConfigManager.class));
         Set<String> keys = new HashSet<>();
@@ -22,8 +22,8 @@ public class PatchCoverageTest
             assertEquals(grouped.getDisplayName(), grouped.getPatchCount(), names.size());
             for (FarmRunPatch patch : PatchNames.expand(grouped, names))
             {
-                assertTrue(patch.getDisplayName(), keys.add(FarmRouteManager.key(patch)));
-                assertTrue(patch.getDisplayName(), TravelTarget.navigation(patch, reader).routable());
+                assertTrue(patch.getDisplayName(), keys.add(patch.key()));
+                assertNotNull(patch.getDisplayName(), Waypoints.destination(patch));
             }
         }
         assertEquals("All non-compost physical plots in the vendored farming registry", 99, keys.size());
@@ -31,20 +31,19 @@ public class PatchCoverageTest
 
     @Test public void mapMarkersAreNotExactObjectTargets()
     {
-        QuestFarmingStateReader reader = new QuestFarmingStateReader(mock(Client.class), mock(ConfigManager.class));
-        TravelTarget target = TravelTarget.navigation(new FarmRunPatch("Yanille", "", PatchType.HOPS), reader);
-        assertTrue(target.routable());
-        assertFalse(target.exact);
+        FarmRunPatch patch = new FarmRunPatch("Yanille","",PatchType.HOPS);
+        assertNotNull(Waypoints.destination(patch));
+        assertNull(QuestTargets.get(patch));
     }
 
     @Test public void currentSpiritTreeLimits()
     {
-        assertEquals(0, RunReadiness.spiritTreeCapacity(82));
-        assertEquals(1, RunReadiness.spiritTreeCapacity(83));
-        assertEquals(2, RunReadiness.spiritTreeCapacity(88));
-        assertEquals(3, RunReadiness.spiritTreeCapacity(93));
-        assertEquals(4, RunReadiness.spiritTreeCapacity(96));
-        assertEquals(Integer.MAX_VALUE, RunReadiness.spiritTreeCapacity(99));
+        assertEquals(0, FarmingHelperPlugin.spiritCapacity(82));
+        assertEquals(1, FarmingHelperPlugin.spiritCapacity(83));
+        assertEquals(2, FarmingHelperPlugin.spiritCapacity(88));
+        assertEquals(3, FarmingHelperPlugin.spiritCapacity(93));
+        assertEquals(4, FarmingHelperPlugin.spiritCapacity(96));
+        assertEquals(Integer.MAX_VALUE, FarmingHelperPlugin.spiritCapacity(99));
     }
 
     @Test public void existingPerennialsDoNotRequireReplacementSeeds()

@@ -81,22 +81,16 @@ public class FarmingHandler
 
 		PatchState state = patch.getImplementation().forVarbitValue(value);
 		if (state == null) return null;
-		CropState normalized = QuestFarmingStateReader.normalizedState(patch.getImplementation(), value, state);
-		if (normalized != CropState.GROWING) return normalized;
-        if (patch.getImplementation() == PatchImplementation.REDWOOD &&
-            state.getCropState() == CropState.HARVESTABLE) return CropState.GROWING;
-        // A harvested perennial regrows produce on a separate timer.
+        CropState normalized = QuestFarmingStateReader.normalizedState(patch.getImplementation(), value, state);
+        if (normalized != CropState.GROWING) return normalized;
+        if (patch.getImplementation() == PatchImplementation.REDWOOD && state.getCropState() == CropState.HARVESTABLE)
+            return CropState.GROWING;
         if (state.getCropState() == CropState.HARVESTABLE)
         {
-            int minutes = state.getTickRate();
-            return minutes > 0 && unixTime > 0 && unixNow - unixTime >= minutes * 60L
-                ? CropState.HARVESTABLE : CropState.GROWING;
+            int minutes=state.getTickRate();
+            return minutes>0 && unixTime>0 && unixNow-unixTime>=minutes*60L ? CropState.HARVESTABLE : CropState.GROWING;
         }
-		// A mature spirit tree is a permanent transport, not an expiring crop.
-		if (patch.getImplementation() == PatchImplementation.SPIRIT_TREE && value == 20)
-		{
-			return CropState.GROWING;
-		}
+        if (patch.getImplementation() == PatchImplementation.SPIRIT_TREE && value==20) return CropState.GROWING;
 
 		if (unixTime <= 0)
 		{

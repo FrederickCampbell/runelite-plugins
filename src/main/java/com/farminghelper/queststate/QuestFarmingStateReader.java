@@ -103,6 +103,15 @@ public final class QuestFarmingStateReader
             worldPoint, implementation);
     }
 
+    public boolean hasWeeds(String type,int value)
+    {
+        PatchImplementation impl=implementation(type);
+        if(impl==null || value<0)return false;
+        PatchState raw=impl.forVarbitValue(value);
+        return raw!=null && raw.getProduce()==Produce.WEEDS && value>=0 && value<=2 && raw.getStage()>0
+            && impl!=PatchImplementation.GRAPES && impl!=PatchImplementation.HESPORI && impl!=PatchImplementation.CORAL;
+    }
+
     /** Existing Quest Helper registry supplies the actual gardener NPC ID. */
     public int gardenerId(String patchType, String location, String patchName)
     {
@@ -181,6 +190,8 @@ public final class QuestFarmingStateReader
 
         WorldPoint player = client.getLocalPlayer() == null ? null
             : client.getLocalPlayer().getWorldLocation();
+        if (implementation == PatchImplementation.HESPORI && client.getLocalPlayer()!=null && client.getLocalPlayer().getLocalLocation()!=null)
+            player = WorldPoint.fromLocalInstance(client,client.getLocalPlayer().getLocalLocation());
         boolean near = player != null && world.getRegionsForLocation(player)
             .contains(match.getRegion()) &&
             (worldPoint == null

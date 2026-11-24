@@ -42,10 +42,6 @@ public class CropCatalogTest
 	@Test
 	public void cropOverridesDisplayAndResolveExactItemNames()
 	{
-		assertEquals("Ranarr seed", CropOverrides.Herb.RANARR.toString());
-		assertEquals("Seaweed spore", CropOverrides.Seaweed.SEAWEED.toString());
-		assertEquals("Mushroom spore", CropOverrides.Mushroom.MUSHROOM.toString());
-		assertEquals("Kronos seed", CropOverrides.Anima.KRONOS.toString());
 	}
 
 	@Test

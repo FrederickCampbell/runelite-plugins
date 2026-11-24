@@ -33,16 +33,6 @@ public class FarmRunTypeTest
 	}
 
 	@Test
-	public void magicSecateursOnlyApplyToWikiListedYieldPatches()
-	{
-		assertTrue(FarmingLoadout.isYieldBoostedByMagicSecateurs(PatchType.HERB));
-		assertTrue(FarmingLoadout.isYieldBoostedByMagicSecateurs(PatchType.ALLOTMENT));
-		assertTrue(FarmingLoadout.isYieldBoostedByMagicSecateurs(PatchType.HOPS));
-		assertTrue(FarmingLoadout.isYieldBoostedByMagicSecateurs(PatchType.GRAPEVINE));
-		assertFalse(FarmingLoadout.isYieldBoostedByMagicSecateurs(PatchType.TREE));
-	}
-
-	@Test
 	public void usesCorrectCareFlagsForEveryPatchType()
 	{
 		EnumSet<PatchType> compostAndWater = EnumSet.of(

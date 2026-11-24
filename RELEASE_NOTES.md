@@ -1,3 +1,3 @@
-# Farming Helper v0.9 beta
+# Farming Helper 0.15.0-beta.1
 
-Compact modern Swing components, consistent typography, native FlatLaf styles where supported, dark fallback scrollbars, collapsible filters and advanced controls, and a single crop-priority store. Optional local diagnostics. All Farming Helper settings and saved runs reset in this pre-Hub beta (new configuration group). Old settings are not deleted. Retains the existing farming engine and guidance. Live RuneLite testing is required.
+Restore Quest Helper-style requirement groups and collapsible active-step sections without reintroducing Advisor, saved sessions, banking tabs or independent teleport planning. Add missing-stock requirements, editable priorities, patch overrides, live item highlights, session-local completion, optional gardener protection and special-area approach routing. Requires successful build/regression validation and manual RuneLite testing.

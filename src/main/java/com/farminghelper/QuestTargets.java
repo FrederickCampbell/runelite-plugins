@@ -27,9 +27,6 @@ package com.farminghelper;
 
 import java.util.HashMap;
 import java.util.Map;
-import net.runelite.api.Client;
-import net.runelite.api.GameObject;
-import net.runelite.api.ObjectComposition;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.NpcID;
@@ -46,7 +43,6 @@ final class QuestTargets
         Definition(int objectId, int gardenerId) { this.objectId = objectId; this.gardenerId = gardenerId; }
     }
     private static final Map<WorldPoint, Definition> BY_POINT = new HashMap<>();
-    private static final java.util.Set<Integer> OBJECT_IDS = new java.util.HashSet<>();
     static
     {
         add(3193, 3231, 0, ObjectID.FARMING_TREE_PATCH_4, NpcID.FARMING_GARDENER_TREE_4);
@@ -85,33 +81,11 @@ final class QuestTargets
     private static void add(int x, int y, int plane, int object, int gardener)
     {
         BY_POINT.put(new WorldPoint(x,y,plane), new Definition(object,gardener));
-        OBJECT_IDS.add(object);
     }
+    static boolean known(int id) { return BY_POINT.values().stream().anyMatch(d -> d.objectId==id); }
     static Definition get(FarmRunPatch patch)
     {
         if (patch.getPatchType() != PatchType.HERB && !StepEngine.isTreeType(patch.getPatchType())) return null;
         return BY_POINT.get(Waypoints.exactPoint(patch));
-    }
-    static int count() { return BY_POINT.size(); }
-    static boolean matches(Client client, GameObject object, Definition definition)
-    {
-        if (object.getId() == definition.objectId) return true;
-        ObjectComposition c = client.getObjectDefinition(object.getId());
-        return c != null && c.getImpostorIds() != null && c.getImpostor() != null &&
-            c.getImpostor().getId() == definition.objectId;
-    }
-    static boolean knownObject(Client client, GameObject object)
-    {
-        if (OBJECT_IDS.contains(object.getId())) return true;
-        ObjectComposition c = client.getObjectDefinition(object.getId());
-        return c != null && c.getImpostorIds() != null && c.getImpostor() != null && OBJECT_IDS.contains(c.getImpostor().getId());
-    }
-    static boolean atPoint(GameObject object, WorldPoint point)
-    {
-        WorldPoint p = object.getWorldLocation();
-        if (point == null || p.getPlane() != point.getPlane()) return false;
-        int x = p.getX() - (object.sizeX()-1)/2, y = p.getY() - (object.sizeY()-1)/2;
-        return point.getX() >= x && point.getX() < x+object.sizeX() &&
-            point.getY() >= y && point.getY() < y+object.sizeY();
     }
 }

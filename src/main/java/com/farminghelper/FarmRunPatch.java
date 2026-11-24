@@ -45,9 +45,24 @@ final class FarmRunPatch
 		return patchCount;
 	}
 
+	String key()
+	{
+		return location + "~" + patchType.name() + "~" + name;
+	}
+
 	String getDisplayName()
 	{
 		String display = name.isEmpty() ? location : location + " - " + name;
 		return patchCount > 1 ? display + " (" + patchCount + ")" : display;
 	}
+
+    String guideLabel()
+    {
+        if (patchType == PatchType.HERB)
+        {
+            if (location.equals("Kourend")) return "Hosidius";
+            if (location.equals("Civitas illa Fortis")) return "Varlamore";
+        }
+        return getDisplayName();
+    }
 }

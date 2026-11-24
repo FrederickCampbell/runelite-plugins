@@ -50,6 +50,6 @@ enum PatchType
 
 	boolean usesCompost()
 	{
-		return this != GRAPEVINE && this != HESPORI && this != ANIMA;
+		return this != GRAPEVINE && this != HESPORI && this != ANIMA && this != CORAL;
 	}
 }

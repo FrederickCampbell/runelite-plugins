@@ -86,7 +86,7 @@ final class Waypoints
         area(PatchType.ANIMA, "Farming Guild", 1235, 3724);
         area(PatchType.CELASTRUS, "Farming Guild", 1242, 3755);
         area(PatchType.REDWOOD, "Farming Guild", 1233, 3754);
-        area(PatchType.HESPORI, "Farming Guild", 1182, 10068);
+        area(PatchType.HESPORI, "Farming Guild", 1230, 3730);
         area(PatchType.CRYSTAL_TREE, "Prifddinas", 3292, 6120);
         area(PatchType.SEAWEED, "Seaweed", 3730, 10271);
         area(PatchType.CORAL, "Great Conch", 3296, 8861);
@@ -141,6 +141,45 @@ final class Waypoints
             return specific != null ? specific : HARDWOODS.get(patch.getLocation());
         }
         return point(patch.getPatchType(), patch.getLocation());
+    }
+
+    static WorldPoint destination(FarmRunPatch patch)
+    {
+        WorldPoint area = farmArea(patch);
+        return area == null ? exactPoint(patch) : area;
+    }
+
+    /** Entrance and patch destinations are deliberately separate. The outdoor
+     * coordinates for coral and the seaweed bank island are from Shortest Path's
+     * transports.tsv and boats.tsv. They avoid requesting impossible cave routes. */
+    static WorldPoint navigationTarget(FarmRunPatch patch, WorldPoint player)
+    {
+        if (patch.getPatchType()==PatchType.HESPORI)
+            return player!=null && player.getRegionID()==5021 ? null : destination(patch);
+        if (patch.getPatchType()==PatchType.CORAL)
+        {
+            WorldPoint inside=destination(patch);
+            return player!=null && player.getRegionID()==inside.getRegionID()
+                ? (player.getPlane()==inside.getPlane()?inside:null) : new WorldPoint(3271,2463,0);
+        }
+        if (patch.getPatchType()==PatchType.SEAWEED)
+        {
+            WorldPoint inside=destination(patch);
+            return player!=null && player.getRegionID()==inside.getRegionID()
+                ? (player.getPlane()==inside.getPlane()?inside:null) : new WorldPoint(3764,3899,0);
+        }
+        return destination(patch);
+    }
+
+    static String entranceInstruction(FarmRunPatch patch,WorldPoint player)
+    {
+        if(patch.getPatchType()==PatchType.HESPORI && (player==null || player.getRegionID()!=5021))
+            return "Enter the cave beside Arno in the west wing.";
+        if(patch.getPatchType()==PatchType.CORAL && (player==null || player.getRegionID()!=destination(patch).getRegionID()))
+            return "Climb down the steps at the eastern dock to the Coral Nurseries.";
+        if(patch.getPatchType()==PatchType.SEAWEED && (player==null || player.getRegionID()!=destination(patch).getRegionID()))
+            return "Travel to the bank island and dive underwater from the rowboat.";
+        return "";
     }
 
     enum AccessState { AVAILABLE, LOCKED, UNKNOWN }

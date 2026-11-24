@@ -58,15 +58,15 @@ final class FarmRunCatalog
 
 		// Frequent allotment, flower, and herb run.
 		farm(patches, "Falador", true, true, true);
-		farm(patches, "Morytania", true, true, true);
-		farm(patches, "Catherby", true, true, true);
 		farm(patches, "Ardougne", true, true, true);
+		farm(patches, "Catherby", true, true, true);
+		farm(patches, "Morytania", true, true, true);
 		farm(patches, "Kourend", true, true, true);
 		add(patches, "Troll Stronghold", "", PatchType.HERB);
 		add(patches, "Harmony Island", "", PatchType.ALLOTMENT);
-		add(patches, "Harmony Island", "", PatchType.HERB);
 		add(patches, "Weiss", "", PatchType.HERB);
 		farm(patches, "Farming Guild", true, true, true);
+		add(patches, "Harmony Island", "", PatchType.HERB);
 		farm(patches, "Civitas illa Fortis", true, true, true);
 		add(patches, "Prifddinas", "North", PatchType.ALLOTMENT);
 		add(patches, "Prifddinas", "South", PatchType.ALLOTMENT);

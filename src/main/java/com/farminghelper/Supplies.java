@@ -3,7 +3,6 @@ package com.farminghelper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.IntPredicate;
 import net.runelite.api.gameval.ItemID;
 
 /** Conservative per-wave tools and compost using the existing Advisor patch traits. */
@@ -57,50 +56,6 @@ final class Supplies
         if (autoWeed) items.remove(ItemID.RAKE);
         if (barbarianPlanting) items.remove(ItemID.DIBBER);
         return items;
-    }
-
-    static boolean hasProtectionPayment(RunPlanner.Step step, Map<Integer, Integer> inventory)
-    {
-        if (step.crop == null) return false;
-        List<ProtectionPayment> payments = ProtectionPaymentCatalog.forCrop(step.crop);
-        return !payments.isEmpty() && payments.stream().allMatch(payment ->
-            inventory.getOrDefault(payment.getItemId(), 0) >=
-                payment.getQuantity() * step.patch.getPatchCount());
-    }
-
-    static boolean recommended(int id)
-    {
-        return id == ItemID.FAIRY_ENCHANTED_SECATEURS ||
-            id == ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED || CompostChoice.isOrdinary(id);
-    }
-
-    static int slots(List<FarmRunPatch> patches, Map<Integer, Integer> items,
-                     IntPredicate stackable)
-    {
-        return slots(patches, items, stackable, false);
-    }
-
-    static int slots(List<FarmRunPatch> patches, Map<Integer, Integer> items,
-                     IntPredicate stackable, boolean payRemoval)
-    {
-        int result = 0;
-        for (Map.Entry<Integer, Integer> entry : items.entrySet())
-            result += stackable.test(entry.getKey()) ? 1 : entry.getValue();
-        // An axe or manual removal alternative; no particular axe is assumed.
-        if (patches.stream().anyMatch(p -> StepEngine.isTreeType(p.getPatchType()) &&
-            (!payRemoval || QuestTargets.get(p) == null || QuestTargets.get(p).gardenerId < 0)))
-            result++;
-        return result;
-    }
-
-    static int harvestReserve(RunSelection selection, int configured, int override)
-    {
-        if (override >= 0) return Math.min(26, override);
-        int defaults = Math.max(0, Math.min(26, configured));
-        if (selection == RunSelection.TREES || selection == RunSelection.FRUIT_TREES ||
-            selection == RunSelection.HARDWOODS) return 2;
-        if (selection == RunSelection.ALLOTMENTS) return Math.max(14, defaults);
-        return defaults;
     }
 
     static String name(int id)

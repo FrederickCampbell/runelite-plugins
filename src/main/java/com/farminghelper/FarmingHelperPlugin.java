@@ -1,485 +1,444 @@
 package com.farminghelper;
 
 import com.google.inject.Provides;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import com.farminghelper.queststate.CropState;
+import com.farminghelper.queststate.QuestFarmingStateReader;
+import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.List;
 import javax.inject.Inject;
-import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.GameObject;
-import net.runelite.api.GameState;
-import net.runelite.api.InventoryID;
-import net.runelite.api.ItemContainer;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.api.ObjectComposition;
-import net.runelite.api.ScriptID;
-import net.runelite.api.Skill;
-import net.runelite.api.events.GameObjectDespawned;
-import net.runelite.api.events.GameObjectSpawned;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.ScriptCallbackEvent;
-import net.runelite.api.events.ScriptPostFired;
-import net.runelite.api.events.WidgetClosed;
-import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.gameval.InterfaceID;
+import javax.swing.SwingUtilities;
+import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.*;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.PluginChanged;
+import net.runelite.client.events.PluginMessage;
 import net.runelite.client.events.ProfileChanged;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 
-@Slf4j
-@PluginDescriptor(
-	name = "Farming Helper",
-	description = "Basically, Quest Helper, for farm runs.",
-	tags = {"farming", "seed", "patch", "bank", "highlight"}
-)
+@PluginDescriptor(name = "Farming Helper", description = "Farming guides with stock-aware seed choices",
+    tags = {"farming", "seed", "herb", "tree"})
 public class FarmingHelperPlugin extends Plugin
 {
-	@Inject
-	private Client client;
+    @Inject private Client client;
+    @Inject private PluginManager plugins;
+    private boolean routingAvailable;
+    @Inject private ClientThread thread;
+    @Inject private ConfigManager config;
+    @Inject private FarmingHelperConfig legacy;
+    @Inject private ClientToolbar toolbar;
+    @Inject private OverlayManager overlays;
+    @Inject private PatchHighlight highlight;
+    @Inject private GuideItemHighlight itemHighlight;
+    @Inject private EventBus bus;
+    @Inject private QuestFarmingStateReader reader;
 
-	@Inject
-	private ClientThread clientThread;
+    private final List<FarmRunPatch> patches = new ArrayList<>();
+    private final Set<FarmRunPatch> skipped = new HashSet<>(), completed = new HashSet<>();
+    private final GuideProgress progress = new GuideProgress();
+    private Crop activeCrop;
+    private volatile StepEngine.Action activeAction = StepEngine.Action.INSPECT;
+    private volatile boolean activeLive;
+    private volatile Set<Integer> requiredItems = Collections.emptySet(), recommendedItems = Collections.emptySet();
+    private volatile long session;
+    private volatile boolean guideRequested;
+    private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
+    private Set<FarmRunType> run = Collections.emptySet();
+    private FarmingHelperPanel panel;
+    private NavigationButton nav;
+    private WorldPoint destination;
+    private volatile FarmRunPatch current;
+    private String lastView;
+    private volatile Map<String,String> accessNotes = Collections.emptyMap();
+    private int lastAccessLevel=-1;
+    private volatile boolean running;
 
-	@Inject
-	private OverlayManager overlayManager;
-
-	@Inject
-	private FarmingPatchOverlay patchOverlay;
-    @Inject
-    private WidgetOverlay directorWidgetOverlay;
-
-	@Inject
-	private FarmingItemOverlay itemOverlay;
-
-
-
-
-
-
-	@Inject
-	private FarmingLoadout farmingLoadout;
-
-	@Inject
-	private BankChecklistFilter bankChecklistFilter;
-
-	@Inject
-	private PatchTimerManager timerManager;
-
-	@Inject
-	private CompostBinManager compostBinManager;
-
-	@Inject
-	private ClientToolbar clientToolbar;
-
-
-	@Inject
-	private FarmingHelperPanel directorPanel;
-
-	@Inject
-	private FarmingHelperConfig config;
-
-	@Inject
-	private FarmingContractManager contractManager;
-
-	private NavigationButton navigationButton;
-
-	private final Set<GameObject> patchObjects = new HashSet<>();
-    private final Set<GameObject> directorObjects = new HashSet<>();
-
-	@Override
-	protected void startUp()
-	{
-		contractManager.load();
-		timerManager.load();
-		compostBinManager.load();
-		overlayManager.add(patchOverlay);
-        overlayManager.add(directorWidgetOverlay);
-		overlayManager.add(itemOverlay);
-		directorPanel.requestRefresh();
-		navigationButton = NavigationButton.builder()
-			.tooltip("Farming Helper")
-			.icon(createNavigationIcon())
-			.priority(8)
-			.panel(directorPanel)
-			.build();
-		clientToolbar.addNavigation(navigationButton);
-		bankChecklistFilter.addButton();
-		log.debug("Farming Helper started");
-	}
-
-	@Override
-	protected void shutDown()
-	{
-		overlayManager.remove(patchOverlay);
-        overlayManager.remove(directorWidgetOverlay);
-		overlayManager.remove(itemOverlay);
-		if (navigationButton != null)
-		{
-			clientToolbar.removeNavigation(navigationButton);
-			navigationButton = null;
-		}
-		directorPanel.shutDown();
-		bankChecklistFilter.removeButton();
-		patchObjects.clear();
-        directorObjects.clear();
-		compostBinManager.unload();
-		log.debug("Farming Helper stopped");
-	}
-
-	@Subscribe
-	public void onGameObjectSpawned(GameObjectSpawned event)
-	{
-		GameObject object = event.getGameObject();
-		if (getRecognizedPatchType(object) != null)
-		{
-			patchObjects.add(object);
-		}
-        if (QuestTargets.knownObject(client, object)) directorObjects.add(object);
-		timerManager.onPatchObjectSpawned(object);
-		compostBinManager.onGameObjectSpawned(object);
-	}
-
-	@Subscribe
-	public void onGameObjectDespawned(GameObjectDespawned event)
-	{
-		patchObjects.remove(event.getGameObject());
-        directorObjects.remove(event.getGameObject());
-		compostBinManager.onGameObjectDespawned(event.getGameObject());
-	}
-
-	@Subscribe
-	public void onGameStateChanged(GameStateChanged event)
-	{
-		if (event.getGameState() == GameState.LOGGED_IN)
-		{
-			contractManager.load();
-			timerManager.load();
-			compostBinManager.load();
-		}
-		if (event.getGameState() == GameState.LOADING || event.getGameState() == GameState.LOGIN_SCREEN)
-		{
-			patchObjects.clear();
-        directorObjects.clear();
-			compostBinManager.clearObjects();
-			if (event.getGameState() == GameState.LOGIN_SCREEN)
-			{
-				directorPanel.resetCharacter();
-				farmingLoadout.clearStorageSnapshots();
-				timerManager.unload();
-				contractManager.unload();
-				compostBinManager.unload();
-			}
-		}
-	}
-
-	@Subscribe
-	public void onMenuOptionClicked(MenuOptionClicked event)
-	{
-		timerManager.onMenuOptionClicked(event);
-	}
-
-	@Subscribe
-	public void onChatMessage(ChatMessage event)
-	{
-		timerManager.onChatMessage(event);
-		contractManager.checkGameMessage(event.getMessage());
-	}
-
-	@Subscribe
-	public void onGameTick(GameTick event)
-	{
-		contractManager.checkJaneDialogue();
-		compostBinManager.observeCurrentLocation();
-		for (GameObject object : new HashSet<>(patchObjects))
-		{
-			timerManager.onPatchObjectSpawned(object);
-		}
-		// Evaluate Quest Helper farming states after Advisor updates its observations.
-		directorPanel.onClientTick();
-	}
-
-	@Subscribe
-	public void onProfileChanged(ProfileChanged event)
-	{
-		reloadCharacterData();
-	}
-
-	@Subscribe
-	public void onRuneScapeProfileChanged(RuneScapeProfileChanged event)
-	{
-		reloadCharacterData();
-	}
-
-	private void reloadCharacterData()
-	{
-		directorPanel.resetCharacter();
-		patchObjects.clear();
-        directorObjects.clear();
-		farmingLoadout.clearStorageSnapshots();
-		contractManager.load();
-		timerManager.load();
-		compostBinManager.load();
-	}
-
-	@Subscribe
-	public void onItemContainerChanged(ItemContainerChanged event)
-	{
-		farmingLoadout.onItemContainerChanged(event);
-		directorPanel.requestRefresh();
-	}
-
-	@Subscribe
-	public void onConfigChanged(ConfigChanged event)
-	{
-		if ("farming-helper".equals(event.getGroup()))
-		{
-		}
-	}
-
-	@Subscribe
-	public void onWidgetLoaded(WidgetLoaded event)
-	{
-		if (event.getGroupId() == InterfaceID.BANKMAIN)
-		{
-			farmingLoadout.markBankScanned();
-			clientThread.invokeLater(() ->
-			{
-				ItemContainer observed = client.getItemContainer(InventoryID.BANK);
-				if (observed != null) farmingLoadout.observeBank(observed.getItems());
-			});
-			bankChecklistFilter.addButton();
-		}
-		else if (event.getGroupId() == InterfaceID.SEED_VAULT)
-		{
-			farmingLoadout.markSeedVaultScanned();
-			clientThread.invokeLater(() ->
-			{
-				ItemContainer observed = client.getItemContainer(InventoryID.SEED_VAULT);
-				if (observed != null) farmingLoadout.observeVault(observed.getItems());
-			});
-		}
-	}
-
-	@Subscribe
-	public void onWidgetClosed(WidgetClosed event)
-	{
-		if (event.getGroupId() == InterfaceID.BANKMAIN)
-		{
-			farmingLoadout.markBankClosed();
-			bankChecklistFilter.onBankClosed();
-			directorPanel.onStorageClosed();
-		}
-		else if (event.getGroupId() == InterfaceID.SEED_VAULT)
-		{
-			farmingLoadout.markSeedVaultClosed();
-			directorPanel.onStorageClosed();
-		}
-	}
-
-	@Subscribe(priority = -200)
-	public void onScriptCallbackEvent(ScriptCallbackEvent event)
-	{
-		if ("bankSearchFilter".equals(event.getEventName()))
-		{
-			bankChecklistFilter.filterBankItem();
-		}
-	}
-
-	@Subscribe
-	public void onScriptPostFired(ScriptPostFired event)
-	{
-		if (event.getScriptId() == ScriptID.BANKMAIN_SIZE_CHECK
-			|| event.getScriptId() == ScriptID.BANKMAIN_FINISHBUILDING
-			|| event.getScriptId() == ScriptID.BANKMAIN_POPUP_TAB_DRAW)
-		{
-			bankChecklistFilter.addButton();
-			bankChecklistFilter.repositionButton();
-		}
-	}
-
-    void refreshDirectorBankFilter()
+    @Provides FarmingHelperConfig provideConfig(ConfigManager manager)
     {
-        clientThread.invokeLater(bankChecklistFilter::refreshDirectorFilter);
+        return manager.getConfig(FarmingHelperConfig.class);
     }
 
-    WorldGuide.Target activeDirectorWorldTarget()
+    @Override protected void startUp()
     {
-        return directorPanel.activeWorldTarget();
+        running = true;
+        routingAvailable = plugins.getPlugins().stream().anyMatch(p ->
+            "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
+        for (FarmRunPatch group : FarmRunCatalog.patches())
+            patches.addAll(PatchNames.expand(group,
+                reader.patchNamesForType(group.getPatchType().name(), group.getLocation())));
+        panel = new FarmingHelperPanel(this);
+        nav = NavigationButton.builder().tooltip("Farming Helper").icon(createNavigationIcon())
+            .panel(panel).priority(8).build();
+        toolbar.addNavigation(nav);
+        overlays.add(highlight);
+        if (itemHighlight != null) overlays.add(itemHighlight);
+        SwingUtilities.invokeLater(panel::home);
     }
 
-    boolean directorRunDisplayed()
+    @Override protected void shutDown()
     {
-        return directorPanel.directorRunDisplayed();
+        running = false;
+        reset();
+        toolbar.removeNavigation(nav);
+        overlays.remove(highlight);
+        if (itemHighlight != null) overlays.remove(itemHighlight);
+        patches.clear();
+        highlight.clear();
     }
 
-    boolean directorPatchHasWeeds(FarmRunPatch patch)
+    void start(Set<FarmRunType> types)
     {
-        return patchOverlay.directorPatchHasWeeds(patch);
+        if (types.isEmpty()) return;
+        guideRequested = true;
+        final long requested = ++session;
+        thread.invokeLater(() -> {
+            if (!running || !guideRequested || requested != session) return;
+            clearRun();
+            run = EnumSet.copyOf(types);
+            sampleStorage();
+            update();
+        });
     }
 
-    WorldPoint directorPatchAnchor(FarmRunPatch patch)
+    void stop()
     {
-        return patchOverlay.directorPatchAnchor(patch);
+        guideRequested = false;
+        final long requested = ++session;
+        thread.invokeLater(() -> { if (requested == session) end(); });
     }
 
-    PatchType directorPatchType(GameObject object)
+    private void clearRun()
     {
-        // Explicit Director physical-patch choices supersede legacy area switches.
-        return getRecognizedPatchType(object);
+        run = Collections.emptySet();
+        current = null;
+        skipped.clear();
+        completed.clear();
+        progress.reset();
+        activeCrop = null;
+        activeAction = StepEngine.Action.INSPECT;
+        activeLive=false;
+        requiredItems = Collections.emptySet();
+        recommendedItems = Collections.emptySet();
+        lastView = null;
+        navigate(null);
     }
 
-	Set<GameObject> getDirectorObjects()
+    private void end()
     {
-        return Collections.unmodifiableSet(directorObjects);
+        clearRun();
+        final long ended = session;
+        if (running) SwingUtilities.invokeLater(() -> { if (ended == session && !guideRequested) panel.home(); });
     }
 
-    Set<GameObject> getPatchObjects()
-	{
-		return Collections.unmodifiableSet(patchObjects);
-	}
+    private void reset()
+    {
+        guideRequested = false;
+        ++session;
+        lastAccessLevel=-1;
+        accessNotes=Collections.emptyMap();
+        bank.clear();
+        vault.clear();
+        end();
+    }
 
-	PatchType getPatchType(GameObject object)
-	{
-		PatchType patchType = getRecognizedPatchType(object);
-		String location = PatchLocationCatalog.name(object.getWorldLocation());
-		return patchType != null && PatchLocationSelection.isEnabled(config, location) ? patchType : null;
-	}
+    void skip(FarmRunPatch displayed)
+    {
+        thread.invokeLater(() -> {
+            if (current != null && current == displayed) skipped.add(current);
+            update();
+        });
+    }
 
-	private PatchType getRecognizedPatchType(GameObject object)
-	{
-		if (!PatchClassifier.isFarmRunPatchObject(object.getId()))
-		{
-			return null;
-		}
-		ObjectComposition composition = client.getObjectDefinition(object.getId());
-		if (composition.getImpostorIds() != null)
-		{
-			composition = composition.getImpostor();
-		}
-		String name = composition == null ? "" : composition.getName();
-		// Decorative fields and crop scenery can share names with real Farming crops, but
-		// only an actual player-usable Farming patch exposes the Guide action.
-		if (!PatchClassifier.hasAction(composition, "Guide")
-			&& !PatchClassifier.isSpecialHerbPatchObject(object.getId()))
-		{
-			return null;
-		}
-		// Growing objects often use the crop name (for example "Strawberry plant") instead
-		// of the empty patch name. Classify that live name before consulting a nearby timer,
-		// otherwise an adjacent one-tile patch can inherit the allotment timer after planting.
-		PatchType patchType = PatchClassifier.classifyGrowing(object.getId(), name);
-		boolean farmingState = PatchClassifier.hasAction(composition, "Inspect");
-		if (patchType == null && farmingState)
-		{
-			// Only inherit a timer from the same patch footprint. The herb and flower
-			// patches at standard farming sites are close enough that a wider lookup
-			// can classify the flower patch as herb when its live object has a generic
-			// name such as "Farming patch".
-			PatchTimer timer = timerManager.findTimer(object.getWorldLocation(), 1);
-			patchType = timer == null ? null : timer.getPatchType();
-		}
-		String location = PatchLocationCatalog.name(object.getWorldLocation());
-		return patchType != null && FarmRunCatalog.hasPatch(location, patchType) ? patchType : null;
-	}
+    @Subscribe public void onPluginChanged(PluginChanged event)
+    {
+        if (!"Shortest Path".equals(event.getPlugin().getName())) return;
+        thread.invokeLater(() -> {
+            if (!running) return;
+            routingAvailable = event.isLoaded();
+            destination = null;
+            if (!run.isEmpty()) update();
+        });
+    }
 
-	Crop getPatchCrop(GameObject object, PatchType patchType)
-	{
-		if (patchType == null)
-		{
-			return null;
-		}
-		ObjectComposition composition = client.getObjectDefinition(object.getId());
-		if (composition.getImpostorIds() != null)
-		{
-			composition = composition.getImpostor();
-		}
-		return composition == null ? null : CropCatalog.findInText(composition.getName(), patchType);
-	}
+    @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
+    @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { reset(); }
+    @Subscribe public void onGameObjectSpawned(GameObjectSpawned event) { highlight.spawned(event.getGameObject()); }
+    @Subscribe public void onGameObjectDespawned(GameObjectDespawned event) { highlight.despawned(event.getGameObject()); }
+    @Subscribe public void onGameStateChanged(GameStateChanged event)
+    {
+        if(event.getGameState()==GameState.LOADING || event.getGameState()==GameState.LOGIN_SCREEN) highlight.clear();
+        if (event.getGameState() == GameState.LOGIN_SCREEN ||
+            event.getGameState() == GameState.HOPPING) reset();
+    }
 
-	int getFarmingLevel()
-	{
-		return client.getGameState() == GameState.LOGGED_IN
-			? client.getRealSkillLevel(Skill.FARMING)
-			: 1;
-	}
+    @Subscribe public void onGameTick(GameTick event)
+    {
+        if (client.getGameState() != GameState.LOGGED_IN) return;
+        if (!run.isEmpty() && guideRequested) update();
+        if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
+    }
 
-	WorldPoint getPatchAnchor(PatchType patchType, WorldPoint clicked)
-	{
-		GameObject seed = null;
-		int nearest = Integer.MAX_VALUE;
-		for (GameObject object : patchObjects)
-		{
-			if (getPatchType(object) != patchType || object.getPlane() != clicked.getPlane())
-			{
-				continue;
-			}
-			WorldPoint point = object.getWorldLocation();
-			int distance = Math.max(Math.abs(point.getX() - clicked.getX()), Math.abs(point.getY() - clicked.getY()));
-			if (distance < nearest)
-			{
-				nearest = distance;
-				seed = object;
-			}
-		}
-		if (seed == null || nearest > 4)
-		{
-			return clicked;
-		}
+    @Subscribe public void onWidgetLoaded(WidgetLoaded event)
+    {
+        if (event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.SEED_VAULT)
+            thread.invokeLater(() -> { if (running) sampleStorage(); });
+    }
 
-		Set<GameObject> connected = new HashSet<>();
-		ArrayDeque<GameObject> queue = new ArrayDeque<>();
-		connected.add(seed);
-		queue.add(seed);
-		while (!queue.isEmpty())
-		{
-			GameObject current = queue.removeFirst();
-			WorldPoint currentPoint = current.getWorldLocation();
-			for (GameObject candidate : patchObjects)
-			{
-				if (connected.contains(candidate) || getPatchType(candidate) != patchType
-					|| candidate.getWorldView() != current.getWorldView() || candidate.getPlane() != current.getPlane())
-				{
-					continue;
-				}
-				WorldPoint candidatePoint = candidate.getWorldLocation();
-				if (Math.abs(currentPoint.getX() - candidatePoint.getX()) <= 1
-					&& Math.abs(currentPoint.getY() - candidatePoint.getY()) <= 1)
-				{
-					connected.add(candidate);
-					queue.addLast(candidate);
-				}
-			}
-		}
+    @Subscribe public void onItemContainerChanged(ItemContainerChanged event)
+    {
+        if (event.getContainerId() == InventoryID.BANK.getId() || event.getContainerId() == InventoryID.SEED_VAULT.getId())
+            sampleStorage();
+    }
 
-		int x = connected.stream().mapToInt(object -> object.getWorldLocation().getX()).min().orElse(clicked.getX());
-		int y = connected.stream().mapToInt(object -> object.getWorldLocation().getY()).min().orElse(clicked.getY());
-		return new WorldPoint(x, y, clicked.getPlane());
-	}
+    private void sampleStorage()
+    {
+        observeStorage(InterfaceID.Bankmain.UNIVERSE, InventoryID.BANK, bank);
+        observeStorage(InterfaceID.SeedVault.UNIVERSE, InventoryID.SEED_VAULT, vault);
+    }
 
-	@Provides
-	FarmingHelperConfig provideConfig(ConfigManager configManager)
-	{
-		return configManager.getConfig(FarmingHelperConfig.class);
-	}
+    private void observeStorage(int component, InventoryID id, Map<Integer,Integer> snapshot)
+    {
+        if (client.getWidget(component) == null || client.getWidget(component).isHidden()) return;
+        ItemContainer container = client.getItemContainer(id);
+        if (container == null) return;
+        snapshot.clear();
+        addItems(snapshot, container);
+    }
+
+    private static void addItems(Map<Integer,Integer> stock, ItemContainer container)
+    {
+        if (container == null) return;
+        for (Item item : container.getItems())
+            if (item.getId() > 0 && item.getQuantity() > 0)
+                stock.merge(item.getId(), item.getQuantity(), Integer::sum);
+    }
+
+    static boolean actionable(PatchType type, CropState state)
+    {
+        return state != CropState.GROWING && state != CropState.FILLING;
+    }
+
+    static int spiritCapacity(int level)
+    {
+        if (level >= 99) return Integer.MAX_VALUE;
+        if (level >= 96) return 4;
+        if (level >= 93) return 3;
+        if (level >= 88) return 2;
+        return level >= 83 ? 1 : 0;
+    }
+
+    private void updateAccessNotes()
+    {
+        if (client.getGameState() != GameState.LOGGED_IN) return;
+        int level = client.getRealSkillLevel(Skill.FARMING);
+        lastAccessLevel=level;
+        Map<String,String> notes = new HashMap<>();
+        for (FarmRunPatch patch : patches)
+        {
+            String issue = Waypoints.accessIssue(client,patch.getPatchType(),patch.getLocation(),level,false);
+            if (issue == null && CropCatalog.recommend(patch.getPatchType(),level) == null) issue = "Farming level too low";
+            if (issue != null) notes.put(patch.key(),issue);
+        }
+        accessNotes = Collections.unmodifiableMap(notes);
+    }
+
+    private QuestFarmingStateReader.Observation observe(FarmRunPatch p)
+    {
+        return reader.observeType(p.getPatchType().name(),p.getLocation(),p.getName(),
+            p.getPatchType()==PatchType.HESPORI ? null : Waypoints.destination(p));
+    }
+
+    private void update()
+    {
+        if (run.isEmpty() || !guideRequested) return;
+        String title = run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
+        boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
+        int level = client.getRealSkillLevel(Skill.FARMING);
+        Map<Integer,Integer> bag=new HashMap<>(), carried=new HashMap<>();
+        addItems(bag,client.getItemContainer(InventoryID.INVENTORY));
+        carried.putAll(bag); addItems(carried,client.getItemContainer(InventoryID.EQUIPMENT));
+        Map<Integer,Integer> stock=new HashMap<>(bag);
+        bank.forEach((id,n)->stock.merge(id,n,Integer::sum));
+        vault.forEach((id,n)->stock.merge(id,n,Integer::sum));
+        boolean protect=flag("directorProtectTrees",true), pay=flag("directorPayRemoval",true);
+        CompostChoice compost=CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));
+        int compostId=compost.resolve(stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED));
+        List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
+        Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new LinkedHashMap<>();
+        int eligible=0;
+        int spiritSlots=spiritCapacity(level);
+        if(loggedIn && run.contains(FarmRunType.SPECIALTY) && level<99)
+            for(FarmRunPatch p:patches) if(p.getPatchType()==PatchType.SPIRIT_TREE)
+            { CropState state=observe(p).state; if(state!=null && state!=CropState.EMPTY && state!=CropState.DEAD) spiritSlots--; }
+        if(loggedIn) for(FarmRunPatch p:patches)
+        {
+            PatchType type=p.getPatchType();
+            if(!run.contains(p.getFarmRunType()) || !enabled(p) || skipped.contains(p) ||
+                Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || CropCatalog.recommend(type,level)==null) continue;
+            eligible++;
+            QuestFarmingStateReader.Observation o=observe(p);
+            if(o==null) continue;
+            observations.put(p,o);
+            if(completed.contains(p)) { visible.add(p); continue; }
+            if(p==current)
+            {
+                progress.observe(o);
+                boolean wants=protect && activeCrop!=null && StepEngine.supportsProtection(type) && !ProtectionPaymentCatalog.forCrop(activeCrop).isEmpty();
+                boolean hasPayment=wants && ProtectionPaymentCatalog.forCrop(activeCrop).stream().allMatch(cost -> bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
+                if(progress.finished(type,o,wants,hasPayment)) { completed.add(p); visible.add(p); continue; }
+                // Only the active newly planted crop may remain for optional gardener payment.
+                if(progress.planted() && o.state==CropState.GROWING && wants && hasPayment)
+                { ready.add(p);visible.add(p);continue; }
+                if(!actionable(type,o.state)) { completed.add(p);visible.add(p);continue; }
+            }
+            if(!actionable(type,o.state)) continue;
+            if(type==PatchType.SPIRIT_TREE && !StepEngine.keepExisting(type,o.state) && spiritSlots<=0) continue;
+            ready.add(p);visible.add(p);
+            if(!StepEngine.keepExisting(type,o.state)) { plant.add(p); if(type==PatchType.SPIRIT_TREE) spiritSlots--; }
+        }
+        // Keep the active step stable while the player is working, rather than jumping when another patch matures.
+        if(current!=null && ready.remove(current)) ready.add(0,current);
+        if(current!=null && plant.remove(current)) plant.add(0,current);
+        FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
+        if(next!=current) { current=next;progress.reset();activeCrop=null; if(current!=null) progress.observe(observations.get(current)); }
+        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,stock,this::priority,this::override);
+        if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
+        Map<Integer,Integer> required=Supplies.guideKit(ready,-1,false,false,
+            loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
+            loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
+        Map<Integer,Integer> recommended=new LinkedHashMap<>();
+        int compostCount=0,coins=0;
+        for(FarmRunPatch p:ready)
+        {
+            Crop c=seeds.get(p);PatchType type=p.getPatchType();
+            if(c!=null) required.merge(c.getItemId(),c.getQuantity(),Integer::sum);
+            if(c!=null && type.usesCompost()) compostCount++;
+            if(pay && c!=null && StepEngine.isTreeType(type) && reader.gardenerId(type.name(),p.getLocation(),p.getName())>0) coins+=200;
+            if(protect && (c!=null || (p==current && progress.planted() && activeCrop!=null)))
+            {
+                Crop paymentCrop=c!=null?c:activeCrop;
+                if(StepEngine.supportsProtection(type)) for(ProtectionPayment cost:ProtectionPaymentCatalog.forCrop(paymentCrop))
+                    recommended.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);
+            }
+        }
+        if(coins>0) recommended.merge(ItemID.COINS,coins,Integer::sum);
+        if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
+        if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
+        List<GuideView.ItemRow> items=new ArrayList<>();
+        required.forEach((id,n)->items.add(itemRow(id,n,carried,false)));
+        recommended.forEach((id,n)->items.add(itemRow(id,n+required.getOrDefault(id,0),carried,true)));
+        requiredItems=Set.copyOf(required.keySet());recommendedItems=Set.copyOf(recommended.keySet());
+        List<GuideView.Stop> stops=new ArrayList<>();
+        String instruction=!loggedIn?"Log in to start this guide.":eligible==0?"No enabled, unlocked patches remain.":completed.isEmpty()?"Wait for plants to grow.":"Run complete. Close the helper to start another run.";
+        activeAction=StepEngine.Action.INSPECT;
+        activeLive=false;
+        if(current!=null)
+        {
+            PatchType type=current.getPatchType();QuestFarmingStateReader.Observation o=observations.get(current);
+            activeLive=o.source==QuestFarmingStateReader.Source.LIVE;
+            StepEngine.Action action=StepEngine.action(type,o.state,false,o.protectedByFarmer);
+            if(type==PatchType.CELASTRUS && o.rawValue==17) action=StepEngine.Action.REMOVE_TREE;
+            if(progress.planted() && o.state==CropState.GROWING) action=StepEngine.Action.PROTECT_TREE;
+            if(action==StepEngine.Action.REMOVE_TREE)
+                action=StepEngine.refine(action,pay,reader.gardenerId(type.name(),current.getLocation(),current.getName())>0,false);
+            if(action==StepEngine.Action.PLANT && o.source==QuestFarmingStateReader.Source.LIVE && reader.hasWeeds(type.name(),o.rawValue)) action=StepEngine.Action.RAKE;
+            activeAction=action;
+            instruction=StepEngine.instruction(action,activeCrop,type,compostId>=0);
+        }
+        for(FarmRunPatch p:visible)
+        {
+            Crop c=seeds.get(p);
+            String line=p==current?instruction:completed.contains(p)?"Completed":c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
+            stops.add(new GuideView.Stop(p,line,p==current,completed.contains(p)));
+        }
+        WorldPoint player=loggedIn?client.getLocalPlayer().getWorldLocation():null;
+        if(loggedIn && current!=null && current.getPatchType()==PatchType.HESPORI && client.getLocalPlayer().getLocalLocation()!=null)
+            player=WorldPoint.fromLocalInstance(client,client.getLocalPlayer().getLocalLocation());
+        WorldPoint point=current==null?null:Waypoints.navigationTarget(current,player);
+        if(current!=null)
+        {
+            String entrance=Waypoints.entranceInstruction(current,player);
+            if(!entrance.isEmpty())
+            {
+                instruction=entrance+" "+instruction;
+                for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,true,false));
+            }
+        }
+        navigate(point);
+        GuideView view=new GuideView(title,instruction,items,stops,current);
+        String signature=view.signature();
+        if(!signature.equals(lastView))
+        {
+            lastView=signature;final long id=session;
+            SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view); });
+        }
+    }
+
+    private GuideView.ItemRow itemRow(int id,int count,Map<Integer,Integer> carried,boolean recommended)
+    {
+        Crop crop=CropCatalog.findByItemId(id);
+        return new GuideView.ItemRow(id,crop==null?Supplies.name(id):crop.getItemName(),carried.getOrDefault(id,0),count,
+            bank.getOrDefault(id,0),vault.getOrDefault(id,0),recommended);
+    }
+
+    String override(FarmRunPatch p) { return setting("directorCrop_"+p.key(),""); }
+    String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
+    StepEngine.Action activeAction() { return activeAction; }
+    boolean activeLive() { return activeLive && guideRequested; }
+    int patchCount(FarmRunPatch p) { return reader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
+    Set<Integer> requiredItems() { return guideRequested ? requiredItems : Collections.emptySet(); }
+    Set<Integer> recommendedItems() { return guideRequested ? recommendedItems : Collections.emptySet(); }
+    int gardener(FarmRunPatch p) { return reader.gardenerId(p.getPatchType().name(),p.getLocation(),p.getName()); }
+
+    private void navigate(WorldPoint point)
+    {
+        if (!routingAvailable || Objects.equals(destination,point)) return;
+        if (destination != null) bus.post(new PluginMessage("shortestpath","clear"));
+        destination = point;
+        if (point != null && client.getLocalPlayer() != null)
+            bus.post(new PluginMessage("shortestpath","path",
+                Map.of("start",client.getLocalPlayer().getWorldLocation(),"target",point)));
+    }
+
+    FarmRunPatch activePatch() { return guideRequested ? current : null; }
+
+    List<FarmRunPatch> patches() { return Collections.unmodifiableList(patches); }
+
+    boolean enabled(FarmRunPatch patch)
+    {
+        return flag("patchEnabled_" + patch.key(),PatchLocationSelection.isEnabled(legacy,patch.getLocation()));
+    }
+
+    String priority(PatchType type)
+    {
+        return flag("cropCustom_" + type.name(),false) ? setting("cropPriority_" + type.name(),"") : "";
+    }
+
+    boolean flag(String key, boolean fallback) { return Boolean.parseBoolean(setting(key,String.valueOf(fallback))); }
+    String setting(String key, String fallback)
+    {
+        String value = config.getRSProfileKey() == null ? null : config.getRSProfileConfiguration("farming-helper",key);
+        return value == null ? fallback : value;
+    }
+    boolean canSave() { return config.getRSProfileKey() != null; }
+    void save(String key, String value)
+    {
+        if (canSave()) config.setRSProfileConfiguration("farming-helper",key,value);
+    }
 
 	private static BufferedImage createNavigationIcon()
 	{

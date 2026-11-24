@@ -90,32 +90,6 @@ final class StepEngine
         }
     }
 
-    static Action actionForStep(RunPlanner.Step step, CropState state, Boolean protection)
-    {
-        PatchType type = step.patch.getPatchType();
-        if ((type == PatchType.SPIRIT_TREE || type == PatchType.REDWOOD) && state == CropState.HARVESTABLE)
-            return Action.COMPLETE; // Keep permanent transport/woodcutting trees.
-        if (step.harvestOnly && state == CropState.HARVESTABLE && isTreeType(type))
-        {
-            if (type == PatchType.FRUIT_TREE || type == PatchType.CALQUAT || type == PatchType.CELASTRUS)
-                return Action.HARVEST;
-            return Action.COMPLETE;
-        }
-        return action(type, state, step.protectionPlanned, protection);
-    }
-
-    /** Curing a growing crop is not planting. Optional post-plant supplies cannot trap a guide. */
-    static Action guideAction(RunPlanner.Step step, CropState state, Boolean protection,
-                              boolean sawEmpty, boolean sawWork, boolean hasPayment)
-    {
-        Action action = actionForStep(step, state, protection);
-        if (state == CropState.GROWING && sawWork && !sawEmpty)
-            return Action.COMPLETE;
-        if (action == Action.PROTECT_TREE && (!sawEmpty || !hasPayment))
-            return Action.COMPLETE;
-        return action;
-    }
-
     static boolean keepExisting(PatchType type, CropState state)
     {
         if (state != CropState.UNCHECKED && state != CropState.HARVESTABLE && state != CropState.DISEASED)
@@ -128,15 +102,6 @@ final class StepEngine
     {
         if (action == Action.REMOVE_TREE) return payRemoval && knownGardener ? Action.PAY_REMOVE : Action.CHOP_TREE;
         if (action == Action.PLANT && weeds) return Action.RAKE;
-        return action;
-    }
-
-    static Action withCompost(Action action, RunPlanner.Step step,
-                              boolean plannedCompost, boolean sawPlanting, boolean compostConfirmed)
-    {
-        if (plannedCompost && step.requiresPlanting && step.patch.getPatchType().usesCompost() &&
-            sawPlanting && !compostConfirmed && (action == Action.COMPLETE || action == Action.PROTECT_TREE))
-            return Action.COMPOST;
         return action;
     }
 
@@ -159,15 +124,17 @@ final class StepEngine
                 if (crop == null && (type == PatchType.FRUIT_TREE || type == PatchType.CALQUAT))
                     return "Pick the fruit and leave the tree planted. Use Skip if finished and the patch has not advanced.";
                 return crop == null
-                    ? "Harvest this patch; no replacement stock allocated. Refill and replan."
+                    ? "Harvest this patch and leave the existing crop planted if it regrows."
                     : "Harvest this " + type.getDisplayName().toLowerCase() +
                         " patch, then replant " + name + " if appropriate.";
             case CHECK_HEALTH:
                 if (type == PatchType.SPIRIT_TREE) return "Check health and leave the spirit tree planted for travel.";
+                if (type == PatchType.REDWOOD) return "Check health and leave the redwood planted.";
+                if (type == PatchType.CACTUS) return "Check health and pick the cactus produce.";
                 if (type == PatchType.CELASTRUS) return crop == null
                     ? "Check health, then harvest the bark and leave the tree planted."
                     : "Check health, then harvest the bark before removing the tree.";
-                return "Check the tree's health, then remove the tree if replanting.";
+                return "Check the tree’s health, then remove the tree if replanting.";
             case REMOVE_TREE:
                 return "Chop the tree or pay the gardener to remove it.";
             case PAY_REMOVE: return "Pay the gardener 200 coins to remove the tree.";
@@ -181,7 +148,8 @@ final class StepEngine
                 return isTreeType(type) ? "Prune the diseased tree with secateurs."
                     : "Cure the diseased crop before harvesting.";
             case PLANT:
-                return crop == null ? "No suitable planting stock allocated. Bank or replan."
+                if (type == PatchType.GRAPEVINE && crop != null) return "Prepare the vine patch with saltpetre and a gardening trowel, then plant " + name + ".";
+                return crop == null ? "Choose an eligible crop manually, or skip this patch."
                     : "Rake if necessary, " +
                         (compost && type.usesCompost() ? "compost, " : "") + "plant " + name + ".";
             case COMPOST:
@@ -198,21 +166,4 @@ final class StepEngine
         }
     }
 
-    static boolean canFinishHarvestOnly(boolean harvestOnly, boolean workWasObserved,
-                                        CropState latestState, boolean live)
-    {
-        // Initial EMPTY must never imply that a ready crop was harvested.
-        // Only a live transition from an observed actionable state is sufficient.
-        return harvestOnly && workWasObserved && live && latestState == CropState.EMPTY;
-    }
-
-    static boolean canAutoAdvance(Action action, boolean known, boolean sourceFresh,
-                                  boolean alreadyGrowingAtActivation)
-    {
-        // An observed growing state when a step was selected may be skipped
-        // exactly as Quest Helper skips growing patches. Newly changed states
-        // require live varbits or a new Time Tracking observation.
-        return action == Action.COMPLETE && known &&
-            (sourceFresh || alreadyGrowingAtActivation);
-    }
 }
