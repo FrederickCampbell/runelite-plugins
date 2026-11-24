@@ -7,6 +7,7 @@ import java.util.function.IntFunction;
 import java.util.regex.*;
 import net.runelite.api.*;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.game.ItemVariationMapping;
 
 /** Read-only supply shelf. No routing, loadout optimization or settings overrides. */
 final class CuratedBank
@@ -16,6 +17,38 @@ final class CuratedBank
     private static final Pattern BIRD=Pattern.compile("(?i)^(?:"+TRAVEL+")$");
     private static final Pattern GEAR=Pattern.compile("(?i)^(?:"+TRAVEL+"|farmer.s (?:strawhat|jacket|shirt|boro trousers|breeches|boots|trousers)|magic secateurs|secateurs|herb sack|seed box|gricoller.s can|watering can(?:\\([0-8]\\))?|spade|rake|seed dibber|gardening trowel|plant cure|bottomless compost bucket.*|ultracompost|supercompost|compost|empty bucket|bucket|volcanic ash|compost potion.*|basket|sack|amulet of bounty.*|amulet of nature|pre-nature amulet|fishbowl helmet|diving apparatus|medallion of the deep|flippers|(?:bronze|iron|steel|black|mithril|adamant|rune|dragon|crystal|infernal|3rd age) axe.*|imcando hammer|hammer|chisel)$");
     private static final List<String[]> ROWS=load();
+    private static final Map<Integer,List<String[]>> EXACT=index(false), FAMILIES=index(true);
+    private static final Pattern CHARGED_NAME=Pattern.compile("(?i)^(.+?)\\s*\\(([1-9][0-9]*)\\)$");
+    private static Map<Integer,List<String[]>> index(boolean fuzzy)
+    {
+        Map<Integer,List<String[]>> map=new HashMap<>();
+        for(String[] row:ROWS){int id=Integer.parseInt(row[0]);map.computeIfAbsent(fuzzy?ItemVariationMapping.map(id):id,k->new ArrayList<>()).add(row);}
+        return map;
+    }
+    static boolean fuzzyEquipment(int id,IntFunction<String> names,boolean bird)
+    {
+        if(equipment(names.apply(id),bird))return true;
+        int base=ItemVariationMapping.map(id);
+        return base!=id&&equipment(names.apply(base),bird);
+    }
+    /** Fuzzy fallback only for positive-charge aliases of known transport families.
+     * Exact rows are authoritative; do not inherit their requirements for empty,
+     * cosmetic or other non-transport variants merely because the IDs map together. */
+    static List<String[]> teleportRows(int id,IntFunction<String> names)
+    {
+        List<String[]> exact=EXACT.get(id);if(exact!=null)return exact;
+        String name=names.apply(id);if(name==null)return Collections.emptyList();
+        Matcher charged=CHARGED_NAME.matcher(name.trim());if(!charged.matches())return Collections.emptyList();
+        List<String[]> candidates=FAMILIES.getOrDefault(ItemVariationMapping.map(id),Collections.emptyList());
+        List<String[]> result=new ArrayList<>();
+        for(String[] row:candidates)
+        {
+            String other=names.apply(Integer.parseInt(row[0]));if(other==null)continue;
+            Matcher m=CHARGED_NAME.matcher(other.trim());
+            if(m.matches()&&charged.group(1).trim().equalsIgnoreCase(m.group(1).trim())&&"T".equals(row[2]))result.add(row);
+        }
+        return result;
+    }
     private static List<String[]> load()
     {
         List<String[]> result=new ArrayList<>();
@@ -29,9 +62,10 @@ final class CuratedBank
     }
     static int transportCategory(int id)
     {
-        boolean found=false;
-        for(String[] row:ROWS)if(Integer.parseInt(row[0])==id){found=true;if("F".equals(row[2]))return BankShelfLayout.PERMANENT;}
-        return found?BankShelfLayout.CHARGED:-1;
+        List<String[]> rows=EXACT.get(id);
+        if(rows==null)return FAMILIES.containsKey(ItemVariationMapping.map(id))?BankShelfLayout.CHARGED:-1;
+        for(String[] row:rows)if("F".equals(row[2]))return BankShelfLayout.PERMANENT;
+        return BankShelfLayout.CHARGED;
     }
     static boolean equipment(String name,boolean bird)
     {return name!=null&&(bird?BIRD:GEAR).matcher(name).matches();}
@@ -108,13 +142,13 @@ final class CuratedBank
         {
             if(entry.getValue()<=0)continue;
             int id=entry.getKey();String name=names.apply(id);
-            if(equipment(name,bird))result.add(id);
+            if(fuzzyEquipment(id,names,bird))result.add(id);
             if(fairy&&!blocked.contains(id)&&(id==772||id==9084)&&fairyAccess(client))result.add(id);
         }
-        for(String[] row:ROWS)
+        for(var entry:bank.entrySet())if(entry.getValue()>0)for(String[] row:teleportRows(entry.getKey(),names))
         {
-            int id=Integer.parseInt(row[0]),family=Integer.parseInt(row[1]);
-            if(bank.getOrDefault(id,0)<=0||blocked.contains(id)||blocked.contains(family)||!modeAllows(mode,"T".equals(row[2])))continue;
+            int id=entry.getKey(),source=Integer.parseInt(row[0]),family=Integer.parseInt(row[1]);
+            if(blocked.contains(id)||blocked.contains(source)||blocked.contains(family)||!modeAllows(mode,"T".equals(row[2])))continue;
             if("whistle".equals(row[7])&&!quetzal)continue;
             try
             {

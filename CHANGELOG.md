@@ -1,3 +1,9 @@
+## v0.31.1-beta.1 — Lifecycle fix and fuzzy bank equipment
+
+- New guide session IDs open the sidebar guide even for direct API starts; same-session ticks preserve the current screen. Restores the explicit End control tested by GuideLifecycleTest.
+- RuneLite ItemVariationMapping recognizes recolored equipment and known charged teleport families. Exact usable transport rows take precedence; positive-charge aliases only inherit same-name transport family rows. Uncharged aliases and placeholders are not admitted through fuzzy matching.
+- Seeds and other exact run requirements remain unchanged. Existing Shortest Path modes and item blocks remain authoritative.
+
 ## v0.31-beta.1 — Sidebar UX overhaul
 
 - Scoped Verdana/native fallback theme, native Swing/FlatLaf controls, consistent vector icons, fixed navigation header.

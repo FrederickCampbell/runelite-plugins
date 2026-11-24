@@ -930,7 +930,7 @@ public class FarmingHelperPlugin extends Plugin
         if(!signature.equals(lastView))
         {
             lastView=signature;final long id=session;
-            SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view); });
+            SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view,id); });
         }
     }
 

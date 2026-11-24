@@ -12,6 +12,16 @@ public class CuratedBankTest
         assertFalse(CuratedBank.equipment("Fishbowl helmet",true));
         assertFalse(CuratedBank.equipment("Dragon claws",false));
     }
+    @Test public void nativeVariationsAndChargeSafety()
+    {
+        assertTrue(CuratedBank.fuzzyEquipment(13579,id->id==11850?"Graceful hood":"Recoloured hood",false));
+        assertTrue(CuratedBank.fuzzyEquipment(21253,id->id==13646?"Farmer's strawhat":"Recoloured hat",false));
+        assertTrue(CuratedBank.fuzzyEquipment(13579,id->"Graceful hood",true));
+        assertFalse(CuratedBank.teleportRows(11105,id->"Skills necklace(4)").isEmpty());
+        assertFalse(CuratedBank.teleportRows(11970,id->"Skills necklace(1)").isEmpty());
+        assertTrue(CuratedBank.teleportRows(11113,id->"Skills necklace").isEmpty());
+        assertTrue(CuratedBank.teleportRows(1704,id->"Amulet of glory").isEmpty());
+    }
     @Test public void restrictionsAndModes()
     {
         assertEquals(Set.of(4251,13393),CuratedBank.blocked("4251, 13393@42, 11105:5"));

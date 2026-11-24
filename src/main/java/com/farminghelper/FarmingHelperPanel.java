@@ -34,6 +34,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final JPanel footer=new JPanel(new BorderLayout());
     private final SidebarNavigation navigation=new SidebarNavigation();
     private GuideView latestGuide;
+    private long guideSession=Long.MIN_VALUE;
     private boolean requiredOpen=true,completedOpen=false;
     private JButton requirementsHeader;
     private boolean settingsFromRun=false,patchByLocation=true,showLocked=false,manualByLocation=false;
@@ -180,7 +181,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     void home()
     {
-        latestGuide=null;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=true;completedOpen=false;
+        latestGuide=null;guideSession=Long.MIN_VALUE;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=true;completedOpen=false;
         showHome();
     }
     private void showHome()
@@ -352,8 +353,12 @@ final class FarmingHelperPanel extends PluginPanel
         group.add(body,BorderLayout.CENTER);addRow(group);
     }
 
-    void guide(GuideView view)
+    void guide(GuideView view,long session)
     {
+        // A new backend session must open the guide even if it was started via
+        // the plugin API rather than by a sidebar button. Same-session ticks
+        // must never change the user's selected screen.
+        if(guideSession!=session){guideSession=session;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=true;completedOpen=false;navigation.starting();}
         latestGuide=view;
         if(navigation.acceptGuide())renderGuide(view);
     }
