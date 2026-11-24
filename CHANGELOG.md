@@ -1,3 +1,10 @@
+## v0.36-beta.1 — UI reliability and compliance hardening
+
+- Preserve selected Seed Vault view and local scroll across native refresh scripts; defer reapplication to the next client tick outside the script stack. Quantity-only changes with unchanged physical ID membership, widget identities, and ordered selection avoid custom relayout. Native rebuilds and changed selection still require reapplication.
+- Keep native Bank Tags shelves and withdrawal positions. The registered predicate admits only physical IDs already present in the supplied layout, preventing plugin-originated unmatched additions; never explicitly save or delete Bank Tags configuration. No permanent tag tab is created. Native Bank Tags still manages its own remembered-tab configuration; live verification of implicit native persistence is required.
+- Bank view and Seed Vault view remain independent character preferences. Explicit Show farming bank respects its toggle. Closing the bank unregisters the temporary predicate. Beginning a guide no longer unconditionally clears another helper's Shortest Path destination.
+- The only Seed Vault script invoked by Farming Helper is UPDATE_SCROLLBAR for visual scrolling; no game actions, packet calls or withdrawal listener changes. Native geometry and script IDs not verified against generated names remain unchanged. Plugin Hub approval and live client validation remain outstanding.
+
 ## v0.35-beta.1 — Reliability & simplification
 
 - Global character preferences are authoritative; crop care, tree removal and missing-planting-supply overrides are temporary per run. Old persisted run overrides are ignored, not deleted. Existing global, crop, patch, preset and storage preferences remain.

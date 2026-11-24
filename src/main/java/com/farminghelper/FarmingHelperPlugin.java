@@ -436,6 +436,9 @@ public class FarmingHelperPlugin extends Plugin
         if(vaultViews!=null&&event.getContainerId()==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
     }
 
+    @Subscribe public void onClientTick(ClientTick event)
+    {if(vaultViews!=null)vaultViews.clientTick();}
+
     @Subscribe public void onScriptPreFired(ScriptPreFired event)
     {if(vaultViews!=null)vaultViews.beforeScript(event.getScriptId());}
     @Subscribe public void onScriptPostFired(ScriptPostFired event)
@@ -463,7 +466,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
         return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving);
     }
-    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(bankRunItems(),birdBankPhase());}});}
+    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested&&flag("activeRunBank",true)){sampleStorage();update();runBank.show(bankRunItems(),birdBankPhase());}});}
     TransportHint birdhouseTransport()
     {
         if(!guideRequested||diseaseTarget!=null||preparing||current==null||current.getPatchType()!=PatchType.BIRDHOUSE||navigation==null||client.getLocalPlayer()==null)return null;

@@ -15,7 +15,6 @@ import net.runelite.client.plugins.banktags.BankTagsPlugin;
 import net.runelite.client.plugins.banktags.BankTagsService;
 import net.runelite.client.plugins.banktags.TagManager;
 import net.runelite.client.plugins.banktags.tabs.Layout;
-import net.runelite.client.plugins.banktags.tabs.LayoutManager;
 
 /** Native Bank Tags custom predicate, not persisted tags or a custom bank renderer. */
 final class ActiveRunBank
@@ -24,10 +23,9 @@ final class ActiveRunBank
     private final Client client;
     private final PluginManager plugins;
     private TagManager tags;
-    private LayoutManager layouts;
     private BankSearch search;
     private final ItemManager items;
-    private Set<Integer> ids=Collections.emptySet();
+    private Set<Integer> ids=Collections.emptySet(), admitted=Collections.emptySet();
     private int[] lastLayout=new int[0];
     private boolean registered,opened,offered,birdPhase;
     ActiveRunBank(Client client,PluginManager plugins,ItemManager items)
@@ -39,7 +37,7 @@ final class ActiveRunBank
             // TagManager is deliberately bound inside the native plugin injector.
             // Reuse that exact instance without requiring Bank Tags as a dependency.
             TagManager actual=p.getInjector().getInstance(TagManager.class);
-            if(tags!=actual){if(registered&&tags!=null)tags.unregisterTag(TAG);registered=false;tags=actual;layouts=p.getInjector().getInstance(LayoutManager.class);search=p.getInjector().getInstance(BankSearch.class);}
+            if(tags!=actual){if(registered&&tags!=null)tags.unregisterTag(TAG);registered=false;tags=actual;admitted=Collections.emptySet();search=p.getInjector().getInstance(BankSearch.class);}
             return (BankTagsPlugin)p;
         }
         return null;
@@ -53,7 +51,7 @@ final class ActiveRunBank
     {return ids.contains(id)&&definition!=null&&definition.getPlaceholderTemplateId()==-1;}
     private void register()
     {
-        if(!registered){tags.registerTag(TAG,id->includes(ids,id,items.getItemComposition(id)));registered=true;}
+        if(!registered){tags.registerTag(TAG,id->includes(admitted,id,items.getItemComposition(id))&&ids.contains(id));registered=true;}
     }
     private Set<Integer> physical()
     {
@@ -64,16 +62,24 @@ final class ActiveRunBank
     }
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
     private int slot(int id){var s=items.getItemStats(id);return s==null||s.getEquipment()==null?-1:s.getEquipment().getSlot();}
+    static Set<Integer> admittedIds(int[] layout)
+    {
+        Set<Integer> result=new HashSet<>();for(int id:layout)if(id>=0)result.add(id);
+        return Set.copyOf(result);
+    }
     private void open(BankTagsPlugin api,int[] layout)
     {
-        // Native in-memory layout, no user tag or layout config write by this plugin.
-        lastLayout=layout.clone();api.openTag(TAG,new Layout(TAG,layout),BankTagsService.OPTION_ITEMS_NOT_IN_LAYOUT_AT_BOTTOM);
+        // Publish only items already in the supplied layout. Native Bank Tags saves
+        // a layout if a filtered item is missing from it. New IDs therefore cannot
+        // enter through our predicate before their corresponding layout is ready.
+        lastLayout=layout.clone();admitted=admittedIds(layout);
+        api.openTag(TAG,new Layout(TAG,layout),BankTagsService.OPTION_ITEMS_NOT_IN_LAYOUT_AT_BOTTOM);
     }
     void tick(Set<Integer> next,boolean enabled,boolean bird)
     {
         BankTagsPlugin api=service();
         if(!enabled||next==null||api==null){close();return;}
-        if(!bankOpen()){opened=false;offered=false;lastLayout=new int[0];return;}
+        if(!bankOpen()){if(registered)close();return;}
         Set<Integer> physical=physical();Set<Integer> filtered=new HashSet<>(physical);filtered.retainAll(next);
         boolean changed=!ids.equals(filtered);ids=Set.copyOf(filtered);register();
         if(!opened){opened=true;offered=false;lastLayout=new int[0];}
@@ -97,11 +103,10 @@ final class ActiveRunBank
     void close()
     {
         BankTagsService api=service();
-        if(registered&&api!=null&&TAG.equals(api.getActiveTag()))api.closeBankTag();
+        if(api!=null&&TAG.equals(api.getActiveTag())&&bankOpen())api.closeBankTag();
         if(registered&&tags!=null)tags.unregisterTag(TAG);
-        // Native Bank Tags may save a layout if it reconciles a changed bank between ticks.
-        // Remove only our reserved temporary tag's layout, never another user's tag.
-        if(registered&&layouts!=null)layouts.removeLayout(TAG);
-        registered=false;opened=false;offered=false;ids=Collections.emptySet();lastLayout=new int[0];
+        // Never save or delete another plugin's configuration. Registration is
+        // in-memory; no actual TagTab or permanent item tag is created.
+        registered=false;opened=false;offered=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];
     }
 }

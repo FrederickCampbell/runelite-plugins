@@ -4,6 +4,9 @@ import java.util.*;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Skill;
+import net.runelite.api.InventoryID;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.Point;
 import net.runelite.api.ScriptID;
 import net.runelite.api.gameval.VarClientID;
@@ -36,29 +39,85 @@ final class SeedVaultViews
     private Widget parent;
     private int originalScrollHeight=-1,originalChildCount;
     private VaultRanking.View active;
-    private boolean dirty=true, building;
+    private boolean dirty=true, quantityDirty, nativeRefresh;
+    private int buildDepth;
+    private List<VaultRanking.Entry> lastEntries=Collections.emptyList();
+    private List<Integer> lastOrder=Collections.emptyList();
+    private Set<Integer> lastStockIds;
+    private Widget lastItemParent;
     private int lastLevel=-1;
     private long lastConfig=Long.MIN_VALUE;
 
     SeedVaultViews(Client client,ItemManager items,FarmingHelperPlugin plugin)
     {this.client=client;this.items=items;this.plugin=plugin;}
 
-    void invalidate(){dirty=true;}
+    void invalidate(){quantityDirty=true;}
+    private static boolean nativeBuild(int id){return id==INIT||id==CATEGORY||id==BUILD;}
     void beforeScript(int id)
     {
-        if(id==INIT||id==CATEGORY){leave();removeButtons();if(id==INIT)opened=false;building=true;}
-        else if(id==BUILD){rememberScroll();restore(false);building=true;dirty=true;}
+        if(!nativeBuild(id))return;
+        // Native scripts own item identity and quantity. Restore before they rebuild,
+        // but do not confuse a deposit/withdraw rebuild with a player selecting a tab.
+        if(buildDepth++==0){rememberScroll();restore(false);forgetProjection();}
+        if(id==INIT||id==CATEGORY)removeButtons();
+        dirty=true;
     }
     void afterScript(int id)
     {
-        if(id==INIT||id==CATEGORY||id==BUILD){building=false;dirty=true;}
+        if(!nativeBuild(id))return;
+        if(buildDepth>0)--buildDepth;
+        dirty=true;nativeRefresh=true;
+    }
+    void clientTick()
+    {
+        // Reapply outside the script stack, at client-frame cadence instead of
+        // displaying the unfiltered native list for a whole 600 ms game tick.
+        if(nativeRefresh&&buildDepth==0){nativeRefresh=false;tick();}
+    }
+    private void forgetProjection()
+    {
+        lastEntries=Collections.emptyList();lastOrder=Collections.emptyList();
+        lastStockIds=null;lastItemParent=null;
+    }
+    private Map<Integer,Integer> stock()
+    {
+        ItemContainer c=client.getItemContainer(InventoryID.SEED_VAULT);
+        if(c==null)return null;
+        Map<Integer,Integer> result=new HashMap<>();
+        for(Item i:c.getItems())if(i!=null&&PhysicalStock.available(i.getId(),i.getQuantity(),items::getItemComposition))
+            result.merge(i.getId(),i.getQuantity(),Integer::sum);
+        return result;
+    }
+    static List<VaultRanking.Entry> withQuantities(List<VaultRanking.Entry> entries,Map<Integer,Integer> stock)
+    {
+        List<VaultRanking.Entry> result=new ArrayList<>();
+        for(VaultRanking.Entry e:entries)result.add(new VaultRanking.Entry(e.id,stock.getOrDefault(e.id,0),e.crop));
+        return result;
+    }
+    private Set<Integer> selection(List<VaultRanking.Entry> entries,int level)
+    {
+        return active==VaultRanking.View.RUN?VaultRanking.selectRun(entries,runItems==null?Collections.emptySet():runItems):
+            VaultRanking.select(active,entries,level,plugin.vaultAllowed(level),plugin::priority,plugin.vaultOverrides(level));
+    }
+    private boolean canKeepProjection(int level)
+    {
+        Map<Integer,Integer> now=stock();
+        if(now==null||lastStockIds==null||!lastStockIds.equals(now.keySet())||
+            lastItemParent!=client.getWidget(ITEMS)||scrollParent==null||scrollParent!=client.getWidget(VIEWPORT))return false;
+        for(Map.Entry<Widget,WidgetState> e:changed.entrySet())
+        {
+            Widget w=e.getKey(),p=client.getWidget(w.getId());int i=w.getIndex();
+            Widget[] children=p==null?null:p.getChildren();
+            if(children==null||i<0||i>=children.length||children[i]!=w||!e.getValue().matches(w))return false;
+        }
+        return lastOrder.equals(new ArrayList<>(selection(withQuantities(lastEntries,now),level)));
     }
     void nativeMenu(int component)
     {
         if(component==CATEGORIES||component==InterfaceID.SeedVault.SEARCH)leave();
     }
-    void close(){leave();removeButtons();building=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastWidth=-1;runItems=null;opened=false;dirty=true;}
-    void leave(){restore(true);active=null;paintButtons();dirty=true;customScroll=0;}
+    void close(){leave();removeButtons();buildDepth=0;nativeRefresh=false;quantityDirty=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastWidth=-1;runItems=null;opened=false;dirty=true;}
+    void leave(){restore(true);forgetProjection();active=null;paintButtons();dirty=true;customScroll=0;}
     private void rememberScroll(){if(active!=null&&scrollParent!=null&&client.getWidget(VIEWPORT)==scrollParent)customScroll=scrollParent.getScrollY();}
 
     void tick()
@@ -66,7 +125,7 @@ final class SeedVaultViews
         if(client.getGameState()!=GameState.LOGGED_IN||!plugin.flag("seedVaultViews",true)) {close();flushScrollbar();return;}
         Widget root=client.getWidget(InterfaceID.SeedVault.UNIVERSE);
         if(root==null||root.isHidden()){close();return;}
-        if(building)return;
+        if(buildDepth>0)return;
         Widget left=client.getWidget(LEFT), categories=client.getWidget(CATEGORIES);
         if(left==null||categories==null||categories.isHidden())return;
         Set<Integer> nextRun=plugin.vaultRunItems();
@@ -87,6 +146,11 @@ final class SeedVaultViews
         if(lastLevel!=level||lastConfig!=revision){lastLevel=level;lastConfig=revision;dirty=true;}
         Widget viewport=client.getWidget(VIEWPORT);
         if(viewport!=null&&lastWidth!=viewport.getWidth()){lastWidth=viewport.getWidth();dirty=true;}
+        if(quantityDirty)
+        {
+            quantityDirty=false;
+            if(active!=null&&!dirty&&!canKeepProjection(level))dirty=true;
+        }
         if(dirty&&active!=null){dirty=false;rememberScroll();filter(level);}
         flushScrollbar();
     }
@@ -213,15 +277,18 @@ final class SeedVaultViews
         void apply(Widget w,int x,int y,boolean hide)
         {
             appliedX=x;appliedY=y;appliedHidden=hide;
-            w.setOriginalX(x);w.setOriginalY(y);w.setHidden(hide);w.revalidate();
+            if(w.getOriginalX()!=x||w.getOriginalY()!=y||w.isSelfHidden()!=hide)
+            {w.setOriginalX(x);w.setOriginalY(y);w.setHidden(hide);w.revalidate();}
         }
+        boolean matches(Widget w){return w.getOriginalX()==appliedX&&w.getOriginalY()==appliedY&&w.isSelfHidden()==appliedHidden;}
         void restore(Widget w)
         {
             // Respect a native rebuild or another plugin that changed a property.
-            if(w.getOriginalX()==appliedX)w.setOriginalX(x);
-            if(w.getOriginalY()==appliedY)w.setOriginalY(y);
-            if(w.isSelfHidden()==appliedHidden)w.setHidden(hidden);
-            w.revalidate();
+            boolean changed=false;
+            if(w.getOriginalX()==appliedX&&appliedX!=x){w.setOriginalX(x);changed=true;}
+            if(w.getOriginalY()==appliedY&&appliedY!=y){w.setOriginalY(y);changed=true;}
+            if(w.isSelfHidden()==appliedHidden&&appliedHidden!=hidden){w.setHidden(hidden);changed=true;}
+            if(changed)w.revalidate();
         }
     }
     private void move(Widget w,int x,int y,boolean hide)
@@ -238,9 +305,13 @@ final class SeedVaultViews
         changed.clear();
         if(scrollParent!=null&&client.getWidget(VIEWPORT)==scrollParent&&appliedHeight==scrollParent.getScrollHeight())
         {
-            scrollParent.setScrollHeight(nativeHeight);scrollParent.setScrollY(nativeScroll);scrollParent.revalidateScroll();
-            client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,nativeVarScroll);
-            scrollbarDirty=true;
+            if(scrollParent.getScrollHeight()!=nativeHeight||scrollParent.getScrollY()!=nativeScroll)
+            {
+                scrollParent.setScrollHeight(nativeHeight);scrollParent.setScrollY(nativeScroll);scrollParent.revalidateScroll();
+                scrollbarDirty=true;
+            }
+            if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=nativeVarScroll)
+                client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,nativeVarScroll);
         }
         scrollParent=null;appliedHeight=-1;
         if(exit)customScroll=0;
@@ -271,6 +342,7 @@ final class SeedVaultViews
     void filter(int level)
     {
         restore(false);
+        forgetProjection();
         Widget itemParent=client.getWidget(ITEMS),textParent=client.getWidget(LABELS),headerParent=client.getWidget(HEADERS),lineParent=client.getWidget(LINES),viewport=client.getWidget(VIEWPORT);
         if(itemParent==null||textParent==null||headerParent==null||viewport==null)return;
         int headerOffset=yOffset(headerParent,itemParent);
@@ -309,8 +381,7 @@ final class SeedVaultViews
         }
         for(Widget label:labels)if(label!=null&&!label.isSelfHidden()&&!matched.contains(label))
         {Section section=sectionAt(sections,label.getOriginalY());if(section!=null)section.safe=false;}
-        Set<Integer> keep=active==VaultRanking.View.RUN?VaultRanking.selectRun(entries,runItems==null?Collections.emptySet():runItems):
-            VaultRanking.select(active,entries,level,plugin.vaultAllowed(level),plugin::priority,plugin.vaultOverrides(level));
+        Set<Integer> keep=selection(entries,level);
         Map<Integer,Integer> rank=new HashMap<>();int index=0;for(int id:keep)rank.put(id,index++);
         // Full compaction requires all section widgets to be accounted for and the
         // native divider paired by index and nearby original Y. Otherwise compact
@@ -375,10 +446,20 @@ final class SeedVaultViews
             scrollParent=viewport;nativeHeight=viewport.getScrollHeight();nativeScroll=viewport.getScrollY();
             nativeVarScroll=client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS);
             appliedHeight=Math.max(viewport.getHeight(),nativeHeight-(full?shift:0));
-            viewport.setScrollHeight(appliedHeight);
             int scroll=Math.max(0,Math.min(customScroll,appliedHeight-viewport.getHeight()));
-            viewport.setScrollY(scroll);viewport.revalidateScroll();
-            client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,scroll);scrollbarDirty=true;
+            if(viewport.getScrollHeight()!=appliedHeight||viewport.getScrollY()!=scroll)
+            {
+                viewport.setScrollHeight(appliedHeight);viewport.setScrollY(scroll);viewport.revalidateScroll();
+                scrollbarDirty=true;
+            }
+            if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=scroll)
+                client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,scroll);
+        }
+        Map<Integer,Integer> observed=stock();
+        if(observed!=null)
+        {
+            lastEntries=List.copyOf(entries);lastOrder=List.copyOf(keep);
+            lastStockIds=Set.copyOf(observed.keySet());lastItemParent=itemParent;
         }
     }
     static boolean pair(Widget icon,Widget label)

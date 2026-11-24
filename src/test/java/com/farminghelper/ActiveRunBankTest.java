@@ -6,6 +6,11 @@ import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 public class ActiveRunBankTest
 {
+    @Test public void admitsOnlyIdsAlreadyInSuppliedNativeLayout()
+    {
+        assertEquals(Set.of(1513,1755),ActiveRunBank.admittedIds(new int[]{-1,1513,1755,-1,1513}));
+        assertFalse(ActiveRunBank.admittedIds(new int[]{1513,-1}).contains(1755));
+    }
     @Test public void filtersExactPhysicalItemIds()
     {
         ItemComposition real=mock(ItemComposition.class),placeholder=mock(ItemComposition.class);

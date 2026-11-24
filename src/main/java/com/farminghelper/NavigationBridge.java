@@ -22,7 +22,7 @@ final class NavigationBridge
     // Only use background ordering queries after the installed API has responded
     // and the active navigation request is no longer awaiting its own probe.
     boolean canProbeOrder(){return enabled&&modern&&queryId==null&&!refreshPending;}
-    void begin(){reset(true);if(enabled)post("clear",null);}
+    void begin(){reset(true);}
     void stop(){reset(true);}
     private void reset(boolean clear)
     {
