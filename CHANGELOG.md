@@ -1,3 +1,10 @@
+## v0.26-beta.1 — Stock evidence and saved clearing preference
+
+- Clear Patches defaults on for a new character preference, remembers explicit opt-out across runs and sessions, and is not reset when Hide Seedless Patches is toggled.
+- Raw seed preparation shows physical carried/bank/vault quantities and which storage has been observed this session; planned saplings are marked with their preparation count.
+- Refresh open storage before seedless preference changes; warn about unverified storage and allow explicit, non-destructive reset of cached observations.
+- Regression tests for absent calquat stock, one raw seed allocation, and cleared observations.
+
 ## v0.25-beta.1 — Focused inventory guidance and seedless clearing
 
 - Separate current-action inventory outlines from whole-run shopping lists. Only the first inventory slot containing each requested item is highlighted.

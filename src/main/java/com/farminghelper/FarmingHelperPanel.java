@@ -316,7 +316,7 @@ final class FarmingHelperPanel extends PluginPanel
         if(view.hideSeedless)
         {
             JCheckBox clear=new JCheckBox("Clear Patches",view.clearSeedless);clear.setFont(FontManager.getRunescapeFont());clear.setOpaque(false);
-            clear.setBorder(BorderFactory.createEmptyBorder(0,14,0,0));clear.setToolTipText("Visit occupied, actionable seedless patches for XP and clearing. Do not replant or visit empty patches.");clear.addActionListener(e->plugin.setClearSeedless(clear.isSelected()));addRow(clear);
+            clear.setBorder(BorderFactory.createEmptyBorder(0,14,0,0));clear.setToolTipText("Visit occupied, actionable seedless patches for XP and clearing. Do not replant or visit empty patches. This preference is saved for your character.");clear.addActionListener(e->plugin.setClearSeedless(clear.isSelected()));addRow(clear);
         }
         JComboBox<RunPolicy> care=new JComboBox<>(RunPolicy.values());care.setSelectedItem(plugin.runPolicy());care.setToolTipText("Compost and crop protection for this run type");care.addActionListener(e->plugin.setRunPolicy((RunPolicy)care.getSelectedItem(),null));addRow(care);
         if(plugin.runHasTrees())
@@ -326,6 +326,12 @@ final class FarmingHelperPanel extends PluginPanel
         requirements("Item requirements:",view.items,false);
         requirements("Recommended items:",view.items,true);
         if(!view.supplyNote.isEmpty())line(view.supplyNote,false);
+        if(view.hideSeedless)
+        {
+            JButton resetStock=new JButton("Reset observed stock");
+            resetStock.setToolTipText("Forget saved bank and Seed Vault observations only. No game items are changed. Reopen both storage interfaces before relying on the seedless filter.");
+            resetStock.addActionListener(e->{int choice=JOptionPane.showConfirmDialog(this,"Forget cached bank and Seed Vault quantities? Reopen both before relying on the seedless filter. Your actual items are unchanged.","Reset observed stock",JOptionPane.OK_CANCEL_OPTION);if(choice==JOptionPane.OK_OPTION)plugin.resetObservedStock();});addRow(resetStock);
+        }
         if(!view.preparation.isEmpty())
         {
             heading("Preparation / resupply");line(view.preparation,true);

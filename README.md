@@ -1,4 +1,4 @@
-# Farming Helper v0.25-beta.1
+# Farming Helper v0.26-beta.1
 
 ### v0.24 candidate
 

@@ -36,5 +36,12 @@ final class TreePreparation
         }
         return result;
     }
+    /** Explain the physical raw stock used by the virtual sapling allocation. */
+    static String evidence(Map<Integer,Integer> preparation,Map<Integer,Integer> carried,Map<Integer,Integer> bank,Map<Integer,Integer> vault,IntFunction<String> name,boolean bankObserved,boolean vaultObserved)
+    {
+        StringJoiner out=new StringJoiner("\n");
+        new TreeMap<>(preparation).forEach((id,n)->out.add(name.apply(id)+" ×"+n+" needed; carried "+carried.getOrDefault(id,0)+", bank "+bank.getOrDefault(id,0)+(bankObserved?" (observed)":" (cached/unknown)")+", vault "+vault.getOrDefault(id,0)+(vaultObserved?" (observed)":" (cached/unknown)")+"."));
+        return out.toString();
+    }
     private TreePreparation(){}
 }
