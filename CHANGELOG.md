@@ -1,3 +1,10 @@
+## v0.33-beta.1 — Structured farming bank and expanded travel catalogue
+
+- Native eight-column positional layout: Graceful/Farmer mannequins, cape/diving/diary blocks, jewellery families sorted by charge, rune matrix alongside staves and tomes, tablets, tools, compost, protection payments and crop-specific seed groups.
+- Preserve native visual withdrawal placeholders during each bank visit; physical stock remains exact and separate. New deposits append without moving existing slots; reopening or birdhouse stage changes rebuild the shelf. No persistent bank changes.
+- Expanded selected transport data from Shortest Path to include diary equipment, Max/Hunter/Fishing/Quest capes, ring of the elements, regional alternatives and additional useful tablets/scrolls. Exact tier/charge/unlock requirements remain authoritative; unknown gates fail closed.
+- Existing farming logic and stage-specific supply selection retained. Added positional and withdrawal regression tests.
+
 ## v0.32.1-beta.1 — Fossil Island final leg
 
 - Manual and Specialty runs keep all selected Fossil Island work after mainland/other locations. Hardwoods precede seaweed; birdhouses are last in their own resupply stage when mixed with farming.

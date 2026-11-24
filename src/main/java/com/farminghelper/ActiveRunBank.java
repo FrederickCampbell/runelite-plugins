@@ -9,6 +9,7 @@ import net.runelite.api.ItemContainer;
 import net.runelite.api.InventoryID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.plugins.bank.BankSearch;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.banktags.BankTagsPlugin;
 import net.runelite.client.plugins.banktags.BankTagsService;
@@ -24,6 +25,7 @@ final class ActiveRunBank
     private final PluginManager plugins;
     private TagManager tags;
     private LayoutManager layouts;
+    private BankSearch search;
     private final ItemManager items;
     private Set<Integer> ids=Collections.emptySet();
     private int[] lastLayout=new int[0];
@@ -37,7 +39,7 @@ final class ActiveRunBank
             // TagManager is deliberately bound inside the native plugin injector.
             // Reuse that exact instance without requiring Bank Tags as a dependency.
             TagManager actual=p.getInjector().getInstance(TagManager.class);
-            if(tags!=actual){if(registered&&tags!=null)tags.unregisterTag(TAG);registered=false;tags=actual;layouts=p.getInjector().getInstance(LayoutManager.class);}
+            if(tags!=actual){if(registered&&tags!=null)tags.unregisterTag(TAG);registered=false;tags=actual;layouts=p.getInjector().getInstance(LayoutManager.class);search=p.getInjector().getInstance(BankSearch.class);}
             return (BankTagsPlugin)p;
         }
         return null;
@@ -57,7 +59,7 @@ final class ActiveRunBank
     {
         Set<Integer> result=new HashSet<>();
         ItemContainer bank=client.getItemContainer(InventoryID.BANK);
-        if(bank!=null)for(Item item:bank.getItems())if(item!=null&&item.getQuantity()>0&&items.getItemComposition(item.getId())!=null&&items.getItemComposition(item.getId()).getPlaceholderTemplateId()==-1)result.add(item.getId());
+        if(bank!=null)for(Item item:bank.getItems())if(item!=null&&item.getId()>0&&item.getQuantity()>0){ItemComposition def=items.getItemComposition(item.getId());if(def!=null&&def.getPlaceholderTemplateId()==-1)result.add(item.getId());}
         return Set.copyOf(result);
     }
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
@@ -80,7 +82,8 @@ final class ActiveRunBank
         if(offered&&!TAG.equals(api.getActiveTag()))return; // Respect manual browsing.
         int[] layout=BankShelfLayout.reconcile(lastLayout,ids,physical,this::name,this::slot,CuratedBank::transportCategory);
         if(!offered&&!ids.isEmpty()){offered=true;open(api,layout);}
-        else if(offered&&(stageChanged||changed||!Arrays.equals(layout,lastLayout)))open(api,layout);
+        else if(offered&&(stageChanged||!Arrays.equals(layout,lastLayout)))open(api,layout);
+        else if(offered&&changed&&search!=null)search.layoutBank();
     }
     void show(Set<Integer> next,boolean bird)
     {

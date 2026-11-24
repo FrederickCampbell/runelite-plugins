@@ -22,6 +22,11 @@ public class CuratedBankTest
         assertTrue(CuratedBank.teleportRows(11113,id->"Skills necklace").isEmpty());
         assertTrue(CuratedBank.teleportRows(1704,id->"Amulet of glory").isEmpty());
     }
+    @Test public void diaryAndCapeCatalogue()
+    {
+        for(int id:new int[]{13122,13124,13140,13115,13280,13342,9948,19476})assertFalse("Missing exact teleport ID "+id,CuratedBank.teleportRows(id,x->"").isEmpty());
+        assertTrue(CuratedBank.equipment("Reagent pouch",false));
+    }
     @Test public void restrictionsAndModes()
     {
         assertEquals(Set.of(4251,13393),CuratedBank.blocked("4251, 13393@42, 11105:5"));

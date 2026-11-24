@@ -54,8 +54,13 @@ final class BankShelfLayout
     private static void familyRows(List<Integer> out,List<Integer> items,IntFunction<String> names)
     {
         Map<String,List<Integer>> families=new TreeMap<>();for(int id:items)families.computeIfAbsent(family(name(names,id)),k->new ArrayList<>()).add(id);
+        List<Integer> singletons=new ArrayList<>();
         for(List<Integer> group:families.values())
-        {group.sort(Comparator.comparingInt((Integer id)->charge(name(names,id))).reversed().thenComparingInt(Integer::intValue));block(out,group);}
+        {
+            group.sort(Comparator.comparingInt((Integer id)->charge(name(names,id))).reversed().thenComparingInt(Integer::intValue));
+            if(group.size()==1&&charge(name(names,group.get(0)))==0)singletons.add(group.get(0));else block(out,group);
+        }
+        block(out,singletons);
     }
     static int[] build(Set<Integer> owned,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport)
     {
@@ -83,6 +88,7 @@ final class BankShelfLayout
             if(Arrays.stream(cells).anyMatch(id->id>=0)){for(int id:cells)out.add(id);}
         }
         block(out,overflow);
+        if(!out.isEmpty()&&!left.isEmpty()){pad(out);for(int i=0;i<WIDTH;i++)out.add(-1);}
         block(out,take(left,id->cape(name(names,id)),byName));
         block(out,take(left,id->dive(name(names,id)),Comparator.comparingInt((Integer id)->slot(name(names,id),equipment.applyAsInt(id))).thenComparing(byName)));
         block(out,take(left,id->diary(name(names,id)),byName));
@@ -96,7 +102,9 @@ final class BankShelfLayout
         List<Integer> spell=take(left,id->spellGear(name(names,id)),Comparator.comparingInt((Integer id)->name(names,id).contains("rune pouch")?0:name(names,id).startsWith("tome of")?2:1).thenComparing(byName));
         if(!runes.isEmpty()||!spell.isEmpty())
         {
-            pad(out);int rows=Math.max(runes.isEmpty()?0:(RUNES.length+3)/4,(spell.size()+3)/4);
+            if(!out.isEmpty()){pad(out);for(int i=0;i<WIDTH;i++)out.add(-1);}
+            pad(out);int highest=runes.stream().mapToInt(id->Arrays.asList(RUNES).indexOf(name(names,id).replaceFirst(" rune$",""))).max().orElse(-1);
+            int rows=Math.max((highest+4)/4,(spell.size()+3)/4);
             int[] cells=new int[rows*WIDTH];Arrays.fill(cells,-1);
             List<Integer> spare=new ArrayList<>();
             for(int id:runes){int i=Arrays.asList(RUNES).indexOf(name(names,id).replaceFirst(" rune$",""));if(i<0||cells[i/4*WIDTH+i%4]>=0)spare.add(id);else cells[i/4*WIDTH+i%4]=id;}
