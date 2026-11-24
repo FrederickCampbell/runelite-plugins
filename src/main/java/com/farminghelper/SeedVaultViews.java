@@ -298,11 +298,14 @@ final class SeedVaultViews
             if(section==null)continue; // native top section is never changed
             int i=icon.getIndex();
             if(icon.getItemId()<=0||i<0||i>=labels.length||!pair(icon,labels[i])||!absolute(icon)||!absolute(labels[i])){section.safe=false;continue;}
-            String actual=items.getItemComposition(icon.getItemId()).getName();
+            net.runelite.api.ItemComposition definition=items.getItemComposition(icon.getItemId());
+            if(definition==null){section.safe=false;continue;}
+            String actual=definition.getName();
             if(!clean(actual).equalsIgnoreCase(clean(labels[i].getText()))){section.safe=false;continue;}
             Pair p=new Pair(icon,labels[i],VaultRanking.resolve(icon.getItemId(),actual));
             matched.add(p.label);section.pairs.add(p);
-            entries.add(new VaultRanking.Entry(p.id,icon.getItemQuantity(),p.crop));
+            int quantity=PhysicalStock.available(p.id,icon.getItemQuantity(),id->definition)?icon.getItemQuantity():0;
+            entries.add(new VaultRanking.Entry(p.id,quantity,p.crop));
         }
         for(Widget label:labels)if(label!=null&&!label.isSelfHidden()&&!matched.contains(label))
         {Section section=sectionAt(sections,label.getOriginalY());if(section!=null)section.safe=false;}

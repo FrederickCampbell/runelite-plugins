@@ -32,7 +32,7 @@ public class VaultLayoutLifecycleTest
         when(w.getCanvasLocation()).thenReturn(new Point(0,0));return w;
     }
     private static void item(ItemManager manager,int id,String name)
-    {ItemComposition c=mock(ItemComposition.class);when(manager.getItemComposition(id)).thenReturn(c);when(c.getName()).thenReturn(name);}
+    {ItemComposition c=mock(ItemComposition.class);when(manager.getItemComposition(id)).thenReturn(c);when(c.getName()).thenReturn(name);when(c.getPlaceholderTemplateId()).thenReturn(-1);}
     @Test public void nativeItemAndLabelMoveTogetherThenRestoreBeforeBuild()
     {
         Client c=mock(Client.class);ItemManager im=mock(ItemManager.class);FarmingHelperPlugin plugin=mock(FarmingHelperPlugin.class);

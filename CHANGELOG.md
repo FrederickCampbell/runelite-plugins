@@ -1,3 +1,10 @@
+## v0.26.1-beta.1 — Exclude placeholder stock
+
+- Reject bank and vault placeholder item definitions before counting physical stock, even if the quantity is positive and the name matches a seed.
+- Sanitize and persist existing cached snapshots on load; preserve genuine items.
+- Exclude placeholders from custom vault ranking and raw-seed name resolution.
+- Add regression coverage for same-name calquat placeholders and cached phantom stock.
+
 ## v0.26-beta.1 — Stock evidence and saved clearing preference
 
 - Clear Patches defaults on for a new character preference, remembers explicit opt-out across runs and sessions, and is not reset when Hide Seedless Patches is toggled.

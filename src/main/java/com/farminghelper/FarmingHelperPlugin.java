@@ -249,7 +249,7 @@ public class FarmingHelperPlugin extends Plugin
         });
     }
     private String observedItemName(int id)
-    {if(itemManager==null)return "";return itemNamesCache.computeIfAbsent(id,i->{var item=itemManager.getItemComposition(i);return item==null||item.getNote()!=-1?"":item.getName();});}
+    {if(itemManager==null)return "";return itemNamesCache.computeIfAbsent(id,i->{var item=itemManager.getItemComposition(i);return item==null||item.getNote()!=-1||item.getPlaceholderTemplateId()!=-1?"":item.getName();});}
     boolean hideSeedless(){return hideSeedless;}
     boolean clearSeedless(){return clearSeedless;}
     Set<Integer> activeStepItems(){return guideRequested&&!preparing?stepItems:Collections.emptySet();}
@@ -430,7 +430,20 @@ public class FarmingHelperPlugin extends Plugin
         {
             bank.putAll(StockSnapshot.decode(setting("observedBankV1","")));
             vault.putAll(StockSnapshot.decode(setting("observedVaultV1","")));
+            // Migrate older cached observations without discarding genuine stock.
+            if(itemManager!=null)
+            {
+                sanitizeSnapshot(bank,"observedBankV1");
+                sanitizeSnapshot(vault,"observedVaultV1");
+            }
         }
+    }
+
+    private void sanitizeSnapshot(Map<Integer,Integer> snapshot,String key)
+    {
+        int before=snapshot.size();
+        PhysicalStock.sanitize(snapshot,itemManager::getItemComposition);
+        if(before!=snapshot.size())save(key,StockSnapshot.encode(snapshot));
     }
 
     private void sampleStorage()
@@ -458,11 +471,11 @@ public class FarmingHelperPlugin extends Plugin
         }
     }
 
-    private static void addItems(Map<Integer,Integer> stock, ItemContainer container)
+    private void addItems(Map<Integer,Integer> stock, ItemContainer container)
     {
-        if (container == null) return;
+        if (container == null || itemManager==null) return;
         for (Item item : container.getItems())
-            if (item.getId() > 0 && item.getQuantity() > 0)
+            if (item!=null && PhysicalStock.available(item.getId(),item.getQuantity(),itemManager::getItemComposition))
                 stock.merge(item.getId(), item.getQuantity(), Integer::sum);
     }
 
