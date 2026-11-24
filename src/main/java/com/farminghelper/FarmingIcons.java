@@ -6,7 +6,7 @@ import javax.swing.*;
 /** Small antialiased line icons, drawn at logical Swing coordinates for HiDPI. */
 final class FarmingIcons
 {
-    enum Kind{BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK,LEAF,LAYERS,PIN,LIST,STORAGE,TOOLS,SLIDERS}
+    enum Kind{PLAY,BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK,LEAF,LAYERS,PIN,LIST,STORAGE,TOOLS,SLIDERS}
     static Icon of(Kind kind,Color color)
     {
         return new Icon()
@@ -21,6 +21,7 @@ final class FarmingIcons
                 p.setStroke(new BasicStroke(1.6f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
                 switch(kind)
                 {
+                    case PLAY:p.fillPolygon(new int[]{5,13,5},new int[]{3,8,13},3);break;
                     case BACK:p.drawLine(12,8,3,8);p.drawLine(3,8,7,4);p.drawLine(3,8,7,12);break;
                     case END:p.drawLine(4,4,12,12);p.drawLine(4,12,12,4);break;
                     case EXPAND:p.drawLine(6,4,10,8);p.drawLine(10,8,6,12);break;

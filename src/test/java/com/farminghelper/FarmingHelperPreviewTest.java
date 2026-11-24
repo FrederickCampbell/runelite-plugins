@@ -53,6 +53,21 @@ public class FarmingHelperPreviewTest
         });
         Path output=Paths.get("build/reports/farming-helper-home-preview.png");Files.createDirectories(output.getParent());assertTrue(ImageIO.write(image,"png",output.toFile()));
     }
+    @Test public void primaryRunControlsHavePlayIconAndStayProminent()throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            com.formdev.flatlaf.FlatDarkLaf.setup();
+            int[] clicks={0};
+            JButton start=FarmingHelperPanel.runButton("Start Run",()->clicks[0]++);
+            JButton resume=FarmingHelperPanel.runButton("Continue Run",()->clicks[0]++);
+            assertEquals(FarmingTheme.RUN_PRIMARY,start.getBackground());
+            assertEquals(FarmingTheme.RUN_PRIMARY_TEXT,resume.getForeground());
+            assertNotNull(start.getIcon());assertNotNull(resume.getIcon());
+            assertTrue(start.getFont().isBold());
+            start.doClick(0);resume.doClick(0);assertEquals(2,clicks[0]);
+            start.setEnabled(false);start.doClick(0);assertEquals(2,clicks[0]);
+        });
+    }
     private static JButton findButton(Container root,String tooltip)
     {
         for(Component child:root.getComponents())

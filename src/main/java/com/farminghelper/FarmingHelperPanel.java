@@ -136,6 +136,16 @@ final class FarmingHelperPanel extends PluginPanel
         addRow(button);
     }
 
+    static JButton runButton(String text,Runnable action)
+    {
+        JButton button=new JButton(text,FarmingIcons.of(PLAY,FarmingTheme.RUN_PRIMARY_TEXT));
+        button.putClientProperty("farming.primaryRun",Boolean.TRUE);
+        button.setHorizontalAlignment(SwingConstants.CENTER);button.setIconTextGap(7);
+        button.setToolTipText(text);button.getAccessibleContext().setAccessibleName(text);
+        button.addActionListener(e->action.run());FarmingTheme.apply(button);
+        return button;
+    }
+
     private void finish() { rows.revalidate(); rows.repaint(); toolbar.revalidate();toolbar.repaint();footer.revalidate();footer.repaint(); }
 
     private void header(String title,Runnable back,Runnable gear,boolean end)
@@ -302,7 +312,7 @@ final class FarmingHelperPanel extends PluginPanel
         long count=plugin.patches().stream().filter(this::selectable).filter(p->manual.contains(p.key())).count();
         JPanel bottom=new JPanel(new BorderLayout(2,4));bottom.setOpaque(false);bottom.setBorder(BorderFactory.createEmptyBorder(5,6,6,6));
         JLabel selected=new JLabel(count+" patches selected",SwingConstants.CENTER);selected.setForeground(FarmingTheme.MUTED);bottom.add(selected,BorderLayout.NORTH);
-        JButton go=new JButton("Start Manual Run");go.setEnabled(count>0);go.addActionListener(e->start(()->{Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&manual.contains(p.key()))keys.add(p.key());plugin.startManual(keys);}));
+        JButton go=runButton("Start Manual Run",()->start(()->{Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&manual.contains(p.key()))keys.add(p.key());plugin.startManual(keys);}));go.setEnabled(count>0);
         bottom.add(go);FarmingTheme.apply(bottom);footer.add(bottom);finish();SwingUtilities.invokeLater(()->{if(navigation.page()==MANUAL)scroll.getVerticalScrollBar().setValue(y);});
     }
 
@@ -432,7 +442,7 @@ final class FarmingHelperPanel extends PluginPanel
         if(isPreparing)
         {
             heading("Preparation / resupply");line(view.preparation,true);
-            button("Continue run",plugin::continueRun);
+            addRow(runButton(view.preparation.startsWith("Gather the listed supplies")?"Start Run":"Continue Run",plugin::continueRun));
         }
         else if(view.active!=null)
         {

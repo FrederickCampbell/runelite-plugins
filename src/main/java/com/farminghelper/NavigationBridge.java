@@ -10,8 +10,7 @@ import net.runelite.client.events.PluginMessage;
 final class NavigationBridge
 {
     private final Consumer<PluginMessage> send;
-    private WorldPoint requested, displayed, start, fallbackBank;
-    private Map<Integer,Integer> bankRequirements=Map.of();
+    private WorldPoint requested, displayed, start;
     private Object shownTarget;
     private boolean enabled, owned, probe, refreshPending, modern;
     private int ticks, sequence;
@@ -32,28 +31,23 @@ final class NavigationBridge
         if(clear)releaseDisplayed();
         else {clearId=null;clearTarget=null;}
         requested=null;displayed=null;start=null;owned=false;probe=false;refreshPending=false;
-        fallbackBank=null;bankRequirements=Map.of();shownTarget=null;
+        shownTarget=null;
         queryId=null;targetId=null;status="";ticks=0;hints=Collections.emptyList();
     }
     void request(WorldPoint from,WorldPoint to,boolean verify)
-    {request(from,to,verify,null,Map.of());}
-    void requestBank(WorldPoint from,WorldPoint patch,WorldPoint fallback,Map<Integer,Integer> requirements)
-    {request(from,patch,true,fallback,Map.copyOf(requirements));}
-    private void request(WorldPoint from,WorldPoint to,boolean verify,WorldPoint fallback,Map<Integer,Integer> requirements)
     {
         if(!enabled)return;
-        if(Objects.equals(requested,to)&&probe==verify&&Objects.equals(fallbackBank,fallback)&&bankRequirements.equals(requirements))return;
+        if(Objects.equals(requested,to)&&probe==verify)return;
         releaseDisplayed();
         requested=from==null?null:to;displayed=null;owned=false;start=from;probe=verify;ticks=0;status="";
-        fallbackBank=fallback;bankRequirements=requirements;shownTarget=null;
+        shownTarget=null;
         queryId=null;targetId=null;refreshPending=false;hints=Collections.emptyList();
         if(to==null || from==null)return;
         if(verify)
         {
             queryId="farming-helper-query-"+(++sequence);
             status="Checking route…";
-            Object target=bankRequirements.isEmpty()?to:Map.of("point",to,"requirements",requirementGroups(bankRequirements));
-            post("query",Map.of("id",queryId,"start",from,"target",target));
+            post("query",Map.of("id",queryId,"start",from,"target",to));
             targetId="farming-helper-probe-"+(++sequence);
             post("getTarget",Map.of("id",targetId));
         }
@@ -78,34 +72,13 @@ final class NavigationBridge
         displayed=point;shownTarget=target;owned=true;status="";
         post("path",Map.of("start",start,"target",target));
     }
-    static List<Map<Integer,Integer>> requirementGroups(Map<Integer,Integer> requirements)
-    {
-        List<Map<Integer,Integer>> result=new ArrayList<>();
-        requirements.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e->result.add(Map.of(e.getKey(),e.getValue())));
-        return result;
-    }
-    private void bankFallback()
-    {
-        hints=Collections.emptyList();
-        display(fallbackBank);
-        status="Use the suggested bank or any accessible bank, then continue.";
-    }
-    // CurrentTarget encodes requirements as a list of any-of maps, even when
-    // the original request used a single map. Compare point and requirements.
+    // Only one destination is owned; never clear a different or multi-target route.
     static boolean matchesTarget(Object expected,Object actual)
     {
         if(actual instanceof Collection)
         {
             Collection<?> targets=(Collection<?>)actual;
             return targets.size()==1&&matchesTarget(expected,targets.iterator().next());
-        }
-        if(expected instanceof Map&&actual instanceof Map)
-        {
-            Map<?,?> e=(Map<?,?>)expected,a=(Map<?,?>)actual;
-            Object requirements=e.get("requirements"),returned=a.get("requirements");
-            return Objects.equals(e.get("point"),a.get("point"))&&
-                (Objects.equals(requirements,returned)||requirements instanceof Collection&&returned instanceof Collection&&
-                    new HashSet<>((Collection<?>)requirements).equals(new HashSet<>((Collection<?>)returned)));
         }
         return Objects.equals(expected,actual);
     }
@@ -118,8 +91,7 @@ final class NavigationBridge
         {
             // No response: installed version may predate query. One legacy request only.
             queryId=null;
-            if(fallbackBank!=null)bankFallback();
-            else if(modern)status="Route check did not finish. Follow the guide’s transport instruction.";
+            if(modern)status="Route check did not finish. Follow the guide’s transport instruction.";
             else display(requested);
             return;
         }
@@ -149,16 +121,6 @@ final class NavigationBridge
         {
             modern=true;queryId=null;targetId=null;
             hints=TransportHint.read(data.get("transports"));
-            if(fallbackBank!=null)
-            {
-                if(Boolean.TRUE.equals(data.get("reached"))&&"BANK".equals(data.get("targetStatus"))&&Boolean.TRUE.equals(data.get("bankVisited")))
-                {
-                    display(requested,Map.of("point",requested,"requirements",requirementGroups(bankRequirements)));
-                    status="Follow the bank detour, then continue when ready.";
-                }
-                else bankFallback();
-                return;
-            }
             if(Boolean.TRUE.equals(data.get("reached"))){display(requested);return;}
             // A small reachable approach is preferable to a blocked object tile.
             Object near=data.get("closest");

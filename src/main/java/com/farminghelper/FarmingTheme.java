@@ -12,7 +12,7 @@ final class FarmingTheme
     static final Color BACKGROUND=new Color(0x202020), CARD=new Color(0x292929), INPUT=new Color(0x353535),
         HOVER=new Color(0x414141), BORDER=new Color(0x484848), TEXT=new Color(0xE8E8E8),
         MUTED=new Color(0xA6A6A6), ACCENT=new Color(0xF0A04B), SUCCESS=new Color(0x9AC784),
-        RUN_CARD=new Color(0x293328), NAV=new Color(0x252525), ACTIVE=new Color(0x303E2C), WARNING=new Color(0xE9C46A), DANGER=new Color(0xE57373);
+        RUN_PRIMARY=new Color(0x82D66A), RUN_PRIMARY_TEXT=new Color(0x182416), RUN_CARD=new Color(0x293328), NAV=new Color(0x252525), ACTIVE=new Color(0x303E2C), WARNING=new Color(0xE9C46A), DANGER=new Color(0xE57373);
     private static final boolean VERDANA=Arrays.stream(GraphicsEnvironment.getLocalGraphicsEnvironment()
         .getAvailableFontFamilyNames()).anyMatch("Verdana"::equalsIgnoreCase);
     private FarmingTheme(){}
@@ -43,7 +43,13 @@ final class FarmingTheme
                     }
                     else
                     {
-                        if(b.getClientProperty("farming.navigation")!=null)
+                        if(b.getClientProperty("farming.primaryRun")!=null)
+                        {
+                            b.setBackground(RUN_PRIMARY);b.setForeground(RUN_PRIMARY_TEXT);
+                            b.setFont(font(Font.BOLD,13));b.setMargin(new Insets(10,10,10,10));
+                            style(b,"arc: 8; borderWidth: 0; focusWidth: 1; hoverBackground: #9BE482; pressedBackground: #65BA51; disabledBackground: #3B4937; disabledText: #A6A6A6");
+                        }
+                        else if(b.getClientProperty("farming.navigation")!=null)
                         {style(b,"arc: 8; borderWidth: 0; focusWidth: 1; hoverBackground: #3B4637; pressedBackground: #303E2C");b.setMargin(new Insets(7,7,7,7));}
                         else if(b.getClientProperty("farming.icon")==null)
                         {if(b.getClientProperty("farming.preserveBackground")==null)b.setBackground(INPUT);style(b,"arc: 8; borderWidth: 1; focusWidth: 1; hoverBackground: #414141; pressedBackground: #303E2C");b.setMargin(new Insets(5,7,5,7));}

@@ -1,3 +1,9 @@
+## v0.39-beta.3 — Player-controlled runs
+
+- Remove automatic mid-run banking diversions, including the newly introduced Shortest Path item-aware bank detour, ordinary crop shortage prompts, automatic birdhouse banking and Entrana gear-triggered banking. Retain advisory supply/gear notes, initial preparation and explicit Resupply.
+- Keep initial preparation open until Start Run is clicked; a manually requested resupply uses Continue Run. Both controls and Start Manual Run share a prominent green play-style button.
+- Retain the remaining v0.39 Seed Vault, bank layout, coordinate and transport changes. Regression tests cover destination-only route requests and primary controls.
+
 ## v0.39-beta.2 — Compilation correction
 
 - Capture the shared location context before its first use in the guide update; use normalized coordinates consistently in local watering and disease checks. No new features.
