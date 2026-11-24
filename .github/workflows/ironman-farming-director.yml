@@ -1,7 +1,7 @@
 name: Farming Helper build and regression tests
 on:
   push:
-    branches: [farming-helper-v0.23]
+    branches: ['farming-helper-v*']
   pull_request:
     branches: [master]
   workflow_dispatch:

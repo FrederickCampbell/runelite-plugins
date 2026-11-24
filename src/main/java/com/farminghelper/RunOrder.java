@@ -52,7 +52,8 @@ final class RunOrder
         {
             // Complete surface work first, then enter a cave/underwater area once.
             List<FarmRunPatch> ordered=new ArrayList<>(entry.getValue());
-            ordered.sort(Comparator.comparingInt(p->interior(p)?2:p.getPatchType()==PatchType.COMPOST_BIN?1:0));
+            ordered.sort(Comparator.comparingInt(p->interior(p)?3:p.getPatchType()==PatchType.COMPOST_BIN?2:
+                "Gnome Stronghold".equals(entry.getKey())&&p.getPatchType()==PatchType.FRUIT_TREE?0:1));
             result.add(new Group(entry.getKey(),ordered));
         }
         return result;

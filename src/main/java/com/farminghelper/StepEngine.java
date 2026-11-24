@@ -74,7 +74,7 @@ final class StepEngine
             case STUMP:
                 return Action.DIG_STUMP;
             case UNCHECKED:
-                return isTreeType(type) || type == PatchType.CACTUS ? Action.CHECK_HEALTH : Action.HARVEST;
+                return isTreeType(type) || type == PatchType.CACTUS || type == PatchType.BUSH ? Action.CHECK_HEALTH : Action.HARVEST;
             case HARVESTABLE:
                 if (type == PatchType.SPIRIT_TREE || type == PatchType.REDWOOD) return Action.COMPLETE;
                 if (type == PatchType.CELASTRUS || type == PatchType.CRYSTAL_TREE) return Action.HARVEST;
@@ -134,6 +134,7 @@ final class StepEngine
                 if (type == PatchType.SPIRIT_TREE) return "Check health and leave the spirit tree planted for travel.";
                 if (type == PatchType.REDWOOD) return "Check health and leave the redwood planted.";
                 if (type == PatchType.CACTUS) return "Check health and pick the cactus produce.";
+                if (type == PatchType.BUSH) return "Check health, harvest the berries and leave the bush planted.";
                 if (type == PatchType.CELASTRUS) return crop == null
                     ? "Check health, then harvest the bark and leave the tree planted."
                     : "Check health, then harvest the bark before removing the tree.";

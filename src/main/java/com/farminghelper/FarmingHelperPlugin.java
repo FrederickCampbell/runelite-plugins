@@ -536,7 +536,13 @@ public class FarmingHelperPlugin extends Plugin
                 // Only the active newly planted crop may remain for optional gardener payment.
                 if(progress.planted() && o.state==CropState.GROWING && wants && hasPayment)
                 { ready.add(p);visible.add(p);continue; }
-                if(!actionable(type,o.state)) { completed.add(p);visible.add(p);continue; }
+                if(!actionable(type,o.state))
+                {
+                    // A remote prediction or already-growing crop is not evidence
+                    // of completion. If we have not witnessed planting, simply
+                    // defer this stop until a later actionable observation.
+                    continue;
+                }
             }
             if(!actionable(type,o.state)) continue;
             if(type==PatchType.SPIRIT_TREE && !StepEngine.keepExisting(type,o.state) && spiritSlots<=0) continue;

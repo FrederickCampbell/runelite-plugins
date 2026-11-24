@@ -343,12 +343,7 @@ public final class QuestFarmingStateReader
         if (implementation == PatchImplementation.CORAL && (value==8 || value==19 || value==30)) return CropState.HARVESTABLE;
         if (implementation == PatchImplementation.ANIMA &&
             (value == 16 || value == 25 || value == 34)) return CropState.DEAD;
-        if (implementation == PatchImplementation.SPIRIT_TREE && value == 44 ||
-            implementation == PatchImplementation.REDWOOD && value == 37 ||
-            implementation == PatchImplementation.CELASTRUS && value == 13 ||
-            implementation == PatchImplementation.CRYSTAL_TREE && value == 14 ||
-            implementation == PatchImplementation.CACTUS && (value == 31 || value == 58))
-            return CropState.UNCHECKED;
+        if (awaitingHealthCheck(implementation,value)) return CropState.UNCHECKED;
         // Mature redwoods and harvested celastrus are distinct from harvestable fruit.
         // Leave permanent woodcutting trees in place; celastrus can be removed after bark harvest.
         if (implementation == PatchImplementation.REDWOOD && raw.getCropState() == CropState.HARVESTABLE)
@@ -359,6 +354,27 @@ public final class QuestFarmingStateReader
             && raw.getCropState() == CropState.HARVESTABLE && raw.getStage() == 0)
             return CropState.GROWING; // No produce left; regrowth is not a new planting.
         return raw.getCropState();
+    }
+
+    /** Explicit Check-health action values documented in the vendored decoder.
+     * Do not infer this from the final growth stage: several ordinary growing
+     * values share the stage index, but do not have the health-check action. */
+    static boolean awaitingHealthCheck(PatchImplementation implementation,int value)
+    {
+        switch(implementation)
+        {
+            case FRUIT_TREE: return value==34||value==61||value==98||value==125||value==162||value==189||value==226||value==253;
+            case TREE: return value==12||value==21||value==32||value==45||value==60;
+            case HARDWOOD_TREE: return value==15||value==38||value==63||value==88||value==114;
+            case BUSH: return value>=250&&value<=255;
+            case CALQUAT: return value==34;
+            case SPIRIT_TREE: return value==44;
+            case REDWOOD: return value==37;
+            case CELASTRUS: return value==13;
+            case CRYSTAL_TREE: return value==14;
+            case CACTUS: return value==31||value==58;
+            default:return false;
+        }
     }
 
     /** The RuneLite tracker stores: varbit-value:unix-seconds. */
@@ -403,16 +419,21 @@ public final class QuestFarmingStateReader
             return null;
         }
         String expected = normalize(location);
+        FarmingPatch match=null;
         for (FarmingPatch patch : patches)
         {
             if (normalize(patch.getRegion().getName()).equals(expected)
                 && (implementation == null || patch.getImplementation() == implementation)
                 && (patchName == null || patch.getName().equalsIgnoreCase(patchName)))
             {
-                return patch;
+                // Explicit physical identities must be unique. Location-only
+                // legacy/region queries may still return the first representative.
+                if(patchName==null||implementation==null)return patch;
+                if(match!=null)return null;
+                match=patch;
             }
         }
-        return null;
+        return match;
     }
 
     /** Canonical Quest Helper patch names for multi-patch locations. */

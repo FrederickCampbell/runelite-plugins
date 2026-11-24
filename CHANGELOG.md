@@ -1,3 +1,12 @@
+## v0.24-beta.1 — Health-check state and completion audit
+
+- Normalize all 31 documented Check-health states across fruit trees, trees, hardwoods, bushes and specialty crops before route planning and cached prediction.
+- Require live empty-to-growing transition for replacement completion. Already-growing observations are not recorded as completed work.
+- Reject ambiguous typed physical patch identities; retain Kastori flower object verification.
+- Gnome Stronghold fruit tree before regular tree within its route group.
+- Regression coverage for raw values, patch isolation and complete replanting sequence.
+- CI workflow covers version branches.
+
 ## v0.23-beta.1 — Run preferences, dedicated vault view and templates
 
 - Character-local policies for individual/grouped/manual runs; optional protection, compost and removal.
