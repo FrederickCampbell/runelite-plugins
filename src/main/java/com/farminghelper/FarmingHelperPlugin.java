@@ -428,6 +428,7 @@ public class FarmingHelperPlugin extends Plugin
         if(runItems==null)return null;
         Set<Integer> ids=new HashSet<>(runItems);ids.addAll(requiredItems);ids.addAll(recommendedItems);
         boolean bird=specialtyStaged&&specialtyBirdPhase||run.size()==1&&run.contains(FarmRunType.BIRDHOUSE);
+        if(runBank==null||!runBank.bankOpen())return Set.copyOf(ids);
         return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird);
     }
     void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(bankRunItems());}});}
