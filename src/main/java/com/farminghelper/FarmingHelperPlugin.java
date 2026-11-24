@@ -59,6 +59,11 @@ public class FarmingHelperPlugin extends Plugin
     private final Set<FarmRunPatch> birdhouseTouched=new HashSet<>();
     private final Set<FarmRunPatch> wateredThisRun=new HashSet<>();
     private boolean activeCareOnly;
+    private final DiseaseInterrupt diseasePriority=new DiseaseInterrupt();
+    private volatile FarmRunPatch diseaseTarget;
+    private volatile RouteLeg diseaseLeg;
+    private volatile Set<Integer> diseaseItems=Collections.emptySet();
+    private GuideView normalView;
     private boolean specialtyStaged,specialtyBirdPhase,birdBankOffered;
     private final Map<Integer,String> itemNamesCache=new HashMap<>();
     private Crop activeCrop;
@@ -206,6 +211,7 @@ public class FarmingHelperPlugin extends Plugin
         runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
+        diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
         specialtyStaged=false;specialtyBirdPhase=false;birdBankOffered=false;
         skipped.clear();
         completed.clear();
@@ -257,7 +263,7 @@ public class FarmingHelperPlugin extends Plugin
     {if(itemManager==null)return "";return itemNamesCache.computeIfAbsent(id,i->{var item=itemManager.getItemComposition(i);return item==null||item.getNote()!=-1||item.getPlaceholderTemplateId()!=-1?"":item.getName();});}
     boolean hideSeedless(){return hideSeedless;}
     boolean clearSeedless(){return clearSeedless;}
-    Set<Integer> activeStepItems(){return guideRequested&&!preparing?stepItems:Collections.emptySet();}
+    Set<Integer> activeStepItems(){return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:!preparing?stepItems:Collections.emptySet();}
     void setClearSeedless(boolean value)
     {
         long id=session;thread.invokeLater(()->{
@@ -298,7 +304,11 @@ public class FarmingHelperPlugin extends Plugin
     void skip(FarmRunPatch displayed)
     {
         thread.invokeLater(() -> {
-            if (current != null && current == displayed) skipped.add(current);
+            if(diseaseTarget!=null)
+            {
+                if(displayed==diseaseTarget){diseasePriority.skip(displayed);diseaseTarget=null;lastView=null;}
+            }
+            else if (current != null && current == displayed) skipped.add(current);
             update();
         });
     }
@@ -318,7 +328,7 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onPluginMessage(PluginMessage event)
     {
         if(navigation!=null)navigation.message(event);
-        if(!guideRequested||orderProbeId==null||!"shortestpath".equals(event.getNamespace())||
+        if(diseaseTarget!=null||!guideRequested||orderProbeId==null||!"shortestpath".equals(event.getNamespace())||
             !"result".equals(event.getName())||event.getData()==null||!orderProbeId.equals(event.getData().get("id")))return;
         orderProbeId=null;orderFrozen=true;
         Object target=event.getData().get("target"),cost=event.getData().get("cost");
@@ -334,7 +344,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private void refineOrder()
     {
-        if(preparing||orderFrozen||orderProbeSent||!shortestPathAvailable||runOrder==null||runOrder.isEmpty()||current==null)return;
+        if(diseaseTarget!=null||preparing||orderFrozen||orderProbeSent||!shortestPathAvailable||runOrder==null||runOrder.isEmpty()||current==null)return;
         if(!runOrder.get(0).patches.contains(current)){orderFrozen=true;return;}
         if(++orderTicks<3 || navigation==null || !navigation.canProbeOrder())return;
         // Do not compete with the initial long-distance route. Probe while the
@@ -403,7 +413,7 @@ public class FarmingHelperPlugin extends Plugin
     Set<Integer> vaultRunItems()
     {
         if(!guideRequested||run.isEmpty())return null;
-        Set<Integer> ids=new HashSet<>(requiredItems);ids.addAll(recommendedItems);
+        Set<Integer> ids=new HashSet<>(requiredItems());ids.addAll(recommendedItems());
         return Set.copyOf(ids);
     }
 
@@ -532,6 +542,9 @@ public class FarmingHelperPlugin extends Plugin
         addItems(bag,client.getItemContainer(InventoryID.INVENTORY));
         Map<Integer,Integer> equipped=new HashMap<>();addItems(equipped,client.getItemContainer(InventoryID.EQUIPMENT));
         carried.putAll(bag);equipped.forEach((id,n)->carried.merge(id,n,Integer::sum));
+        // Run this before normal planning, even during banking or birdhouses. No
+        // mutations to the normal guide cursor, progress, or preparation state.
+        if(loggedIn&&showDiseaseInterrupt(title,bag,carried))return;
         Map<Integer,Integer> storage=new HashMap<>(bank);vault.forEach((id,n)->storage.merge(id,n,Integer::sum));
         Map<Integer,Integer> stock=new HashMap<>(bag);storage.forEach((id,n)->stock.merge(id,n,Integer::sum));
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
@@ -634,8 +647,8 @@ public class FarmingHelperPlugin extends Plugin
             for(List<FarmRunPatch> list:List.of(ready,plant,visible))
             {list.removeIf(p->!rank.containsKey(p));list.sort(Comparator.comparingInt(rank::get));}
         }
-        // Nearby verified disease is an urgent cure-only detour, even outside the preset.
-        // A selected, local dry crop can also be watered without a new planting allocation.
+        // A selected, local dry crop can be watered without a new planting allocation.
+        // Disease is handled independently before the ordinary planner.
         Set<FarmRunPatch> careOnly=new LinkedHashSet<>();
         if(loggedIn&&!preparing&&highlight!=null&&!(specialtyStaged&&specialtyBirdPhase))
         {
@@ -646,10 +659,9 @@ public class FarmingHelperPlugin extends Plugin
                 if(skipped.contains(p)||type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),here))continue;
                 QuestFarmingStateReader.Observation o=observations.get(p);
                 if(o==null)o=observe(p);
-                boolean disease=o!=null&&o.state==CropState.DISEASED&&CropCare.needsCure(o,highlight.hasVerifiedDisease(p));
                 boolean water=ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,wateringCan)&&highlight.hasLocalPatch(p);
                 if(p==current&&activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
-                if(!disease&&(!water||wateredThisRun.contains(p)))continue;
+                if(!water||wateredThisRun.contains(p))continue;
                 if(ready.contains(p)&&!(p==current&&activeCareOnly))continue;
                 observations.put(p,o);plant.remove(p);ready.remove(p);visible.remove(p);
                 careOnly.add(p);
@@ -657,7 +669,7 @@ public class FarmingHelperPlugin extends Plugin
             ready.addAll(0,careOnly);
             for(FarmRunPatch p:careOnly)if(!visible.contains(p))visible.add(0,p);
         }
-        // Never interrupt work already under way at a verified local patch.
+        // Ordinary watering does not interrupt work already underway.
         if(current!=null&&(careOnly.isEmpty()||observations.get(current)!=null&&observations.get(current).source==QuestFarmingStateReader.Source.LIVE)&&ready.remove(current))ready.add(0,current);
         if(current!=null && plant.remove(current)) plant.add(0,current);
         Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current)!=null &&
@@ -878,12 +890,62 @@ public class FarmingHelperPlugin extends Plugin
         if(preparing&&!routeNote.isEmpty())prepMessage+="\n"+routeNote;
         cacheIcons(items);
         GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST);
+        normalView=view;
+        publishView(view);
+    }
+
+    private void publishView(GuideView view)
+    {
         String signature=view.signature();
         if(!signature.equals(lastView))
         {
             lastView=signature;final long id=session;
             SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view); });
         }
+    }
+
+    private boolean showDiseaseInterrupt(String title,Map<Integer,Integer> bag,Map<Integer,Integer> carried)
+    {
+        if(highlight==null)return false;
+        WorldPoint here=client.getLocalPlayer().getWorldLocation();
+        Map<FarmRunPatch,QuestFarmingStateReader.Observation> verified=new LinkedHashMap<>();
+        Map<FarmRunPatch,WorldPoint> approaches=new HashMap<>();
+        for(FarmRunPatch p:patches)
+        {
+            PatchType type=p.getPatchType();
+            if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),here))continue;
+            QuestFarmingStateReader.Observation o=observe(p);
+            if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.DISEASED||!highlight.hasVerifiedDisease(p))continue;
+            verified.put(p,o);approaches.put(p,highlight.approach(p));
+        }
+        FarmRunPatch previous=diseaseTarget;
+        FarmRunPatch target=diseasePriority.select(verified.keySet(),p->{WorldPoint a=approaches.get(p);return a==null?Integer.MAX_VALUE:here.distanceTo(a);});
+        if(target==null)
+        {
+            if(previous!=null)lastView=null;
+            diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();return false;
+        }
+        if(previous!=target){orderProbeId=null;orderProbeSent=false;lastView=null;}
+        // Record the disease transition only when the interrupted patch itself is
+        // the diseased one, so its existing completion tracker can see recovery.
+        if(current==target)progress.observe(verified.get(target));
+        PatchType type=target.getPatchType();
+        int cure=CropCare.prunes(type)?(carried.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0?ItemID.FAIRY_ENCHANTED_SECATEURS:ItemID.SECATEURS):ItemID.PLANT_CURE;
+        diseaseItems=Set.of(cure);
+        WorldPoint approach=approaches.get(target);
+        diseaseLeg=RouteLeg.walk(approach,false);
+        diseaseTarget=target;
+        if(navigation!=null)navigation.request(here,approach,false);
+        String instruction=CropCare.prunes(type)?"Prune the diseased crop with secateurs.":"Use plant cure on the diseased crop.";
+        if(carried.getOrDefault(cure,0)==0)instruction+=CropCare.prunes(type)?" Obtain secateurs or skip this cure.":" Obtain plant cure from a nearby farmer or shop if available, or skip this cure.";
+        String resume=preparing?"Preparation / resupply":current==null?"The remaining run":current.getDisplayName();
+        List<GuideView.ItemRow> items=new ArrayList<>();items.add(itemRow(cure,1,carried,false));
+        List<GuideView.Stop> stops=new ArrayList<>();stops.add(new GuideView.Stop(target,instruction,false,false));
+        stops.set(0,new GuideView.Stop(target,instruction,true,false));
+        if(normalView!=null)for(GuideView.Stop stop:normalView.stops)if(stop.patch!=target)stops.add(new GuideView.Stop(stop.patch,stop.active?"Paused: "+stop.instruction:stop.instruction,false,stop.done));
+        cacheIcons(items);
+        publishView(new GuideView(title,"Disease priority",items,stops,target,"","Disease detected — current guide paused. Resume: "+resume+". Cure only; no harvest or replant.",hideSeedless,clearSeedless,false));
+        return true;
     }
 
     private boolean stackable(int id)
@@ -922,7 +984,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     void resupply()
     {
-        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||current==null)return;beginPreparation(false,false,"Resupply at a nearby bank. Continue when ready.");if(specialtyStaged&&specialtyBirdPhase)preparationBank=Preparation.FOSSIL_BANK;update();});
+        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||diseaseTarget!=null||current==null)return;beginPreparation(false,false,"Resupply at a nearby bank. Continue when ready.");if(specialtyStaged&&specialtyBirdPhase)preparationBank=Preparation.FOSSIL_BANK;update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
@@ -946,18 +1008,19 @@ public class FarmingHelperPlugin extends Plugin
 
     String override(FarmRunPatch p) { return setting("directorCrop_"+p.key(),""); }
     String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
-    StepEngine.Action activeAction() { return activeAction; }
-    boolean activeLive() { return activeLive && guideRequested && !preparing; }
+    StepEngine.Action activeAction() { return diseaseTarget!=null?StepEngine.Action.CURE:activeAction; }
+    boolean activeLive() { return guideRequested && (diseaseTarget!=null||activeLive&&!preparing); }
     int patchCount(FarmRunPatch p) { return reader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
-    Set<Integer> requiredItems() { return guideRequested ? requiredItems : Collections.emptySet(); }
-    Set<Integer> recommendedItems() { return guideRequested ? recommendedItems : Collections.emptySet(); }
+    Set<Integer> requiredItems() { return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:requiredItems; }
+    Set<Integer> recommendedItems() { return guideRequested&&diseaseTarget==null?recommendedItems:Collections.emptySet(); }
     int gardener(FarmRunPatch p) { return reader.gardenerId(p.getPatchType().name(),p.getLocation(),p.getName()); }
 
-    RouteLeg activeLeg(){return guideRequested?activeLeg:null;}
+    RouteLeg activeLeg(){return !guideRequested?null:diseaseTarget!=null?diseaseLeg:activeLeg;}
     int patchVarbit(FarmRunPatch p){return reader.patchVarbit(p.getPatchType().name(),p.getLocation(),p.getName());}
     boolean inPatchRegion(FarmRunPatch p,WorldPoint point){return reader.inPatchRegion(p.getPatchType().name(),p.getLocation(),p.getName(),point);}
 
-    FarmRunPatch activePatch() { return guideRequested && !preparing ? current : null; }
+    FarmRunPatch activePatch() { return !guideRequested?null:diseaseTarget!=null?diseaseTarget:!preparing?current:null; }
+    boolean diseaseInterruptActive(){return diseaseTarget!=null&&guideRequested;}
 
     List<FarmRunPatch> patches() { return Collections.unmodifiableList(patches); }
 

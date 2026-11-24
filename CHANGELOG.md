@@ -1,3 +1,10 @@
+## v0.28.1-beta.1 — Universal disease priority interrupt
+
+- Verify live disease on an identified local patch before ordinary planning, even in resupply and birdhouse phases.
+- Suspend the normal cursor, crop, planting progress, route order, and banking state rather than inserting a replacement stop.
+- Highlight only the cure item and affected patch, then resume on recovery or manual skip. If the target leaves local view, resume without claiming it was cured.
+- Skip is separate from ordinary patch skipping; dismissed interruptions are remembered for this run.
+
 ## v0.28-beta.1 — Specialty birdhouse finish
 
 - Specialty includes optional birdhouses by default; farms and seaweed first, then a separate inventory phase at Bank Chest-wreck.

@@ -334,7 +334,7 @@ final class FarmingHelperPanel extends PluginPanel
             heading("Preparation / resupply");line(view.preparation,true);
             button("Continue run",plugin::continueRun);
         }
-        else if(view.active!=null)button("Resupply…",plugin::resupply);
+        else if(view.active!=null&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
         else line(view.message,true);
         for(GuideView.Stop stop:view.stops)
         {
@@ -355,7 +355,7 @@ final class FarmingHelperPanel extends PluginPanel
                 stepText.put(stop.patch.key(),detail);body.add(detail,BorderLayout.CENTER);
                 if(stop.active)
                 {
-                    JButton skip=new JButton("Skip step");skip.addActionListener(e->plugin.skip(stop.patch));
+                    JButton skip=new JButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":"Skip step");skip.addActionListener(e->plugin.skip(stop.patch));
                     JPanel actions=new JPanel(new java.awt.GridLayout(0,1,0,2));actions.setOpaque(false);
                     if(view.compostStep){JButton applied=new JButton("Compost applied / skip");applied.addActionListener(e->plugin.acknowledgeCompost(stop.patch));actions.add(applied);}
                     actions.add(skip);body.add(actions,BorderLayout.SOUTH);
