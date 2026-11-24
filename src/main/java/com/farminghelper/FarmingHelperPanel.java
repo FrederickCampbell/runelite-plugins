@@ -321,7 +321,7 @@ final class FarmingHelperPanel extends PluginPanel
             JComboBox<String> removal=new JComboBox<>(new String[]{"Pay to remove","Manual removal"});removal.setSelectedIndex(plugin.runPayRemoval()?0:1);removal.setToolTipText("Tree removal for this run type");removal.addActionListener(e->plugin.setRunPolicy(null,removal.getSelectedIndex()==0));addRow(removal);
         }
         requirements("Item requirements:",view.items,false);
-        requirements("Recommended items:",view.items,true);
+
         if(!view.supplyNote.isEmpty())line(view.supplyNote,false);
         if(view.hideSeedless)
         {
@@ -386,7 +386,7 @@ final class FarmingHelperPanel extends PluginPanel
             protect.addActionListener(e->plugin.save("directorProtectTrees",String.valueOf(protect.isSelected())));addRow(protect);
             JCheckBox vaultViews = new JCheckBox("Seed Vault views",plugin.flag("seedVaultViews",true));
             vaultViews.addActionListener(e->plugin.save("seedVaultViews",String.valueOf(vaultViews.isSelected())));addRow(vaultViews);
-            JCheckBox activeBank = new JCheckBox("Active Run bank filter",plugin.flag("activeRunBank",true));
+            JCheckBox activeBank = new JCheckBox("Curated farming bank view",plugin.flag("activeRunBank",true));
             activeBank.addActionListener(e->plugin.save("activeRunBank",String.valueOf(activeBank.isSelected())));addRow(activeBank);
             heading("Grouped run components");
             for(RunPreset preset:RunPreset.values())button(preset.title,()->presetPreferences(preset));

@@ -388,7 +388,7 @@ public class FarmingHelperPlugin extends Plugin
             refineOrder();
         }
         if(vaultViews!=null)vaultViews.tick();
-        if(runBank!=null)runBank.tick(vaultRunItems(),flag("activeRunBank",true));
+        if(runBank!=null)runBank.tick(bankRunItems(),flag("activeRunBank",true));
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)) updateAccessNotes();
     }
 
@@ -422,7 +422,15 @@ public class FarmingHelperPlugin extends Plugin
         return Set.copyOf(ids);
     }
 
-    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(vaultRunItems());}});}
+    private Set<Integer> bankRunItems()
+    {
+        Set<Integer> runItems=vaultRunItems();
+        if(runItems==null)return null;
+        Set<Integer> ids=new HashSet<>(runItems);ids.addAll(requiredItems);ids.addAll(recommendedItems);
+        boolean bird=specialtyStaged&&specialtyBirdPhase||run.size()==1&&run.contains(FarmRunType.BIRDHOUSE);
+        return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird);
+    }
+    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(bankRunItems());}});}
     TransportHint birdhouseTransport()
     {
         if(!guideRequested||diseaseTarget!=null||preparing||current==null||current.getPatchType()!=PatchType.BIRDHOUSE||navigation==null||client.getLocalPlayer()==null)return null;
@@ -766,7 +774,13 @@ public class FarmingHelperPlugin extends Plugin
         int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
         if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
-        if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB || p.getPatchType()==PatchType.CORAL) && !required.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
+        // Selected policy costs and sapling preparation are actual supplies, not outfit recommendations.
+        recommended.forEach((id,n)->required.merge(id,n,Integer::sum));recommended.clear();
+        if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.CORAL))
+        {
+            Map<Integer,Integer> diveStock=new HashMap<>(bank);carried.forEach((id,n)->diveStock.merge(id,n,Integer::sum));
+            DivingKit.require(required,diveStock,carried);
+        }
         Map<Integer,Integer> farmingRequirements=new LinkedHashMap<>(required);
         Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?SpecialtyStages.birdStock(bag,bank):stock;
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
@@ -887,6 +901,8 @@ public class FarmingHelperPlugin extends Plugin
                 if(!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
             }
         }
+        if(!preparing&&current!=null&&current.getPatchType()==PatchType.CORAL)
+            instruction="Wear the Medallion of the deep OR fishbowl helmet and diving apparatus before entering.\n"+instruction;
         if(!preparing&&current!=null&&"Entrana".equals(current.getLocation()))instruction="Entrana: deposit prohibited weapons and armour before travel.\n"+instruction;
         activeLeg=leg;
         WorldPoint actionPoint=localApproach!=null?localApproach:current==null?null:Waypoints.destination(current);

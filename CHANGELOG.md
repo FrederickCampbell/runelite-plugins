@@ -1,3 +1,10 @@
+## v0.30-beta.1 — Curated farming bank shelf
+
+- Shared owned farming gear and teleport candidates across run types, selected run supplies, narrower birdhouse resupply view. No optional recommendation panel or Farming Helper bank highlights.
+- Native Bank Tags filtering retained; Inventory Setups uses the same underlying API.
+- Item teleport rows adapted from Shortest Path; exact owned IDs, mode, explicit blocks, known skill/quest/var conditions checked. Destination-scoped blocks conservatively exclude the family; unknown gates omit candidates.
+- Coral equipment required; ordinary seaweed gear optional. No route changes or automatic withdrawals.
+
 ## v0.29-beta.1 — Active Run bank and birdhouse navigation
 
 - Native transient Bank Tags predicate for current guide requirements; auto opens once per bank visit and allows ordinary browsing or manual reopening. No permanent item tags or automated withdrawal.
