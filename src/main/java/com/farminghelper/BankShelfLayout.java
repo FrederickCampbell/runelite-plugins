@@ -19,9 +19,12 @@ final class BankShelfLayout
         String n=name==null?"":name.toLowerCase(Locale.ROOT);
         // Farming cape remains with other capes; active transport jewellery stays together.
         if(n.contains("rune pouch")||n.endsWith(" rune")||n.contains("tablet")||n.endsWith(" basalt")||n.contains("teleport scroll")||n.equals("master scroll book")||n.equals("tai bwo wannai teleport"))return CONSUMABLE;
+        if(transport>=0&&(n.startsWith("ardougne cloak")||n.startsWith("explorer's ring")||n.startsWith("rada's blessing")))return PERMANENT;
         if(transport>=0&&!n.startsWith("farming cape")&&!n.startsWith("construction cape")&&!n.startsWith("crafting cape")&&!n.startsWith("achievement diary cape"))return transport;
         if(n.contains("sapling")||n.endsWith(" seed")||n.endsWith(" seeds")||n.endsWith(" spore")||n.endsWith(" spores")||n.equals("grape seed")||n.equals("seaweed spore")||CropCatalog.findByItemId(id)!=null)return SEEDS;
+        if(n.endsWith(" logs")||n.equals("logs")||n.equals("clockwork")||n.contains("bird house")||n.contains("birdhouse"))return TOOLS;
         if(n.contains("compost")||n.contains("volcanic ash")||n.equals("coins")||n.equals("saltpetre"))return COMPOST;
+        if(n.equals("dramen staff")||n.equals("lunar staff"))return PERMANENT;
         if(n.contains("staff")||n.contains("secateurs")||n.endsWith(" axe")||n.contains("axe (")||n.contains("hammer")||n.contains("chisel")||n.contains("watering can"))return equipmentSlot==3?3:TOOLS;
         for(int i=0;i<SLOTS.length;i++)if(equipmentSlot==SLOTS[i])return i;
         // Item stat lookup may be absent for nontradeable gear; explicit common slots.
