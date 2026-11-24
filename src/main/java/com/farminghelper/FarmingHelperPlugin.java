@@ -4,7 +4,7 @@ import com.google.inject.Provides;
 import com.farminghelper.queststate.CropState;
 import com.farminghelper.queststate.QuestFarmingStateReader;
 import java.awt.*;
-import java.awt.image.BufferedImage;
+import net.runelite.client.util.ImageUtil;
 import java.util.*;
 import java.util.List;
 import javax.inject.Inject;
@@ -135,7 +135,7 @@ public class FarmingHelperPlugin extends Plugin
                 reader.patchNamesForType(group.getPatchType().name(), group.getLocation())));
         patches.addAll(BirdhouseRun.patches());
         panel = new FarmingHelperPanel(this);
-        nav = NavigationButton.builder().tooltip("Farming Helper").icon(createNavigationIcon())
+        nav = NavigationButton.builder().tooltip("Farming Helper").icon(ImageUtil.loadImageResource(FarmingHelperPlugin.class, "sidebar.png"))
             .panel(panel).priority(8).build();
         toolbar.addNavigation(nav);
         overlays.add(highlight);
@@ -1127,18 +1127,4 @@ public class FarmingHelperPlugin extends Plugin
         if (canSave()) {config.setRSProfileConfiguration("farming-helper",key,value);if(!key.startsWith("observed"))preferenceRevision++;}
     }
 
-	private static BufferedImage createNavigationIcon()
-	{
-		BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D graphics = image.createGraphics();
-		graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		graphics.setColor(new Color(74, 45, 24));
-		graphics.setStroke(new BasicStroke(2f));
-		graphics.drawLine(8, 14, 8, 7);
-		graphics.setColor(new Color(60, 190, 80));
-		graphics.fillOval(2, 2, 7, 7);
-		graphics.fillOval(7, 1, 7, 7);
-		graphics.dispose();
-		return image;
-	}
 }

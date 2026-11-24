@@ -68,6 +68,12 @@ public class FarmingHelperPreviewTest
             start.setEnabled(false);start.doClick(0);assertEquals(2,clicks[0]);
         });
     }
+    @Test public void packagedSidebarIconHasExpectedDimensions()
+    {
+        BufferedImage icon=net.runelite.client.util.ImageUtil.loadImageResource(FarmingHelperPlugin.class,"sidebar.png");
+        assertEquals(16,icon.getWidth());assertEquals(16,icon.getHeight());
+        assertTrue(icon.getColorModel().hasAlpha());
+    }
     private static JButton findButton(Container root,String tooltip)
     {
         for(Component child:root.getComponents())

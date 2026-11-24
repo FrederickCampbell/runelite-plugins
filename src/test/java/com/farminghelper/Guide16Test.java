@@ -55,7 +55,13 @@ public class Guide16Test
         PluginMessage query=events.stream().filter(e->e.getName().equals("query")).findFirst().get();
         bridge.message(new PluginMessage("shortestpath","result",Map.of("id",query.getData().get("id"),"reached",false,"closest",near,"path",List.of(start,near))));
         assertEquals(near,events.get(events.size()-1).getData().get("target"));
-        bridge.stop();assertEquals("clear",events.get(events.size()-1).getName());
+        bridge.stop();
+        // Modern Shortest Path requires a current-target check before clearing.
+        PluginMessage release=events.get(events.size()-1);
+        assertEquals("getTarget",release.getName());
+        assertFalse(events.stream().anyMatch(e->e.getName().equals("clear")));
+        bridge.message(new PluginMessage("shortestpath","currentTarget",Map.of("id",release.getData().get("id"),"set",true,"target",List.of(near))));
+        assertEquals("clear",events.get(events.size()-1).getName());
         events.clear();bridge.begin();bridge.request(start,dest,true);
         query=events.stream().filter(e->e.getName().equals("query")).findFirst().get();
         bridge.message(new PluginMessage("shortestpath","result",Map.of("id",query.getData().get("id"),"reached",false,"path",List.of())));

@@ -1,3 +1,9 @@
+## v0.39-beta.4 — Icons and regression correction
+
+- Add a custom 48×48 Plugin Hub icon and a matching transparent 16×16 sidebar icon. Load the sidebar resource through RuneLite ImageUtil.
+- Update the legacy route-probe regression assertion to require confirmed route ownership before clearing; preserve reachable-tile and unreachable-route checks. No production navigation behavior changed.
+- Add a packaged-sidebar-icon regression test.
+
 ## v0.39-beta.3 — Player-controlled runs
 
 - Remove automatic mid-run banking diversions, including the newly introduced Shortest Path item-aware bank detour, ordinary crop shortage prompts, automatic birdhouse banking and Entrana gear-triggered banking. Retain advisory supply/gear notes, initial preparation and explicit Resupply.
