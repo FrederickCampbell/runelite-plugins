@@ -33,6 +33,15 @@ public class CuratedBankTest
         {assertTrue(n,CuratedBank.equipment(n,false));assertFalse(n,CuratedBank.equipment(n,true));}
         assertFalse(CuratedBank.equipment("Hammer",false));assertFalse(CuratedBank.equipment("Chisel",false));
     }
+    @Test public void optionalPreparationEquipmentDependsOnRun()
+    {
+        assertFalse(CuratedBank.contextualEquipment(5354,id->"Filled plant pot",false,false,false));
+        assertTrue(CuratedBank.contextualEquipment(5354,id->"Filled plant pot",false,true,false));
+        assertFalse(CuratedBank.contextualEquipment(7534,id->"Fishbowl helmet",false,false,false));
+        assertTrue(CuratedBank.contextualEquipment(7534,id->"Fishbowl helmet",false,false,true));
+        assertTrue(CuratedBank.contextualEquipment(21622,id->"Volcanic ash",false,false,false));
+        assertFalse(CuratedBank.contextualEquipment(21622,id->"Volcanic ash",true,false,false));
+    }
     @Test public void restrictionsAndModes()
     {
         assertEquals(Set.of(4251,13393),CuratedBank.blocked("4251, 13393@42, 11105:5"));

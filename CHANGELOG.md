@@ -1,3 +1,12 @@
+## v0.35-beta.1 — Reliability & simplification
+
+- Global character preferences are authoritative; crop care, tree removal and missing-planting-supply overrides are temporary per run. Old persisted run overrides are ignored, not deleted. Existing global, crop, patch, preset and storage preferences remain.
+- Active guide shows current task first, automatically expands supplies during preparation, and retains completion/preservation history across farming and birdhouses. Run-wide ledger distinguishes completed, preserved, skipped, deferred and missing supplies; initially unscheduled patches are deferred rather than silently completed.
+- Four settings categories; grouped presets under Patches, storage integration switches under Advanced. One missing-supply dropdown replaces two interacting controls. Combined Tree Run distinguished from individual Tree Run.
+- Refresh patch access periodically for quest/diary/Hunter/Sailing changes and on start; update visible patch selection when eligibility changes. Same-profile world hops retain the active run and reissue navigation; logout or profile change resets it.
+- Use one required-items map and shared physical-stock validation. Optional pot/seedling and diving gear appear for relevant run types; actual required supplies remain visible. Native bank layout, placeholders and final birdhouse stage unchanged.
+- Added regression cases for run override lifetime, same-profile hop, stage-wide progress, and context-sensitive bank supplies. Existing live state readers and route selection remain intact.
+
 ## v0.34-beta.1 — One curated farming bank
 
 - Keep one automatic native Bank Tags view; no favorites, hidden items, additional tabs or customization settings.

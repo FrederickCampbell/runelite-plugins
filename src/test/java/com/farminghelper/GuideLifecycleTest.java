@@ -130,6 +130,37 @@ public class GuideLifecycleTest
         assertNull(plugin.activePatch());
         plugin.shutDown();
     }
+    @Test public void globalPreferencesWinAndRunOverridesExpireAcrossRuns() throws Exception
+    {
+        Player player=mock(Player.class);
+        when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(new WorldPoint(2813,3463,0));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(72);
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(config.getRSProfileKey()).thenReturn("profile");
+        when(config.getRSProfileConfiguration("farming-helper","directorCompostChoice")).thenReturn("ULTRA");
+        when(config.getRSProfileConfiguration("farming-helper","directorProtectTrees")).thenReturn("false");
+        when(config.getRSProfileConfiguration("farming-helper","directorPayRemoval")).thenReturn("true");
+        when(reader.observeType(anyString(),anyString(),anyString(),any())).thenReturn(new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
+        doAnswer(invocation->{((Runnable)invocation.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        plugin.startUp();
+        plugin.start(EnumSet.of(FarmRunType.HERB));
+        assertEquals(RunPolicy.COMPOST,plugin.runPolicy());assertTrue(plugin.runPayRemoval());
+        plugin.setRunPolicy(RunPolicy.NONE,false);plugin.setSeedlessPolicy(SeedlessPolicy.SKIP);
+        assertEquals(RunPolicy.NONE,plugin.runPolicy());assertFalse(plugin.runPayRemoval());assertTrue(plugin.hideSeedless());assertFalse(plugin.clearSeedless());
+        plugin.setSeedlessPolicy(SeedlessPolicy.GUIDE);
+        FarmRunPatch before=plugin.activePatch();assertNotNull(before);
+        net.runelite.api.events.GameStateChanged hop=mock(net.runelite.api.events.GameStateChanged.class);
+        when(hop.getGameState()).thenReturn(GameState.HOPPING);plugin.onGameStateChanged(hop);
+        assertSame(before,plugin.activePatch());
+        plugin.onGameTick(null);assertSame(before,plugin.activePatch());assertEquals(RunPolicy.NONE,plugin.runPolicy());
+        plugin.stop();plugin.start(EnumSet.of(FarmRunType.HERB));
+        assertEquals(RunPolicy.COMPOST,plugin.runPolicy());assertTrue(plugin.runPayRemoval());assertFalse(plugin.hideSeedless());
+        verify(config,never()).getRSProfileConfiguration(eq("farming-helper"),startsWith("runPolicy_"));
+        verify(config,never()).getRSProfileConfiguration(eq("farming-helper"),startsWith("runPayRemoval_"));
+        plugin.stop();plugin.shutDown();SwingUtilities.invokeAndWait(()->{});
+    }
     private static javax.swing.JButton findEndButton(java.awt.Container root)
     {
         for(java.awt.Component child:root.getComponents())

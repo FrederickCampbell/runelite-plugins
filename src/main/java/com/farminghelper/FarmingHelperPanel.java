@@ -530,7 +530,7 @@ final class FarmingHelperPanel extends PluginPanel
         preferenceCheck("Pay for crop protection","directorProtectTrees",true);
         heading("Default tree removal");preferenceCheck("Pay gardener to remove trees","directorPayRemoval",true);
         heading("Missing planting supplies");
-        JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());seedless.setSelectedItem(SeedlessPolicy.load(plugin.setting("seedlessPolicyV1","GUIDE")));
+        JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());seedless.setToolTipText("Guide anyway: show missing supplies. Harvest / clear: clear occupied patches. Skip: omit seedless patches.");seedless.setSelectedItem(SeedlessPolicy.load(plugin.setting("seedlessPolicyV1","GUIDE")));
         seedless.addActionListener(e->plugin.save("seedlessPolicyV1",((SeedlessPolicy)seedless.getSelectedItem()).name()));addRow(seedless);
         caption("These defaults apply to every run. Changes in Run settings are temporary.");finish();
     }
@@ -570,13 +570,18 @@ final class FarmingHelperPanel extends PluginPanel
         page(RUN_SETTINGS,"Run settings",this::returnToGuide,null,true);
         caption("Changes apply only to this run.");
         heading("Missing planting supplies");
-        JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());
+        JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());seedless.setToolTipText("Guide anyway: show missing supplies. Harvest / clear: clear occupied patches. Skip: omit seedless patches.");
         seedless.setSelectedItem(SeedlessPolicy.of(plugin.hideSeedless(),plugin.clearSeedless()));
         seedless.addActionListener(e->plugin.setSeedlessPolicy((SeedlessPolicy)seedless.getSelectedItem()));addRow(seedless);
         heading("Crop care");JComboBox<RunPolicy> care=new JComboBox<>(RunPolicy.values());care.setSelectedItem(plugin.runPolicy());
         care.addActionListener(e->plugin.setRunPolicy((RunPolicy)care.getSelectedItem(),null));addRow(care);
         if(plugin.runHasTrees()){heading("Tree removal");JComboBox<String> remove=new JComboBox<>(new String[]{"Pay to remove","Manual removal"});remove.setSelectedIndex(plugin.runPayRemoval()?0:1);remove.addActionListener(e->plugin.setRunPolicy(null,remove.getSelectedIndex()==0));addRow(remove);}
         button("All settings",()->settings(true));finish();
+    }
+    void accessChanged()
+    {
+        if(navigation.page()==MANUAL){manualRun();return;}
+        if(navigation.page()==PATCHES){int y=scroll.getVerticalScrollBar().getValue();patchBrowser();SwingUtilities.invokeLater(()->{if(navigation.page()==PATCHES)scroll.getVerticalScrollBar().setValue(y);});}
     }
     private void patchBrowser()
     {
