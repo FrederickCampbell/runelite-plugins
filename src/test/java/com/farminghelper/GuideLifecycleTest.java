@@ -14,6 +14,8 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.events.PluginMessage;
 import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
+import javax.swing.SwingUtilities;
 import net.runelite.client.ui.overlay.OverlayManager;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,7 +41,7 @@ public class GuideLifecycleTest
     @Mock QuestFarmingStateReader reader;
     @InjectMocks FarmingHelperPlugin plugin;
 
-    @Test public void routesWithoutSeedsHonorsPreferencesAndStopsOnClose()
+    @Test public void routesWithoutSeedsHonorsPreferencesAndStopsOnExplicitClose() throws Exception
     {
         Player player = mock(Player.class);
         WorldPoint start = new WorldPoint(3100,3200,0);
@@ -77,9 +79,25 @@ public class GuideLifecycleTest
         verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2670,3374,0))));
         plugin.onGameTick(null);
         verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
+        ArgumentCaptor<NavigationButton> navigationButton=ArgumentCaptor.forClass(NavigationButton.class);
+        verify(toolbar).addNavigation(navigationButton.capture());
+        FarmingHelperPanel sidebar=(FarmingHelperPanel)navigationButton.getValue().getPanel();
+        FarmRunPatch beforeHide=plugin.activePatch();
+        clearInvocations(bus);
+        // Both collapsing the sidebar and selecting another plugin deactivate this panel.
+        SwingUtilities.invokeAndWait(sidebar::onDeactivate);
+        plugin.onGameTick(null);
+        assertSame(beforeHide,plugin.activePatch());
+        verify(bus,never()).post(new PluginMessage("shortestpath","clear"));
+        SwingUtilities.invokeAndWait(sidebar::onActivate);
+        assertSame(beforeHide,plugin.activePatch());
+        // Progress and navigation still update when the panel is not visible.
+        SwingUtilities.invokeAndWait(sidebar::onDeactivate);
         plugin.skip(plugin.activePatch());
         assertEquals("Catherby",plugin.activePatch().getLocation());
         verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2813,3463,0))));
+        SwingUtilities.invokeAndWait(sidebar::onActivate);
+        assertEquals("Catherby",plugin.activePatch().getLocation());
         clearInvocations(bus);
         plugin.onPluginChanged(new net.runelite.client.events.PluginChanged(shortestPath,false));
         plugin.onGameTick(null);
@@ -87,7 +105,11 @@ public class GuideLifecycleTest
         verifyNoInteractions(bus);
         plugin.onPluginChanged(new net.runelite.client.events.PluginChanged(shortestPath,true));
         verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2813,3463,0))));
-        plugin.stop();
+        SwingUtilities.invokeAndWait(() -> {
+            javax.swing.JButton end=findEndButton(sidebar);
+            assertNotNull("Explicit end control must remain available",end);
+            end.doClick(0);
+        });
         assertNull(plugin.activePatch());
         plugin.onGameTick(null);
         verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
@@ -107,6 +129,20 @@ public class GuideLifecycleTest
         }
         assertNull(plugin.activePatch());
         plugin.shutDown();
+    }
+    private static javax.swing.JButton findEndButton(java.awt.Container root)
+    {
+        for(java.awt.Component child:root.getComponents())
+        {
+            if(child instanceof javax.swing.JButton && "End farming run".equals(((javax.swing.JButton)child).getToolTipText()))
+                return (javax.swing.JButton)child;
+            if(child instanceof java.awt.Container)
+            {
+                javax.swing.JButton found=findEndButton((java.awt.Container)child);
+                if(found!=null)return found;
+            }
+        }
+        return null;
     }
     @Test public void manualRunFiltersPhysicalPatchesAndKeepsClusterTogether()
     {

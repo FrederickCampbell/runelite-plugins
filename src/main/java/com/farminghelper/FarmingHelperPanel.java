@@ -89,7 +89,9 @@ final class FarmingHelperPanel extends PluginPanel
 
     private void finish() { rows.revalidate(); rows.repaint(); }
 
-    @Override public void onDeactivate() { plugin.stop(); }
+    // Sidebar visibility is not the lifetime of an active run. The guide header
+    // explicitly ends the session; game ticks continue updating it while hidden.
+    @Override public void onDeactivate() { }
 
     void home()
     {
@@ -257,7 +259,7 @@ final class FarmingHelperPanel extends PluginPanel
         JLabel title=new JLabel(view.title);title.setForeground(Color.WHITE);title.setFont(FontManager.getRunescapeBoldFont());
         header.add(title,BorderLayout.CENTER);
         JButton close=new JButton("×");close.setUI(new BasicButtonUI());close.setBorderPainted(false);close.setContentAreaFilled(false);
-        close.setToolTipText("Close helper");close.addActionListener(e->plugin.stop());header.add(close,BorderLayout.EAST);addRow(header);
+        close.setToolTipText("End farming run");close.addActionListener(e->plugin.stop());header.add(close,BorderLayout.EAST);addRow(header);
         requirements("Item requirements:",view.items,false);
         requirements("Recommended items:",view.items,true);
         if(!view.supplyNote.isEmpty())line(view.supplyNote,false);

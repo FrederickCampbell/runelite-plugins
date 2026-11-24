@@ -1,3 +1,9 @@
+## v0.20.1-beta.1 — Keep runs active when the sidebar is hidden
+
+- Sidebar deactivation no longer stops an active farming run.
+- The guide header × is explicitly labelled End farming run; normal session cleanup remains unchanged.
+- Regression test covers panel hide/reopen, progress while hidden, and explicit end.
+
 ## v0.20.0-beta.1 — Grouped and individual presets
 
 - Four configurable grouped presets plus Manual Run, all individual crop-type shortcuts, and two collapsible home sections.

@@ -1,6 +1,6 @@
-# Farming Helper v0.20.0-beta.1
+# Farming Helper v0.20.1-beta.1
 
-A standalone Quest Helper-style farming guide. Choose a run, bring the items listed in the sidebar if desired, and follow the active patch instructions. Missing items never prevent navigation. The × or switching away from the sidebar ends the session and clears its route and highlights. Crop preferences, enabled patches and last observed storage contents are saved per character; no run progress is saved.
+A standalone Quest Helper-style farming guide. Choose a run, bring the items listed in the sidebar if desired, and follow the active patch instructions. Missing items never prevent navigation. The guide’s × explicitly ends the session and clears its route and highlights. Hiding the sidebar or switching to another plugin keeps the session, route and highlights active. Logout, world hopping, profile changes and plugin shutdown still reset the guide. Crop preferences, enabled patches and last observed storage contents are saved per character; no run progress is saved.
 
 - Automatic crop selection uses observed inventory, bank and Seed Vault stock; unknown/missing stock still produces an item requirement. Custom rankings take precedence over automatic fallback, and individual preferences reserve available stock and fall through to category priorities and then the highest estimated XP per planting item. Missing-stock fallback is advisory.
 - Required and recommended items display live carried quantities. The bank and Seed Vault show outlines, not additional tabs or withdrawal automation. Storage counts are observed snapshots, not hidden queries.

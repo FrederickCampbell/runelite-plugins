@@ -1,3 +1,3 @@
-# Farming Helper v0.20.0-beta.1
+# Farming Helper v0.20.1-beta.1
 
-Grouped and individual runs with Guild-first preparation and reference ordering. Existing XP-per-seed crop engine, Seed Vault views and Shortest Path integration retained. Advisory banking and equipment checks; no automatic gameplay. Live testing remains required.
+Lifecycle hotfix on v0.20: hiding the sidebar or switching plugins keeps the active guide and route alive. The guide’s × ends the run. All existing farming, banking, and Seed Vault features are unchanged. Live client validation remains required.
