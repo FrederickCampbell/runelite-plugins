@@ -10,7 +10,8 @@ enum FarmRunType
 	HOPS("Hops Run"),
 	BUSH("Bush Run"),
 	CACTUS("Cactus Run"),
-	SPECIALTY("Specialty Patch Run");
+	SPECIALTY("Specialty Patch Run"),
+	COMPOST("Compost Run");
 
 	private final String displayName;
 
@@ -28,6 +29,7 @@ enum FarmRunType
 	{
 		switch (patchType)
 		{
+			case COMPOST_BIN: return COMPOST;
 			case ALLOTMENT:
 			case FLOWER:
 				return ALLOTMENT_FLOWER;

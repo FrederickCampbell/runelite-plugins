@@ -28,7 +28,7 @@ final class Supplies
     static Map<Integer, Integer> required(List<FarmRunPatch> patches, int compostItem, boolean carriedSecateurs, boolean payRemoval)
     {
         Map<Integer, Integer> items = new LinkedHashMap<>();
-        if (patches.isEmpty()) return items;
+        if (patches.isEmpty() || patches.stream().allMatch(p->p.getPatchType()==PatchType.COMPOST_BIN)) return items;
         items.put(ItemID.RAKE, 1);
         items.put(ItemID.SPADE, 1);
         if (patches.stream().anyMatch(p -> p.getPatchType().usesDibber()))
@@ -64,6 +64,17 @@ final class Supplies
     {
         switch (id)
         {
+            case CompostRun.ASH: return "Volcanic ash";
+            case CompostRun.BUCKET: return "Empty bucket";
+            case CompostRun.BOTTOMLESS: return "Empty bottomless compost bucket";
+            case CompostRun.WEEDS: return "Weeds";
+            case CompostRun.PINEAPPLE: return "Pineapple";
+            case CompostRun.WATERMELON: return "Watermelon";
+            case CompostRun.WOAD: return "Woad leaf";
+            case 6470: return "Compost potion(4)";
+            case 6472: return "Compost potion(3)";
+            case 6474: return "Compost potion(2)";
+            case 6476: return "Compost potion(1)";
             case SALTPETRE: return "Saltpetre";
             case GARDENING_TROWEL: return "Gardening trowel";
             case ItemID.COINS: return "Coins for tree removal";

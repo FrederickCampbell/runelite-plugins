@@ -72,7 +72,10 @@ final class Waypoints
         area(PatchType.FLOWER, "Prifddinas", 3289, 6100);
         area(PatchType.ALLOTMENT, "Farming Guild", 1269, 3730);
         area(PatchType.FLOWER, "Farming Guild", 1259, 3729);
-        area(PatchType.FLOWER, "Kastori", 1352, 3025);
+        area(PatchType.FLOWER, "Kastori", 1353, 3023);
+        // Farm-area markers; actual bins are resolved from their native objects.
+        for(String site:new String[]{"Falador","Ardougne","Catherby","Morytania","Kourend","Civitas illa Fortis","Farming Guild","Prifddinas"})
+            FARM_AREAS.put(PatchType.COMPOST_BIN.name()+"~"+site,FARM_AREAS.get(PatchType.ALLOTMENT.name()+"~"+site));
         area(PatchType.HOPS, "Yanille", 2572, 3102);
         area(PatchType.HOPS, "Seers' Village", 2661, 3523);
         area(PatchType.HOPS, "Lumbridge", 3224, 3313);
@@ -210,7 +213,7 @@ final class Waypoints
     {
         switch (type)
         {
-            case ALLOTMENT: case FLOWER: case BUSH: case CACTUS: return 45;
+            case ALLOTMENT: case FLOWER: case BUSH: case CACTUS: case COMPOST_BIN: return 45;
             case FRUIT_TREE: case CELASTRUS: case SPIRIT_TREE: case REDWOOD: return 85;
             default: return 65;
         }

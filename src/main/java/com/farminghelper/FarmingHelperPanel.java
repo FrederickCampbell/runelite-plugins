@@ -352,6 +352,13 @@ final class FarmingHelperPanel extends PluginPanel
     private void patches(PatchType type)
     {
         rows.removeAll();heading(type.getDisplayName());
+        if(type==PatchType.COMPOST_BIN)
+        {
+            line("Select compost bins to visit. Supplies follow the current contents.",false);
+            for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)
+            {JCheckBox box=new JCheckBox(p.getDisplayName(),plugin.enabled(p));box.addActionListener(e->plugin.save("patchEnabled_"+p.key(),String.valueOf(box.isSelected())));addRow(box);}
+            button("Back",this::preferences);finish();return;
+        }
         String csv=plugin.priority(type);
         List<String> names=new ArrayList<>();if(!csv.isBlank())names.addAll(Arrays.asList(csv.split(",\\s*")));
         line(names.isEmpty()?"Automatic · highest estimated XP per seed in stock":"Preferred crops first, then highest XP per seed",false);

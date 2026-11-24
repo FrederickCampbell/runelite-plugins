@@ -52,7 +52,7 @@ final class RunOrder
         {
             // Complete surface work first, then enter a cave/underwater area once.
             List<FarmRunPatch> ordered=new ArrayList<>(entry.getValue());
-            ordered.sort(Comparator.comparingInt(p->interior(p)?1:0));
+            ordered.sort(Comparator.comparingInt(p->interior(p)?2:p.getPatchType()==PatchType.COMPOST_BIN?1:0));
             result.add(new Group(entry.getKey(),ordered));
         }
         return result;

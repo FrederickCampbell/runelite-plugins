@@ -1,3 +1,8 @@
+## v0.21-beta.1 — Compost runs and Kastori flower state validation
+
+- Eight native compost bins; optional Crop Run component and Manual Run selection. Live contents determine fill, close, upgrade, and collection steps.
+- Confirm nearby Kastori flower object and transmit identity; ignore unverified remote flower completion.
+
 ## v0.20.1-beta.1 — Keep runs active when the sidebar is hidden
 
 - Sidebar deactivation no longer stops an active farming run.

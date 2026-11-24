@@ -386,6 +386,7 @@ public class FarmingHelperPlugin extends Plugin
 
     static boolean actionable(PatchType type, CropState state)
     {
+        if(type==PatchType.COMPOST_BIN)return state!=CropState.GROWING;
         return state != CropState.GROWING && state != CropState.FILLING &&
             !(state==CropState.HARVESTABLE && (type==PatchType.REDWOOD || type==PatchType.SPIRIT_TREE));
     }
@@ -408,7 +409,7 @@ public class FarmingHelperPlugin extends Plugin
         for (FarmRunPatch patch : patches)
         {
             String issue = Waypoints.accessIssue(client,patch.getPatchType(),patch.getLocation(),level,false);
-            if (issue == null && CropCatalog.recommend(patch.getPatchType(),level) == null) issue = "Farming level too low";
+            if (issue == null && patch.getPatchType()!=PatchType.COMPOST_BIN && CropCatalog.recommend(patch.getPatchType(),level) == null) issue = "Farming level too low";
             if (issue != null) notes.put(patch.key(),issue);
         }
         accessNotes = Collections.unmodifiableMap(notes);
@@ -447,12 +448,19 @@ public class FarmingHelperPlugin extends Plugin
         {
             PatchType type=p.getPatchType();
             if(!ManualSelection.includes(p,run,manualKeys) || !enabled(p) || skipped.contains(p) ||
-                Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || CropCatalog.recommend(type,level)==null) continue;
+                Waypoints.accessIssue(client,type,p.getLocation(),level,false)!=null || (type!=PatchType.COMPOST_BIN && CropCatalog.recommend(type,level)==null)) continue;
             eligible++;
             if(pinned!=null && !pinned.contains(p))continue;
             QuestFarmingStateReader.Observation o=observe(p);
             if(o==null) continue;
             observations.put(p,o);
+            if(type==PatchType.COMPOST_BIN)
+            {
+                if(completed.contains(p)){visible.add(p);continue;}
+                if(actionable(type,o.state)){ready.add(p);visible.add(p);}
+                else if(p==current){completed.add(p);visible.add(p);}
+                continue;
+            }
             // Leave living white lilies as permanent allotment protection.
             if((type==PatchType.FLOWER && QuestFarmingStateReader.isLivingWhiteLily(o)) ||
                 ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
@@ -518,6 +526,8 @@ public class FarmingHelperPlugin extends Plugin
                 else required.merge(ItemID.PLANT_CURE,1,Integer::sum);
             }
         }
+        Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
+        CompostRun.addSupplies(required,ready,observations,stock,binPlans);
         int compostCount=0,coins=0;
         for(FarmRunPatch p:ready)
         {
@@ -556,12 +566,12 @@ public class FarmingHelperPlugin extends Plugin
                 action=StepEngine.refine(action,pay,reader.gardenerId(type.name(),current.getLocation(),current.getName())>0,false);
             if(action==StepEngine.Action.PLANT && o.source==QuestFarmingStateReader.Source.LIVE && reader.hasWeeds(type.name(),o.rawValue)) action=StepEngine.Action.RAKE;
             activeAction=action;
-            instruction=StepEngine.instruction(action,activeCrop,type,compostId>=0);
+            instruction=type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,compostId>=0);
         }
         for(FarmRunPatch p:visible)
         {
             Crop c=seeds.get(p);
-            String line=p==current?instruction:completed.contains(p)?"Completed":c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
+            String line=p==current?instruction:completed.contains(p)?"Completed":binPlans.containsKey(p)?binPlans.get(p).instruction:c==null?"Check or harvest existing crop.":"Harvest / clear, then plant "+c.getName()+".";
             stops.add(new GuideView.Stop(p,line,p==current,completed.contains(p)));
         }
         WorldPoint actual=loggedIn?client.getLocalPlayer().getWorldLocation():null;

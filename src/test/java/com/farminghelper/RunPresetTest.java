@@ -12,7 +12,7 @@ public class RunPresetTest
     @Test public void groupedPresetsAreOnlySelections()
     {
         assertEquals(EnumSet.of(PatchType.TREE,PatchType.FRUIT_TREE,PatchType.HARDWOOD_TREE,PatchType.CALQUAT,PatchType.CELASTRUS,PatchType.CRYSTAL_TREE,PatchType.REDWOOD),RunPreset.TREE.types);
-        assertEquals(EnumSet.of(PatchType.HERB,PatchType.ALLOTMENT,PatchType.FLOWER),RunPreset.CROP.types);
+        assertEquals(EnumSet.of(PatchType.HERB,PatchType.ALLOTMENT,PatchType.FLOWER,PatchType.COMPOST_BIN),RunPreset.CROP.types);
         assertEquals(EnumSet.of(PatchType.HOPS,PatchType.BUSH),RunPreset.HOPS_BUSH.types);
         assertEquals(EnumSet.of(PatchType.CACTUS,PatchType.BELLADONNA,PatchType.MUSHROOM,PatchType.SEAWEED,PatchType.CORAL,PatchType.GRAPEVINE),RunPreset.SPECIALTY.types);
         assertFalse(RunPreset.TREE.types.contains(PatchType.SPIRIT_TREE));

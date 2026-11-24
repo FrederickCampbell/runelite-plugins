@@ -26,7 +26,7 @@ public class PatchCoverageTest
                 assertNotNull(patch.getDisplayName(), Waypoints.destination(patch));
             }
         }
-        assertEquals("All non-compost physical plots in the vendored farming registry", 99, keys.size());
+        assertEquals("All physical plots and compost bins in the vendored farming registry", 107, keys.size());
     }
 
     @Test public void mapMarkersAreNotExactObjectTargets()

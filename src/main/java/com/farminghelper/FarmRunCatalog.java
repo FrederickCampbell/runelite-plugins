@@ -136,6 +136,9 @@ final class FarmRunCatalog
 		add(patches, "Great Conch", "West", PatchType.CORAL);
 		add(patches, "Kastori", "", PatchType.FLOWER);
 
+		// One physical bin per farm, including the 30-item Guild bin.
+		for(String location : new String[]{"Farming Guild","Falador","Morytania","Ardougne","Catherby","Kourend","Civitas illa Fortis","Prifddinas"})
+			add(patches,location,"",PatchType.COMPOST_BIN);
 		return Collections.unmodifiableList(groupRepeatedPatches(patches));
 	}
 

@@ -1,4 +1,4 @@
-# Farming Helper v0.20.1-beta.1
+# Farming Helper v0.21-beta.1
 
 A standalone Quest Helper-style farming guide. Choose a run, bring the items listed in the sidebar if desired, and follow the active patch instructions. Missing items never prevent navigation. The guide’s × explicitly ends the session and clears its route and highlights. Hiding the sidebar or switching to another plugin keeps the session, route and highlights active. Logout, world hopping, profile changes and plugin shutdown still reset the guide. Crop preferences, enabled patches and last observed storage contents are saved per character; no run progress is saved.
 
@@ -35,3 +35,6 @@ The automated tests exercise allocation, snapshots, route-message lifecycle, tra
 Ordering algorithms adapted from [Farm Run Autopilot RoutePlanner](https://github.com/elzerma/farm-run-autopilot/blob/master/src/main/java/com/farmrunautopilot/route/RoutePlanner.java), BSD-2-Clause; see LICENSE-FARM-RUN-AUTOPILOT. Place grouping inspired by Codex Rounds; pinning inspired by Better Farming. No upstream travel planner or bank system is imported.
 
 Seed Vault visual widget repositioning follows [RuneLite Bank Tags LayoutManager](https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/banktags/tabs/LayoutManager.java); see LICENSE-BANK-TAGS. Bank-specific action remapping, synthetic item widgets, and drag/reorder handlers are deliberately not imported.
+
+### Compost Run (v0.21)
+Individual Runs → Compost Run, or opt into Compost in Crop Run preferences / Manual Run. The Guild's 30-item bin and seven regular bins share the same native farming tracker and route planner. Use compatible ordinary or supercompostable produce, close full bins, skip decomposition, open ripe bins, add one compost potion dose if regular, and 25/50 volcanic ash if super. Collect manually, optionally with a compatible bottomless bucket. Supply recommendations use a small verified list of cheap materials; other compatible produce may be used manually. Unknown bin states require inspection. Kastori flower completion now requires nearby native object confirmation, not cached cross-region data.

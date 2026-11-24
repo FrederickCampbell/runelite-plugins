@@ -96,7 +96,7 @@ public final class QuestFarmingStateReader
     public Observation observeType(String patchType, String location,
                                    String patchName, WorldPoint worldPoint)
     {
-        PatchImplementation implementation = implementation(patchType);
+        PatchImplementation implementation = implementation(patchType,location);
         if (implementation == null)
         {
             return new Observation(null, Source.NONE, 0, null, "");
@@ -131,17 +131,43 @@ public final class QuestFarmingStateReader
             && impl!=PatchImplementation.GRAPES && impl!=PatchImplementation.HESPORI && impl!=PatchImplementation.CORAL;
     }
 
+    /** Actual bin contents from the existing Quest Helper varbit decoder. Stage is
+     * zero-based for filling/harvesting. Closed ripe bins retain their full capacity. */
+    public static final class BinContents
+    {
+        public final CropState state;
+        public final String kind;
+        public final int count,capacity;
+        public final boolean closed;
+        BinContents(CropState state,String kind,int count,int capacity,boolean closed)
+        {this.state=state;this.kind=kind;this.count=count;this.capacity=capacity;this.closed=closed;}
+    }
+    public static BinContents binContents(boolean large,Observation o)
+    {
+        if(o==null||!o.known()||o.rawValue<0)return null;
+        PatchImplementation impl=large?PatchImplementation.BIG_COMPOST:PatchImplementation.COMPOST;
+        PatchState raw=impl.forVarbitValue(o.rawValue);if(raw==null)return null;
+        CropState state=normalizedState(impl,o.rawValue,raw);
+        // A predicted mature remote bin still requires live verification.
+        if(state==CropState.GROWING && o.state!=CropState.GROWING)return null;
+        String kind=raw.getProduce().name().replace("BIG_","");
+        int capacity=large?30:15;
+        boolean closed=raw.getCropState()==CropState.GROWING;
+        int count=state==CropState.EMPTY?0:closed?capacity:raw.getStage()+1;
+        return new BinContents(state,kind,count,capacity,closed);
+    }
+
     /** Existing Quest Helper registry supplies the actual gardener NPC ID. */
     public int gardenerId(String patchType, String location, String patchName)
     {
-        PatchImplementation impl = implementation(patchType);
+        PatchImplementation impl = implementation(patchType,location);
         FarmingPatch patch = impl == null ? null : find(world, impl.getTab(), location, patchName, impl);
         return patch == null ? -1 : patch.getFarmer();
     }
 
     public int patchVarbit(String type,String location,String name)
     {
-        PatchImplementation impl=implementation(type);
+        PatchImplementation impl=implementation(type,location);
         FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
         return patch==null?-1:patch.getVarbit();
     }
@@ -149,7 +175,7 @@ public final class QuestFarmingStateReader
     public boolean inPatchRegion(String type,String location,String name,WorldPoint point)
     {
         if(point==null)return false;
-        PatchImplementation impl=implementation(type);
+        PatchImplementation impl=implementation(type,location);
         FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
         if(patch==null)return false;
         if(impl==PatchImplementation.CORAL && point.getRegionID()!=13194)return false;
@@ -159,7 +185,7 @@ public final class QuestFarmingStateReader
 
     public List<String> patchNamesForType(String patchType, String location)
     {
-        PatchImplementation impl = implementation(patchType);
+        PatchImplementation impl = implementation(patchType,location);
         return impl == null ? Collections.emptyList()
             : patchNamesResolved(impl.getTab(), location, impl);
     }
@@ -170,7 +196,7 @@ public final class QuestFarmingStateReader
     @Nullable
     public WorldPoint regionHint(String patchType, String location)
     {
-        PatchImplementation impl = implementation(patchType);
+        PatchImplementation impl = implementation(patchType,location);
         if (impl == null) return null;
         FarmingPatch patch = find(world, impl.getTab(), location, null, impl);
         if (patch == null) return null;
@@ -179,11 +205,16 @@ public final class QuestFarmingStateReader
             (region & 0xff) * 64 + 32, 0);
     }
 
+    static PatchImplementation implementation(String type,String location)
+    {
+        return "COMPOST_BIN".equals(type) && "Farming Guild".equals(location) ? PatchImplementation.BIG_COMPOST : implementation(type);
+    }
+
     @Nullable
     static PatchImplementation implementation(String type)
     {
         if (type == null) return null;
-        String normalized = "GRAPEVINE".equals(type) ? "GRAPES" : type;
+        String normalized = "GRAPEVINE".equals(type) ? "GRAPES" : "COMPOST_BIN".equals(type) ? "COMPOST" : type;
         try
         {
             return PatchImplementation.valueOf(normalized);
@@ -236,6 +267,10 @@ public final class QuestFarmingStateReader
                 ? player.getRegionID() == match.getRegion().getRegionID()
                 : (implementation==PatchImplementation.CORAL ? player.distanceTo2D(worldPoint)<=LIVE_TILE_RADIUS :
                     player.getPlane() == worldPoint.getPlane() && player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS));
+        boolean kastoriFlower = implementation==PatchImplementation.FLOWER && "Kastori".equals(location);
+        boolean bin = implementation==PatchImplementation.COMPOST || implementation==PatchImplementation.BIG_COMPOST;
+        if (near && (kastoriFlower || bin) && !confirmedObject(match,worldPoint,kastoriFlower))
+            return new Observation(null,Source.NONE,0,protection,match.getName());
         if (near)
         {
             int value = client.getVarbitValue(match.getVarbit());
@@ -250,6 +285,8 @@ public final class QuestFarmingStateReader
             }
         }
 
+        // Old or cross-region flower snapshots must never suppress a Kastori visit.
+        if(kastoriFlower) return new Observation(null,Source.NONE,0,protection,match.getName());
         String raw = config.getConfiguration(TIME_TRACKING, profile, match.configKey());
         String observed=recent.get(match.configKey());
         boolean own=timestampMillis(observed)>timestampMillis(raw);
@@ -268,12 +305,40 @@ public final class QuestFarmingStateReader
             observedAtMillis, protection, match.getName(), Integer.parseInt(raw.split(":",2)[0]));
     }
 
+    private boolean confirmedObject(FarmingPatch match,WorldPoint marker,boolean flower)
+    {
+        if(marker==null||client.getScene()==null||client.getScene().getTiles()==null)return false;
+        net.runelite.api.Tile[][][] tiles=client.getScene().getTiles();
+        int plane=marker.getPlane();if(plane<0||plane>=tiles.length||tiles[plane]==null)return false;
+        // Local scene only. Varbits are multiplexed between areas, so do not
+        // interpret a neighbour's transmit value as the requested patch.
+        for(net.runelite.api.Tile[] row:tiles[plane])if(row!=null)for(net.runelite.api.Tile tile:row)
+        {
+            if(tile==null||tile.getWorldLocation()==null||tile.getWorldLocation().distanceTo(marker)>(flower?6:25)||tile.getGameObjects()==null)continue;
+            for(net.runelite.api.GameObject object:tile.getGameObjects())if(object!=null)
+            {
+                net.runelite.api.ObjectComposition base=client.getObjectDefinition(object.getId());
+                if(base==null||base.getVarbitId()!=match.getVarbit())continue;
+                net.runelite.api.ObjectComposition actual=base.getImpostorIds()==null?base:base.getImpostor();
+                if(actual!=null&&matchesLiveName(actual.getName(),flower))return true;
+            }
+        }
+        return false;
+    }
+    static boolean matchesLiveName(String name,boolean flower)
+    {
+        if(name==null)return false;
+        String n=name.toLowerCase(Locale.ROOT);
+        return flower?(n.contains("flower patch")||n.equals("flowers")||n.contains("marigold")||n.contains("rosemary")||n.contains("nasturtium")||n.contains("woad")||n.contains("limpwurt")||n.contains("lily")||n.contains("lilies")):n.contains("compost bin");
+    }
+
     /** Some upstream special patches intentionally use GROWING for their
      * final stage. The Director needs their actionable state, not just their
      * presence. Values come from the vendored decoder's documented actions. */
     static CropState normalizedState(PatchImplementation implementation, int value, PatchState raw)
     {
         if (raw == null) return null;
+        if (implementation==PatchImplementation.COMPOST && (value==94||value==126) || implementation==PatchImplementation.BIG_COMPOST && (value==93||value==99||value==222)) return CropState.HARVESTABLE;
         if (raw.getProduce() == Produce.WEEDS) return CropState.EMPTY;
         if (implementation == PatchImplementation.CORAL && (value==8 || value==19 || value==30)) return CropState.HARVESTABLE;
         if (implementation == PatchImplementation.ANIMA &&

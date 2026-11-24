@@ -25,14 +25,15 @@ final class PatchHighlight extends Overlay
     {
         if(object==null)return;
         ObjectComposition c=client.getObjectDefinition(object.getId());
-        if(PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c))
+        if(PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || isBin(c))
         {objects.add(object);return;}
         if(c!=null && c.getImpostorIds()!=null)
-            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id)){objects.add(object);return;}
+            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || isBin(client.getObjectDefinition(id))){objects.add(object);return;}
     }
     void despawned(GameObject o){objects.remove(o);}
     void clear(){objects.clear();}
     private static String name(ObjectComposition c){return c==null || c.getName()==null?"":c.getName().toLowerCase(Locale.ROOT);}
+    private static boolean isBin(ObjectComposition c){return name(c).contains("compost bin");}
     private static boolean isVine(ObjectComposition c){String n=name(c);return n.contains("grape") || n.contains("vine patch");}
     private static boolean hasAction(ObjectComposition c,String action)
     {if(c==null || c.getActions()==null)return false;for(String a:c.getActions())if(a!=null && a.equalsIgnoreCase(action))return true;return false;}
@@ -65,8 +66,10 @@ final class PatchHighlight extends Overlay
             if(exactId && point.distanceTo(Waypoints.exactPoint(patch))<=3){verified.add(o);continue;}
             if(!helper.inPatchRegion(patch,point))continue;
             boolean type=PatchObjects.matches(patch.getPatchType(),o.getId()) || imp!=null && PatchObjects.matches(patch.getPatchType(),imp.getId())
-                || patch.getPatchType()==PatchType.GRAPEVINE && (isVine(base)||isVine(imp));
+                || patch.getPatchType()==PatchType.GRAPEVINE && (isVine(base)||isVine(imp))
+                || patch.getPatchType()==PatchType.COMPOST_BIN && (isBin(base)||isBin(imp));
             if(!type)continue;
+            if(patch.getPatchType()==PatchType.COMPOST_BIN && (base==null||base.getVarbitId()!=varbit))continue;
             // The base object's transform varbit can directly bind a numbered or compass patch.
             if(varbit>0 && base!=null && base.getVarbitId()==varbit){verified.add(o);continue;}
             if(patch.getPatchType()==PatchType.HESPORI || patch.getPatchType()==PatchType.CORAL || marker!=null && point.distanceTo2D(marker)<=25)candidates.add(o);

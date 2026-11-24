@@ -58,7 +58,7 @@ public class FarmRunTypeTest
 			PatchType.GRAPEVINE,
 			PatchType.HESPORI,
 			PatchType.ANIMA,
-			PatchType.CORAL);
+			PatchType.CORAL, PatchType.COMPOST_BIN);
 
 		EnumSet<PatchType> audited = EnumSet.noneOf(PatchType.class);
 		audited.addAll(compostAndWater);

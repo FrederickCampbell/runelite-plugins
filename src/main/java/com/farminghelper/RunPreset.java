@@ -9,7 +9,7 @@ enum RunPreset
 {
     TREE("Tree Run", EnumSet.of(PatchType.TREE,PatchType.FRUIT_TREE,PatchType.HARDWOOD_TREE,PatchType.CALQUAT,PatchType.CELASTRUS,PatchType.CRYSTAL_TREE,PatchType.REDWOOD),
         "Farming Guild|Gnome Stronghold|Tree Gnome Village|Lumbridge|Varrock|Falador Park|Taverley|Catherby|Brimhaven|Tai Bwo Wannai|Lletya|Kastori|Auburnvale|Great Conch|Fossil Island|Avium Savannah|Anglers' Retreat|Prifddinas"),
-    CROP("Crop Run", EnumSet.of(PatchType.HERB,PatchType.ALLOTMENT,PatchType.FLOWER),
+    CROP("Crop Run", EnumSet.of(PatchType.HERB,PatchType.ALLOTMENT,PatchType.FLOWER,PatchType.COMPOST_BIN),
         "Farming Guild|South Falador|Morytania|North Ardougne|Catherby|Hosidius|Prifddinas|Harmony Island|Civitas illa Fortis|Troll Stronghold|Weiss|Kastori"),
     HOPS_BUSH("Hops & Bush Run", EnumSet.of(PatchType.HOPS,PatchType.BUSH),
         "Farming Guild|Champions' Guild|Lumbridge|Ardougne Monastery|Aldarin|Seers' Village|Etceteria|Yanille|Rimmington|Entrana"),
@@ -19,7 +19,7 @@ enum RunPreset
     final String title; final Set<PatchType> types; final List<String> reference;
     RunPreset(String title,Set<PatchType> types,String reference)
     {this.title=title;this.types=Collections.unmodifiableSet(types);this.reference=List.of(reference.split("\\|"));}
-    boolean defaultEnabled(PatchType type){return type!=PatchType.FLOWER && type!=PatchType.GRAPEVINE;}
+    boolean defaultEnabled(PatchType type){return type!=PatchType.FLOWER && type!=PatchType.GRAPEVINE && type!=PatchType.COMPOST_BIN;}
     String key(PatchType type){return "preset_"+name()+"_"+type.name();}
     Set<String> select(List<FarmRunPatch> patches,BiPredicate<String,Boolean> flag)
     {
@@ -37,7 +37,7 @@ enum RunPreset
             case HARDWOOD_TREE:return List.of("Fossil Island","Avium Savannah","Anglers' Retreat");
             case HOPS:return List.of("Lumbridge","Seers' Village","Aldarin","Yanille","Entrana");
             case BUSH:return List.of("Farming Guild","Champions' Guild","Rimmington","Ardougne Monastery","Etceteria");
-            case ALLOTMENT:case FLOWER:return CROP.reference;
+            case ALLOTMENT:case FLOWER:case COMPOST_BIN:return CROP.reference;
             case CALQUAT:return TREE.reference;
             default:return List.of("Farming Guild");
         }

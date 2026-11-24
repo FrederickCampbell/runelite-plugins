@@ -22,7 +22,8 @@ enum PatchType
 	HESPORI("Hespori", true),
 	ANIMA("Anima", true),
 	CRYSTAL_TREE("Crystal tree", false),
-	CORAL("Coral", true);
+	CORAL("Coral", true),
+	COMPOST_BIN("Compost", false);
 
 	private final String displayName;
 	private final boolean usesDibber;
@@ -50,6 +51,6 @@ enum PatchType
 
 	boolean usesCompost()
 	{
-		return this != GRAPEVINE && this != HESPORI && this != ANIMA && this != CORAL;
+		return this != GRAPEVINE && this != HESPORI && this != ANIMA && this != CORAL && this != COMPOST_BIN;
 	}
 }
