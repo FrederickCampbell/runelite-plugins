@@ -137,7 +137,19 @@ final class CuratedBank
         return false;
     }
     private static String config(ConfigManager c,String key){return c.getConfiguration("shortestpath",key);}
+    static boolean contextualEquipment(int id,IntFunction<String> names,boolean bird,boolean trees,boolean diving)
+    {
+        if(!fuzzyEquipment(id,names,bird))return false;
+        String n=Objects.toString(names.apply(id),"").toLowerCase(Locale.ROOT);
+        String base=Objects.toString(names.apply(ItemVariationMapping.map(id)),"").toLowerCase(Locale.ROOT);
+        if(!trees&&(saplingPreparation(n)||saplingPreparation(base)))return false;
+        if(!diving&&(divingEquipment(n)||divingEquipment(base)))return false;
+        return true;
+    }
+    private static boolean divingEquipment(String n){return n.equals("fishbowl helmet")||n.equals("diving apparatus")||n.equals("medallion of the deep")||n.equals("flippers");}
     static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> bank,IntFunction<String> names,Client client,ConfigManager config,boolean bird)
+    {return shelf(run,bank,names,client,config,bird,!bird,!bird);}
+    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> bank,IntFunction<String> names,Client client,ConfigManager config,boolean bird,boolean trees,boolean diving)
     {
         if(run==null)return null;
         Set<Integer> result=new HashSet<>(run);
@@ -149,7 +161,7 @@ final class CuratedBank
         {
             if(entry.getValue()<=0)continue;
             int id=entry.getKey();String name=names.apply(id);
-            if(fuzzyEquipment(id,names,bird))result.add(id);
+            if(contextualEquipment(id,names,bird,trees,diving))result.add(id);
             if(fairy&&!blocked.contains(id)&&(id==772||id==9084)&&fairyAccess(client))result.add(id);
         }
         for(var entry:bank.entrySet())if(entry.getValue()>0)for(String[] row:teleportRows(entry.getKey(),names))

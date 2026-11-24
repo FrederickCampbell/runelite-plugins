@@ -7,7 +7,7 @@ import java.util.function.BiPredicate;
  * from supplied Wiki Farming runs export; location keys remain stable aliases. */
 enum RunPreset
 {
-    TREE("Tree Run", EnumSet.of(PatchType.TREE,PatchType.FRUIT_TREE,PatchType.HARDWOOD_TREE,PatchType.CALQUAT,PatchType.CELASTRUS,PatchType.CRYSTAL_TREE,PatchType.REDWOOD),
+    TREE("Combined Tree Run", EnumSet.of(PatchType.TREE,PatchType.FRUIT_TREE,PatchType.HARDWOOD_TREE,PatchType.CALQUAT,PatchType.CELASTRUS,PatchType.CRYSTAL_TREE,PatchType.REDWOOD),
         "Farming Guild|Gnome Stronghold|Tree Gnome Village|Lumbridge|Varrock|Falador Park|Taverley|Catherby|Brimhaven|Tai Bwo Wannai|Lletya|Kastori|Auburnvale|Great Conch|Fossil Island|Avium Savannah|Anglers' Retreat|Prifddinas"),
     CROP("Crop Run", EnumSet.of(PatchType.HERB,PatchType.ALLOTMENT,PatchType.FLOWER,PatchType.COMPOST_BIN),
         "Farming Guild|South Falador|Morytania|North Ardougne|Catherby|Hosidius|Prifddinas|Harmony Island|Civitas illa Fortis|Troll Stronghold|Weiss|Kastori"),

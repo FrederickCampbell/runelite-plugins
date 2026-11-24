@@ -36,7 +36,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final SidebarNavigation navigation=new SidebarNavigation();
     private GuideView latestGuide;
     private long guideSession=Long.MIN_VALUE;
-    private boolean requiredOpen=true,completedOpen=false;
+    private boolean requiredOpen=false,completedOpen=false,lastPreparing=false;
     private JButton requirementsHeader;
     private boolean settingsFromRun=false,patchByLocation=true,showLocked=false,manualByLocation=false;
     private String patchSearch="",individualSearch="";
@@ -183,7 +183,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     void home()
     {
-        latestGuide=null;guideSession=Long.MIN_VALUE;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=true;completedOpen=false;
+        latestGuide=null;guideSession=Long.MIN_VALUE;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=false;completedOpen=false;lastPreparing=false;
         showHome();
     }
     private void showHome()
@@ -213,7 +213,7 @@ final class FarmingHelperPanel extends PluginPanel
             fillIndividual(results);addRow(results);
         }
         addRow(navRow("Manual Run","Choose your own patches",LIST,-1,false,this::openManual));
-        JLabel version=new JLabel("Farming Helper · v0.34",SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
+        JLabel version=new JLabel("Farming Helper · v0.35",SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
         footer.add(version);finish();
     }
     private static int patchSprite(PatchType type)
@@ -394,7 +394,7 @@ final class FarmingHelperPanel extends PluginPanel
         // A new backend session must open the guide even if it was started via
         // the plugin API rather than by a sidebar button. Same-session ticks
         // must never change the user's selected screen.
-        if(guideSession!=session){guideSession=session;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=true;completedOpen=false;navigation.starting();}
+        if(guideSession!=session){guideSession=session;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=!view.preparation.isEmpty();lastPreparing=!view.preparation.isEmpty();completedOpen=false;navigation.starting();}
         latestGuide=view;
         if(navigation.acceptGuide())renderGuide(view);
     }
@@ -413,66 +413,95 @@ final class FarmingHelperPanel extends PluginPanel
             if(view.active!=null)expanded.put(view.active.key(),true);
             lastActive=view.active;
         }
+        boolean isPreparing=!view.preparation.isEmpty();
+        if(isPreparing!=lastPreparing){requiredOpen=isPreparing;lastPreparing=isPreparing;}
         page(GUIDE,view.title,null,this::runSettings,true);
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
-        if(!plugin.diseaseInterruptActive()&&!view.stops.isEmpty())
+        int total=view.stats.total>=0?view.stats.total:view.stops.size();
+        int remaining=view.stats.pending>=0?view.stats.pending:(int)pending;
+        int complete=view.stats.processed>=0?view.stats.processed:(int)done;
+        if(!plugin.diseaseInterruptActive()&&total>0)
         {
-            caption(done+" listed complete · "+pending+" remaining");
-            JProgressBar progress=new JProgressBar(0,view.stops.size());progress.setValue((int)done);progress.setForeground(FarmingTheme.SUCCESS);
+            caption(complete+" completed · "+remaining+" remaining");
+            JProgressBar progress=new JProgressBar(0,total);progress.setValue(Math.max(0,total-remaining));progress.setForeground(FarmingTheme.SUCCESS);
+            progress.setToolTipText("Reviewed "+(total-remaining)+" of "+total+" selected patches (includes skipped, preserved and deferred).");
             progress.setPreferredSize(new Dimension(1,6));addRow(progress);
         }
-        requirementsHeader=collapse(requirementsTitle(view),requiredOpen,()->{requiredOpen=!requiredOpen;previousGuide=null;renderGuide(latestGuide);});
-        if(requiredOpen)requirements("Supplies",view.items,false);
-        if(requiredOpen||!view.preparation.isEmpty())button("Show farming bank",plugin::showActiveRunBank);
-
-
-        if(!view.supplyNote.isEmpty())line(view.supplyNote,false);
-        if(!view.preparation.isEmpty())
+        // The current task, or banking instructions while preparing, comes first.
+        if(isPreparing)
         {
             heading("Preparation / resupply");line(view.preparation,true);
             button("Continue run",plugin::continueRun);
         }
-        else if(view.active==null){heading("Run status");line(view.message,true);
-            if(view.stats.processed>=0){caption("Processed (including preserved): "+view.stats.processed);caption("Skipped manually: "+view.stats.skipped);if(view.stats.deferred>0)caption("Deferred this stage: "+view.stats.deferred);if(view.stats.seedless>0)caption("Hidden for missing seed stock: "+view.stats.seedless);}
-            button("Return home",plugin::stop);}
-        if(plugin.diseaseInterruptActive())heading("Disease detected");
-        if(done>0)collapse("Completed · "+done,completedOpen,()->{completedOpen=!completedOpen;previousGuide=null;renderGuide(latestGuide);});
-        if(completedOpen)for(GuideView.Stop stop:view.stops)if(stop.done)caption("✓ "+stop.patch.guideLabel());
-        List<GuideView.Stop> displayed=new ArrayList<>(view.stops);
-        displayed.sort(Comparator.comparing((GuideView.Stop stop)->!stop.active));
-        for(GuideView.Stop stop:displayed)
+        else if(view.active!=null)
         {
-            if(stop.done)continue;
-            JPanel section=new JPanel(new BorderLayout(0,1));section.setBorder(BorderFactory.createEmptyBorder(5,0,0,0));
-            boolean open=expanded.getOrDefault(stop.patch.key(),stop.active);
-            Color bg=stop.active?ACTIVE:FarmingTheme.CARD.darker();
-            JButton fold=new JButton("<html><div style='width:140px'>"+escape(stop.patch.guideLabel())+"<br><small>"+escape(stop.patch.getPatchType().getDisplayName())+"</small></div></html>",FarmingIcons.of(open?COLLAPSE:EXPAND,stop.active?FarmingTheme.SUCCESS:FarmingTheme.MUTED));
-            fold.setToolTipText(stop.patch.getDisplayName());
-            fold.setFont(FarmingTheme.font(Font.BOLD,12));fold.setHorizontalAlignment(SwingConstants.LEFT);
-            fold.setBackground(bg);fold.putClientProperty("farming.preserveBackground",Boolean.TRUE);fold.setForeground(stop.active?ACTIVE_TEXT:Color.WHITE);
-            fold.setBorder(BorderFactory.createEmptyBorder(7,7,5,7));
-            fold.addActionListener(e->{expanded.put(stop.patch.key(),!open);GuideView latest=previousGuide;previousGuide=null;renderGuide(latest==null?view:latest);});section.add(fold,BorderLayout.NORTH);
-            if(open)
-            {
-                JPanel body=new JPanel(new BorderLayout());body.setBackground(FarmingTheme.CARD);
-                body.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
-                JTextArea detail=text((stop.active?"▶ ":"")+stop.instruction,stop.done?new Color(100,205,100):stop.active?ACTIVE_TEXT:Color.WHITE);
-                stepText.put(stop.patch.key(),detail);body.add(detail,BorderLayout.CENTER);
-                if(stop.active)
-                {
-                    JButton skip=new JButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":"Skip patch");skip.addActionListener(e->plugin.skip(stop.patch));
-                    JPanel actions=new JPanel(new java.awt.GridLayout(0,1,0,2));actions.setOpaque(false);
-                    if(view.compostStep){JButton applied=new JButton("Compost applied / skip");applied.addActionListener(e->plugin.acknowledgeCompost(stop.patch));actions.add(applied);}
-                    actions.add(skip);body.add(actions,BorderLayout.SOUTH);
-                }
-                section.add(body,BorderLayout.CENTER);
-            }
-            addRow(section);
+            heading(plugin.diseaseInterruptActive()?"Disease detected":"Current patch");
+            for(GuideView.Stop stop:view.stops)if(stop.active&&!stop.done)renderStop(view,stop);
         }
-        if(view.preparation.isEmpty()&&view.active!=null&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
+        else
+        {
+            heading("Run status");line(view.message,true);
+            if(view.stats.processed>=0)
+            {
+                caption("Completed: "+view.stats.processed);
+                if(view.stats.preserved>0)caption("Preserved: "+view.stats.preserved);
+                if(view.stats.skipped>0)caption("Skipped: "+view.stats.skipped);
+                if(view.stats.deferred>0)caption("Deferred: "+view.stats.deferred);
+                if(view.stats.seedless>0)caption("Missing planting supplies: "+view.stats.seedless);
+            }
+            button("Return home",plugin::stop);
+        }
+        if(!view.items.isEmpty())
+        {
+            requirementsHeader=collapse(requirementsTitle(view),requiredOpen,()->{requiredOpen=!requiredOpen;previousGuide=null;renderGuide(latestGuide);});
+            if(requiredOpen)requirements("Supplies",view.items,false);
+        }
+        else requirementsHeader=null;
+        if(isPreparing||view.active!=null)
+        {
+            if(plugin.flag("activeRunBank",true))button("Show farming bank",plugin::showActiveRunBank);
+            if(!isPreparing&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
+        }
+        if(!view.supplyNote.isEmpty())caption(view.supplyNote);
+        if(view.stops.stream().anyMatch(stop->!stop.done&&!stop.active))
+        {
+            heading("Upcoming patches");
+            for(GuideView.Stop stop:view.stops)if(!stop.done&&!stop.active)renderStop(view,stop);
+        }
+        if(done>0)collapse("Completed / preserved · "+done,completedOpen,()->{completedOpen=!completedOpen;previousGuide=null;renderGuide(latestGuide);});
+        if(completedOpen)for(GuideView.Stop stop:view.stops)if(stop.done)caption(("Preserved".equals(stop.instruction)?"Preserved: ":"✓ ")+stop.patch.guideLabel());
         finish();
         SwingUtilities.invokeLater(()->{if(navigation.page()==GUIDE)scroll.getVerticalScrollBar().setValue(sameActive?scrollY:0);});
+    }
+
+    private void renderStop(GuideView view,GuideView.Stop stop)
+    {
+        JPanel section=new JPanel(new BorderLayout(0,1));section.setBorder(BorderFactory.createEmptyBorder(5,0,0,0));
+        boolean open=expanded.getOrDefault(stop.patch.key(),stop.active);
+        Color bg=stop.active?ACTIVE:FarmingTheme.CARD.darker();
+        JButton fold=new JButton("<html><div style='width:140px'>"+escape(stop.patch.guideLabel())+"<br><small>"+escape(stop.patch.getPatchType().getDisplayName())+"</small></div></html>",FarmingIcons.of(open?COLLAPSE:EXPAND,stop.active?FarmingTheme.SUCCESS:FarmingTheme.MUTED));
+        fold.setToolTipText(stop.patch.getDisplayName());
+        fold.setFont(FarmingTheme.font(Font.BOLD,12));fold.setHorizontalAlignment(SwingConstants.LEFT);
+        fold.setBackground(bg);fold.putClientProperty("farming.preserveBackground",Boolean.TRUE);fold.setForeground(stop.active?ACTIVE_TEXT:Color.WHITE);
+        fold.setBorder(BorderFactory.createEmptyBorder(7,7,5,7));
+        fold.addActionListener(e->{expanded.put(stop.patch.key(),!open);GuideView latest=previousGuide;previousGuide=null;renderGuide(latest==null?view:latest);});section.add(fold,BorderLayout.NORTH);
+        if(open)
+        {
+            JPanel body=new JPanel(new BorderLayout());body.setBackground(FarmingTheme.CARD);
+            body.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
+            JTextArea detail=text((stop.active?"▶ ":"")+stop.instruction,stop.done?new Color(100,205,100):stop.active?ACTIVE_TEXT:Color.WHITE);
+            stepText.put(stop.patch.key(),detail);body.add(detail,BorderLayout.CENTER);
+            if(stop.active)
+            {
+                JButton skip=new JButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":"Skip patch");skip.addActionListener(e->plugin.skip(stop.patch));
+                JPanel actions=new JPanel(new java.awt.GridLayout(0,1,0,2));actions.setOpaque(false);
+                if(view.compostStep){JButton applied=new JButton("Compost applied / skip");applied.addActionListener(e->plugin.acknowledgeCompost(stop.patch));actions.add(applied);}
+                actions.add(skip);body.add(actions,BorderLayout.SOUTH);
+            }
+            section.add(body,BorderLayout.CENTER);
+        }
+        addRow(section);
     }
 
     private static String escape(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");}
@@ -482,11 +511,9 @@ final class FarmingHelperPanel extends PluginPanel
         if(!plugin.canSave())caption("Log in to edit character preferences.");
         else
         {
-            addRow(navRow("General","Default crop care",SLIDERS,-1,false,this::general));
-            addRow(navRow("Grouped runs","Customize presets",LAYERS,-1,false,this::groupedPreferences));
-            addRow(navRow("Patches","Manage locations",PIN,-1,false,this::patchBrowser));
+            addRow(navRow("Farming preferences","Default crop care",SLIDERS,-1,false,this::general));
+            addRow(navRow("Patches","Locations and grouped runs",PIN,-1,false,this::patchBrowser));
             addRow(navRow("Crop priorities","Preferred seeds",LEAF,-1,false,this::priorities));
-            addRow(navRow("Bank & Seed Vault","Storage integration",FarmingIcons.Kind.STORAGE,-1,false,this::storagePreferences));
             addRow(navRow("Advanced","Diagnostics & maintenance",TOOLS,-1,false,this::advanced));
             caption("Preferences save automatically.");
         }
@@ -494,7 +521,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void general()
     {
-        page(GENERAL,"General",this::preferences,null,latestGuide!=null);
+        page(GENERAL,"Farming preferences",this::preferences,null,latestGuide!=null);
         heading("Default crop care");caption("Compost type");
         JComboBox<CompostChoice> compost=new JComboBox<>(CompostChoice.values());
         compost.setSelectedItem(CompostChoice.load(plugin.setting("directorCompostChoice",""),plugin.flag("directorUseCompost",true)));
@@ -502,13 +529,16 @@ final class FarmingHelperPanel extends PluginPanel
         compost.addActionListener(e->plugin.save("directorCompostChoice",((CompostChoice)compost.getSelectedItem()).name()));addRow(compost);
         preferenceCheck("Pay for crop protection","directorProtectTrees",true);
         heading("Default tree removal");preferenceCheck("Pay gardener to remove trees","directorPayRemoval",true);
-        caption("Saved run policies override these defaults.");finish();
+        heading("Missing planting supplies");
+        JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());seedless.setSelectedItem(SeedlessPolicy.load(plugin.setting("seedlessPolicyV1","GUIDE")));
+        seedless.addActionListener(e->plugin.save("seedlessPolicyV1",((SeedlessPolicy)seedless.getSelectedItem()).name()));addRow(seedless);
+        caption("These defaults apply to every run. Changes in Run settings are temporary.");finish();
     }
     private void preferenceCheck(String title,String key,boolean fallback)
     {JCheckBox check=new JCheckBox(title,plugin.flag(key,fallback));check.addActionListener(e->plugin.save(key,Boolean.toString(check.isSelected())));addRow(check);}
     private void groupedPreferences()
     {
-        int y=scroll.getVerticalScrollBar().getValue();page(GROUPS,"Grouped runs",this::preferences,null,latestGuide!=null);
+        int y=scroll.getVerticalScrollBar().getValue();page(GROUPS,"Grouped runs",this::patchBrowser,null,latestGuide!=null);
         caption("Applies to grouped runs only.");
         for(RunPreset preset:RunPreset.values())
         {
@@ -520,15 +550,12 @@ final class FarmingHelperPanel extends PluginPanel
         }
         finish();SwingUtilities.invokeLater(()->{if(navigation.page()==GROUPS)scroll.getVerticalScrollBar().setValue(y);});
     }
-    private void storagePreferences()
-    {
-        page(SidebarNavigation.Page.STORAGE,"Bank & Seed Vault",this::preferences,null,latestGuide!=null);
-        heading("Bank");preferenceCheck("Farming bank view","activeRunBank",true);caption("Open organized supplies during a run.");
-        heading("Seed Vault");preferenceCheck("Custom Seed Vault views","seedVaultViews",true);caption("Highest XP · Top 3 · Custom · Active Run");finish();
-    }
     private void advanced()
     {
         page(ADVANCED,"Advanced",this::preferences,null,latestGuide!=null);
+        heading("Bank & Seed Vault");
+        preferenceCheck("Farming bank view","activeRunBank",true);
+        preferenceCheck("Custom Seed Vault views","seedVaultViews",true);
         heading("Observed storage");
         JButton reset=new JButton("Reset observed stock");reset.setEnabled(latestGuide!=null);
         reset.setToolTipText("Clears cached quantities only; reopen the bank and Seed Vault.");
@@ -541,14 +568,11 @@ final class FarmingHelperPanel extends PluginPanel
     {
         if(latestGuide==null){showHome();return;}
         page(RUN_SETTINGS,"Run settings",this::returnToGuide,null,true);
-        GuideView view=latestGuide;
-        heading("Patch selection");
-        JCheckBox seedless=new JCheckBox("Hide seedless patches",view.hideSeedless);
-        JCheckBox clear=new JCheckBox("Clear occupied patches",view.clearSeedless);clear.setEnabled(view.hideSeedless);
-        seedless.setToolTipText("Hide patches with insufficient planting supplies; current run only.");
-        seedless.addActionListener(e->{plugin.setHideSeedless(seedless.isSelected());clear.setEnabled(seedless.isSelected());});addRow(seedless);
-        clear.setBorder(BorderFactory.createEmptyBorder(2,12,2,0));clear.setToolTipText("Harvest or check health without replanting.");
-        clear.addActionListener(e->plugin.setClearSeedless(clear.isSelected()));addRow(clear);
+        caption("Changes apply only to this run.");
+        heading("Missing planting supplies");
+        JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());
+        seedless.setSelectedItem(SeedlessPolicy.of(plugin.hideSeedless(),plugin.clearSeedless()));
+        seedless.addActionListener(e->plugin.setSeedlessPolicy((SeedlessPolicy)seedless.getSelectedItem()));addRow(seedless);
         heading("Crop care");JComboBox<RunPolicy> care=new JComboBox<>(RunPolicy.values());care.setSelectedItem(plugin.runPolicy());
         care.addActionListener(e->plugin.setRunPolicy((RunPolicy)care.getSelectedItem(),null));addRow(care);
         if(plugin.runHasTrees()){heading("Tree removal");JComboBox<String> remove=new JComboBox<>(new String[]{"Pay to remove","Manual removal"});remove.setSelectedIndex(plugin.runPayRemoval()?0:1);remove.addActionListener(e->plugin.setRunPolicy(null,remove.getSelectedIndex()==0));addRow(remove);}
@@ -557,6 +581,8 @@ final class FarmingHelperPanel extends PluginPanel
     private void patchBrowser()
     {
         page(PATCHES,"Patches",this::preferences,null,latestGuide!=null);
+        addRow(navRow("Grouped runs","Customize preset crops",LAYERS,-1,false,this::groupedPreferences));
+        heading("Locations");
         JPanel results=new JPanel();results.setOpaque(false);results.setLayout(new BoxLayout(results,BoxLayout.Y_AXIS));
         searchField(patchSearch,"Search patches…",v->{patchSearch=v;fillPatches(results);});
         JComboBox<String> sort=new JComboBox<>(new String[]{"Location · A–Z","Crop type · A–Z"});sort.setSelectedIndex(patchByLocation?0:1);

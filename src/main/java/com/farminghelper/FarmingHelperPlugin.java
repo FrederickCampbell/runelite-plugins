@@ -198,7 +198,7 @@ public class FarmingHelperPlugin extends Plugin
             runProfile=config.getRSProfileKey();
             refreshRunPreferences();
             updateAccessNotes();
-            runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&StepEngine.isTreeType(p.getPatchType()));
+            runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&StepEngine.isTreeType(p.getPatchType()));
             loadStock();
             sampleStorage();
             navigation.begin();
@@ -389,7 +389,7 @@ public class FarmingHelperPlugin extends Plugin
 
 
     @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
-    @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { if(!hopping||!Objects.equals(runProfile,config.getRSProfileKey()))reset(); }
+    @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { if(!guideRequested||!Objects.equals(runProfile,config.getRSProfileKey()))reset(); }
     @Subscribe public void onGameObjectSpawned(GameObjectSpawned event) { highlight.spawned(event.getGameObject()); }
     @Subscribe public void onGameObjectDespawned(GameObjectDespawned event) { highlight.despawned(event.getGameObject()); }
     @Subscribe public void onGameStateChanged(GameStateChanged event)
@@ -461,7 +461,8 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> ids=new HashSet<>(runItems);
         boolean bird=birdBankPhase();
         if(runBank==null||!runBank.bankOpen())return Set.copyOf(ids);
-        return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird);
+        boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
+        return CuratedBank.shelf(ids,bank,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving);
     }
     void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested){sampleStorage();update();runBank.show(bankRunItems(),birdBankPhase());}});}
     TransportHint birdhouseTransport()
