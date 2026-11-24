@@ -5,8 +5,6 @@ import java.util.function.IntFunction;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.ItemComposition;
-import net.runelite.api.Item;
-import net.runelite.api.ItemContainer;
 import net.runelite.api.InventoryID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.game.ItemManager;
@@ -60,16 +58,19 @@ final class ActiveRunBank
     {
         Map<Integer,Integer> result=new HashMap<>();
         for(InventoryID source:List.of(InventoryID.BANK,InventoryID.INVENTORY,InventoryID.EQUIPMENT))
-        {
-            ItemContainer container=client.getItemContainer(source);
-            if(container==null||container.getItems()==null)continue;
-            for(Item item:container.getItems())
-                if(item!=null&&PhysicalStock.available(item.getId(),item.getQuantity(),definition))
-                    result.merge(item.getId(),item.getQuantity(),Integer::sum);
-        }
+            PhysicalStock.collect(result,client.getItemContainer(source),definition);
         return Map.copyOf(result);
     }
-    Map<Integer,Integer> ownedStock(){return ownedStock(client,items::getItemComposition);}
+    Map<Integer,Integer> ownedStock()
+    {
+        Map<Integer,Integer> result=new HashMap<>(),worn=new HashMap<>();
+        PhysicalStock.collect(result,client.getItemContainer(InventoryID.BANK),items::getItemComposition);
+        PhysicalStock.collect(result,client.getItemContainer(InventoryID.INVENTORY),items::getItemComposition);
+        PhysicalStock.collect(worn,client.getItemContainer(InventoryID.EQUIPMENT),items::getItemComposition);
+        // Only normalize worn IDs for this visual shelf; exact supply stock is unchanged.
+        worn.forEach((id,n)->result.merge(items.canonicalize(id),n,Integer::sum));
+        return Map.copyOf(result);
+    }
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
     private int slot(int id){var s=items.getItemStats(id);return s==null||s.getEquipment()==null?-1:s.getEquipment().getSlot();}
     static Set<Integer> admittedIds(int[] layout)
@@ -87,11 +88,10 @@ final class ActiveRunBank
     }
     void tick(Set<Integer> next,Set<Integer> owned,boolean enabled,boolean bird)
     {
+        if(!bankOpen()){release();return;}
         BankTagsPlugin api=service();
-        if(!enabled||next==null||api==null){close();return;}
-        if(!bankOpen()){if(registered)close();return;}
-        Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);
-        boolean changed=!ids.equals(filtered);ids=Set.copyOf(filtered);register();
+        if(!enabled||next==null||api==null){close(api);return;}
+        boolean changed=updateEligible(next,owned);register();
         if(!opened){opened=true;offered=false;lastLayout=new int[0];}
         boolean stageChanged=birdPhase!=bird;birdPhase=bird;
         if(stageChanged)lastLayout=new int[0];
@@ -105,15 +105,26 @@ final class ActiveRunBank
     {
         BankTagsPlugin api=service();
         if(api==null||next==null||next.isEmpty()||!bankOpen())return;
-        Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);ids=Set.copyOf(filtered);
+        updateEligible(next,owned);
         if(!opened||birdPhase!=bird)lastLayout=new int[0];birdPhase=bird;
         register();opened=true;offered=true;
         open(api,BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory));
     }
-    void close()
+    private boolean updateEligible(Set<Integer> next,Set<Integer> owned)
     {
-        BankTagsService api=service();
+        Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);
+        boolean changed=!ids.equals(filtered);ids=Set.copyOf(filtered);return changed;
+    }
+    void close(){close(bankOpen()?service():null);}
+    private void close(BankTagsService api)
+    {
+        // Native Bank Tags can restore its remembered tag on reopen even after
+        // our in-memory registration was released. Close only our exact tag.
         if(api!=null&&TAG.equals(api.getActiveTag())&&bankOpen())api.closeBankTag();
+        release();
+    }
+    private void release()
+    {
         if(registered&&tags!=null)tags.unregisterTag(TAG);
         // Never save or delete another plugin's configuration. Registration is
         // in-memory; no actual TagTab or permanent item tag is created.

@@ -135,9 +135,22 @@ final class BankShelfLayout
     {
         if(prior.length==0)return build(eligible,names,equipment,transport);
         List<Integer> out=new ArrayList<>();Set<Integer> fresh=new HashSet<>(eligible);
+        Set<Integer> previous=new HashSet<>();for(int id:prior)if(id>=0)previous.add(id);
         for(int id:prior)
         {
             if(id>=0&&owned.contains(id)&&!eligible.contains(id))out.add(-1);
+            else if(id>=0&&!owned.contains(id))
+            {
+                // A consumed charge can change an ID, but not the shelf position.
+                // Only replace with a newly owned, eligible charged family member;
+                // never conflate different seeds, tools, or simultaneous stacks.
+                String oldName=name(names,id);
+                int replacement=fresh.stream().filter(n->!previous.contains(n)&&charge(oldName)>0&&
+                    charge(name(names,n))>0&&family(oldName).equals(family(name(names,n)))&&
+                    ItemVariationMapping.map(id)==ItemVariationMapping.map(n)&&transport.applyAsInt(id)==CHARGED&&
+                    transport.applyAsInt(n)==CHARGED).min(Integer::compareTo).orElse(id);
+                out.add(replacement);fresh.remove(replacement);
+            }
             else{out.add(id);fresh.remove(id);}
         }
         if(!fresh.isEmpty()){pad(out);for(int id:build(fresh,names,equipment,transport))out.add(id);}

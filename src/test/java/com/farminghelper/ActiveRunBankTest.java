@@ -51,6 +51,13 @@ public class ActiveRunBankTest
         when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(empty,equipment);
         assertEquals(ActiveRunBank.ownedStock(client,id->real),ActiveRunBank.ownedStock(client,id->real));
     }
+    @Test public void combinedStockKeepsInputsAndAddsQuantities()
+    {
+        Map<Integer,Integer> a=Map.of(952,1,556,10),b=Map.of(556,20);
+        assertEquals(Map.of(952,1,556,30),PhysicalStock.combine(a,b));
+        assertEquals(Integer.valueOf(10),a.get(556));
+        assertEquals(Integer.valueOf(20),b.get(556));
+    }
     @Test public void filtersExactPhysicalItemIds()
     {
         ItemComposition real=mock(ItemComposition.class),placeholder=mock(ItemComposition.class);

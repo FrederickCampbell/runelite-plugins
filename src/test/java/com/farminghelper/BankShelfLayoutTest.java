@@ -23,6 +23,15 @@ public class BankShelfLayoutTest
         assertTrue(position(layout,11850)>=0);assertTrue(position(layout,952)>=0);assertTrue(position(layout,7409)>=0);
         assertArrayEquals(layout,BankShelfLayout.reconcile(layout,owned,owned,names::get,id->-1,id->-1));
     }
+    @Test public void spentJewelleryChargeKeepsItsPosition()
+    {
+        Map<Integer,String> names=Map.of(11978,"Amulet of glory(6)",11976,"Amulet of glory(5)",952,"Spade");
+        int[] initial=BankShelfLayout.build(Set.of(11978,952),names::get,id->-1,id->id==952?-1:BankShelfLayout.CHARGED);
+        int[] changed=BankShelfLayout.reconcile(initial,Set.of(11976,952),Set.of(11976,952),names::get,id->-1,id->id==952?-1:BankShelfLayout.CHARGED);
+        assertEquals(position(initial,11978),position(changed,11976));
+        assertEquals(position(initial,952),position(changed,952));
+        assertEquals(-1,position(changed,11978));
+    }
     @Test public void noGhostItemsInitiallyAndStableWithdrawals()
     {
         assertArrayEquals(new int[0],BankShelfLayout.build(Set.of(),id->"",id->-1,id->-1));

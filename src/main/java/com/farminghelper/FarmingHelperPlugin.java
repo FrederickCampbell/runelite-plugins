@@ -112,6 +112,9 @@ public class FarmingHelperPlugin extends Plugin
     private String lastView;
     private volatile Map<String,String> accessNotes = Collections.emptyMap();
     private int lastAccessLevel=-1,accessTicks;
+    // Quest.getState runs a clientscript; only compute this cache outside script callbacks.
+    private Set<String> vaultAccessible=Collections.emptySet();
+    private long vaultAccessRevision;
     private volatile boolean running;
 
     @Provides FarmingHelperConfig provideConfig(ConfigManager manager)
@@ -251,6 +254,7 @@ public class FarmingHelperPlugin extends Plugin
         if(vaultViews!=null)vaultViews.close();
         ++session;
         lastAccessLevel=-1;
+        vaultAccessible=Collections.emptySet();vaultAccessRevision++;
         accessNotes=Collections.emptyMap();
         bank.clear();
         vault.clear();
@@ -483,17 +487,19 @@ public class FarmingHelperPlugin extends Plugin
         return navigation.nearbyTransport(client.getLocalPlayer().getWorldLocation());
     }
     long preferenceRevision(){return preferenceRevision;}
+    long vaultAccessRevision(){return vaultAccessRevision;}
+    boolean vaultAccessReady(int level){return lastAccessLevel==level;}
     Set<PatchType> vaultAllowed(int level)
     {
         Set<PatchType> allowed=EnumSet.noneOf(PatchType.class);
-        for(FarmRunPatch p:patches)if(enabled(p)&&Waypoints.accessIssue(client,p.getPatchType(),p.getLocation(),level,false)==null)
+        for(FarmRunPatch p:patches)if(enabled(p)&&vaultAccessible.contains(p.key()))
             allowed.add(p.getPatchType());
         return allowed;
     }
     Map<PatchType,Set<Crop>> vaultOverrides(int level)
     {
         Map<PatchType,Set<Crop>> result=new EnumMap<>(PatchType.class);
-        for(FarmRunPatch p:patches)if(enabled(p)&&Waypoints.accessIssue(client,p.getPatchType(),p.getLocation(),level,false)==null)
+        for(FarmRunPatch p:patches)if(enabled(p)&&vaultAccessible.contains(p.key()))
         {
             Crop c=CropCatalog.findByName(p.getPatchType(),override(p));
             if(c!=null&&c.getLevel()<=level)result.computeIfAbsent(p.getPatchType(),t->new LinkedHashSet<>()).add(c);
@@ -553,10 +559,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private void addItems(Map<Integer,Integer> stock, ItemContainer container)
     {
-        if (container == null || itemManager==null) return;
-        for (Item item : container.getItems())
-            if (item!=null && PhysicalStock.available(item.getId(),item.getQuantity(),itemManager::getItemComposition))
-                stock.merge(item.getId(), item.getQuantity(), Integer::sum);
+        if(itemManager!=null)PhysicalStock.collect(stock,container,itemManager::getItemComposition);
     }
 
     static boolean actionable(PatchType type, CropState state)
@@ -581,12 +584,15 @@ public class FarmingHelperPlugin extends Plugin
         int level = client.getRealSkillLevel(Skill.FARMING);
         lastAccessLevel=level;
         Map<String,String> notes = new HashMap<>();
+        Set<String> accessible=new HashSet<>();
         for (FarmRunPatch patch : patches)
         {
             String issue = Waypoints.accessIssue(client,patch.getPatchType(),patch.getLocation(),level,false);
+            if(issue==null)accessible.add(patch.key());
             if (issue == null && patch.getPatchType()!=PatchType.COMPOST_BIN && patch.getPatchType()!=PatchType.BIRDHOUSE && CropCatalog.recommend(patch.getPatchType(),level) == null) issue = "Farming level too low";
             if (issue != null) notes.put(patch.key(),issue);
         }
+        if(!vaultAccessible.equals(accessible)){vaultAccessible=Set.copyOf(accessible);vaultAccessRevision++;}
         Map<String,String> old=accessNotes;
         accessNotes = Collections.unmodifiableMap(notes);
         if(!old.equals(notes)&&panel!=null)SwingUtilities.invokeLater(()->{if(running&&panel!=null)panel.accessChanged();});
@@ -606,15 +612,15 @@ public class FarmingHelperPlugin extends Plugin
         String title = runLabel!=null ? runLabel : run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         int level = client.getRealSkillLevel(Skill.FARMING);
-        Map<Integer,Integer> bag=new HashMap<>(), carried=new HashMap<>();
+        Map<Integer,Integer> bag=new HashMap<>(), equipped=new HashMap<>();
         addItems(bag,client.getItemContainer(InventoryID.INVENTORY));
-        Map<Integer,Integer> equipped=new HashMap<>();addItems(equipped,client.getItemContainer(InventoryID.EQUIPMENT));
-        carried.putAll(bag);equipped.forEach((id,n)->carried.merge(id,n,Integer::sum));
+        addItems(equipped,client.getItemContainer(InventoryID.EQUIPMENT));
+        Map<Integer,Integer> carried=PhysicalStock.combine(bag,equipped);
         // Run this before normal planning, even during banking or birdhouses. No
         // mutations to the normal guide cursor, progress, or preparation state.
         if(loggedIn&&showDiseaseInterrupt(title,bag,carried))return;
-        Map<Integer,Integer> storage=new HashMap<>(bank);vault.forEach((id,n)->storage.merge(id,n,Integer::sum));
-        Map<Integer,Integer> stock=new HashMap<>(bag);storage.forEach((id,n)->stock.merge(id,n,Integer::sum));
+        Map<Integer,Integer> storage=PhysicalStock.combine(bank,vault);
+        Map<Integer,Integer> stock=PhysicalStock.combine(bag,storage);
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
         boolean protect=runPolicy.protection, pay=runPayRemoval;
         Map<Integer,Integer> aliases=TreePreparation.aliases(stock,this::observedItemName);

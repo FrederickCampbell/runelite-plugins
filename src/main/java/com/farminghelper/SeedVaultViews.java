@@ -5,7 +5,6 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Skill;
 import net.runelite.api.InventoryID;
-import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.Point;
 import net.runelite.api.ScriptID;
@@ -23,7 +22,7 @@ import org.slf4j.LoggerFactory;
  * edit native withdrawal widgets, quantities, actions or listeners. */
 final class SeedVaultViews
 {
-    static final int GROUP=631, INIT=2814, CATEGORY=2815, BUILD=ScriptID.SEED_VAULT_BUILD;
+    static final int GROUP=InterfaceID.SEED_VAULT, INIT=2814, CATEGORY=2815, BUILD=ScriptID.SEED_VAULT_BUILD;
     private static final Logger LOG=LoggerFactory.getLogger(SeedVaultViews.class);
     static final int LEFT=(GROUP<<16)|7, CATEGORIES=(GROUP<<16)|9, ITEMS=(GROUP<<16)|18, LABELS=(GROUP<<16)|19;
     static final int HEADERS=(GROUP<<16)|16, LINES=(GROUP<<16)|17, VIEWPORT=(GROUP<<16)|12, SCROLLBAR=(GROUP<<16)|11;
@@ -49,7 +48,7 @@ final class SeedVaultViews
     private Set<Integer> lastStockIds;
     private Widget lastItemParent;
     private int lastLevel=-1;
-    private long lastConfig=Long.MIN_VALUE;
+    private long lastConfig=Long.MIN_VALUE,lastAccess=Long.MIN_VALUE;
 
     SeedVaultViews(Client client,ItemManager items,FarmingHelperPlugin plugin)
     {this.client=client;this.items=items;this.plugin=plugin;}
@@ -107,8 +106,7 @@ final class SeedVaultViews
         ItemContainer c=client.getItemContainer(InventoryID.SEED_VAULT);
         if(c==null)return null;
         Map<Integer,Integer> result=new HashMap<>();
-        for(Item i:c.getItems())if(i!=null&&PhysicalStock.available(i.getId(),i.getQuantity(),items::getItemComposition))
-            result.merge(i.getId(),i.getQuantity(),Integer::sum);
+        PhysicalStock.collect(result,c,items::getItemComposition);
         return result;
     }
     static List<VaultRanking.Entry> withQuantities(List<VaultRanking.Entry> entries,Map<Integer,Integer> stock)
@@ -145,7 +143,7 @@ final class SeedVaultViews
     {
         if(component==CATEGORIES||component==InterfaceID.SeedVault.SEARCH)leave();
     }
-    void close(){leave();removeButtons();buildDepth=0;nativeRefresh=false;quantityDirty=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastWidth=-1;runItems=null;opened=false;dirty=true;}
+    void close(){leave();removeButtons();buildDepth=0;nativeRefresh=false;quantityDirty=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastAccess=Long.MIN_VALUE;lastWidth=-1;runItems=null;opened=false;dirty=true;}
     void leave(){restore(true);forgetProjection();active=null;paintButtons();dirty=true;customScroll=0;}
     private void rememberScroll(){if(active!=null&&scrollParent!=null&&client.getWidget(VIEWPORT)==scrollParent)customScroll=scrollParent.getScrollY();}
 
@@ -179,8 +177,12 @@ final class SeedVaultViews
         if((!opened||starting)&&runItems!=null)select(VaultRanking.View.RUN);
         opened=true;
         int level=client.getRealSkillLevel(Skill.FARMING);
-        long revision=plugin.preferenceRevision();
-        if(lastLevel!=level||lastConfig!=revision){lastLevel=level;lastConfig=revision;dirty=true;}
+        long revision=plugin.preferenceRevision(),access=plugin.vaultAccessRevision();
+        if(lastLevel!=level||lastConfig!=revision||lastAccess!=access)
+        {lastLevel=level;lastConfig=revision;lastAccess=access;dirty=true;}
+        // Do not project an empty/old eligibility cache during login or a level change.
+        if(active!=null&&active!=VaultRanking.View.RUN&&!plugin.vaultAccessReady(level))
+        {dirty=true;return;}
         Widget viewport=client.getWidget(VIEWPORT);
         if(viewport!=null&&lastWidth!=viewport.getWidth()){lastWidth=viewport.getWidth();dirty=true;}
         if(quantityDirty)
