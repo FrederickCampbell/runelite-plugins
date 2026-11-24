@@ -657,3 +657,220 @@
 29273	29273	T				4182&2048	whistle	Quetzal whistle: Salvager Overlook
 29275	29275	T				4182&2048	whistle	Quetzal whistle: Salvager Overlook
 33120	33120	F				4182&2048	whistle	Perfected quetzal whistle(i): Salvager Overlook
+11140	11140	F			3611=2		item	Karamja gloves: Gem Mine
+13103	11140	F			3611=2		item	Karamja gloves: Gem Mine
+13103	11140	F			4566=1		item	Karamja gloves 4: Slayer Master
+13134	13134	T			4485=1;4558=0		item	Desert amulet 3: Teleport
+13135	13134	T			4485=1;4558=0		item	Desert amulet 3: Teleport
+13136	13134	F			4486=1		item	Desert amulet 4: Nardah
+13136	13134	F			4486=1		item	Desert amulet 4: Kalphite cave
+13112	13112	T			4487=1;4542<2		item	Morytania legs: Slime Pit
+13113	13112	T			4488=1;4542<5		item	Morytania legs: Slime Pit
+13114	13112	T			4488=1;4542<5		item	Morytania legs: Slime Pit
+13115	13112	F			4490=1		item	Morytania legs: Slime Pit
+13114	13112	F			4489=1		item	Morytania legs: Burgh de Rott
+13115	13112	F			4489=1		item	Morytania legs: Burgh de Rott
+13129	13129	T			4491=1;5005=0		item	Fremennik sea boots: Teleport
+13130	13129	T			4491=1;5005<3		item	Fremennik sea boots: Teleport
+13131	13129	T			4491=1;5005<5		item	Fremennik sea boots: Teleport
+13132	13129	F			4494=1		item	Fremennik sea boots: Teleport
+13139	13139	T			4477=1;4561=0		item	Kandarin headgear 3: Teleport
+13140	13139	F			4478=1		item	Kandarin headgear 4: Teleport
+13110	13110	T			4468=1;4541=0		item	Wilderness sword 3: Teleport
+13111	13110	F			4469=1		item	Wilderness sword 4: Teleport
+13143	13143	T			4473=1;4564=0		item	Western banner 3: Teleport
+13144	13143	F			4474=1		item	Western banner 4: Teleport
+28790	8007	T		Client of Kourend			item	Kourend Castle tablet
+11743	8007	T					item	Pollnivneach tablet
+11744	8007	T					item	Rellekka tablet
+11747	8007	T					item	Trollheim tablet
+30149	8007	T					item	Aldarin tablet
+12779	8007	T		Desert Treasure I			item	Kharyrll tablet
+12780	8007	T		Desert Treasure I			item	Lassar tablet
+24949	8007	T		Lunar Diplomacy			item	Moonclan tablet
+24953	8007	T					item	Waterbirth tablet
+24957	8007	T					item	Khazard tablet
+24959	8007	T					item	Fishing guild tablet
+19613	8007	T					item	Arceuus Library tablet
+22949	8007	T					item	Battlefront tablet
+19617	8007	T					item	Mind Altar tablet
+19623	8007	T		Biohazard			item	West Ardougne tablet
+12402	12402	T					item	Nardah teleport
+21389	12402	T			5672>0		item	Master scroll book: Nardah teleport
+12403	12402	T					item	Digsite teleport
+21389	12402	T			5673>0		item	Master scroll book: Digsite teleport
+12404	12402	T					item	Feldip hills teleport
+21389	12402	T			5674>0		item	Master scroll book: Feldip hills teleport
+12405	12402	T		Lunar Diplomacy			item	Lunar isle teleport
+21389	12402	T		Lunar Diplomacy	5675>0		item	Master scroll book: Lunar isle teleport
+12406	12402	T		Priest in Peril			item	Mort'ton teleport
+21389	12402	T		Priest in Peril	5676>0		item	Master scroll book: Mort'ton teleport
+12408	12402	T					item	Piscatoris teleport
+21389	12402	T			5678>0		item	Master scroll book: Piscatoris teleport
+12410	12402	T		Regicide			item	Iorwerth camp teleport
+21389	12402	T		Regicide	5680>0		item	Master scroll book: Iorwerth camp teleport
+12411	12402	T		Cabin Fever			item	Mos le'harmless teleport
+21389	12402	T		Cabin Fever	5681>0		item	Master scroll book: Mos le'harmless teleport
+12642	12402	T					item	Lumberyard teleport
+21389	12402	T			5682>0		item	Master scroll book: Lumberyard teleport
+23387	12402	T					item	Watson teleport
+21389	12402	T			8253>0		item	Master scroll book: Watson teleport
+30040	12402	T		Children of the Sun	9650=1		item	Colossal wyrm teleport scroll
+21389	12402	T		Children of the Sun	9650=1;11029>0		item	Master scroll book: Colossal wyrm teleport scroll
+30775	12402	T					item	Chasm teleport scroll
+21389	12402	T			16238>0		item	Master scroll book: Chasm teleport scroll
+34033	12402	T		Fallen From Grace			item	Ardeaglais teleport
+21389	12402	T		Fallen From Grace	15749>0		item	Master scroll book: Ardeaglais teleport
+9798	9798	F	99 Fishing				item	Fishing cape: Fishing Guild
+9799	9798	F	99 Fishing				item	Fishing cape: Fishing Guild
+9798	9798	F	99 Fishing				item	Fishing cape: Otto's Grotto
+9799	9798	F	99 Fishing				item	Fishing cape: Otto's Grotto
+9948	9948	T	99 Hunter		4819<5		item	Hunter cape: Feldip Hills
+9949	9948	T	99 Hunter		4819<5		item	Hunter cape: Feldip Hills
+9948	9948	T	99 Hunter		4819<5		item	Hunter cape: Black chinchompa
+9949	9948	T	99 Hunter		4819<5		item	Hunter cape: Black chinchompa
+9948	9948	F	99 Hunter				item	Hunter cape: Hunter Guild
+9949	9948	F	99 Hunter				item	Hunter cape: Hunter Guild
+13280	13280	F	Max Total		4744=0		item	Max cape: Tele to POH (Inside the house)
+13342	13280	F	Max Total		4744=0		item	Max cape: Tele to POH (Inside the house)
+13280	13280	F	Max Total		2187=1;4744=1		item	Max cape: POH Portals: Rimmington
+13342	13280	F	Max Total		2187=1;4744=1		item	Max cape: POH Portals: Rimmington
+13280	13280	F	Max Total		2187=2;4744=1		item	Max cape: POH Portals: Taverley
+13342	13280	F	Max Total		2187=2;4744=1		item	Max cape: POH Portals: Taverley
+13280	13280	F	Max Total		2187=3;4744=1		item	Max cape: POH Portals: Pollnivneach
+13342	13280	F	Max Total		2187=3;4744=1		item	Max cape: POH Portals: Pollnivneach
+13280	13280	F	Max Total		2187=4;4744=1		item	Max cape: POH Portals: Rellekka
+13342	13280	F	Max Total		2187=4;4744=1		item	Max cape: POH Portals: Rellekka
+13280	13280	F	Max Total		2187=5;4744=1		item	Max cape: POH Portals: Brimhaven
+13342	13280	F	Max Total		2187=5;4744=1		item	Max cape: POH Portals: Brimhaven
+13280	13280	F	Max Total		2187=6;4744=1		item	Max cape: POH Portals: Yanille
+13342	13280	F	Max Total		2187=6;4744=1		item	Max cape: POH Portals: Yanille
+13280	13280	F	Max Total		2187=8;4744=1		item	Max cape: POH Portals: Hosidius
+13342	13280	F	Max Total		2187=8;4744=1		item	Max cape: POH Portals: Hosidius
+13280	13280	F	Max Total		2187=9;4744=1		item	Max cape: POH Portals: Prifddinas
+13342	13280	F	Max Total		2187=9;4744=1		item	Max cape: POH Portals: Prifddinas
+13280	13280	F	Max Total		2187=13;4744=1		item	Max cape: POH Portals: Aldarin
+13342	13280	F	Max Total		2187=13;4744=1		item	Max cape: POH Portals: Aldarin
+13280	13280	F	Max Total				item	Max cape: POH Portals: Rimmington
+13342	13280	F	Max Total				item	Max cape: POH Portals: Rimmington
+13280	13280	F	Max Total				item	Max cape: POH Portals: Taverley
+13342	13280	F	Max Total				item	Max cape: POH Portals: Taverley
+13280	13280	F	Max Total				item	Max cape: POH Portals: Pollnivneach
+13342	13280	F	Max Total				item	Max cape: POH Portals: Pollnivneach
+13280	13280	F	Max Total				item	Max cape: POH Portals: Hosidius
+13342	13280	F	Max Total				item	Max cape: POH Portals: Hosidius
+13280	13280	F	Max Total				item	Max cape: POH Portals: Rellekka
+13342	13280	F	Max Total				item	Max cape: POH Portals: Rellekka
+13280	13280	F	Max Total				item	Max cape: POH Portals: Brimhaven
+13342	13280	F	Max Total				item	Max cape: POH Portals: Brimhaven
+13280	13280	F	Max Total				item	Max cape: POH Portals: Yanille
+13342	13280	F	Max Total				item	Max cape: POH Portals: Yanille
+13280	13280	F	Max Total				item	Max cape: POH Portals: Prifddinas
+13342	13280	F	Max Total				item	Max cape: POH Portals: Prifddinas
+13280	13280	F	Max Total				item	Max cape: POH Portals: Aldarin
+13342	13280	F	Max Total				item	Max cape: POH Portals: Aldarin
+13280	13280	F	Max Total				item	Max cape: Warriors' Guild
+13342	13280	F	Max Total				item	Max cape: Warriors' Guild
+13280	13280	F	Max Total				item	Max cape: Fishing Teleports: Fishing Guild
+13342	13280	F	Max Total				item	Max cape: Fishing Teleports: Fishing Guild
+13280	13280	F	Max Total				item	Max cape: Fishing Teleports: Otto's Grotto
+13342	13280	F	Max Total				item	Max cape: Fishing Teleports: Otto's Grotto
+13280	13280	F	Max Total				item	Max cape: Crafting Guild
+13342	13280	F	Max Total				item	Max cape: Crafting Guild
+13280	13280	T	Max Total				item	Max cape: Other Teleports: Feldip Hills
+13342	13280	T	Max Total				item	Max cape: Other Teleports: Feldip Hills
+13280	13280	T	Max Total				item	Max cape: Other Teleports: Black chinchompa
+13342	13280	T	Max Total				item	Max cape: Other Teleports: Black chinchompa
+13280	13280	F	Max Total				item	Max cape: Other Teleports: Hunter Guild
+13342	13280	F	Max Total				item	Max cape: Other Teleports: Hunter Guild
+13280	13280	F	Max Total				item	Max cape: Other Teleports: Farming Guild
+13342	13280	F	Max Total				item	Max cape: Other Teleports: Farming Guild
+13280	13280	F	Max Total				item	Max cape: Other Teleports: The Pandemonium
+13342	13280	F	Max Total				item	Max cape: Other Teleports: The Pandemonium
+9813	9813	F	Max Quest				item	Quest point cape: Legends' Guild
+13068	9813	F	Max Quest				item	Quest point cape: Legends' Guild
+34813	34813	T	45 Farming				item	Seed of growth
+9469	9469	T					item	Grand seed pod: Grand Tree
+3691	3691	T					item	Enchanted lyre: Rellekka
+6125	3691	T					item	Enchanted lyre: Rellekka
+6126	3691	T					item	Enchanted lyre: Rellekka
+6127	3691	T					item	Enchanted lyre: Rellekka
+13079	3691	T					item	Enchanted lyre: Rellekka
+3691	3691	T			4493=1		item	Enchanted lyre: Waterbirth Island
+6125	3691	T			4493=1		item	Enchanted lyre: Waterbirth Island
+6126	3691	T			4493=1		item	Enchanted lyre: Waterbirth Island
+6127	3691	T			4493=1		item	Enchanted lyre: Waterbirth Island
+13079	3691	T			4493=1		item	Enchanted lyre: Waterbirth Island
+3691	3691	T			4494=1		item	Enchanted lyre: Jatizso
+6125	3691	T			4494=1		item	Enchanted lyre: Jatizso
+6126	3691	T			4494=1		item	Enchanted lyre: Jatizso
+6127	3691	T			4494=1		item	Enchanted lyre: Jatizso
+13079	3691	T			4494=1		item	Enchanted lyre: Jatizso
+3691	3691	T			4494=1		item	Enchanted lyre: Neitiznot
+6125	3691	T			4494=1		item	Enchanted lyre: Neitiznot
+6126	3691	T			4494=1		item	Enchanted lyre: Neitiznot
+6127	3691	T			4494=1		item	Enchanted lyre: Neitiznot
+13079	3691	T			4494=1		item	Enchanted lyre: Neitiznot
+23458	3691	F					item	Enchanted lyre (i): Rellekka
+23458	3691	F			4493=1		item	Enchanted lyre (i): Waterbirth Island
+23458	3691	F			4494=1		item	Enchanted lyre (i): Jatizso
+23458	3691	F			4494=1		item	Enchanted lyre (i): Neitiznot
+22400	22400	F					item	Drakan's medallion: Ver Sinhaza
+22400	22400	F		Sins of the Father			item	Drakan's medallion: Darkmeyer
+22400	22400	F		The Blood Moon Rises	15470>0		item	Drakan's medallion: Castle Drakan
+22400	22400	F			12416>0		item	Drakan's medallion: Slepe
+21913	21913	F					item	Mythical cape
+22114	21913	F					item	Mythical cape
+24855	21913	F					item	Mythical cape
+26948	26948	T					item	Pharaoh's sceptre: Jalsavrah
+26948	26948	T					item	Pharaoh's sceptre: Jaleustrophos
+26948	26948	T					item	Pharaoh's sceptre: Jaldraocht
+26948	26948	T			13839=1		item	Pharaoh's sceptre: Jaltevas
+26818	26818	T					item	Ring of the elements: Air
+26818	26818	T					item	Ring of the elements: Water
+26818	26818	T					item	Ring of the elements: Earth
+26818	26818	T					item	Ring of the elements: Fire
+32399	32399	T					item	Sailors' amulet: The Pandemonium
+32399	32399	T			19540=1		item	Sailors' amulet: Port Roberts
+32399	32399	T			19541=1		item	Sailors' amulet: Red Rock
+33104	33104	T					item	Cowbell amulet
+21129	21129	T			668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Lumbridge
+21132	21129	T			668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Lumbridge
+21134	21129	T			668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Lumbridge
+21136	21129	T			668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Lumbridge
+21138	21129	T			668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Lumbridge
+21129	21129	T			3910=1		item	Ring of returning: Camelot
+21132	21129	T			3910=1		item	Ring of returning: Camelot
+21134	21129	T			3910=1		item	Ring of returning: Camelot
+21136	21129	T			3910=1		item	Ring of returning: Camelot
+21138	21129	T			3910=1		item	Ring of returning: Camelot
+21129	21129	T			668=1		item	Ring of returning: Falador
+21132	21129	T			668=1		item	Ring of returning: Falador
+21134	21129	T			668=1		item	Ring of returning: Falador
+21136	21129	T			668=1		item	Ring of returning: Falador
+21138	21129	T			668=1		item	Ring of returning: Falador
+21129	21129	T			621=1		item	Ring of returning: Edgeville
+21132	21129	T			621=1		item	Ring of returning: Edgeville
+21134	21129	T			621=1		item	Ring of returning: Edgeville
+21136	21129	T			621=1		item	Ring of returning: Edgeville
+21138	21129	T			621=1		item	Ring of returning: Edgeville
+21129	21129	T			10528=1		item	Ring of returning: Ferox Enclave
+21132	21129	T			10528=1		item	Ring of returning: Ferox Enclave
+21134	21129	T			10528=1		item	Ring of returning: Ferox Enclave
+21136	21129	T			10528=1		item	Ring of returning: Ferox Enclave
+21138	21129	T			10528=1		item	Ring of returning: Ferox Enclave
+21129	21129	T			12310=1		item	Ring of returning: Kourend Castle
+21132	21129	T			12310=1		item	Ring of returning: Kourend Castle
+21134	21129	T			12310=1		item	Ring of returning: Kourend Castle
+21136	21129	T			12310=1		item	Ring of returning: Kourend Castle
+21138	21129	T			12310=1		item	Ring of returning: Kourend Castle
+21129	21129	T			9805=1		item	Ring of returning: Civitas illa Fortis
+21132	21129	T			9805=1		item	Ring of returning: Civitas illa Fortis
+21134	21129	T			9805=1		item	Ring of returning: Civitas illa Fortis
+21136	21129	T			9805=1		item	Ring of returning: Civitas illa Fortis
+21138	21129	T			9805=1		item	Ring of returning: Civitas illa Fortis
+21129	21129	T		Song of the Elves	668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Prifddinas
+21132	21129	T		Song of the Elves	668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Prifddinas
+21134	21129	T		Song of the Elves	668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Prifddinas
+21136	21129	T		Song of the Elves	668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Prifddinas
+21138	21129	T		Song of the Elves	668=0;3910=0;621=0;10528=0;12310=0;9805=0		item	Ring of returning: Prifddinas
