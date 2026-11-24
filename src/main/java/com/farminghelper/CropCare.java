@@ -36,6 +36,18 @@ final class CropCare
             default:return false;
         }
     }
+    static boolean watered(PatchType type,Observation o)
+    {
+        if(o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;
+        int r=o.rawValue;
+        switch(type)
+        {
+            case ALLOTMENT:return between(r,70,73)||between(r,77,80)||between(r,84,87)||between(r,91,94)||between(r,98,103)||between(r,107,112)||between(r,116,123)||between(r,128,134);
+            case FLOWER:return between(r,72,75)||between(r,77,80)||between(r,82,85)||between(r,87,90)||between(r,92,95)||between(r,101,104);
+            case HOPS:return between(r,132,135)||between(r,142,146)||between(r,154,159)||between(r,168,174)||between(r,184,191)||between(r,202,205)||between(r,212,216)||between(r,224,226)||between(r,232,235)||between(r,242,246);
+            default:return false;
+        }
+    }
     static boolean needsCure(Observation o,boolean verified)
     {return verified&&o!=null&&o.source==Source.LIVE&&o.state==CropState.DISEASED;}
     static boolean prunes(PatchType type)

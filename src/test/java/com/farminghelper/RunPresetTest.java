@@ -17,9 +17,10 @@ public class RunPresetTest
         assertEquals(EnumSet.of(PatchType.CACTUS,PatchType.BELLADONNA,PatchType.MUSHROOM,PatchType.SEAWEED,PatchType.CORAL,PatchType.GRAPEVINE),RunPreset.SPECIALTY.types);
         assertFalse(RunPreset.TREE.types.contains(PatchType.SPIRIT_TREE));
         List<FarmRunPatch> patches=List.of(p("Falador",PatchType.HERB),p("Falador",PatchType.FLOWER),p("Kourend",PatchType.GRAPEVINE),p("Morytania",PatchType.MUSHROOM));
-        assertEquals(Set.of(patches.get(0).key()),RunPreset.CROP.select(patches,(k,d)->d));
+        assertEquals(Set.of(patches.get(0).key(),patches.get(1).key()),RunPreset.CROP.select(patches,(k,d)->d));
         assertEquals(Set.of(patches.get(3).key()),RunPreset.SPECIALTY.select(patches,(k,d)->d));
         assertEquals(Set.of(patches.get(1).key()),RunPreset.CROP.select(patches,(k,d)->k.equals(RunPreset.CROP.key(PatchType.FLOWER))));
+        assertEquals(Set.of(patches.get(0).key()),RunPreset.CROP.select(patches,(k,d)->d&&!k.equals(RunPreset.CROP.key(PatchType.FLOWER))));
     }
     @Test public void guildFirstAndSharedSitesStayTogether()
     {

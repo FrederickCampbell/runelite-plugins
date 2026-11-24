@@ -574,7 +574,7 @@ public class FarmingHelperPlugin extends Plugin
                 else if(p==current){completed.add(p);visible.add(p);}
                 continue;
             }
-            if(p==current)progress.observe(o);
+            if(p==current){progress.observe(o);if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);}
             // Preserve lilies, but let a newly planted lily finish watering first.
             if((type==PatchType.FLOWER && QuestFarmingStateReader.isLivingWhiteLily(o) && !(p==current&&progress.planted())) ||
                 ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
@@ -585,7 +585,7 @@ public class FarmingHelperPlugin extends Plugin
                 if(activeCareOnly)
                 {
                     // A local care detour must never turn into an ordinary harvest/replant.
-                    if(o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.DISEASED){ready.add(p);visible.add(p);}
+                    // The local scanner below re-adds this detour only while the exact target is verified.
                     continue;
                 }
                 if(o.source==QuestFarmingStateReader.Source.LIVE&&progress.planted()&&CropCare.waterNeeded(type,o,wateringCan)&&!wateredThisRun.contains(p))
@@ -644,8 +644,8 @@ public class FarmingHelperPlugin extends Plugin
                 if(o==null)o=observe(p);
                 boolean disease=o!=null&&o.state==CropState.DISEASED&&CropCare.needsCure(o,highlight.hasVerifiedDisease(p));
                 boolean water=ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,wateringCan)&&highlight.hasLocalPatch(p);
-                if(p==current&&activeCareOnly&&!disease&&!water&&o!=null&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.GROWING)wateredThisRun.add(p);
-                if(!disease&&!water)continue;
+                if(p==current&&activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
+                if(!disease&&(!water||wateredThisRun.contains(p)))continue;
                 if(ready.contains(p)&&!(p==current&&activeCareOnly))continue;
                 observations.put(p,o);plant.remove(p);ready.remove(p);visible.remove(p);
                 careOnly.add(p);
@@ -772,6 +772,7 @@ public class FarmingHelperPlugin extends Plugin
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,false);
             if(activeClearOnly)instruction=ClearOnly.instruction(action,type);
             if(activeCareOnly&&action==StepEngine.Action.CURE)instruction="Nearby diseased crop — "+instruction+" Then resume the run without replanting.";
+            if(action==StepEngine.Action.CURE&&!CropCare.prunes(type)&&bag.getOrDefault(ItemID.PLANT_CURE,0)==0)instruction+=" Obtain plant cure from a nearby farmer or Farming shop, if available; skip if you cannot cure it.";
             if(action==StepEngine.Action.WATER)instruction="Water this crop with the watering can you are carrying.";
             if(action==StepEngine.Action.COMPOST)instruction="Apply the selected compost to this patch. The next step is planting; use Compost applied / skip if the tracker cannot confirm it.";
             if(activeLive)
