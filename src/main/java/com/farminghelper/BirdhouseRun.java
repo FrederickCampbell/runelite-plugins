@@ -109,5 +109,19 @@ final class BirdhouseRun
         if(bait>0)required.merge(ItemID.BARLEY_SEED,bait,Integer::sum);
         return result;
     }
+    static Set<Integer> stepItems(FarmRunPatch p,Observation o,Map<Integer,Integer> stock,Map<Integer,Integer> bag,Map<Integer,Integer> farming,int hunter,int crafting)
+    {
+        if(o.state!=CropState.EMPTY&&o.state!=CropState.FILLING)return Collections.emptySet();
+        Map<Integer,Integer> needed=new HashMap<>(farming);
+        supplies(List.of(p),Map.of(p,o),stock,needed,hunter,crafting);
+        if(o.state==CropState.FILLING)
+        {
+            for(int id:BAIT)if(needed.getOrDefault(id,0)>farming.getOrDefault(id,0)&&bag.getOrDefault(id,0)>0)return Set.of(id);
+            return Collections.emptySet();
+        }
+        for(int id:HOUSES)if(needed.getOrDefault(id,0)>farming.getOrDefault(id,0)&&bag.getOrDefault(id,0)>0)return Set.of(id);
+        for(int id:LOGS)if(needed.getOrDefault(id,0)>farming.getOrDefault(id,0)&&bag.getOrDefault(id,0)>0&&bag.getOrDefault(8792,0)>0)return Set.of(id,8792);
+        return Collections.emptySet();
+    }
     private BirdhouseRun(){}
 }

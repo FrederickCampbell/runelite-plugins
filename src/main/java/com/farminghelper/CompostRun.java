@@ -62,6 +62,18 @@ final class CompostRun
         {collectNeeds(needs,available,b.count);return new Plan("Collect "+b.count+" ultracompost. "+collection(available)+" Refill if you want another batch; Skip to leave it empty.",needs,true);}
         return new Plan("Inspect the bin to confirm its contents.",needs,true);
     }
+    static Set<Integer> stepItems(FarmRunPatch patch,QuestFarmingStateReader.Observation o,Plan plan,Map<Integer,Integer> bag)
+    {
+        BinContents b=QuestFarmingStateReader.binContents("Farming Guild".equals(patch.getLocation()),o);
+        if(b==null||plan==null||b.closed||b.state==CropState.GROWING)return Collections.emptySet();
+        if(b.state==CropState.EMPTY||b.state==CropState.FILLING)
+            return plan.supplies.keySet().stream().filter(id->bag.getOrDefault(id,0)>0).sorted().findFirst().map(Set::of).orElse(Collections.emptySet());
+        if(b.state!=CropState.HARVESTABLE)return Collections.emptySet();
+        if(b.kind.equals("COMPOST"))return Arrays.stream(POTIONS).filter(id->bag.getOrDefault(id,0)>0).boxed().findFirst().map(Set::of).orElse(Collections.emptySet());
+        if(b.kind.equals("SUPERCOMPOST"))return Set.of(ASH);
+        if(b.kind.equals("ULTRACOMPOST"))return Set.of(bucket(bag));
+        return Collections.emptySet();
+    }
     private static int total(int[] ids,Map<Integer,Integer> stock){int n=0;for(int id:ids)n+=stock.getOrDefault(id,0);return n;}
     private static int choosePotion(Map<Integer,Integer> stock)
     {for(int id:POTIONS)if(stock.getOrDefault(id,0)>0)return id;return POTIONS[0];}

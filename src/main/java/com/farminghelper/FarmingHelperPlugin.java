@@ -618,6 +618,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Integer> required=Supplies.guideKit(ready.stream().filter(p->p.getPatchType()!=PatchType.BIRDHOUSE).collect(java.util.stream.Collectors.toList()),-1,false,false,
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
             loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
+        if(!clearOnly.isEmpty()&&seeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
         Map<Integer,Integer> recommended=new LinkedHashMap<>();
         for(FarmRunPatch p:ready)
         {
@@ -665,6 +666,7 @@ public class FarmingHelperPlugin extends Plugin
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
         if(compostId>=0 && compostCount>0) recommended.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
         if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.HERB || p.getPatchType()==PatchType.CORAL) && !required.containsKey(ItemID.FAIRY_ENCHANTED_SECATEURS)) recommended.put(ItemID.FAIRY_ENCHANTED_SECATEURS,1);
+        Map<Integer,Integer> farmingRequirements=new LinkedHashMap<>(required);
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,stock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
         List<GuideView.ItemRow> items=new ArrayList<>();
         required.forEach((id,n)->items.add(itemRow(id,n,carried,false)));
@@ -695,7 +697,12 @@ public class FarmingHelperPlugin extends Plugin
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,false);
             if(activeClearOnly)instruction=ClearOnly.instruction(action,type);
             if(action==StepEngine.Action.COMPOST)instruction="Apply the selected compost to this patch. The next step is planting; use Compost applied / skip if the tracker cannot confirm it.";
-            if(activeLive&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)localStepItems=StepItems.select(action,type,activeCrop,compostId,axeId,bag);
+            if(activeLive)
+            {
+                if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
+                else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,stock,bag,farmingRequirements,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
+                else localStepItems=StepItems.select(action,type,activeCrop,compostId,axeId,bag);
+            }
             if(type==PatchType.BIRDHOUSE){activeAction=StepEngine.Action.INSPECT;instruction=current.getName()+": "+instruction;}
         }
         for(FarmRunPatch p:visible)
@@ -756,7 +763,9 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(!preparing&&current!=null&&"Entrana".equals(current.getLocation()))instruction="Entrana: deposit prohibited weapons and armour before travel.\n"+instruction;
         activeLeg=leg;
-        stepItems=!preparing&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive?localStepItems:Collections.emptySet();
+        WorldPoint actionPoint=localApproach!=null?localApproach:current==null?null:Waypoints.destination(current);
+        boolean atAction=player!=null&&actionPoint!=null&&player.getPlane()==actionPoint.getPlane()&&player.distanceTo(actionPoint)<=5;
+        stepItems=!preparing&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&atAction?localStepItems:Collections.emptySet();
         if(navigation!=null)navigation.request(actual,leg.point,leg.probe);
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
         String routeNote=navigation==null?"":navigation.status();

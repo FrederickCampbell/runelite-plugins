@@ -40,11 +40,11 @@ final class GuideItemHighlight extends WidgetItemOverlay
             ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
             if(inventory==null)return;
             Item[] entries=inventory.getItems();int[] ids=new int[entries.length];
-            for(int i=0;i<entries.length;i++)ids[i]=entries[i].getId();
+            for(int i=0;i<entries.length;i++)ids[i]=entries[i]==null?-1:entries[i].getId();
             if(!StepItems.firstSlot(id,itemWidget.getIndex(),ids))return;
             color=Color.CYAN;
         }
-        else if(group==InterfaceID.BANKMAIN||group==InterfaceID.SEED_VAULT||group==InterfaceID.SHARED_BANK)
+        else if(group==InterfaceID.BANKMAIN||group==InterfaceID.SEED_VAULT||group==(InterfaceID.SharedBank.ITEMS>>>16))
             color=helper.requiredItems().contains(id)?Color.CYAN:helper.recommendedItems().contains(id)?Color.YELLOW:null;
         else return;
         if(color==null)return;
