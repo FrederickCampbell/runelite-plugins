@@ -6,13 +6,13 @@ import com.farminghelper.queststate.QuestFarmingStateReader;
 /** Only live transitions on the active patch can confirm a player's interaction. */
 final class GuideProgress
 {
-    private boolean sawEmpty, sawWork, planted, changedLive;
+    private boolean sawEmpty, sawWork, planted, changedLive, cured;
     private CropState previous;
     private int previousRaw=-1;
     private Boolean priorProtection;
     private boolean protectionInitiallyKnown;
 
-    void reset() { sawEmpty=false; sawWork=false; planted=false; changedLive=false; previous=null; previousRaw=-1; priorProtection=null; protectionInitiallyKnown=false; }
+    void reset() { sawEmpty=false; sawWork=false; planted=false; changedLive=false; cured=false; previous=null; previousRaw=-1; priorProtection=null; protectionInitiallyKnown=false; }
     boolean planted() { return planted; }
     boolean observe(QuestFarmingStateReader.Observation o)
     {
@@ -21,6 +21,7 @@ final class GuideProgress
         if (o.state == CropState.EMPTY) sawEmpty=true;
         if (o.state != CropState.EMPTY && o.state != CropState.GROWING && o.state != CropState.FILLING) sawWork=true;
         if (o.state == CropState.GROWING && previous==CropState.EMPTY && sawEmpty) planted=true;
+        if (o.state == CropState.GROWING && previous==CropState.DISEASED) cured=true;
         boolean changed=previous!=null && (previous!=o.state || previousRaw!=o.rawValue);
         changedLive|=changed;
         previous=o.state;previousRaw=o.rawValue;
@@ -34,7 +35,7 @@ final class GuideProgress
         // A replacement crop requires an observed empty -> growing transition.
         // Permanent crops may finish a health check/harvest without replanting.
         boolean perennial=type==PatchType.SPIRIT_TREE||type==PatchType.REDWOOD||type==PatchType.BUSH||type==PatchType.CACTUS;
-        return planted || (perennial && sawWork && changedLive);
+        return planted || cured || (perennial && sawWork && changedLive);
     }
     boolean protectionConfirmed(QuestFarmingStateReader.Observation o)
     { return Boolean.TRUE.equals(o.protectedByFarmer) && !Boolean.TRUE.equals(priorProtection); }

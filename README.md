@@ -1,5 +1,9 @@
 # Farming Helper v0.24-beta.1
 
+### v0.24 candidate
+
+Health-check action values for all documented tree and bush species are normalized before route planning and prediction. Completion requires confirmed local work, not merely a growing state; cure transitions and permanent crops are preserved. Gnome Stronghold routes visit the fruit tree before the regular tree. See the health-check and replacement regression tests.
+
 ### v0.23 candidate
 
 Per-run care and tree-removal preferences are saved by character and run type (grouped and individual have distinct keys). Raw seeds are allocation-only virtual stock, and actual saplings remain required. Active Run is a separate temporary vault category. Manual templates include Fossil Island, hardwood trees, seaweed and birdhouses. Birdhouse readiness reads native Time Tracking snapshots; unknown timers require inspection, and remote navigation uses verified mushtree approach markers rather than unverified exact trap tiles. Existing native controls and manual gameplay remain unchanged.

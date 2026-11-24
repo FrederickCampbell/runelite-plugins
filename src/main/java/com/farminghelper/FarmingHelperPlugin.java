@@ -488,7 +488,7 @@ public class FarmingHelperPlugin extends Plugin
         int compostId=runPolicy.compost?compost.resolve(stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)):-1;
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new LinkedHashMap<>();
-        int eligible=0;
+        int eligible=0, deferredGrowing=0;
         int contract=loggedIn?client.getVarbitValue(VarbitID.FARMGUILD_CONTRACT_TYPE):0;
         int spiritSlots=spiritCapacity(level);
         if(loggedIn && run.contains(FarmRunType.SPECIALTY) && level<99)
@@ -541,10 +541,10 @@ public class FarmingHelperPlugin extends Plugin
                     // A remote prediction or already-growing crop is not evidence
                     // of completion. If we have not witnessed planting, simply
                     // defer this stop until a later actionable observation.
-                    continue;
+                    deferredGrowing++;continue;
                 }
             }
-            if(!actionable(type,o.state)) continue;
+            if(!actionable(type,o.state)){deferredGrowing++;continue;}
             if(type==PatchType.SPIRIT_TREE && !StepEngine.keepExisting(type,o.state) && spiritSlots<=0) continue;
             ready.add(p);visible.add(p);
             if(!StepEngine.keepExisting(type,o.state) && o.state!=CropState.DISEASED) { plant.add(p); if(type==PatchType.SPIRIT_TREE) spiritSlots--; }
@@ -644,7 +644,7 @@ public class FarmingHelperPlugin extends Plugin
         recommended.forEach((id,n)->items.add(itemRow(id,n+required.getOrDefault(id,0),carried,true)));
         requiredItems=Set.copyOf(required.keySet());recommendedItems=Set.copyOf(recommended.keySet());
         List<GuideView.Stop> stops=new ArrayList<>();
-        String instruction=!loggedIn?"Log in to start this guide.":eligible==0?"No enabled, unlocked patches remain.":completed.isEmpty()?"No ready patches remain in this run. Close and start another when crops mature.":"Run complete. Close the helper to start another run.";
+        String instruction=!loggedIn?"Log in to start this guide.":eligible==0?"No enabled, unlocked patches remain.":deferredGrowing>0?"No ready patches remain. Growing or unconfirmed patches were deferred, not marked completed.":completed.isEmpty()?"No ready patches remain in this run. Close and start another when crops mature.":"Run complete. Close the helper to start another run.";
         activeAction=StepEngine.Action.INSPECT;
         activeLive=false;
         if(current!=null)

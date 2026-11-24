@@ -32,6 +32,14 @@ public class HealthCheckStateTest
         assertEquals(CropState.EMPTY,state(PatchImplementation.FRUIT_TREE,0));
         assertEquals(CropState.EMPTY,state(PatchImplementation.FLOWER,0));
     }
+    @Test public void cachedMaturePalmIsNotPredictedAsGrowing()
+    {
+        net.runelite.api.Client client=org.mockito.Mockito.mock(net.runelite.api.Client.class);
+        net.runelite.client.config.ConfigManager config=org.mockito.Mockito.mock(net.runelite.client.config.ConfigManager.class);
+        FarmingPatch palm=QuestFarmingStateReader.find(new FarmingWorld(),Tab.FRUIT_TREE,"Gnome Stronghold","",PatchImplementation.FRUIT_TREE);
+        long now=java.time.Instant.now().getEpochSecond();
+        assertEquals(CropState.UNCHECKED,new FarmingHandler(client,config).predictObserved(palm,"test","226:"+now));
+    }
     private static CropState state(PatchImplementation t,int raw)
     {return QuestFarmingStateReader.normalizedState(t,raw,t.forVarbitValue(raw));}
     @Test public void neighbouringPatchIdentitiesCannotAlias()
