@@ -62,21 +62,21 @@ public class GuideLifecycleTest
         when(shortestPath.getName()).thenReturn("Shortest Path");
         plugin.startUp();
         plugin.start(EnumSet.of(FarmRunType.HERB));
-        assertEquals("Ardougne",plugin.activePatch().getLocation());
+        assertEquals("Farming Guild",plugin.activePatch().getLocation());
         verifyNoInteractions(bus);
         QuestFarmingStateReader.Observation growing = new QuestFarmingStateReader.Observation(
             com.farminghelper.queststate.CropState.GROWING,QuestFarmingStateReader.Source.LIVE,0,null,"");
-        when(reader.observeType(eq("HERB"),eq("Ardougne"),anyString(),any())).thenReturn(growing);
+        when(reader.observeType(eq("HERB"),eq("Farming Guild"),anyString(),any())).thenReturn(growing);
         plugin.onGameTick(null);
-        assertEquals("Catherby",plugin.activePatch().getLocation());
-        when(reader.observeType(eq("HERB"),eq("Ardougne"),anyString(),any())).thenReturn(
+        assertEquals("Morytania",plugin.activePatch().getLocation());
+        when(reader.observeType(eq("HERB"),eq("Farming Guild"),anyString(),any())).thenReturn(
             new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
         plugin.stop();
         verifyNoInteractions(bus);
         plugin.onPluginChanged(new net.runelite.client.events.PluginChanged(shortestPath,true));
         plugin.start(EnumSet.of(FarmRunType.HERB));
-        assertEquals("Ardougne",plugin.activePatch().getLocation());
-        verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2670,3374,0))));
+        assertEquals("Farming Guild",plugin.activePatch().getLocation());
+        verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(1238,3726,0))));
         plugin.onGameTick(null);
         // Starting a guide must not clear an unrelated Shortest Path route.
         // Explicit guide termination below must still clear our own route.
@@ -96,17 +96,17 @@ public class GuideLifecycleTest
         // Progress and navigation still update when the panel is not visible.
         SwingUtilities.invokeAndWait(sidebar::onDeactivate);
         plugin.skip(plugin.activePatch());
-        assertEquals("Catherby",plugin.activePatch().getLocation());
-        verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2813,3463,0))));
+        assertEquals("Morytania",plugin.activePatch().getLocation());
+        verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(3605,3529,0))));
         SwingUtilities.invokeAndWait(sidebar::onActivate);
-        assertEquals("Catherby",plugin.activePatch().getLocation());
+        assertEquals("Morytania",plugin.activePatch().getLocation());
         clearInvocations(bus);
         plugin.onPluginChanged(new net.runelite.client.events.PluginChanged(shortestPath,false));
         plugin.onGameTick(null);
-        assertEquals("Catherby", plugin.activePatch().getLocation());
+        assertEquals("Morytania", plugin.activePatch().getLocation());
         verifyNoInteractions(bus);
         plugin.onPluginChanged(new net.runelite.client.events.PluginChanged(shortestPath,true));
-        verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(2813,3463,0))));
+        verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(3605,3529,0))));
         SwingUtilities.invokeAndWait(() -> {
             javax.swing.JButton end=findEndButton(sidebar);
             assertNotNull("Explicit end control must remain available",end);
@@ -116,12 +116,12 @@ public class GuideLifecycleTest
         plugin.onGameTick(null);
         verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
         plugin.start(EnumSet.of(FarmRunType.HERB));
-        assertEquals("Ardougne",plugin.activePatch().getLocation());
+        assertEquals("Farming Guild",plugin.activePatch().getLocation());
         plugin.stop();
         when(config.getRSProfileConfiguration("farming-helper","patchEnabled_Falador~HERB~")).thenReturn("true");
         plugin.start(EnumSet.of(FarmRunType.HERB));
-        int[][] herbTargets = {{3058,3311},{2670,3374},{2813,3463},{3605,3529},{1738,3550},
-            {2826,3694},{2848,3934},{1238,3726},{3789,2837},{1582,3094}};
+        int[][] herbTargets = {{1238,3726},{3058,3311},{3605,3529},{2670,3374},{2813,3463},{1738,3550},
+            {1582,3094},{3789,2837},{2826,3694},{2848,3934}};
         for (int[] xy : herbTargets)
         {
             verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","path",
