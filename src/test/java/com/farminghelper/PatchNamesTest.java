@@ -1,40 +1,27 @@
 package com.farminghelper;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.Test;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class PatchNamesTest
 {
-    @Test
-    public void independentGrapevinesAndSeaweedKeepQuestHelperNames()
+    @Test public void preservesEveryV1PhysicalConfigKeyAndItsOrder() throws Exception
     {
-        FarmRunPatch grapes = new FarmRunPatch("Kourend", "Grapevines",
-            PatchType.GRAPEVINE, 2);
-        assertEquals("East 1", PatchNames.expand(grapes,
-            Arrays.asList("East 1", "East 2")).get(0).getName());
-        assertEquals(2, PatchNames.expand(grapes,
-            Arrays.asList("East 1", "East 2")).size());
-        FarmRunPatch seaweed = new FarmRunPatch("Seaweed", "Seaweed patches",
-            PatchType.SEAWEED, 2);
-        assertEquals("North", PatchNames.expand(seaweed,
-            Arrays.asList("North", "South")).get(0).getName());
-    }
-
-    @Test
-    public void ambiguityDoesNotSilentlyMergeTwoPatches()
-    {
-        FarmRunPatch ambiguous = new FarmRunPatch("Kourend", "Grapevines",
-            PatchType.GRAPEVINE, 12);
-        assertTrue(PatchNames.expand(ambiguous,
-            Arrays.asList("East 1", "East 2")).isEmpty());
-        assertTrue(PatchNames.expand(ambiguous, Collections.emptyList()).isEmpty());
-        FarmRunPatch pair = new FarmRunPatch("Falador", "Allotments", PatchType.ALLOTMENT, 2);
-        assertTrue(PatchNames.expand(pair, Arrays.asList("North", "North")).isEmpty());
-        assertTrue(PatchNames.expand(pair, Arrays.asList("North", "")).isEmpty());
-        assertEquals(1, PatchNames.expand(
-            new FarmRunPatch("Ardougne", "", PatchType.HERB),
-            Collections.emptyList()).size());
+        List<String> actual=new ArrayList<>();
+        var reader=new com.farminghelper.queststate.QuestFarmingStateReader(null,null);
+        List<FarmRunPatch> patches=new ArrayList<>(FarmRunCatalog.patches());
+        patches.addAll(BirdhouseRun.patches());
+        for(FarmRunPatch p:patches)
+        {
+            var point=Waypoints.destination(p);
+            String type=p.getPatchType().name();
+            actual.add(p.key()+"|"+point.getX()+","+point.getY()+","+point.getPlane()+"|"
+                +reader.patchVarbit(type,p.getLocation(),p.getName())+"|"+reader.gardenerId(type,p.getLocation(),p.getName()));
+        }
+        assertEquals(Files.readAllLines(Path.of(getClass().getResource("/v1-patch-keys.txt").toURI())),actual);
     }
 }

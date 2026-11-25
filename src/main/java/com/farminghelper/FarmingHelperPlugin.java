@@ -127,9 +127,7 @@ public class FarmingHelperPlugin extends Plugin
         shortestPathAvailable=plugins.getPlugins().stream().anyMatch(p ->
             "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
         navigation.enabled(shortestPathAvailable);
-        for (FarmRunPatch group : FarmRunCatalog.patches())
-            patches.addAll(PatchNames.expand(group,
-                reader.patchNamesForType(group.getPatchType().name(), group.getLocation())));
+        patches.addAll(FarmRunCatalog.patches());
         patches.addAll(BirdhouseRun.patches());
         panel = new FarmingHelperPanel(this);
         nav = NavigationButton.builder().tooltip("Farming Helper").icon(ImageUtil.loadImageResource(FarmingHelperPlugin.class, "sidebar.png"))
@@ -199,7 +197,7 @@ public class FarmingHelperPlugin extends Plugin
             runProfile=config.getRSProfileKey();
             refreshRunPreferences();
             updateAccessNotes();
-            runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&StepEngine.isTreeType(p.getPatchType()));
+            runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&p.getPatchType().isTree());
             loadStock();
             sampleStorage();
             navigation.begin();
@@ -651,7 +649,7 @@ public class FarmingHelperPlugin extends Plugin
                 {ready.add(p);visible.add(p);continue;}
                 if(hideSeedless&&clearSeedless&&activeClearOnly&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.EMPTY)
                 {completed.add(p);visible.add(p);continue;}
-                boolean wants=protect && activeCrop!=null && StepEngine.supportsProtection(type) && !ProtectionPaymentCatalog.forCrop(activeCrop).isEmpty();
+                boolean wants=protect && activeCrop!=null && type.supportsProtection() && !ProtectionPaymentCatalog.forCrop(activeCrop).isEmpty();
                 boolean hasPayment=wants && ProtectionPaymentCatalog.forCrop(activeCrop).stream().allMatch(cost -> bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
                 boolean preserveCrop=preserveReplacement(p,o);
                 // The player may carry a lower-ranked seed than the initially allocated bank crop.
@@ -691,7 +689,7 @@ public class FarmingHelperPlugin extends Plugin
             WorldPoint start=location.normalized;
             boolean guildFirst=Preparation.StartAt.load(setting("startAtV1","GUILD"))==Preparation.StartAt.GUILD&&level>=45;
             Set<PatchType> carriedSaplings=EnumSet.noneOf(PatchType.class);
-            for(FarmRunPatch p:plant)if(StepEngine.isTreeType(p.getPatchType())&&p.getPatchType()!=PatchType.SPIRIT_TREE&&
+            for(FarmRunPatch p:plant)if(p.getPatchType().isTree()&&p.getPatchType()!=PatchType.SPIRIT_TREE&&
                 CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->c.getLevel()<=level&&bag.getOrDefault(c.getItemId(),0)>=c.getQuantity()))
                 carriedSaplings.add(p.getPatchType());
             int usedSlots=Preparation.slots(bag,Collections.emptyMap(),this::stackable);
@@ -788,7 +786,7 @@ public class FarmingHelperPlugin extends Plugin
             Crop c=seeds.get(p);PatchType type=p.getPatchType();
             if(c!=null) required.merge(c.getItemId(),c.getQuantity(),Integer::sum);
             if(c!=null && type.usesCompost()) compostCount++;
-            if((c!=null||clearOnly.contains(p))&&StepEngine.isTreeType(type)&&type!=PatchType.CRYSTAL_TREE&&type!=PatchType.CALQUAT)
+            if((c!=null||clearOnly.contains(p))&&type.isTree()&&type!=PatchType.CRYSTAL_TREE&&type!=PatchType.CALQUAT)
             {
                 var o=observations.get(p);
                 if(o!=null&&(o.state==null||CropReplacement.mature(type,o)))
@@ -797,7 +795,7 @@ public class FarmingHelperPlugin extends Plugin
             if(protect && (c!=null || (p==current && progress.planted() && activeCrop!=null)))
             {
                 Crop paymentCrop=c!=null?c:activeCrop;
-                if(StepEngine.supportsProtection(type)) for(ProtectionPayment cost:ProtectionPaymentCatalog.forCrop(paymentCrop))
+                if(type.supportsProtection()) for(ProtectionPayment cost:ProtectionPaymentCatalog.forCrop(paymentCrop))
                     required.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);
             }
         }
@@ -872,8 +870,6 @@ public class FarmingHelperPlugin extends Plugin
             boolean replacementCarried=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
             boolean keep=preserveReplacement(current,o);
             StepEngine.Action action=CropReplacement.action(type,o,keep,replacementCarried,activeClearOnly);
-            if(action==StepEngine.Action.COMPLETE&&!keep&&CropReplacement.configurable(type)&&CropReplacement.mature(type,o)&&!replacementCarried)
-                action=StepEngine.Action.NEED_REPLACEMENT;
             if(progress.planted() && o.state==CropState.GROWING) action=StepEngine.Action.PROTECT_TREE;
             if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,wateringCan))action=StepEngine.Action.WATER;
             if(activeCareOnly&&o.state==CropState.DISEASED)action=StepEngine.Action.CURE;
@@ -886,7 +882,7 @@ public class FarmingHelperPlugin extends Plugin
                 if(reader.compostRecorded(type.name(),current.getLocation(),current.getName(),minimum))compostAcknowledged=true;
                 else action=StepEngine.Action.COMPOST;
             }
-            boolean needsSapling=action==StepEngine.Action.PLANT && activeCrop!=null && StepEngine.isTreeType(type)
+            boolean needsSapling=action==StepEngine.Action.PLANT && activeCrop!=null && type.isTree()
                 && !replacementCarried;
             if(needsSapling)action=StepEngine.Action.NEED_REPLACEMENT;
             activeAction=action;
@@ -1149,7 +1145,7 @@ public class FarmingHelperPlugin extends Plugin
     String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
     StepEngine.Action activeAction() { return diseaseTarget!=null?StepEngine.Action.CURE:activeAction; }
     boolean activeLive() { return guideRequested && (diseaseTarget!=null||activeLive&&!preparing); }
-    int patchCount(FarmRunPatch p) { return reader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
+    int patchCount(FarmRunPatch p) { return QuestFarmingStateReader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
     Set<Integer> requiredItems() { return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:requiredItems; }
     Set<Integer> missingStorageItems() {return guideRequested?missingStorageItems:Collections.emptySet();}
     Set<Integer> recommendedItems() { return guideRequested?missingTeleports:Collections.emptySet(); }

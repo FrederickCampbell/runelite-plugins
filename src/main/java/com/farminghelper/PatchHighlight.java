@@ -87,7 +87,7 @@ final class PatchHighlight extends Overlay
             WorldPoint point=template(o);if(point==null)continue;
             ObjectComposition base=client.getObjectDefinition(o.getId()), imp=transformed(base);
             boolean exactId=exact!=null && (o.getId()==exact.objectId || imp!=null && imp.getId()==exact.objectId);
-            if(exactId && point.distanceTo(Waypoints.exactPoint(patch))<=3){verified.add(o);continue;}
+            if(exactId && point.distanceTo(exact.point)<=3){verified.add(o);continue;}
             if(!helper.inPatchRegion(patch,point))continue;
             boolean type=PatchObjects.matches(patch.getPatchType(),o.getId()) || imp!=null && PatchObjects.matches(patch.getPatchType(),imp.getId())
                 || patch.getPatchType()==PatchType.GRAPEVINE && (isVine(base)||isVine(imp))
@@ -198,7 +198,7 @@ final class PatchHighlight extends Overlay
         for(GameObject o:group)draw(graphics,o.getClickbox());
         if(group.isEmpty() && QuestTargets.get(patch)!=null)
         {
-            WorldPoint point=Waypoints.exactPoint(patch);LocalPoint local=LocalPoint.fromWorld(client,point);
+            WorldPoint point=QuestTargets.get(patch).point;LocalPoint local=LocalPoint.fromWorld(client,point);
             if(local!=null){Polygon tile=Perspective.getCanvasTilePoly(client,local);if(tile!=null)OverlayUtil.renderPolygon(graphics,tile,Color.CYAN);}
         }
         return null;

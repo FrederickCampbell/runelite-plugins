@@ -52,8 +52,8 @@ public class WaypointsTest
     @Test
     public void standardWaypointsHaveCoordinates()
     {
-        assertNotNull(Waypoints.point(PatchType.HERB, "Falador"));
-        assertNotNull(Waypoints.point(PatchType.TREE, "Auburnvale"));
-        assertNull(Waypoints.point(PatchType.TREE, "Catherby"));
+        assertNotNull(Waypoints.destination(new FarmRunPatch("Falador","",PatchType.HERB)));
+        assertNotNull(Waypoints.destination(new FarmRunPatch("Auburnvale","",PatchType.TREE)));
+        assertNull(Waypoints.destination(new FarmRunPatch("Catherby","",PatchType.TREE)));
     }
 }

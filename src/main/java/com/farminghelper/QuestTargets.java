@@ -29,63 +29,67 @@ import java.util.HashMap;
 import java.util.Map;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ObjectID;
-import net.runelite.api.gameval.NpcID;
+import java.util.HashSet;
+import java.util.Set;
 
 /** Exact Quest Helper TreeRun and HerbRun ObjectStep/NpcStep definitions.
  * Adapted from Zoinkwiz/quest-helper @ b9b93706618a7b7fe7e5ea30e9a9ef35ba09673e.
- * Patch coordinates stay in Waypoints for travel. Identity is separate
- * from display names, crop state and proximity. */
+ * Travel and exact-object verification use the same plot coordinates. */
 final class QuestTargets
 {
     static final class Definition
     {
-        final int objectId, gardenerId;
-        Definition(int objectId, int gardenerId) { this.objectId = objectId; this.gardenerId = gardenerId; }
+        final int objectId;
+        final WorldPoint point;
+        Definition(int objectId,WorldPoint point){this.objectId=objectId;this.point=point;}
     }
-    private static final Map<WorldPoint, Definition> BY_POINT = new HashMap<>();
+    private static final Map<String,Definition> BY_PATCH=new HashMap<>();
+    private static final Set<Integer> OBJECTS=new HashSet<>();
     static
     {
-        add(3193, 3231, 0, ObjectID.FARMING_TREE_PATCH_4, NpcID.FARMING_GARDENER_TREE_4);
-        add(3004, 3373, 0, ObjectID.FARMING_TREE_PATCH_2, NpcID.FARMING_GARDENER_TREE_2);
-        add(2936, 3438, 0, ObjectID.FARMING_TREE_PATCH_1, NpcID.FARMING_GARDENER_TREE_1);
-        add(3229, 3459, 0, ObjectID.FARMING_TREE_PATCH_3, NpcID.FARMING_GARDENER_TREE_3_02);
-        add(2436, 3415, 0, ObjectID.FARMING_TREE_PATCH_5, NpcID.FARMING_GARDENER_TREE_GNOME);
-        add(1232, 3736, 0, ObjectID.FARMING_TREE_PATCH_6, NpcID.FARMING_GARDENER_FARMGUILD_T2);
-        add(1367, 3322, 0, ObjectID.FARMING_TREE_PATCH_7, NpcID.FARMING_GARDENER_TREE_7);
-        add(2476, 3446, 0, ObjectID.FARMING_FRUIT_TREE_PATCH_1, NpcID.FARMING_GARDENER_FRUIT_1);
-        add(2490, 3180, 0, ObjectID.FARMING_FRUIT_TREE_PATCH_2, NpcID.FARMING_GARDENER_FRUIT_2);
-        add(2765, 3213, 0, ObjectID.FARMING_FRUIT_TREE_PATCH_3, NpcID.GARTH);
-        add(2860, 3433, 0, ObjectID.FARMING_FRUIT_TREE_PATCH_4, NpcID.FARMING_GARDENER_FRUIT_4);
-        add(2347, 3162, 0, ObjectID.FARMING_FRUIT_TREE_PATCH_5, NpcID.FARMING_GARDENER_FRUIT_TREE_5);
-        add(1242, 3758, 0, ObjectID.FARMING_FRUIT_TREE_PATCH_6, NpcID.FARMING_GARDENER_FARMGUILD_T3);
-        add(1350, 3057, 0, ObjectID.FARMING_FRUIT_TREE_PATCH_7, NpcID.FARMING_GARDENER_FRUIT_7);
-        add(2795, 3102, 0, ObjectID.FARMING_CALQUAT_TREE_PATCH, NpcID.FARMING_GARDENER_CALQUAT);
-        add(1366, 3033, 0, ObjectID.FARMING_CALQUAT_TREE_PATCH_2, NpcID.FARMING_GARDENER_CALQUAT_2);
-        add(3129, 2406, 0, ObjectID.FARMING_CALQUAT_TREE_PATCH_3, NpcID.FARMING_GARDENER_CALQUAT_3);
-        add(3702, 3837, 0, ObjectID.FARMING_HARDWOOD_TREE_PATCH_3, NpcID.FOSSIL_SQUIRREL_GARDENER3);
-        add(3708, 3833, 0, ObjectID.FARMING_HARDWOOD_TREE_PATCH_2, NpcID.FOSSIL_SQUIRREL_GARDENER2);
-        add(3715, 3835, 0, ObjectID.FARMING_HARDWOOD_TREE_PATCH_1, NpcID.FOSSIL_SQUIRREL_GARDENER1);
-        add(1687, 2972, 0, ObjectID.FARMING_HARDWOOD_TREE_PATCH_4, NpcID.FROG_QUEST_MARCELLUS_FARMER);
-        add(2470, 2704, 0, ObjectID.FARMING_HARDWOOD_TREE_PATCH_5, NpcID.FARMING_GARDENER_HARDWOOD_TREE_5);
-        add(2670, 3374, 0, ObjectID.FARMING_HERB_PATCH_3, -1);
-        add(2813, 3463, 0, ObjectID.FARMING_HERB_PATCH_2, -1);
-        add(3058, 3311, 0, ObjectID.FARMING_HERB_PATCH_1, -1);
-        add(1738, 3550, 0, ObjectID.FARMING_HERB_PATCH_6, -1);
-        add(1238, 3726, 0, ObjectID.FARMING_HERB_PATCH_7, -1);
-        add(3789, 2837, 0, ObjectID.FARMING_HERB_PATCH_5, -1);
-        add(3605, 3529, 0, ObjectID.FARMING_HERB_PATCH_4, -1);
-        add(2826, 3694, 0, ObjectID.MYARM_HERBPATCH, -1);
-        add(2848, 3934, 0, ObjectID.MY2ARM_HERBPATCH, -1);
-        add(1582, 3094, 0, ObjectID.FARMING_HERB_PATCH_8, -1);
+        add(PatchType.TREE, "Lumbridge", 3193, 3231, ObjectID.FARMING_TREE_PATCH_4);
+        add(PatchType.TREE, "Falador", 3004, 3373, ObjectID.FARMING_TREE_PATCH_2);
+        add(PatchType.TREE, "Taverley", 2936, 3438, ObjectID.FARMING_TREE_PATCH_1);
+        add(PatchType.TREE, "Varrock", 3229, 3459, ObjectID.FARMING_TREE_PATCH_3);
+        add(PatchType.TREE, "Gnome Stronghold", 2436, 3415, ObjectID.FARMING_TREE_PATCH_5);
+        add(PatchType.TREE, "Farming Guild", 1232, 3736, ObjectID.FARMING_TREE_PATCH_6);
+        add(PatchType.TREE, "Auburnvale", 1367, 3322, ObjectID.FARMING_TREE_PATCH_7);
+        add(PatchType.FRUIT_TREE, "Gnome Stronghold", 2476, 3446, ObjectID.FARMING_FRUIT_TREE_PATCH_1);
+        add(PatchType.FRUIT_TREE, "Tree Gnome Village", 2490, 3180, ObjectID.FARMING_FRUIT_TREE_PATCH_2);
+        add(PatchType.FRUIT_TREE, "Brimhaven", 2765, 3213, ObjectID.FARMING_FRUIT_TREE_PATCH_3);
+        add(PatchType.FRUIT_TREE, "Catherby", 2860, 3433, ObjectID.FARMING_FRUIT_TREE_PATCH_4);
+        add(PatchType.FRUIT_TREE, "Lletya", 2347, 3162, ObjectID.FARMING_FRUIT_TREE_PATCH_5);
+        add(PatchType.FRUIT_TREE, "Farming Guild", 1242, 3758, ObjectID.FARMING_FRUIT_TREE_PATCH_6);
+        add(PatchType.FRUIT_TREE, "Kastori", 1350, 3057, ObjectID.FARMING_FRUIT_TREE_PATCH_7);
+        add(PatchType.CALQUAT, "Tai Bwo Wannai", 2795, 3102, ObjectID.FARMING_CALQUAT_TREE_PATCH);
+        add(PatchType.CALQUAT, "Kastori", 1366, 3033, ObjectID.FARMING_CALQUAT_TREE_PATCH_2);
+        add(PatchType.CALQUAT, "Great Conch", 3129, 2406, ObjectID.FARMING_CALQUAT_TREE_PATCH_3);
+        add(PatchType.HARDWOOD_TREE, "Fossil Island~West", 3702, 3837, ObjectID.FARMING_HARDWOOD_TREE_PATCH_3);
+        add(PatchType.HARDWOOD_TREE, "Fossil Island~Middle", 3708, 3833, ObjectID.FARMING_HARDWOOD_TREE_PATCH_2);
+        add(PatchType.HARDWOOD_TREE, "Fossil Island~East", 3715, 3835, ObjectID.FARMING_HARDWOOD_TREE_PATCH_1);
+        add(PatchType.HARDWOOD_TREE, "Avium Savannah", 1687, 2972, ObjectID.FARMING_HARDWOOD_TREE_PATCH_4);
+        add(PatchType.HARDWOOD_TREE, "Anglers' Retreat", 2470, 2704, ObjectID.FARMING_HARDWOOD_TREE_PATCH_5);
+        add(PatchType.HERB, "Ardougne", 2670, 3374, ObjectID.FARMING_HERB_PATCH_3);
+        add(PatchType.HERB, "Catherby", 2813, 3463, ObjectID.FARMING_HERB_PATCH_2);
+        add(PatchType.HERB, "Falador", 3058, 3311, ObjectID.FARMING_HERB_PATCH_1);
+        add(PatchType.HERB, "Kourend", 1738, 3550, ObjectID.FARMING_HERB_PATCH_6);
+        add(PatchType.HERB, "Farming Guild", 1238, 3726, ObjectID.FARMING_HERB_PATCH_7);
+        add(PatchType.HERB, "Harmony Island", 3789, 2837, ObjectID.FARMING_HERB_PATCH_5);
+        add(PatchType.HERB, "Morytania", 3605, 3529, ObjectID.FARMING_HERB_PATCH_4);
+        add(PatchType.HERB, "Troll Stronghold", 2826, 3694, ObjectID.MYARM_HERBPATCH);
+        add(PatchType.HERB, "Weiss", 2848, 3934, ObjectID.MY2ARM_HERBPATCH);
+        add(PatchType.HERB, "Civitas illa Fortis", 1582, 3094, ObjectID.FARMING_HERB_PATCH_8);
     }
-    private static void add(int x, int y, int plane, int object, int gardener)
+    private static void add(PatchType type,String plot,int x,int y,int object)
     {
-        BY_POINT.put(new WorldPoint(x,y,plane), new Definition(object,gardener));
+        BY_PATCH.put(type+"~"+plot,new Definition(object,new WorldPoint(x,y,0)));
+        OBJECTS.add(object);
     }
-    static boolean known(int id) { return BY_POINT.values().stream().anyMatch(d -> d.objectId==id); }
+    static boolean known(int id){return OBJECTS.contains(id);}
     static Definition get(FarmRunPatch patch)
     {
-        if (patch.getPatchType() != PatchType.HERB && !StepEngine.isTreeType(patch.getPatchType())) return null;
-        return BY_POINT.get(Waypoints.exactPoint(patch));
+        String plot=patch.getLocation();
+        if(patch.getPatchType()==PatchType.HARDWOOD_TREE && "Fossil Island".equals(plot))plot+="~"+patch.getName();
+        return BY_PATCH.get(patch.getPatchType()+"~"+plot);
     }
 }

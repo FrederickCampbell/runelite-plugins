@@ -36,7 +36,7 @@ public class HealthCheckStateTest
     {
         net.runelite.api.Client client=org.mockito.Mockito.mock(net.runelite.api.Client.class);
         net.runelite.client.config.ConfigManager config=org.mockito.Mockito.mock(net.runelite.client.config.ConfigManager.class);
-        FarmingPatch palm=QuestFarmingStateReader.find(new FarmingWorld(),Tab.FRUIT_TREE,"Gnome Stronghold","",PatchImplementation.FRUIT_TREE);
+        FarmingPatch palm=QuestFarmingStateReader.lookup("FRUIT_TREE","Gnome Stronghold","");
         long now=java.time.Instant.now().getEpochSecond();
         assertEquals(CropState.UNCHECKED,new FarmingHandler(client,config).predictObserved(palm,"test","226:"+now));
     }
@@ -45,12 +45,12 @@ public class HealthCheckStateTest
     @Test public void neighbouringPatchIdentitiesCannotAlias()
     {
         FarmingWorld w=new FarmingWorld();
-        FarmingPatch strongholdFruit=QuestFarmingStateReader.find(w,Tab.FRUIT_TREE,"Gnome Stronghold","",PatchImplementation.FRUIT_TREE);
-        FarmingPatch strongholdTree=QuestFarmingStateReader.find(w,Tab.TREE,"Gnome Stronghold","",PatchImplementation.TREE);
-        FarmingPatch villageFruit=QuestFarmingStateReader.find(w,Tab.FRUIT_TREE,"Tree Gnome Village","",PatchImplementation.FRUIT_TREE);
-        FarmingPatch flower=QuestFarmingStateReader.find(w,PatchImplementation.FLOWER.getTab(),"Kastori","",PatchImplementation.FLOWER);
-        FarmingPatch fruit=QuestFarmingStateReader.find(w,Tab.FRUIT_TREE,"Kastori","",PatchImplementation.FRUIT_TREE);
-        FarmingPatch calquat=QuestFarmingStateReader.find(w,PatchImplementation.CALQUAT.getTab(),"Kastori","",PatchImplementation.CALQUAT);
+        FarmingPatch strongholdFruit=QuestFarmingStateReader.lookup("FRUIT_TREE","Gnome Stronghold","");
+        FarmingPatch strongholdTree=QuestFarmingStateReader.lookup("TREE","Gnome Stronghold","");
+        FarmingPatch villageFruit=QuestFarmingStateReader.lookup("FRUIT_TREE","Tree Gnome Village","");
+        FarmingPatch flower=QuestFarmingStateReader.lookup("FLOWER","Kastori","");
+        FarmingPatch fruit=QuestFarmingStateReader.lookup("FRUIT_TREE","Kastori","");
+        FarmingPatch calquat=QuestFarmingStateReader.lookup("CALQUAT","Kastori","");
         for(FarmingPatch p:List.of(strongholdFruit,strongholdTree,villageFruit,flower,fruit,calquat))assertNotNull(p);
         assertEquals(6,Set.of(strongholdFruit.configKey(),strongholdTree.configKey(),villageFruit.configKey(),flower.configKey(),fruit.configKey(),calquat.configKey()).size());
     }

@@ -36,8 +36,8 @@ public class CropCareTest
         assertEquals(lily,SeedChoices.allocate(List.of(p),99,Map.of(lily.getItemId(),1,limp.getItemId(),10),t->"Limpwurt",q->"",Map.of(),true).get(p));
         assertEquals(limp,SeedChoices.allocate(List.of(p),99,Map.of(limp.getItemId(),10),t->"",q->"",Map.of(),true).get(p));
         assertTrue(RunPreset.CROP.defaultEnabled(PatchType.FLOWER));
-        assertTrue(com.farminghelper.queststate.QuestFarmingStateReader.isLivingWhiteLily(observation(CropState.HARVESTABLE,Source.LIVE,41)));
-        assertFalse(com.farminghelper.queststate.QuestFarmingStateReader.isLivingWhiteLily(observation(CropState.HARVESTABLE,Source.LIVE,32)));
-        assertFalse(com.farminghelper.queststate.QuestFarmingStateReader.isLivingWhiteLily(observation(CropState.DISEASED,Source.LIVE,166)));
+        assertTrue(KeepCrop.WHITE_LILY==KeepCrop.observed(PatchType.FLOWER,observation(CropState.HARVESTABLE,Source.LIVE,41)));
+        assertFalse(KeepCrop.WHITE_LILY==KeepCrop.observed(PatchType.FLOWER,observation(CropState.HARVESTABLE,Source.LIVE,32)));
+        assertFalse(KeepCrop.WHITE_LILY==KeepCrop.observed(PatchType.FLOWER,observation(CropState.DISEASED,Source.LIVE,166)));
     }
 }

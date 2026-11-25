@@ -25,11 +25,7 @@ public class QuestFarmingTypeMappingTest
     public void multiTabLookupsNeverConflateTreeKinds()
     {
         FarmingWorld world = new FarmingWorld();
-        assertNotNull(QuestFarmingStateReader.find(world,
-            net.runelite.client.plugins.timetracking.Tab.TREE, "Fossil Island", "East",
-            PatchImplementation.HARDWOOD_TREE));
-        assertNull(QuestFarmingStateReader.find(world,
-            net.runelite.client.plugins.timetracking.Tab.TREE, "Fossil Island", "East",
-            PatchImplementation.TREE));
+        assertNotNull(QuestFarmingStateReader.lookup("HARDWOOD_TREE","Fossil Island","East"));
+        assertNull(QuestFarmingStateReader.lookup("TREE","Fossil Island","East"));
     }
 }

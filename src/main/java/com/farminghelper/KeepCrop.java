@@ -51,7 +51,7 @@ enum KeepCrop
     {
         String name=label.split(" \\(")[0];
         if(type==PatchType.BUSH)name=name.replace(" bush","");
-        if(StepEngine.isTreeType(type)||type==PatchType.CALQUAT)
+        if(type.isTree()||type==PatchType.CALQUAT)
             name=name.replace(" tree","").replace(" plant","")+" sapling";
         return CropCatalog.findByName(type,name);
     }

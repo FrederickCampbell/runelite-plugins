@@ -45,7 +45,7 @@ public class RouteAndReplacement41Test
         assertEquals(StepEngine.Action.HARVEST,CropReplacement.action(t,berries,false,true,false));
         assertTrue(CropReplacement.actionable(t,depleted,false));
         assertEquals(StepEngine.Action.CLEAR_LIVING,CropReplacement.action(t,depleted,false,true,false));
-        assertEquals(StepEngine.Action.COMPLETE,CropReplacement.action(t,depleted,false,false,false));
+        assertEquals(StepEngine.Action.NEED_REPLACEMENT,CropReplacement.action(t,depleted,false,false,false));
         assertEquals(StepEngine.Action.COMPLETE,CropReplacement.action(t,depleted,true,true,false));
         GuideProgress progress=new GuideProgress();progress.observe(check);progress.observe(berries);progress.observe(depleted);
         assertFalse(progress.finished(t,depleted,false,false,false));

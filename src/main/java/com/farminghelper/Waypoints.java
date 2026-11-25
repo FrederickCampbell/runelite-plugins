@@ -15,51 +15,10 @@ import net.runelite.api.coords.WorldPoint;
  */
 final class Waypoints
 {
-    private static final Map<String, WorldPoint> HERBS = new HashMap<>();
-    private static final Map<String, WorldPoint> TREES = new HashMap<>();
-    private static final Map<String, WorldPoint> FRUITS = new HashMap<>();
-    private static final Map<String, WorldPoint> CALQUATS = new HashMap<>();
-    private static final Map<String, WorldPoint> HARDWOODS = new HashMap<>();
     private static final Map<String, WorldPoint> FARM_AREAS = new HashMap<>();
 
     static
     {
-        at(HERBS, "Ardougne", 2670, 3374);
-        at(HERBS, "Catherby", 2813, 3463);
-        at(HERBS, "Falador", 3058, 3311);
-        at(HERBS, "Kourend", 1738, 3550);
-        at(HERBS, "Farming Guild", 1238, 3726);
-        at(HERBS, "Harmony Island", 3789, 2837);
-        at(HERBS, "Morytania", 3605, 3529);
-        at(HERBS, "Troll Stronghold", 2826, 3694);
-        at(HERBS, "Weiss", 2848, 3934);
-        at(HERBS, "Civitas illa Fortis", 1582, 3094);
-
-        at(TREES, "Lumbridge", 3193, 3231);
-        at(TREES, "Falador", 3004, 3373);
-        at(TREES, "Taverley", 2936, 3438);
-        at(TREES, "Varrock", 3229, 3459);
-        at(TREES, "Gnome Stronghold", 2436, 3415);
-        at(TREES, "Farming Guild", 1232, 3736);
-        at(TREES, "Auburnvale", 1367, 3322);
-
-        // Exact Quest Helper TreeRun ObjectStep coordinates, not estimated locations.
-        at(FRUITS, "Gnome Stronghold", 2476, 3446);
-        at(FRUITS, "Tree Gnome Village", 2490, 3180);
-        at(FRUITS, "Brimhaven", 2765, 3213);
-        at(FRUITS, "Catherby", 2860, 3433);
-        at(FRUITS, "Lletya", 2347, 3162);
-        at(FRUITS, "Farming Guild", 1242, 3758);
-        at(FRUITS, "Kastori", 1350, 3057);
-        at(CALQUATS, "Tai Bwo Wannai", 2795, 3102);
-        at(CALQUATS, "Kastori", 1366, 3033);
-        at(CALQUATS, "Great Conch", 3129, 2406);
-        at(HARDWOODS, "Fossil Island~West", 3702, 3837);
-        at(HARDWOODS, "Fossil Island~Middle", 3708, 3833);
-        at(HARDWOODS, "Fossil Island~East", 3715, 3835);
-        at(HARDWOODS, "Avium Savannah", 1687, 2972);
-        at(HARDWOODS, "Anglers' Retreat", 2470, 2704);
-
         // RuneLite FarmingPatchLocation map markers (not exact object tiles).
         // https://github.com/runelite/runelite/blob/master/runelite-client/src/main/java/net/runelite/client/plugins/worldmap/FarmingPatchLocation.java
         for (PatchType type : new PatchType[]{PatchType.ALLOTMENT,PatchType.FLOWER})
@@ -73,6 +32,7 @@ final class Waypoints
         area(PatchType.ALLOTMENT, "Farming Guild", 1269, 3730);
         area(PatchType.FLOWER, "Farming Guild", 1259, 3729);
         area(PatchType.FLOWER, "Kastori", 1353, 3023);
+        area(PatchType.ALLOTMENT,"Harmony Island",3789,2837);
         // Farm-area markers; actual bins are resolved from their native objects.
         for(String site:new String[]{"Falador","Ardougne","Catherby","Morytania","Kourend","Civitas illa Fortis","Farming Guild","Prifddinas"})
             FARM_AREAS.put(PatchType.COMPOST_BIN.name()+"~"+site,FARM_AREAS.get(PatchType.ALLOTMENT.name()+"~"+site));
@@ -109,59 +69,18 @@ final class Waypoints
 
     private Waypoints() {}
 
-    private static void at(Map<String, WorldPoint> map, String name, int x, int y)
+    private static void area(PatchType type,String location,int x,int y)
     {
-        map.put(name, new WorldPoint(x, y, 0));
-    }
-
-    private static void area(PatchType type, String location, int x, int y)
-    {
-        at(FARM_AREAS, type.name() + "~" + location, x, y);
-    }
-
-    static WorldPoint farmArea(FarmRunPatch patch)
-    {
-        return FARM_AREAS.get(patch.getPatchType().name() + "~" + patch.getLocation());
-    }
-
-    static WorldPoint point(PatchType type, String location)
-    {
-        switch (type)
-        {
-            case TREE: return TREES.get(location);
-            case FRUIT_TREE: return FRUITS.get(location);
-            case CALQUAT: return CALQUATS.get(location);
-            case HARDWOOD_TREE: return HARDWOODS.get(location);
-            case HERB:
-            case ALLOTMENT:
-            case FLOWER:
-                return HERBS.get(location); // Same farming area, not the precise subpatch tile.
-            default:
-                return null; // Never send a bush/mushroom/specialty run to an unrelated herb patch.
-
-        }
-    }
-
-    static WorldPoint exactPoint(FarmRunPatch patch)
-    {
-        if (patch.getPatchType() == PatchType.HARDWOOD_TREE)
-        {
-            WorldPoint specific = HARDWOODS.get(patch.getLocation() + "~" + patch.getName());
-            return specific != null ? specific : HARDWOODS.get(patch.getLocation());
-        }
-        return point(patch.getPatchType(), patch.getLocation());
+        FARM_AREAS.put(type.name()+"~"+location,new WorldPoint(x,y,0));
     }
 
     static WorldPoint destination(FarmRunPatch patch)
     {
         if(patch.getPatchType()==PatchType.BIRDHOUSE){BirdhouseRun.Site s=BirdhouseRun.site(patch);return s==null?null:s.approach;}
-        WorldPoint area = farmArea(patch);
-        return area == null ? exactPoint(patch) : area;
+        QuestTargets.Definition exact=QuestTargets.get(patch);
+        return exact!=null?exact.point:FARM_AREAS.get(patch.getPatchType()+"~"+patch.getLocation());
     }
 
-    /** Entrance and patch destinations are deliberately separate. The outdoor
-     * coordinates for coral and the seaweed bank island are from Shortest Path's
-     * transports.tsv and boats.tsv. They avoid requesting impossible cave routes. */
     enum AccessState { AVAILABLE, LOCKED, UNKNOWN }
 
     static final class Access

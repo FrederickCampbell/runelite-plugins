@@ -28,7 +28,7 @@ public class SpecialStateTest
     @Test public void kastoriFlowerIsNotATreeAndWeedsAreEmpty()
     {
         FarmingWorld world=new FarmingWorld();
-        FarmingPatch flower=QuestFarmingStateReader.find(world,net.runelite.client.plugins.timetracking.Tab.FLOWER,"Kastori","",PatchImplementation.FLOWER);
+        FarmingPatch flower=QuestFarmingStateReader.lookup("FLOWER","Kastori","");
         assertNotNull(flower);
         assertEquals(net.runelite.api.gameval.VarbitID.FARMING_TRANSMIT_C,flower.getVarbit());
         assertTrue(QuestFarmingStateReader.matchesLiveName("Flower Patch",true));

@@ -33,32 +33,6 @@ final class StepEngine
 
     private StepEngine() {}
 
-    static boolean supportsProtection(PatchType type)
-    {
-        return type == PatchType.TREE || type == PatchType.FRUIT_TREE ||
-            type == PatchType.CALQUAT || type == PatchType.HARDWOOD_TREE ||
-            type == PatchType.CELASTRUS || type == PatchType.REDWOOD || type == PatchType.CORAL || type == PatchType.SEAWEED ||
-            type == PatchType.ALLOTMENT || type == PatchType.HOPS || type == PatchType.BUSH || type == PatchType.CACTUS || type == PatchType.SPIRIT_TREE;
-    }
-
-    static boolean isTreeType(PatchType type)
-    {
-        switch (type)
-        {
-            case TREE:
-            case FRUIT_TREE:
-            case CALQUAT:
-            case HARDWOOD_TREE:
-            case SPIRIT_TREE:
-            case CELASTRUS:
-            case REDWOOD:
-            case CRYSTAL_TREE:
-                return true;
-            default:
-                return false;
-        }
-    }
-
     static Action action(PatchType type, @Nullable CropState state,
                          boolean requireProtection, @Nullable Boolean protectedByFarmer)
     {
@@ -77,13 +51,13 @@ final class StepEngine
             case STUMP:
                 return Action.DIG_STUMP;
             case UNCHECKED:
-                return isTreeType(type) || type == PatchType.CACTUS || type == PatchType.BUSH ? Action.CHECK_HEALTH : Action.HARVEST;
+                return type.isTree() || type == PatchType.CACTUS || type == PatchType.BUSH ? Action.CHECK_HEALTH : Action.HARVEST;
             case HARVESTABLE:
                 if (type == PatchType.SPIRIT_TREE || type == PatchType.REDWOOD) return Action.COMPLETE;
                 if (type == PatchType.CELASTRUS || type == PatchType.CRYSTAL_TREE) return Action.HARVEST;
-                return isTreeType(type) ? Action.REMOVE_TREE : Action.HARVEST;
+                return type.isTree() ? Action.REMOVE_TREE : Action.HARVEST;
             case GROWING:
-                if (supportsProtection(type) && requireProtection
+                if (type.supportsProtection() && requireProtection
                     && !Boolean.TRUE.equals(protectedByFarmer))
                 {
                     return Action.PROTECT_TREE;
@@ -169,7 +143,7 @@ final class StepEngine
                 return "Ask the gardener to protect the crop. Continue automatically "
                     + "when protection is detected, or use Skip if protection was applied but not detected.";
             case COMPLETE:
-                return crop == null && isTreeType(type) ? "Existing tree checked; leave it planted."
+                return crop == null && type.isTree() ? "Existing tree checked; leave it planted."
                     : "Patch complete. Continue to the next stop.";
             default:
                 return "Patch state unknown. Inspect the patch or visit it to load "

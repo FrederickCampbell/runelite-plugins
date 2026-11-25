@@ -61,13 +61,13 @@ final class RunOrder
         if(p.getPatchType()==PatchType.BIRDHOUSE)return 6;
         if("Champions' Guild".equals(p.getLocation())||"Gnome Stronghold".equals(p.getLocation())&&p.getPatchType()==PatchType.FRUIT_TREE)return 0;
         if(p.getPatchType()==PatchType.COMPOST_BIN)return 4;
-        if(StepEngine.isTreeType(p.getPatchType()))return 1;
+        if(p.getPatchType().isTree())return 1;
         return 2;
     }
     static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,boolean freeSpace)
     {
         Set<PatchType> trees=EnumSet.noneOf(PatchType.class);
-        if(freeSpace)for(FarmRunPatch p:patches)if(StepEngine.isTreeType(p.getPatchType())&&p.getPatchType()!=PatchType.SPIRIT_TREE)trees.add(p.getPatchType());
+        if(freeSpace)for(FarmRunPatch p:patches)if(p.getPatchType().isTree()&&p.getPatchType()!=PatchType.SPIRIT_TREE)trees.add(p.getPatchType());
         return shared(patches,start,guildFirst,trees);
     }
     static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,Set<PatchType> carriedSaplings)

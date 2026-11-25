@@ -13,6 +13,10 @@ import static org.junit.Assert.assertTrue;
 
 public class FarmRunCatalogTest
 {
+    private boolean hasPatch(String location,PatchType type)
+    {
+        return FarmRunCatalog.patches().stream().anyMatch(p->p.getLocation().equals(location)&&p.getPatchType()==type);
+    }
 	@Test
 	public void placesGnomeStrongholdImmediatelyAfterVarrockInTreeRun()
 	{
@@ -34,7 +38,7 @@ public class FarmRunCatalogTest
 		Map<PatchType, Integer> counts = new EnumMap<>(PatchType.class);
 		for (FarmRunPatch patch : FarmRunCatalog.patches())
 		{
-			counts.merge(patch.getPatchType(), patch.getPatchCount(), Integer::sum);
+			counts.merge(patch.getPatchType(), 1, Integer::sum);
 		}
 
 		assertEquals(Integer.valueOf(17), counts.get(PatchType.ALLOTMENT));
@@ -63,10 +67,10 @@ public class FarmRunCatalogTest
 	@Test
 	public void onlyAllowsPatchTypesAtDocumentedLocations()
 	{
-		assertTrue(FarmRunCatalog.hasPatch("Varrock", PatchType.TREE));
-		assertTrue(FarmRunCatalog.hasPatch("Farming Guild", PatchType.ANIMA));
-		assertTrue(FarmRunCatalog.hasPatch("Great Conch", PatchType.CORAL));
-		assertFalse(FarmRunCatalog.hasPatch("Varrock", PatchType.FRUIT_TREE));
-		assertFalse(FarmRunCatalog.hasPatch("Region 1234", PatchType.HERB));
+		assertTrue(hasPatch("Varrock", PatchType.TREE));
+		assertTrue(hasPatch("Farming Guild", PatchType.ANIMA));
+		assertTrue(hasPatch("Great Conch", PatchType.CORAL));
+		assertFalse(hasPatch("Varrock", PatchType.FRUIT_TREE));
+		assertFalse(hasPatch("Region 1234", PatchType.HERB));
 	}
 }

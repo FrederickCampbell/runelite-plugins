@@ -22,7 +22,7 @@ public class FarmingGuideTest
             {2826,3694},{2848,3934},{1238,3726},{3789,2837},{1582,3094}};
         assertEquals(tiles.length,patches.size());
         for (int i=0; i<tiles.length; i++)
-            assertEquals(new WorldPoint(tiles[i][0],tiles[i][1],0),Waypoints.exactPoint(patches.get(i)));
+            assertEquals(new WorldPoint(tiles[i][0],tiles[i][1],0),QuestTargets.get(patches.get(i)).point);
     }
 
     @Test public void emptyStockCannotRemoveAnUnknownOrReadyHerbPatch()

@@ -13,18 +13,11 @@ public class PatchCoverageTest
 {
     @Test public void everyPhysicalPatchHasAUniqueIdentityAndDefinedDestination()
     {
-        QuestFarmingStateReader reader = new QuestFarmingStateReader(mock(Client.class), mock(ConfigManager.class));
         Set<String> keys = new HashSet<>();
-        for (FarmRunPatch grouped : FarmRunCatalog.patches())
+        for(FarmRunPatch patch:FarmRunCatalog.patches())
         {
-            List<String> names = reader.patchNamesForType(grouped.getPatchType().name(), grouped.getLocation());
-            assertFalse(grouped.getDisplayName(), names.isEmpty());
-            assertEquals(grouped.getDisplayName(), grouped.getPatchCount(), names.size());
-            for (FarmRunPatch patch : PatchNames.expand(grouped, names))
-            {
-                assertTrue(patch.getDisplayName(), keys.add(patch.key()));
-                assertNotNull(patch.getDisplayName(), Waypoints.destination(patch));
-            }
+            assertTrue(patch.key(),keys.add(patch.key()));
+            assertNotNull(patch.key(),Waypoints.destination(patch));
         }
         assertEquals("All physical plots and compost bins in the vendored farming registry", 107, keys.size());
     }

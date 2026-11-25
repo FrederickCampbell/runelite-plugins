@@ -45,7 +45,8 @@ final class CropReplacement
         if(!configurable(t)||!mature(t,o))return base;
         if(o.state==CropState.UNCHECKED)return StepEngine.Action.CHECK_HEALTH;
         if(producer(t)&&!depleted(t,o))return StepEngine.Action.HARVEST;
-        if(preserve||!replacementCarried&&!clearOnly)return StepEngine.Action.COMPLETE;
+        if(preserve)return StepEngine.Action.COMPLETE;
+        if(!replacementCarried&&!clearOnly)return StepEngine.Action.NEED_REPLACEMENT;
         if(t==PatchType.REDWOOD)return StepEngine.Action.PAY_REMOVE;
         if(t==PatchType.BUSH||t==PatchType.CACTUS||t==PatchType.CALQUAT)return StepEngine.Action.CLEAR_LIVING;
         return StepEngine.Action.REMOVE_TREE;

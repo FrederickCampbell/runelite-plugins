@@ -22,11 +22,9 @@ final class CropCare
         }
         return best;
     }
-    static boolean supportsWater(PatchType type)
-    {return type==PatchType.ALLOTMENT||type==PatchType.FLOWER||type==PatchType.HOPS;}
     static boolean waterNeeded(PatchType type,Observation o,int can)
     {
-        if(can<=0||!supportsWater(type)||o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;
+        if(can<=0||!type.canBeWatered()||o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;
         int r=o.rawValue;
         switch(type)
         {
@@ -51,7 +49,7 @@ final class CropCare
     static boolean needsCure(Observation o,boolean verified)
     {return verified&&o!=null&&o.source==Source.LIVE&&o.state==CropState.DISEASED;}
     static boolean prunes(PatchType type)
-    {return StepEngine.isTreeType(type)||type==PatchType.BUSH||type==PatchType.CORAL;}
+    {return type.isTree()||type==PatchType.BUSH||type==PatchType.CORAL;}
     private static boolean between(int v,int min,int max){return v>=min&&v<=max;}
     private CropCare(){}
 }

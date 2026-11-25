@@ -1,5 +1,6 @@
 package com.farminghelper;
 
+@lombok.RequiredArgsConstructor
 enum PatchType
 {
 	ALLOTMENT("Allotment", true),
@@ -26,19 +27,8 @@ enum PatchType
 	COMPOST_BIN("Compost", false),
 	BIRDHOUSE("Birdhouse", false);
 
-	private final String displayName;
+	@lombok.Getter private final String displayName;
 	private final boolean usesDibber;
-
-	PatchType(String displayName, boolean usesDibber)
-	{
-		this.displayName = displayName;
-		this.usesDibber = usesDibber;
-	}
-
-	String getDisplayName()
-	{
-		return displayName;
-	}
 
 	boolean usesDibber()
 	{
@@ -50,6 +40,16 @@ enum PatchType
 		return this == ALLOTMENT || this == FLOWER || this == HOPS;
 	}
 
+    boolean isTree()
+    {
+        return !usesDibber && this!=BIRDHOUSE && this!=COMPOST_BIN;
+    }
+
+    boolean supportsProtection()
+    {
+        return (isTree() && this!=CRYSTAL_TREE) || this==CORAL || this==SEAWEED ||
+            this==ALLOTMENT || this==HOPS || this==BUSH || this==CACTUS;
+    }
 	boolean usesCompost()
 	{
 		return this != GRAPEVINE && this != HESPORI && this != ANIMA && this != CORAL && this != COMPOST_BIN && this != BIRDHOUSE;

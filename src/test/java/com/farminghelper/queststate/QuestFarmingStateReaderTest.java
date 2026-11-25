@@ -11,10 +11,10 @@ public class QuestFarmingStateReaderTest
     @Test
     public void questHelperContainsExistingHerbTreeAndAllotmentPatches()
     {
-        assertNotNull(QuestFarmingStateReader.find(world, Tab.HERB, "Falador", null));
-        assertNotNull(QuestFarmingStateReader.find(world, Tab.TREE, "Farming Guild", null));
-        assertNotNull(QuestFarmingStateReader.find(world, Tab.ALLOTMENT, "Catherby", "North"));
-        assertNotNull(QuestFarmingStateReader.find(world, Tab.ALLOTMENT, "Catherby", "South"));
+        assertNotNull(QuestFarmingStateReader.lookup("HERB","Falador",""));
+        assertNotNull(QuestFarmingStateReader.lookup("TREE","Farming Guild",""));
+        assertNotNull(QuestFarmingStateReader.lookup("ALLOTMENT","Catherby","North"));
+        assertNotNull(QuestFarmingStateReader.lookup("ALLOTMENT","Catherby","South"));
     }
 
     @Test
@@ -35,7 +35,7 @@ public class QuestFarmingStateReaderTest
     @Test
     public void harmonyAliasMatchesQuestHelperWorld()
     {
-        assertNotNull(QuestFarmingStateReader.find(world, Tab.HERB, "Harmony Island", null));
+        assertNotNull(QuestFarmingStateReader.lookup("HERB","Harmony Island",""));
     }
 
     @Test

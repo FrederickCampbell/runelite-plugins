@@ -32,7 +32,29 @@ public final class QuestFarmingStateReader
     private static final String TIME_TRACKING = TimeTrackingConfig.CONFIG_GROUP;
     private final Client client;
     private final ConfigManager config;
-    private final FarmingWorld world;
+    private static final FarmingWorld world=new FarmingWorld();
+    private static final Map<String,Map<String,FarmingPatch>> sites=indexSites();
+    private static Map<String,Map<String,FarmingPatch>> indexSites()
+    {
+        Map<String,Map<String,FarmingPatch>> sites=new HashMap<>();
+        world.getTabs().values().forEach(patches->patches.forEach(patch->{
+            String key=patch.getImplementation()+"~"+normalize(patch.getRegion().getName());
+            Map<String,FarmingPatch> names=sites.computeIfAbsent(key,k->new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER));
+            if(names.put(patch.getName(),patch)!=null)throw new IllegalStateException("Duplicate farming patch "+key+" "+patch.getName());
+        }));
+        return sites;
+    }
+
+    private static Map<String,FarmingPatch> site(String type,String location)
+    {
+        return sites.getOrDefault(implementation(type,location)+"~"+normalize(location),Collections.emptyMap());
+    }
+
+    static FarmingPatch lookup(String type,String location,String name)
+    {
+        return name==null?null:site(type,location).get(name);
+    }
+
     private final FarmingHandler handler;
     private final Map<String,String> recent=new HashMap<>();
     private String recentProfile;
@@ -42,7 +64,6 @@ public final class QuestFarmingStateReader
     {
         this.client = client;
         this.config = config;
-        world = new FarmingWorld();
         handler = new FarmingHandler(client, config);
     }
 
@@ -82,12 +103,7 @@ public final class QuestFarmingStateReader
             return state != null && source != Source.NONE;
         }
 
-        public boolean isFreshSince(long sinceMillis)
-        {
-            return source == Source.LIVE || (observedAtMillis > sinceMillis && sinceMillis > 0);
-        }
     }
-
 
     /**
      * Full patch-type-aware state lookup. Several categories share RuneLite's
@@ -98,13 +114,64 @@ public final class QuestFarmingStateReader
     public Observation observeType(String patchType, String location,
                                    String patchName, WorldPoint worldPoint)
     {
-        PatchImplementation implementation = implementation(patchType,location);
-        if (implementation == null)
+        if (client.getGameState() != GameState.LOGGED_IN ||
+            config.getRSProfileKey() == null)
         {
             return new Observation(null, Source.NONE, 0, null, "");
         }
-        return observeResolved(implementation.getTab(), location, patchName,
-            worldPoint, implementation);
+
+        String profile=config.getRSProfileKey();
+        if(!java.util.Objects.equals(profile,recentProfile)){recent.clear();recentProfile=profile;}
+        FarmingPatch match = lookup(patchType,location,patchName);
+        if (match == null)
+        {
+            return new Observation(null, Source.NONE, 0, null, "");
+        }
+        PatchImplementation implementation=match.getImplementation();
+        Boolean protection = config.getRSProfileConfiguration(TIME_TRACKING,
+            match.configKey() + "." + TimeTrackingConfig.PROTECTED, Boolean.class);
+
+        WorldPoint player = client.getLocalPlayer() == null ? null
+            : client.getLocalPlayer().getWorldLocation();
+        if (client.getLocalPlayer()!=null && client.getLocalPlayer().getLocalLocation()!=null)
+            player = LocationContext.normalize(client,client.getLocalPlayer().getLocalLocation(),player);
+        boolean near = player != null && inRegion(match,player) &&
+            (worldPoint == null
+                ? player.getRegionID() == match.getRegion().getRegionID()
+                : (implementation==PatchImplementation.CORAL ? player.distanceTo2D(worldPoint)<=LIVE_TILE_RADIUS :
+                    player.getPlane() == worldPoint.getPlane() && player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS));
+        boolean kastoriFlower = implementation==PatchImplementation.FLOWER && "Kastori".equals(location);
+        boolean bin = implementation==PatchImplementation.COMPOST || implementation==PatchImplementation.BIG_COMPOST;
+        if (near && (kastoriFlower || bin) && !confirmedObject(match,worldPoint,kastoriFlower))
+            return new Observation(null,Source.NONE,0,protection,match.getName());
+        if (near)
+        {
+            int value = client.getVarbitValue(match.getVarbit());
+            PatchState raw = match.getImplementation().forVarbitValue(value);
+            if (raw != null)
+            {
+                CropState state = normalizedState(match.getImplementation(), value, raw);
+                String old=recent.get(match.configKey());
+                if(old==null || !old.startsWith(value+":"))recent.put(match.configKey(),value+":"+(System.currentTimeMillis()/1000));
+                return new Observation(state, Source.LIVE, System.currentTimeMillis(),
+                    protection, match.getName(), value);
+            }
+        }
+
+        // Old or cross-region flower snapshots must never suppress a Kastori visit.
+        if(kastoriFlower) return new Observation(null,Source.NONE,0,protection,match.getName());
+        String raw = config.getConfiguration(TIME_TRACKING, profile, match.configKey());
+        String observed=recent.get(match.configKey());
+        boolean own=timestampMillis(observed)>timestampMillis(raw);
+        if(own)raw=observed;
+        long observedAtMillis = timestampMillis(raw);
+        if (observedAtMillis <= 0 || observedAtMillis > System.currentTimeMillis())
+        {
+            return new Observation(null, Source.NONE, 0, protection, match.getName());
+        }
+        CropState state = handler.predictObserved(match,profile,raw);
+        return new Observation(state, state == null ? Source.NONE : own?Source.OBSERVED:Source.TIME_TRACKING,
+            observedAtMillis, protection, match.getName(), Integer.parseInt(raw.split(":",2)[0]));
     }
 
     public static String livingProduceKey(String type,Observation o)
@@ -116,15 +183,6 @@ public final class QuestFarmingStateReader
         return raw==null||raw.getProduce()==Produce.WEEDS?"":raw.getProduce().name();
     }
 
-    public static boolean isLivingWhiteLily(Observation o)
-    {
-        if(o==null||o.rawValue<0||o.state==null||o.state==CropState.DEAD||o.state==CropState.EMPTY||o.state==CropState.DISEASED)return false;
-        PatchState raw=PatchImplementation.FLOWER.forVarbitValue(o.rawValue);
-        return raw!=null&&raw.getProduce()==Produce.WHITE_LILY;
-    }
-
-    /** Preserve an established crop assigned by Guildmaster Jane. The
-     * contract mapping comes from RuneLite's actual Produce metadata. */
     public static boolean isLivingContractCrop(String type,Observation o,int contract)
     {
         if(contract<=0||o==null||o.rawValue<0||o.state==null||o.state==CropState.DEAD||o.state==CropState.EMPTY||o.state==CropState.DISEASED||o.state==CropState.STUMP)return false;
@@ -172,8 +230,7 @@ public final class QuestFarmingStateReader
      * advisory; absence of data never means treated. */
     public boolean compostRecorded(String type,String location,String name,int minimum)
     {
-        PatchImplementation impl=implementation(type,location);
-        FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
+        FarmingPatch patch=lookup(type,location,name);
         if(patch==null)return false;
         String value=config.getRSProfileConfiguration(TIME_TRACKING,patch.configKey()+".compost");
         if(value==null)return false;
@@ -189,49 +246,34 @@ public final class QuestFarmingStateReader
     /** Existing Quest Helper registry supplies the actual gardener NPC ID. */
     public int gardenerId(String patchType, String location, String patchName)
     {
-        PatchImplementation impl = implementation(patchType,location);
-        FarmingPatch patch = impl == null ? null : find(world, impl.getTab(), location, patchName, impl);
+        FarmingPatch patch=lookup(patchType,location,patchName);
         return patch == null ? -1 : patch.getFarmer();
     }
 
     public int patchVarbit(String type,String location,String name)
     {
-        PatchImplementation impl=implementation(type,location);
-        FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
+        FarmingPatch patch=lookup(type,location,name);
         return patch==null?-1:patch.getVarbit();
     }
 
     public boolean inPatchRegion(String type,String location,String name,WorldPoint point)
     {
         if(point==null)return false;
-        PatchImplementation impl=implementation(type,location);
-        FarmingPatch patch=impl==null?null:find(world,impl.getTab(),location,name,impl);
-        if(patch==null)return false;
+        FarmingPatch patch=lookup(type,location,name);
+        return patch!=null && inRegion(patch,point);
+    }
+
+    private static boolean inRegion(FarmingPatch patch,WorldPoint point)
+    {
+        PatchImplementation impl=patch.getImplementation();
         if(impl==PatchImplementation.CORAL && point.getRegionID()!=13194)return false;
         if(impl==PatchImplementation.HESPORI && point.getRegionID()!=5021)return false;
         return world.getRegionsForLocation(point).contains(patch.getRegion());
     }
 
-    public List<String> patchNamesForType(String patchType, String location)
+    public static List<String> patchNamesForType(String type,String location)
     {
-        PatchImplementation impl = implementation(patchType,location);
-        return impl == null ? Collections.emptyList()
-            : patchNamesResolved(impl.getTab(), location, impl);
-    }
-
-    /** Geographical fallback derived from Quest Helper's actual world regions.
-     * A region centre is approximate, never a verified patch tile.
-     */
-    @Nullable
-    public WorldPoint regionHint(String patchType, String location)
-    {
-        PatchImplementation impl = implementation(patchType,location);
-        if (impl == null) return null;
-        FarmingPatch patch = find(world, impl.getTab(), location, null, impl);
-        if (patch == null) return null;
-        int region = patch.getRegion().getRegionID();
-        return new WorldPoint(((region >> 8) & 0xff) * 64 + 32,
-            (region & 0xff) * 64 + 32, 0);
+        return List.copyOf(site(type,location).keySet());
     }
 
     static PatchImplementation implementation(String type,String location)
@@ -252,86 +294,6 @@ public final class QuestFarmingStateReader
         {
             return null;
         }
-    }
-
-    /**
-     * Call on RuneLite's client thread. Regions follow Quest Helper's registry
-     * including the nonintuitive Harmony vs Harmony Island display name.
-     */
-    public Observation observe(Tab tab, String location, WorldPoint worldPoint)
-    {
-        return observe(tab, location, null, worldPoint);
-    }
-
-    public Observation observe(Tab tab, String location, String patchName, WorldPoint worldPoint)
-    {
-        return observeResolved(tab, location, patchName, worldPoint, null);
-    }
-
-    private Observation observeResolved(Tab tab, String location, String patchName,
-                                        WorldPoint worldPoint, PatchImplementation implementation)
-    {
-        if (client.getGameState() != GameState.LOGGED_IN ||
-            config.getRSProfileKey() == null)
-        {
-            return new Observation(null, Source.NONE, 0, null, "");
-        }
-
-        String profile=config.getRSProfileKey();
-        if(!java.util.Objects.equals(profile,recentProfile)){recent.clear();recentProfile=profile;}
-        FarmingPatch match = find(world, tab, location, patchName, implementation);
-        if (match == null)
-        {
-            return new Observation(null, Source.NONE, 0, null, "");
-        }
-        Boolean protection = config.getRSProfileConfiguration(TIME_TRACKING,
-            match.configKey() + "." + TimeTrackingConfig.PROTECTED, Boolean.class);
-
-        WorldPoint player = client.getLocalPlayer() == null ? null
-            : client.getLocalPlayer().getWorldLocation();
-        if (client.getLocalPlayer()!=null && client.getLocalPlayer().getLocalLocation()!=null)
-            player = LocationContext.normalize(client,client.getLocalPlayer().getLocalLocation(),player);
-        boolean near = player != null && inPatchRegion(implementation==null?match.getImplementation().name():implementation.name(),location,patchName,player) &&
-            (worldPoint == null
-                ? player.getRegionID() == match.getRegion().getRegionID()
-                : (implementation==PatchImplementation.CORAL ? player.distanceTo2D(worldPoint)<=LIVE_TILE_RADIUS :
-                    player.getPlane() == worldPoint.getPlane() && player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS));
-        boolean kastoriFlower = implementation==PatchImplementation.FLOWER && "Kastori".equals(location);
-        boolean bin = implementation==PatchImplementation.COMPOST || implementation==PatchImplementation.BIG_COMPOST;
-        if (near && (kastoriFlower || bin) && !confirmedObject(match,worldPoint,kastoriFlower))
-            return new Observation(null,Source.NONE,0,protection,match.getName());
-        if (near)
-        {
-            int value = client.getVarbitValue(match.getVarbit());
-            PatchState raw = match.getImplementation().forVarbitValue(value);
-            if (raw != null)
-            {
-                CropState state = normalizedState(match.getImplementation(), value, raw);
-                String old=recent.get(match.configKey());
-                if(old==null || !old.startsWith(value+":"))recent.put(match.configKey(),value+":"+(System.currentTimeMillis()/1000));
-                return new Observation(state, Source.LIVE, System.currentTimeMillis(),
-                    protection, match.getName(), value);
-            }
-        }
-
-        // Old or cross-region flower snapshots must never suppress a Kastori visit.
-        if(kastoriFlower) return new Observation(null,Source.NONE,0,protection,match.getName());
-        String raw = config.getConfiguration(TIME_TRACKING, profile, match.configKey());
-        String observed=recent.get(match.configKey());
-        boolean own=timestampMillis(observed)>timestampMillis(raw);
-        if(own)raw=observed;
-        if (raw == null)
-        {
-            return new Observation(null, Source.NONE, 0, protection, match.getName());
-        }
-        long observedAtMillis = timestampMillis(raw);
-        if (observedAtMillis <= 0 || observedAtMillis > System.currentTimeMillis())
-        {
-            return new Observation(null, Source.NONE, 0, protection, match.getName());
-        }
-        CropState state = handler.predictObserved(match,profile,raw);
-        return new Observation(state, state == null ? Source.NONE : own?Source.OBSERVED:Source.TIME_TRACKING,
-            observedAtMillis, protection, match.getName(), Integer.parseInt(raw.split(":",2)[0]));
     }
 
     private boolean confirmedObject(FarmingPatch match,WorldPoint marker,boolean flower)
@@ -449,63 +411,6 @@ public final class QuestFarmingStateReader
         {
             return 0;
         }
-    }
-
-    static FarmingPatch find(FarmingWorld world, Tab tab, String location, String patchName)
-    {
-        return find(world, tab, location, patchName, null);
-    }
-
-    static FarmingPatch find(FarmingWorld world, Tab tab, String location,
-                             String patchName, PatchImplementation implementation)
-    {
-        Collection<FarmingPatch> patches = world.getTabs().get(tab);
-        if (patches == null || location == null)
-        {
-            return null;
-        }
-        String expected = normalize(location);
-        FarmingPatch match=null;
-        for (FarmingPatch patch : patches)
-        {
-            if (normalize(patch.getRegion().getName()).equals(expected)
-                && (implementation == null || patch.getImplementation() == implementation)
-                && (patchName == null || patch.getName().equalsIgnoreCase(patchName)))
-            {
-                // Explicit physical identities must be unique. Location-only
-                // legacy/region queries may still return the first representative.
-                if(patchName==null||implementation==null)return patch;
-                if(match!=null)return null;
-                match=patch;
-            }
-        }
-        return match;
-    }
-
-    /** Canonical Quest Helper patch names for multi-patch locations. */
-    public List<String> patchNames(Tab tab, String location)
-    {
-        return patchNamesResolved(tab, location, null);
-    }
-
-    private List<String> patchNamesResolved(Tab tab, String location, PatchImplementation implementation)
-    {
-        Collection<FarmingPatch> patches = world.getTabs().get(tab);
-        if (patches == null || location == null)
-        {
-            return Collections.emptyList();
-        }
-        List<String> result = new ArrayList<>();
-        for (FarmingPatch patch : patches)
-        {
-            if (normalize(patch.getRegion().getName()).equals(normalize(location))
-                && (implementation == null || patch.getImplementation() == implementation))
-            {
-                result.add(patch.getName());
-            }
-        }
-        Collections.sort(result);
-        return result;
     }
 
     private static String normalize(String location)

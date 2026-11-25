@@ -30,7 +30,7 @@ public class PatchLocationSelectionTest
 		assertFalse(PatchLocationSelection.isEnabled(config, "Auburnvale"));
 		assertFalse(PatchLocationSelection.isEnabled(config, "Civitas illa Fortis"));
 		assertTrue(PatchLocationSelection.isEnabled(config, "Falador"));
-		assertFalse(FarmRunCatalog.patches(config).stream()
+		assertFalse(FarmRunCatalog.patches().stream().filter(p->PatchLocationSelection.isEnabled(config,p.getLocation()))
 			.anyMatch(patch -> patch.getLocation().equals("Fossil Island")
 				|| patch.getLocation().equals("Seaweed")
 				|| patch.getLocation().equals("Auburnvale")));
