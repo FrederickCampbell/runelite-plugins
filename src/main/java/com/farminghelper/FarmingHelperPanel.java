@@ -6,6 +6,8 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Container;
+import java.awt.KeyboardFocusManager;
 import java.util.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -29,6 +31,12 @@ final class FarmingHelperPanel extends PluginPanel
     private final JPanel toolbar=new JPanel(new BorderLayout(4,0));
     private final JPanel footer=new JPanel(new BorderLayout());
     private final SidebarNavigation navigation=new SidebarNavigation();
+    private final Map<SidebarNavigation.Page,Position> positions=new EnumMap<>(SidebarNavigation.Page.class);
+    private SidebarNavigation.Page mountedPage;
+    private boolean returning;
+    private long renderGeneration;
+    private JPanel patchResults;
+    private ManualPicker manualPicker;
     private GuideView latestGuide;
     private long guideSession=Long.MIN_VALUE;
     private boolean requiredOpen=false,completedOpen=false,lastPreparing=false,teleportsOpen=false;
@@ -99,8 +107,109 @@ final class FarmingHelperPanel extends PluginPanel
         JCheckBox box=new JCheckBox(label,value);
         box.addActionListener(e->change.accept(box.isSelected()));return box;
     }
-    private void restoreScroll(SidebarNavigation.Page page,int y)
-    {SwingUtilities.invokeLater(()->{if(navigation.page()==page)scroll.getVerticalScrollBar().setValue(y);});}
+    /** A control identity and its offset survive rebuilding a list or returning from a child page. */
+    private static final class Position
+    {
+        int scrollY, offset, dot, mark;
+        String focus, anchor, fallback;
+        boolean search;
+    }
+
+    private static String key(Component control)
+    {
+        if (!(control instanceof AbstractButton || control instanceof JTextField || control instanceof JComboBox)) return null;
+        if (control.getName() != null) return control.getName();
+        String name=control.getAccessibleContext().getAccessibleName();
+        return name == null || name.isEmpty() ? null : name;
+    }
+
+    private static void controls(Container owner, List<JComponent> list)
+    {
+        for (Component child : owner.getComponents())
+        {
+            if (!child.isVisible()) continue;
+            if (key(child) != null) list.add((JComponent) child);
+            else if (child instanceof JPanel || child instanceof JViewport || child instanceof JScrollPane)
+                controls((Container)child,list);
+        }
+    }
+
+    private Position position()
+    {
+        Position saved = new Position();
+        saved.scrollY = scroll.getVerticalScrollBar().getValue();
+        Component focus = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (focus != null && SwingUtilities.isDescendingFrom(focus,this))
+        {
+            saved.focus=key(focus);
+            if (focus instanceof JComponent) saved.fallback=(String)((JComponent)focus).getClientProperty("farming.focusFallback");
+            if (focus instanceof JTextField)
+            {
+                JTextField field=(JTextField)focus;
+                saved.search=true; saved.dot=field.getCaret().getDot(); saved.mark=field.getCaret().getMark();
+            }
+        }
+        if (saved.scrollY > 0)
+        {
+            List<JComponent> candidates = new ArrayList<>();
+            controls(rows,candidates);
+            int nearest=Integer.MAX_VALUE;
+            for (JComponent c : candidates)
+            {
+                int offset=SwingUtilities.convertPoint(c,0,0,scroll.getViewport()).y;
+                if (offset+c.getHeight()<=0 || offset>=scroll.getViewport().getHeight()) continue;
+                if (c==focus || Math.abs(offset)<nearest)
+                {
+                    saved.anchor=key(c); saved.offset=offset; nearest=Math.abs(offset);
+                    if (c==focus) break;
+                }
+            }
+        }
+        return saved;
+    }
+
+    private void restorePosition(Position saved)
+    {
+        long generation=++renderGeneration, session=guideSession;
+        SwingUtilities.invokeLater(() -> {
+            if (generation!=renderGeneration || session!=guideSession) return;
+            if (saved==null) { scroll.getVerticalScrollBar().setValue(0); return; }
+            int target=saved.scrollY;
+            if (saved.focus!=null || saved.anchor!=null)
+            {
+                List<JComponent> candidates = new ArrayList<>();
+                controls(this,candidates);
+                JComponent focus=null, fallback=null;
+                for (JComponent c : candidates)
+                {
+                    String k=key(c);
+                    if (k.equals(saved.anchor) && SwingUtilities.isDescendingFrom(c,rows))
+                        target=SwingUtilities.convertPoint(c,0,0,scroll.getViewport().getView()).y-saved.offset;
+                    if (c.isEnabled() && k.equals(saved.focus)) focus=c;
+                    if (c.isEnabled() && k.equals(saved.fallback)) fallback=c;
+                }
+                if (focus==null) focus=fallback;
+                Component current=KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+                if (focus!=null && (current==null || !current.isShowing() || SwingUtilities.isDescendingFrom(current,this)))
+                {
+                    focus.requestFocusInWindow();
+                    if (saved.search && focus instanceof JTextField)
+                    {
+                        JTextField field=(JTextField)focus;
+                        int n=field.getDocument().getLength();
+                        field.setCaretPosition(Math.min(saved.mark,n));field.moveCaretPosition(Math.min(saved.dot,n));
+                    }
+                }
+            }
+            scroll.getVerticalScrollBar().setValue(target);
+        });
+    }
+
+    private void back(Runnable action)
+    {
+        returning=true;
+        try { action.run(); } finally { returning=false; }
+    }
 
     private void addRow(JComponent row)
     {
@@ -199,7 +308,7 @@ final class FarmingHelperPanel extends PluginPanel
     private void header(String title,Runnable back,Runnable gear,boolean end)
     {
         toolbar.removeAll();
-        if(back!=null)toolbar.add(FarmingIcons.button(BACK,"Back",FarmingTheme.MUTED,back),BorderLayout.WEST);
+        if(back!=null)toolbar.add(FarmingIcons.button(BACK,"Back",FarmingTheme.MUTED,()->back(back)),BorderLayout.WEST);
         JLabel label=new JLabel(title);label.setFont(FarmingTheme.font(Font.BOLD,14));label.setForeground(FarmingTheme.TEXT);label.setToolTipText(title);
         if(back==null&&navigation.page()==HOME){label.setIcon(FarmingIcons.of(LEAF,FarmingTheme.SUCCESS));label.setIconTextGap(5);}
         toolbar.add(label,BorderLayout.CENTER);
@@ -210,20 +319,32 @@ final class FarmingHelperPanel extends PluginPanel
         FarmingTheme.apply(toolbar);
     }
     private void page(SidebarNavigation.Page screen,String title,Runnable back,Runnable gear,boolean end)
-    {navigation.show(screen);rows.removeAll();footer.removeAll();header(title,back,gear,end);}
-    private void resetScroll(){scroll.getVerticalScrollBar().setValue(0);}
+    {
+        if (mountedPage!=null) positions.put(mountedPage,position());
+        Position saved=screen==mountedPage || returning ? positions.get(screen) : null;
+        if (screen!=MANUAL) manualPicker=null;
+        if (screen!=PATCHES) patchResults=null;
+        mountedPage=screen;
+        navigation.show(screen);rows.removeAll();footer.removeAll();header(title,back,gear,end);
+        restorePosition(saved);
+    }
     private void start(Runnable action)
     {
         if(latestGuide!=null)return; // Only the explicit End action returns to run selection.
         navigation.starting();action.run();
     }
     private void returnToGuide(){if(latestGuide!=null){navigation.show(GUIDE);previousGuide=null;renderGuide(latestGuide);}}
-    private void settings(boolean fromRun){settingsFromRun=fromRun;preferences();resetScroll();}
+    private void settings(boolean fromRun){settingsFromRun=fromRun;preferences();}
     private void searchField(String value,String placeholder,java.util.function.Consumer<String> change)
     {
-        JTextField search=new JTextField(value);search.putClientProperty("JTextField.placeholderText",placeholder);search.setToolTipText(placeholder);
+        JTextField search=new JTextField(value);search.putClientProperty("JTextField.placeholderText",placeholder);search.setToolTipText(placeholder);search.setName(placeholder);search.getAccessibleContext().setAccessibleName(placeholder.replace("…",""));
         search.getDocument().addDocumentListener(new DocumentListener(){
-            private void update(){String v=search.getText();SwingUtilities.invokeLater(()->{if(SwingUtilities.isDescendingFrom(search,rows))change.accept(v);});}
+            private boolean pending;
+            private void update(){
+                if(pending)return;
+                pending=true;
+                SwingUtilities.invokeLater(()->{pending=false;if(SwingUtilities.isDescendingFrom(search,rows))change.accept(search.getText());});
+            }
             public void insertUpdate(DocumentEvent e){update();} public void removeUpdate(DocumentEvent e){update();} public void changedUpdate(DocumentEvent e){update();}
         });addRow(search);
     }
@@ -231,7 +352,7 @@ final class FarmingHelperPanel extends PluginPanel
     {
         JButton button = new JButton(label, FarmingIcons.of(open ? COLLAPSE : EXPAND, FarmingTheme.MUTED));
         button.setHorizontalAlignment(SwingConstants.LEFT);
-        button.getAccessibleContext().setAccessibleDescription((open ? "Collapse " : "Expand ") + label);
+        button.setName(label);button.getAccessibleContext().setAccessibleDescription((open ? "Collapse " : "Expand ") + label);
         button.addActionListener(e -> action.run());
         return button;
     }
@@ -250,7 +371,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     void home()
     {
-        latestGuide=null;guideSession=Long.MIN_VALUE;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=false;completedOpen=false;lastPreparing=false;teleportsOpen=false;guideRendered=false;
+        positions.clear();mountedPage=null;latestGuide=null;guideSession=Long.MIN_VALUE;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=false;completedOpen=false;lastPreparing=false;teleportsOpen=false;guideRendered=false;
         supplyRows.clear();stepText.clear();showHome();
     }
     private void showHome()
@@ -329,13 +450,20 @@ final class FarmingHelperPanel extends PluginPanel
             if(name.equals("Fruit Tree & Calquat Run"))sprite=ItemID.PLANTPOT_CALQUAT_SAPLING;
             JButton b=navRow(name,"",LEAF,sprite,false,()->start(action));b.setAlignmentX(Component.LEFT_ALIGNMENT);
             FarmingTheme.apply(b);b.setMaximumSize(new Dimension(Integer.MAX_VALUE,b.getPreferredSize().height));results.add(b);results.add(Box.createVerticalStrut(3));}});
+        if(results.getComponentCount()==0)resultRow(results,text("No runs match your search.",FarmingTheme.MUTED));
         results.revalidate();results.repaint();
     }
-    void emptySelection(){showHome();line("No enabled patches for this run. Check patch preferences.",false);finish();}
+    void emptySelection()
+    {
+        showHome();
+        line("No enabled patches for this run. Check patch preferences.",true);
+        rows.setComponentZOrder(rows.getComponent(rows.getComponentCount()-1),0);
+        restorePosition(null);finish();
+    }
     private void openManual()
     {
         manual.clear();manual.addAll(ManualSelection.decode(plugin.setting("manualPatchChoicesV1",null),plugin.patches()));
-        manualGroups.clear();manualRun();resetScroll();
+        manualGroups.clear();manualRun();
     }
     private boolean selectable(FarmRunPatch p){return plugin.enabled(p)&&plugin.accessNote(p).isEmpty();}
     private void saveManual(){plugin.save("manualPatchChoicesV1",ManualSelection.encode(manual));}
@@ -350,39 +478,116 @@ final class FarmingHelperPanel extends PluginPanel
     {return byLocation?p.getPatchType().getDisplayName()+(p.getName().isEmpty()?"":" · "+p.getName()):p.getDisplayName();}
     private void manualRun()
     {
-        int y=scroll.getVerticalScrollBar().getValue();
         page(MANUAL,"Manual Run",this::showHome,null,latestGuide!=null);
-        Map<String,Set<String>> templates=new LinkedHashMap<>();templates.put("Choose preset…",null);
-        for(RunPreset preset:RunPreset.values())templates.put(preset.title,preset.select(plugin.patches(),plugin::flag));
-        for(PatchType type:PatchType.values())
-        {Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)keys.add(p.key());templates.put(RunPreset.individualTitle(type),keys);}
-        JComboBox<String> template=new JComboBox<>(templates.keySet().toArray(new String[0]));
-        template.addActionListener(e->{Set<String> keys=templates.get(template.getSelectedItem());if(keys==null)return;manual.clear();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&keys.contains(p.key()))manual.add(p.key());saveManual();manualRun();});addRow(template);
-        JComboBox<String> sort=new JComboBox<>(new String[]{"Crop type · A–Z","Location · A–Z"});sort.setSelectedIndex(manualByLocation?1:0);
-        sort.addActionListener(e->{manualByLocation=sort.getSelectedIndex()==1;manualGroups.clear();manualRun();});addRow(sort);
-        JPanel controls=transparent(new java.awt.GridLayout(1,2,4,0));
-        JButton all=new JButton("Select all"),none=new JButton("Clear all");
-        all.addActionListener(e->{ManualSelection.select(manual,plugin.patches(),this::selectable,true);saveManual();manualRun();});
-        none.addActionListener(e->{manual.clear();saveManual();manualRun();});controls.add(all);controls.add(none);addRow(controls);
-        for(var entry:groupedPatches(manualByLocation,this::selectable).entrySet())
+        manualPicker=new ManualPicker();
+        finish();
+    }
+
+    /** The selection is character-owned. These controls live only as long as the picker. */
+    private final class ManualPicker
+    {
+        final JPanel list = new JPanel();
+        final Map<String,JCheckBox> children = new HashMap<>(), parents = new HashMap<>();
+        Map<String,List<FarmRunPatch>> groups;
+        final JLabel selected = new JLabel("",SwingConstants.CENTER);
+        final JButton go = runButton("Start Manual Run",()->start(()->{
+            Set<String> keys=new LinkedHashSet<>();
+            for(FarmRunPatch patch:plugin.patches())if(selectable(patch)&&manual.contains(patch.key()))keys.add(patch.key());
+            plugin.startManual(keys);
+        }));
+
+        ManualPicker()
         {
-            String key=entry.getKey();List<FarmRunPatch> list=entry.getValue();long count=list.stream().filter(p->manual.contains(p.key())).count();
-            JPanel group=new JPanel(new BorderLayout(2,0));group.setBackground(FarmingTheme.CARD);
-            JCheckBox check=new JCheckBox(key+" ("+count+"/"+list.size()+")",count==list.size());
-            if(count>0&&count<list.size())check.putClientProperty("JButton.selectedState","indeterminate");
-            check.addActionListener(e->{ManualSelection.select(manual,list,this::selectable,count!=list.size());saveManual();manualRun();});group.add(check);
-            group.add(FarmingIcons.button(manualGroups.contains(key)?COLLAPSE:EXPAND,"Expand patches",FarmingTheme.MUTED,()->{if(!manualGroups.add(key))manualGroups.remove(key);manualRun();}),BorderLayout.EAST);addRow(group);
-            if(manualGroups.contains(key))for(FarmRunPatch p:list)
+            JComboBox<String> template=new JComboBox<>();
+            template.addItem("Choose preset…");
+            Map<String,Set<String>> templates=new LinkedHashMap<>();
+            for(RunPreset preset:RunPreset.values())templates.put(preset.title,preset.select(plugin.patches(),plugin::flag));
+            for(PatchType type:PatchType.values())
             {
-                JCheckBox child=new JCheckBox("<html><div style='width:145px'>"+escape(patchLabel(p,manualByLocation))+"</div></html>",manual.contains(p.key()));
-                child.setBorder(BorderFactory.createEmptyBorder(3,12,3,0));child.addActionListener(e->{if(child.isSelected())manual.add(p.key());else manual.remove(p.key());saveManual();manualRun();});addRow(child);
+                Set<String> keys=new LinkedHashSet<>();
+                for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)keys.add(p.key());
+                templates.put(RunPreset.individualTitle(type),keys);
             }
+            templates.keySet().forEach(template::addItem);
+            template.getAccessibleContext().setAccessibleName("Manual run preset");
+            template.addActionListener(e->{
+                Set<String> keys=templates.get(template.getSelectedItem());
+                if(keys==null)return;
+                manual.clear();
+                for(List<FarmRunPatch> patches:groups.values())
+                    for(FarmRunPatch patch:patches)if(keys.contains(patch.key()))manual.add(patch.key());
+                save();template.setSelectedIndex(0);
+            });
+            addRow(template);
+            JComboBox<String> sort=new JComboBox<>(new String[]{"Crop type · A–Z","Location · A–Z"});
+            sort.getAccessibleContext().setAccessibleName("Group manual patches by");
+            sort.setSelectedIndex(manualByLocation?1:0);
+            sort.addActionListener(e->{manualByLocation=sort.getSelectedIndex()==1;manualGroups.clear();rebuild();});
+            addRow(sort);
+            JPanel bulk=transparent(new java.awt.GridLayout(1,2,4,0));
+            JButton all=new JButton("Select all"), none=new JButton("Clear all");
+            all.addActionListener(e->{for(List<FarmRunPatch> patches:groups.values())for(FarmRunPatch patch:patches)manual.add(patch.key());save();});
+            none.addActionListener(e->{manual.clear();save();});
+            bulk.add(all);bulk.add(none);addRow(bulk);
+            list.setOpaque(false);list.setLayout(new BoxLayout(list,BoxLayout.Y_AXIS));addRow(list);
+            JPanel bottom=transparent(new BorderLayout(2,4));
+            bottom.setBorder(BorderFactory.createEmptyBorder(5,6,6,6));
+            selected.setForeground(FarmingTheme.MUTED);
+            bottom.add(selected,BorderLayout.NORTH);bottom.add(go,BorderLayout.CENTER);
+            FarmingTheme.apply(bottom);footer.add(bottom);
+            rebuild();
         }
-        long count=plugin.patches().stream().filter(this::selectable).filter(p->manual.contains(p.key())).count();
-        JPanel bottom=transparent(new BorderLayout(2,4));bottom.setBorder(BorderFactory.createEmptyBorder(5,6,6,6));
-        JLabel selected=new JLabel(count+" patches selected",SwingConstants.CENTER);selected.setForeground(FarmingTheme.MUTED);bottom.add(selected,BorderLayout.NORTH);
-        JButton go=runButton("Start Manual Run",()->start(()->{Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:plugin.patches())if(selectable(p)&&manual.contains(p.key()))keys.add(p.key());plugin.startManual(keys);}));go.setEnabled(count>0);
-        bottom.add(go);FarmingTheme.apply(bottom);footer.add(bottom);finish();restoreScroll(MANUAL,y);
+
+        void rebuild()
+        {
+            Position saved=groups==null?null:position();
+            groups=groupedPatches(manualByLocation,FarmingHelperPanel.this::selectable);
+            children.clear();parents.clear();list.removeAll();
+            groups.forEach((key,patches)->{
+                JPanel group=new JPanel(new BorderLayout(2,0));group.setBackground(FarmingTheme.CARD);
+                JCheckBox parent=new JCheckBox();parent.setName("manual-group/"+key);
+                parent.addActionListener(e->{
+                    boolean all=patches.stream().allMatch(p->manual.contains(p.key()));
+                    for(FarmRunPatch p:patches)if(all)manual.remove(p.key());else manual.add(p.key());
+                    save();
+                });
+                parents.put(key,parent);group.add(parent);
+                boolean open=manualGroups.contains(key);
+                JButton fold=FarmingIcons.button(open?COLLAPSE:EXPAND,(open?"Collapse patches · ":"Expand patches · ")+key,
+                    FarmingTheme.MUTED,()->{if(!manualGroups.add(key))manualGroups.remove(key);rebuild();});
+                fold.setName("manual-fold/"+key);group.add(fold,BorderLayout.EAST);resultRow(list,group);
+                if(open)for(FarmRunPatch p:patches)
+                {
+                    JCheckBox child=check(patchLabel(p,manualByLocation),manual.contains(p.key()),on->{
+                        if(on)manual.add(p.key());else manual.remove(p.key());
+                        save();
+                    });
+                    child.setName("manual/"+p.key());
+                    child.setMargin(new java.awt.Insets(3,12,3,0));
+                    children.put(p.key(),child);resultRow(list,child);
+                }
+            });
+            refresh();list.revalidate();list.repaint();
+            if(saved!=null)restorePosition(saved);
+        }
+        void save(){saveManual();refresh();}
+        void refresh()
+        {
+            int total=0;
+            for(var entry:groups.entrySet())
+            {
+                List<FarmRunPatch> patches=entry.getValue();
+                int count=(int)patches.stream().filter(p->manual.contains(p.key())).count();
+                total+=count;
+                JCheckBox parent=parents.get(entry.getKey());
+                parent.setText(entry.getKey()+" ("+count+"/"+patches.size()+")");
+                parent.setSelected(count==patches.size());
+                parent.putClientProperty("JButton.selectedState",count>0&&count<patches.size()?"indeterminate":null);
+            }
+            children.forEach((key,child)->child.setSelected(manual.contains(key)));
+            selected.setText(total+" patches selected");
+            go.setEnabled(total>0);
+        }
     }
 
     /* Layout adapted from Quest Helper QuestOverviewPanel, QuestRequirementsPanel
@@ -496,6 +701,7 @@ final class FarmingHelperPanel extends PluginPanel
             else requiredOpen = !requiredOpen;
             redrawGuide();
         });
+        fold.setName(topic);
         JPanel header = transparent(new BorderLayout(2,0));
         header.add(fold, BorderLayout.CENTER);
         header.add(infoButton(topic,help), BorderLayout.EAST);
@@ -528,7 +734,7 @@ final class FarmingHelperPanel extends PluginPanel
         // A new backend session must open the guide even if it was started via
         // the plugin API rather than by a sidebar button. Same-session ticks
         // must never change the user's selected screen.
-        if(guideSession!=session){guideSession=session;guideRendered=false;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=!view.preparation.isEmpty();lastPreparing=!view.preparation.isEmpty();completedOpen=false;teleportsOpen=false;navigation.starting();}
+        if(guideSession!=session){positions.clear();mountedPage=null;guideSession=session;guideRendered=false;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=!view.preparation.isEmpty();lastPreparing=!view.preparation.isEmpty();completedOpen=false;teleportsOpen=false;navigation.starting();}
         latestGuide=view;
         if(navigation.acceptGuide())renderGuide(view);
     }
@@ -538,7 +744,6 @@ final class FarmingHelperPanel extends PluginPanel
     {
         if(sameStructure(previousGuide,view)){refreshRows(previousGuide,view);previousGuide=view;return;}
         supplyRows.clear();stepText.clear();
-        int scrollY=scroll.getVerticalScrollBar().getValue();
         boolean sameActive=guideRendered && lastActive==view.active;
         guideRendered=true;
         previousGuide=view;
@@ -612,8 +817,7 @@ final class FarmingHelperPanel extends PluginPanel
         if(done>0)collapse("Completed / preserved · "+done,completedOpen,()->{completedOpen=!completedOpen;redrawGuide();});
         if(completedOpen)for(GuideView.Stop stop:view.stops)if(stop.done)caption(("Preserved".equals(stop.instruction)?"Preserved: ":"✓ ")+stop.patch.guideLabel());
         finish();
-        long renderedSession=guideSession;
-        SwingUtilities.invokeLater(()->{if(navigation.page()==GUIDE&&guideSession==renderedSession&&lastActive==view.active)scroll.getVerticalScrollBar().setValue(sameActive?scrollY:0);});
+        if (!sameActive) restorePosition(null);
     }
 
     private void renderStop(GuideView view,GuideView.Stop stop)
@@ -622,7 +826,7 @@ final class FarmingHelperPanel extends PluginPanel
         boolean open=expanded.getOrDefault(stop.patch.key(),stop.active);
         Color bg=stop.active?ACTIVE:FarmingTheme.CARD.darker();
         JButton fold=new JButton("<html><div style='width:140px'>"+escape(stop.patch.guideLabel())+"<br><small>"+escape(stop.patch.getPatchType().getDisplayName())+"</small></div></html>",FarmingIcons.of(open?COLLAPSE:EXPAND,stop.active?FarmingTheme.SUCCESS:FarmingTheme.MUTED));
-        fold.setToolTipText(stop.patch.getDisplayName());
+        fold.setName("stop/"+stop.patch.key());fold.setToolTipText(stop.patch.getDisplayName());
         fold.setFont(FarmingTheme.font(Font.BOLD,12));fold.setHorizontalAlignment(SwingConstants.LEFT);
         fold.setBackground(bg);fold.putClientProperty("farming.preserveBackground",Boolean.TRUE);fold.setForeground(stop.active?ACTIVE_TEXT:Color.WHITE);
         fold.setMargin(new java.awt.Insets(5,7,5,7));
@@ -663,7 +867,6 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void general()
     {
-        int y=scroll.getVerticalScrollBar().getValue();
         page(GENERAL,"Farming preferences",this::preferences,null,latestGuide!=null);
         heading("Run preparation");caption("Start at");
         choice(Preparation.StartAt.values(),plugin.startAt(),null,v->plugin.save("startAtV1",v.name()));
@@ -710,7 +913,7 @@ final class FarmingHelperPanel extends PluginPanel
             }
         }
         caption("These defaults apply to every run. Changes in Run settings are temporary.");finish();
-        restoreScroll(GENERAL,y);
+
     }
 
     private JPanel keepRow(KeepCrop crop)
@@ -747,7 +950,7 @@ final class FarmingHelperPanel extends PluginPanel
     {addRow(check(title,plugin.flag(key,fallback),on->plugin.save(key,Boolean.toString(on))));}
     private void groupedPreferences()
     {
-        int y=scroll.getVerticalScrollBar().getValue();page(GROUPS,"Grouped runs",this::patchBrowser,null,latestGuide!=null);
+        page(GROUPS,"Grouped runs",this::patchBrowser,null,latestGuide!=null);
         caption("Applies to grouped runs only.");
         for(RunPreset preset:RunPreset.values())
         {
@@ -765,7 +968,7 @@ final class FarmingHelperPanel extends PluginPanel
                 });addRow(check);
             }
         }
-        finish();restoreScroll(GROUPS,y);
+        finish();
     }
     private void advanced()
     {
@@ -784,7 +987,6 @@ final class FarmingHelperPanel extends PluginPanel
     private void runSettings()
     {
         if(latestGuide==null){showHome();return;}
-        int y=scroll.getVerticalScrollBar().getValue();
         page(RUN_SETTINGS,"Run settings",this::returnToGuide,null,true);
         caption("Changes apply only to this run.");
         heading("Missing planting supplies");
@@ -821,12 +1023,12 @@ final class FarmingHelperPanel extends PluginPanel
             }});addRow(skipType);
         }
         button("All settings",()->settings(true));finish();
-        restoreScroll(RUN_SETTINGS,y);
+
     }
     void accessChanged()
     {
-        if(navigation.page()==MANUAL){manualRun();return;}
-        if(navigation.page()==PATCHES){int y=scroll.getVerticalScrollBar().getValue();patchBrowser();restoreScroll(PATCHES,y);}
+        if(navigation.page()==MANUAL && manualPicker!=null)manualPicker.rebuild();
+        if(navigation.page()==PATCHES && patchResults!=null)fillPatches(patchResults);
     }
     private void patchBrowser()
     {
@@ -834,6 +1036,7 @@ final class FarmingHelperPanel extends PluginPanel
         addRow(navRow("Grouped runs","Customize preset crops",LAYERS,-1,false,this::groupedPreferences));
         heading("Locations");
         JPanel results=new JPanel();results.setOpaque(false);results.setLayout(new BoxLayout(results,BoxLayout.Y_AXIS));
+        patchResults=results;
         searchField(patchSearch,"Search patches…",v->{patchSearch=v;fillPatches(results);});
         JComboBox<String> sort=new JComboBox<>(new String[]{"Location · A–Z","Crop type · A–Z"});sort.setSelectedIndex(patchByLocation?0:1);
         sort.addActionListener(e->{patchByLocation=sort.getSelectedIndex()==0;patchExpanded.clear();fillPatches(results);});addRow(sort);
@@ -847,20 +1050,31 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void fillPatches(JPanel results)
     {
+        Position savedPosition=SwingUtilities.isDescendingFrom(results,rows)?position():null;
         results.removeAll();String q=patchSearch.toLowerCase(Locale.ROOT).trim();
         for(var entry:groupedPatches(patchByLocation,p->(showLocked||plugin.accessNote(p).isEmpty())&&(p.getDisplayName()+" "+p.getPatchType().getDisplayName()).toLowerCase(Locale.ROOT).contains(q)).entrySet())
         {
             String key=entry.getKey();List<FarmRunPatch> list=entry.getValue();
             boolean open=patchExpanded.contains(key)||!q.isEmpty();
-            JButton fold=new JButton(key+" · "+list.stream().filter(plugin::enabled).count()+"/"+list.size(),FarmingIcons.of(open?COLLAPSE:EXPAND,FarmingTheme.MUTED));
-            fold.setHorizontalAlignment(SwingConstants.LEFT);fold.addActionListener(e->{if(!patchExpanded.add(key))patchExpanded.remove(key);fillPatches(results);});resultRow(results,fold);
+            String count=key+" · "+list.stream().filter(plugin::enabled).count()+"/"+list.size();
+            if(q.isEmpty())
+            {
+                JButton fold=disclosure(count,open,()->{if(!patchExpanded.add(key))patchExpanded.remove(key);fillPatches(results);});
+                fold.setName("patch-group/"+key);resultRow(results,fold);
+            }
+            else resultRow(results,text(count,FarmingTheme.MUTED));
             if(open)for(FarmRunPatch p:list)
             {
                 JPanel row=transparent(new BorderLayout(2,0));row.setBorder(BorderFactory.createEmptyBorder(2,8,2,0));
                 JCheckBox enabled=check("<html><div style='width:120px'>"+escape(patchLabel(p,patchByLocation))+"</div></html>",plugin.enabled(p),
                     on->{plugin.save("patchEnabled_"+p.key(),Boolean.toString(on));fillPatches(results);});
+                enabled.setName("enabled/"+p.key());
                 String issue=plugin.accessNote(p);enabled.setToolTipText(issue.isEmpty()?p.getDisplayName():issue);
-                if(!issue.isEmpty())enabled.setForeground(FarmingTheme.MUTED);
+                enabled.getAccessibleContext().setAccessibleDescription(enabled.getToolTipText());
+                if(!issue.isEmpty()){
+                    JTextArea reason=text("Locked · "+issue,FarmingTheme.WARNING);
+                    reason.setFont(FarmingTheme.font(Font.PLAIN,11));row.add(reason,BorderLayout.SOUTH);
+                }
                 row.add(enabled);
                 if(p.getPatchType()!=PatchType.BIRDHOUSE&&p.getPatchType()!=PatchType.COMPOST_BIN)
                 {
@@ -881,18 +1095,20 @@ final class FarmingHelperPanel extends PluginPanel
                 resultRow(results,row);
             }
         }
+        if(results.getComponentCount()==0)resultRow(results,text("No patches match your filters.",FarmingTheme.MUTED));
         results.revalidate();results.repaint();
+        if(savedPosition!=null)restorePosition(savedPosition);
     }
     private void priorities()
     {
-        int y=scroll.getVerticalScrollBar().getValue();page(PRIORITIES,"Crop priorities",this::preferences,null,latestGuide!=null);
+        page(PRIORITIES,"Crop priorities",this::preferences,null,latestGuide!=null);
         List<PatchType> types=new ArrayList<>(Arrays.asList(PatchType.values()));types.sort(Comparator.comparing(PatchType::getDisplayName,String.CASE_INSENSITIVE_ORDER));
         for(PatchType type:types)if(type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
         {
             addRow(navRow(type.getDisplayName(),plugin.priority(type).isBlank()?"Automatic":"Custom priorities",priorityOpen==type?COLLAPSE:EXPAND,patchSprite(type),false,()->{priorityOpen=priorityOpen==type?null:type;priorities();}));
             if(priorityOpen==type)ranking(type);
         }
-        finish();restoreScroll(PRIORITIES,y);
+        finish();
     }
     private JComboBox<String> crops(PatchType type,String first)
     {
