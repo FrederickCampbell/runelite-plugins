@@ -2,15 +2,13 @@
 
 <img src="icon.png" alt="Farming Helper icon" align="right" width="48">
 
-**Quest Helper for your farm runs!**
+**Quest Helper for your farm runs!** · Development version 1.01
 
 Pick a run, grab your supplies and follow the guide. Farming Helper helps you decide what to plant, what to bring and where to go next.
 
 ## Getting started
 
-Install [Farming Helper](https://runelite.net/plugin-hub/show/farming-helper) from the RuneLite Plugin Hub and open it in the sidebar.
-
-Open your bank and, if unlocked, the Farming Guild Seed Vault so the helper knows what supplies you have. Choose a run, gather your items and get farming!
+Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, the Farming Guild Seed Vault to refresh your supplies. Pick a run and follow the highlighted patch. You can start or continue with a partial inventory.
 
 ## Features
 

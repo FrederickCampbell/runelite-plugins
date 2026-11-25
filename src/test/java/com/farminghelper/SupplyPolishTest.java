@@ -59,7 +59,7 @@ public class SupplyPolishTest
         Map<Integer,Integer> prep=TreePreparation.preparation(plan(2),bag,aliases,bag,NAMES);
         assertEquals(Map.of(SAPLING,2),TreePreparation.pending(prep,aliases));
         assertFalse(bag.containsKey(SAPLING));
-        assertTrue(SeedChoices.allocate(new ArrayList<>(plan(1).keySet()),99,bag,t->"Palm sapling",p->"",Map.of(),true).isEmpty());
+        assertTrue(SeedChoices.allocate(new ArrayList<>(plan(1).keySet()),99,bag,t->"Palm sapling",p->"",Map.of(),true,patchChoice->true).isEmpty());
         assertTrue(GuideView.missingItems(Map.of(17,10),Map.of(17,10)).isEmpty());
         assertEquals(Set.of(17),GuideView.missingItems(Map.of(17,10),Map.of(17,9)));
     }
@@ -74,6 +74,6 @@ public class SupplyPolishTest
             assertEquals(FarmingTheme.INPUT,combo.getBackground());
             for(KeepCrop crop:KeepCrop.values())assertNotNull(crop.label,crop.crop());
         });
-        assertEquals("Farming Helper · v1.0",FarmingHelperPanel.versionLabel());
+        assertEquals("Farming Helper · v1.01",FarmingHelperPanel.versionLabel());
     }
 }
