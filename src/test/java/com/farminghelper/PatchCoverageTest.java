@@ -1,4 +1,6 @@
 package com.farminghelper;
+import com.farminghelper.queststate.QuestFarmingStateReader.Source;
+import com.farminghelper.queststate.QuestFarmingStateReader.Observation;
 
 import com.farminghelper.queststate.CropState;
 import com.farminghelper.queststate.QuestFarmingStateReader;
@@ -47,6 +49,6 @@ public class PatchCoverageTest
         assertFalse(StepEngine.keepExisting(PatchType.HERB, CropState.HARVESTABLE));
         assertFalse(StepEngine.keepExisting(PatchType.CACTUS, CropState.EMPTY));
         assertEquals(StepEngine.Action.CHECK_HEALTH,
-            StepEngine.action(PatchType.CACTUS, CropState.UNCHECKED, false, null));
+            StepEngine.action(PatchType.CACTUS, new Observation(CropState.UNCHECKED,Source.LIVE,1,null,"",0),false,true,false,false));
     }
 }

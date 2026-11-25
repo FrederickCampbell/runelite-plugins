@@ -1,4 +1,7 @@
 package com.farminghelper;
+import com.farminghelper.queststate.CropState;
+import com.farminghelper.queststate.QuestFarmingStateReader.Source;
+import com.farminghelper.queststate.QuestFarmingStateReader.Observation;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -51,7 +54,7 @@ public class RunPresetTest
     }
     @Test public void preservePermanentTreesAndFibreCrops()
     {
-        assertEquals(StepEngine.Action.COMPLETE,StepEngine.action(PatchType.SPIRIT_TREE,com.farminghelper.queststate.CropState.HARVESTABLE,false,null));
+        assertEquals(StepEngine.Action.COMPLETE,StepEngine.action(PatchType.SPIRIT_TREE,new Observation(CropState.HARVESTABLE,Source.LIVE,1,null,"",0),false,true,false,false));
         for(String name:List.of("Flax","Hemp","Cotton"))assertNotNull(CropCatalog.findByName(PatchType.HOPS,name));
         for(PatchType type:PatchType.values())assertNotNull(RunPreset.individualTitle(type));
     }

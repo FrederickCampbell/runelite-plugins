@@ -35,7 +35,7 @@ public class KeepCrop42Test
     {
         assertFalse(CropReplacement.preferenceType(PatchType.CELASTRUS));
         assertFalse(KeepCrop.resolve(PatchType.CELASTRUS,null,"PRESERVE","PRESERVE","PRESERVE","PRESERVE"));
-        assertEquals(StepEngine.Action.REMOVE_TREE,CropReplacement.action(PatchType.CELASTRUS,live(CropState.HARVESTABLE,17),false,true,false));
+        assertEquals(StepEngine.Action.CHOP_TREE,StepEngine.action(PatchType.CELASTRUS,live(CropState.HARVESTABLE,17),false,true,false,false));
     }
     @Test public void groupedSelectionUsesSameEffectivePreferenceAsUi()
     {
@@ -47,8 +47,8 @@ public class KeepCrop42Test
     }
     @Test public void preservedBushHarvestsThenStops()
     {
-        assertEquals(StepEngine.Action.HARVEST,CropReplacement.action(PatchType.BUSH,live(CropState.HARVESTABLE,63),true,false,false));
-        assertEquals(StepEngine.Action.COMPLETE,CropReplacement.action(PatchType.BUSH,live(CropState.GROWING,59),true,true,false));
+        assertEquals(StepEngine.Action.HARVEST,StepEngine.action(PatchType.BUSH,live(CropState.HARVESTABLE,63),true,false,false,false));
+        assertEquals(StepEngine.Action.COMPLETE,StepEngine.action(PatchType.BUSH,live(CropState.GROWING,59),true,true,false,false));
     }
     @Test public void configurableAutoLilyAndExplicitSeedPreference()
     {

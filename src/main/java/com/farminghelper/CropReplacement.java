@@ -39,17 +39,5 @@ final class CropReplacement
             return !preserve||o.state==CropState.UNCHECKED||producer(t)&&!depleted(t,o);
         return FarmingHelperPlugin.actionable(t,o.state);
     }
-    static StepEngine.Action action(PatchType t,Observation o,boolean preserve,boolean replacementCarried,boolean clearOnly)
-    {
-        StepEngine.Action base=StepEngine.action(t,o.state,false,o.protectedByFarmer);
-        if(!configurable(t)||!mature(t,o))return base;
-        if(o.state==CropState.UNCHECKED)return StepEngine.Action.CHECK_HEALTH;
-        if(producer(t)&&!depleted(t,o))return StepEngine.Action.HARVEST;
-        if(preserve)return StepEngine.Action.COMPLETE;
-        if(!replacementCarried&&!clearOnly)return StepEngine.Action.NEED_REPLACEMENT;
-        if(t==PatchType.REDWOOD)return StepEngine.Action.PAY_REMOVE;
-        if(t==PatchType.BUSH||t==PatchType.CACTUS||t==PatchType.CALQUAT)return StepEngine.Action.CLEAR_LIVING;
-        return StepEngine.Action.REMOVE_TREE;
-    }
     private CropReplacement(){}
 }

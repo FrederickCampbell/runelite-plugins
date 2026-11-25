@@ -1,6 +1,6 @@
 package com.farminghelper;
 
-import javax.annotation.Nullable;
+import com.farminghelper.queststate.QuestFarmingStateReader.Observation;
 import com.farminghelper.queststate.CropState;
 
 /**
@@ -15,7 +15,6 @@ final class StepEngine
         INSPECT,
         HARVEST,
         CHECK_HEALTH,
-        REMOVE_TREE,
         PAY_REMOVE,
         CHOP_TREE,
         RAKE,
@@ -33,38 +32,31 @@ final class StepEngine
 
     private StepEngine() {}
 
-    static Action action(PatchType type, @Nullable CropState state,
-                         boolean requireProtection, @Nullable Boolean protectedByFarmer)
+    static Action action(PatchType type,Observation observation,boolean preserve,boolean replacementCarried,
+        boolean clearOnly,boolean payGardener)
     {
-        if (state == null)
+        CropState state=observation.state;
+        if(state==null)return Action.INSPECT;
+        if(CropReplacement.configurable(type)&&CropReplacement.mature(type,observation))
         {
-            return Action.INSPECT;
+            if(state==CropState.UNCHECKED)return Action.CHECK_HEALTH;
+            if(CropReplacement.producer(type)&&!CropReplacement.depleted(type,observation))return Action.HARVEST;
+            if(preserve)return Action.COMPLETE;
+            if(!replacementCarried&&!clearOnly)return Action.NEED_REPLACEMENT;
+            if(type==PatchType.REDWOOD)return Action.PAY_REMOVE;
+            if(type==PatchType.BUSH||type==PatchType.CACTUS||type==PatchType.CALQUAT)return Action.CLEAR_LIVING;
+            return payGardener?Action.PAY_REMOVE:Action.CHOP_TREE;
         }
-        switch (state)
+        switch(state)
         {
-            case EMPTY:
-                return Action.PLANT;
-            case DEAD:
-                return Action.CLEAR_DEAD;
-            case DISEASED:
-                return Action.CURE;
-            case STUMP:
-                return Action.DIG_STUMP;
-            case UNCHECKED:
-                return type.isTree() || type == PatchType.CACTUS || type == PatchType.BUSH ? Action.CHECK_HEALTH : Action.HARVEST;
-            case HARVESTABLE:
-                if (type == PatchType.SPIRIT_TREE || type == PatchType.REDWOOD) return Action.COMPLETE;
-                if (type == PatchType.CELASTRUS || type == PatchType.CRYSTAL_TREE) return Action.HARVEST;
-                return type.isTree() ? Action.REMOVE_TREE : Action.HARVEST;
-            case GROWING:
-                if (type.supportsProtection() && requireProtection
-                    && !Boolean.TRUE.equals(protectedByFarmer))
-                {
-                    return Action.PROTECT_TREE;
-                }
-                return Action.COMPLETE;
-            default:
-                return Action.INSPECT;
+            case EMPTY:return Action.PLANT;
+            case DEAD:return Action.CLEAR_DEAD;
+            case DISEASED:return Action.CURE;
+            case STUMP:return Action.DIG_STUMP;
+            case UNCHECKED:return type.isTree()?Action.CHECK_HEALTH:Action.HARVEST;
+            case HARVESTABLE:return type==PatchType.SPIRIT_TREE?Action.COMPLETE:Action.HARVEST;
+            case GROWING:return Action.COMPLETE;
+            default:return Action.INSPECT;
         }
     }
 
@@ -76,21 +68,14 @@ final class StepEngine
             type == PatchType.BUSH || type == PatchType.CACTUS;
     }
 
-    static Action refine(Action action, boolean payRemoval, boolean knownGardener, boolean weeds)
+    static String instruction(Action action,Crop crop,PatchType type,boolean keep,boolean clearOnly,boolean empty)
     {
-        if (action == Action.REMOVE_TREE) return payRemoval && knownGardener ? Action.PAY_REMOVE : Action.CHOP_TREE;
-        if (action == Action.PLANT && weeds) return Action.RAKE;
-        return action;
-    }
-
-    static String instruction(Action action, Crop crop, PatchType type)
-    {
-        return instruction(action, crop, type, true);
-    }
-
-    static String instruction(Action action, Crop crop, PatchType type, boolean compost)
-    {
-        String name = crop == null ? "a suitable replacement crop" : crop.getName();
+        String name=crop==null?"a suitable replacement crop":crop.getName();
+        if(action==Action.PAY_REMOVE&&type==PatchType.REDWOOD)return "Pay Alexandra 2,000 coins to remove the mature redwood.";
+        if(action==Action.CHECK_HEALTH&&CropReplacement.configurable(type))
+            return "Check health"+(CropReplacement.producer(type)?", then harvest produce.":".")+(keep?" Preserve the crop.":" Replant when replacement supplies are carried.");
+        if(action==Action.HARVEST&&keep&&CropReplacement.producer(type))return "Harvest the produce, then leave this plant standing.";
+        if(clearOnly)return ClearOnly.instruction(action,type);
         switch (action)
         {
             case HARVEST:
@@ -109,36 +94,27 @@ final class StepEngine
                         " patch, then replant " + name + " if appropriate.";
             case CHECK_HEALTH:
                 if (type == PatchType.SPIRIT_TREE) return "Check health and leave the spirit tree planted for travel.";
-                if (type == PatchType.REDWOOD) return "Check health and leave the redwood planted.";
-                if (type == PatchType.CACTUS) return "Check health and pick the cactus produce.";
-                if (type == PatchType.BUSH) return "Check health, then harvest the berries.";
-                if (type == PatchType.CELASTRUS) return crop == null
-                    ? "Check health, then harvest the bark and leave the tree planted."
-                    : "Check health, then harvest the bark before removing the tree.";
                 return "Check the tree’s health, then remove the tree if replanting.";
-            case REMOVE_TREE:
-                return "Chop the tree or pay the gardener to remove it.";
             case PAY_REMOVE: return "Pay the gardener 200 coins to remove the tree.";
             case CHOP_TREE: return "Chop the tree.";
             case RAKE: return "Rake the weeds.";
             case DIG_STUMP:
                 return "Dig out the tree stump with a spade.";
             case CLEAR_LIVING: return "Clear the mature crop using your spade.";
-            case NEED_REPLACEMENT: return "Bring "+name+" before clearing the living crop, or Skip to leave it planted." ;
+            case NEED_REPLACEMENT: return empty?"Bring a plantable "+name+". Seeds and seedlings must be prepared first.":"Bring "+name+" before clearing the living crop, or Skip to leave it planted." ;
             case CLEAR_DEAD:
                 return "Clear the dead crop, then plant " + name + ".";
             case CURE:
                 return type == PatchType.CORAL ? "Prune the diseased coral with secateurs." : CropCare.prunes(type) ? "Prune the diseased crop with secateurs."
                     : "Cure the diseased crop before harvesting.";
             case WATER:
-                return "Water this growing crop with the watering can, then continue.";
+                return "Water this crop with the watering can you are carrying.";
             case PLANT:
                 if (type == PatchType.GRAPEVINE && crop != null) return "Prepare the vine patch with saltpetre and a gardening trowel, then plant " + name + ".";
                 return crop == null ? "Choose an eligible crop manually, or skip this patch."
-                    : "Rake if necessary, " +
-                        (compost && type.usesCompost() ? "compost, " : "") + "plant " + name + ".";
+                    : "Rake if necessary, plant " + name + ".";
             case COMPOST:
-                return "Apply compost to this patch. Continue when confirmed, or use Skip if already treated and the patch has not advanced.";
+                return "Apply compost.";
             case PROTECT_TREE:
                 return "Ask the gardener to protect the crop. Continue automatically "
                     + "when protection is detected, or use Skip if protection was applied but not detected.";

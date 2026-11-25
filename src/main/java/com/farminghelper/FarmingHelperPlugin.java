@@ -697,10 +697,8 @@ public class FarmingHelperPlugin extends Plugin
                     Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,bag,this::priority,this::override,Collections.emptyMap(),true).get(p);
                     if(carriedReplacement!=null)activeCrop=carriedReplacement;
                 }
-                boolean replace=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
                 boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
-                if(mature&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state!=CropState.UNCHECKED&&
-                    CropReplacement.action(type,o,preserveCrop,replace,activeClearOnly)==StepEngine.Action.COMPLETE && preserveCrop)
+                if(mature&&preserveCrop&&o.source==QuestFarmingStateReader.Source.LIVE&&!CropReplacement.actionable(type,o,true))
                 {runProgress.finish(p,true);visible.add(p);continue;}
                 if(!mature&&progress.finished(type,o,wants,hasPayment,preserveCrop)) { runProgress.finish(p,false); visible.add(p); continue; }
                 // Only the active newly planted crop may remain for optional gardener payment.
@@ -902,35 +900,12 @@ public class FarmingHelperPlugin extends Plugin
             activeLive=o.source==QuestFarmingStateReader.Source.LIVE;
             boolean replacementCarried=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
             boolean keep=preserveReplacement(current,o);
-            StepEngine.Action action=CropReplacement.action(type,o,keep,replacementCarried,activeClearOnly);
-            if(progress.planted() && o.state==CropState.GROWING) action=StepEngine.Action.PROTECT_TREE;
-            if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,wateringCan))action=StepEngine.Action.WATER;
-            if(activeCareOnly&&o.state==CropState.DISEASED)action=StepEngine.Action.CURE;
-            if(action==StepEngine.Action.REMOVE_TREE)
-                action=StepEngine.refine(action,pay,reader.gardenerId(type.name(),current.getLocation(),current.getName())>0,false);
-            if(action==StepEngine.Action.PLANT && o.source==QuestFarmingStateReader.Source.LIVE && reader.hasWeeds(type.name(),o.rawValue)) action=StepEngine.Action.RAKE;
-            if(action==StepEngine.Action.PLANT&&activeLive&&activeCrop!=null&&compostId>=0&&type.usesCompost()&&!activeClearOnly&&!compostAcknowledged)
-            {
-                int minimum=compostId==ItemID.BUCKET_ULTRACOMPOST?3:compostId==ItemID.BUCKET_SUPERCOMPOST?2:1;
-                if(reader.compostRecorded(type.name(),current.getLocation(),current.getName(),minimum))compostAcknowledged=true;
-                else action=StepEngine.Action.COMPOST;
-            }
-            boolean needsSapling=action==StepEngine.Action.PLANT && activeCrop!=null && type.isTree()
-                && !replacementCarried;
-            if(needsSapling)action=StepEngine.Action.NEED_REPLACEMENT;
+            StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,compostId,wateringCan);
             activeAction=action;
-            instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,false);
-            if(needsSapling)instruction="Bring a plantable "+activeCrop.getName()+". Seeds and seedlings must be prepared first.";
-            if(activeClearOnly)instruction=ClearOnly.instruction(action,type);
-            if(action==StepEngine.Action.PAY_REMOVE&&type==PatchType.REDWOOD)instruction="Pay Alexandra 2,000 coins to remove the mature redwood.";
-            if(action==StepEngine.Action.HARVEST&&keep&&CropReplacement.producer(type))
-                instruction="Harvest the produce, then leave this plant standing.";
-            if(action==StepEngine.Action.CHECK_HEALTH&&CropReplacement.configurable(type))
-                instruction="Check health"+(CropReplacement.producer(type)?", then harvest produce.":".")+(preserveReplacement(current,o)?" Preserve the crop.":" Replant when replacement supplies are carried.");
+            instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
+                StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
             if(activeCareOnly&&action==StepEngine.Action.CURE)instruction="Nearby diseased crop — "+instruction+" Then resume the run without replanting.";
             if(action==StepEngine.Action.CURE&&!CropCare.prunes(type)&&bag.getOrDefault(ItemID.PLANT_CURE,0)==0)instruction+=" Obtain plant cure from a nearby farmer or Farming shop, if available; skip if you cannot cure it.";
-            if(action==StepEngine.Action.WATER)instruction="Water this crop with the watering can you are carrying.";
-            if(action==StepEngine.Action.COMPOST)instruction="Apply compost.";
             if(activeLive)
             {
                 if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
@@ -1045,6 +1020,26 @@ public class FarmingHelperPlugin extends Plugin
             new GuideView.Notes(phase==Preparation.Phase.INITIAL,storageWarning,prepHelp,details.toString()));
         normalView=view;
         publishView(view);
+    }
+
+    private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,
+        boolean replacementCarried,int compostId,int wateringCan)
+    {
+        if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,wateringCan))
+            return StepEngine.Action.WATER;
+        if(progress.planted()&&o.state==CropState.GROWING)return StepEngine.Action.PROTECT_TREE;
+        if(o.state==CropState.EMPTY)
+        {
+            if(activeLive&&reader.hasWeeds(type.name(),o.rawValue))return StepEngine.Action.RAKE;
+            if(activeCrop!=null&&activeLive&&compostId>=0&&type.usesCompost()&&!activeClearOnly&&!compostAcknowledged)
+            {
+                int minimum=compostId==ItemID.BUCKET_ULTRACOMPOST?3:compostId==ItemID.BUCKET_SUPERCOMPOST?2:1;
+                compostAcknowledged=reader.compostRecorded(type.name(),current.getLocation(),current.getName(),minimum);
+                if(!compostAcknowledged)return StepEngine.Action.COMPOST;
+            }
+            if(activeCrop!=null&&type.isTree()&&!replacementCarried)return StepEngine.Action.NEED_REPLACEMENT;
+        }
+        return StepEngine.action(type,o,keep,replacementCarried,activeClearOnly,runPayRemoval&&type.isTree()&&gardener(current)>0);
     }
 
     private void publishView(GuideView view)

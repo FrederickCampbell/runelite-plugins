@@ -12,9 +12,9 @@ public class TreeCompletionRegressionTest
     {
         GuideProgress p=new GuideProgress();
         p.observe(live(CropState.UNCHECKED,226));
-        assertEquals(StepEngine.Action.CHECK_HEALTH,StepEngine.action(PatchType.FRUIT_TREE,CropState.UNCHECKED,false,null));
+        assertEquals(StepEngine.Action.CHECK_HEALTH,StepEngine.action(PatchType.FRUIT_TREE,live(CropState.UNCHECKED,0),false,true,false,false));
         p.observe(live(CropState.HARVESTABLE,212));
-        assertEquals(StepEngine.Action.REMOVE_TREE,StepEngine.action(PatchType.FRUIT_TREE,CropState.HARVESTABLE,false,null));
+        assertEquals(StepEngine.Action.HARVEST,StepEngine.action(PatchType.FRUIT_TREE,live(CropState.HARVESTABLE,212),false,true,false,false));
         p.observe(live(CropState.GROWING,205));
         assertFalse(p.finished(PatchType.FRUIT_TREE,live(CropState.GROWING,205),false,false));
         p.observe(live(CropState.STUMP,225));p.observe(live(CropState.EMPTY,3));
@@ -27,7 +27,7 @@ public class TreeCompletionRegressionTest
         GuideProgress p=new GuideProgress();p.observe(live(CropState.UNCHECKED,250));
         Observation growing=live(CropState.GROWING,13);p.observe(growing);
         assertTrue(p.finished(PatchType.BUSH,growing,false,false));
-        assertEquals(StepEngine.Action.CHECK_HEALTH,StepEngine.action(PatchType.BUSH,CropState.UNCHECKED,false,null));
+        assertEquals(StepEngine.Action.CHECK_HEALTH,StepEngine.action(PatchType.BUSH,live(CropState.UNCHECKED,0),false,true,false,false));
     }
     @Test public void strongholdFruitTreeFirst()
     {
