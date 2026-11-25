@@ -20,6 +20,9 @@ final class PatchHighlight extends Overlay
     private final Client client;
     private final Provider<FarmingHelperPlugin> plugin;
     private final Set<GameObject> objects=new HashSet<>();
+    private final Map<FarmRunPatch,List<GameObject>> resolved=new HashMap<>();
+    private int resolvedTick=-1,resolvedPlane=-1;
+    private WorldView resolvedView;
     @Inject PatchHighlight(Client client,Provider<FarmingHelperPlugin> plugin)
     {this.client=client;this.plugin=plugin;setPosition(OverlayPosition.DYNAMIC);}
     Iterable<GameObject> objects(){return objects;}
@@ -28,12 +31,13 @@ final class PatchHighlight extends Overlay
         if(object==null)return;
         ObjectComposition c=client.getObjectDefinition(object.getId());
         if(BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || verificationObject(c))
-        {objects.add(object);return;}
+        {if(objects.add(object))resolved.clear();return;}
         if(c!=null && c.getImpostorIds()!=null)
-            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || verificationObject(client.getObjectDefinition(id))){objects.add(object);return;}
+            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || verificationObject(client.getObjectDefinition(id))){if(objects.add(object))resolved.clear();return;}
     }
-    void despawned(GameObject o){objects.remove(o);}
-    void clear(){objects.clear();}
+    void despawned(GameObject o){if(objects.remove(o))resolved.clear();}
+    void clear(){objects.clear();resolved.clear();resolvedView=null;}
+    void transformed(){resolved.clear();}
     private static String name(ObjectComposition c){return c==null || c.getName()==null?"":c.getName().toLowerCase(Locale.ROOT);}
     private static boolean isBin(ObjectComposition c){return name(c).contains("compost bin");}
     private static boolean verificationObject(ObjectComposition c)
@@ -74,6 +78,15 @@ final class PatchHighlight extends Overlay
     private List<GameObject> resolve(FarmRunPatch patch)
     {
         if(patch==null || client.getLocalPlayer()==null)return Collections.emptyList();
+        WorldView view=client.getLocalPlayer().getWorldView();
+        int tick=client.getTickCount(),plane=client.getPlane();
+        if(tick!=resolvedTick||view!=resolvedView||plane!=resolvedPlane)
+        {resolved.clear();resolvedTick=tick;resolvedView=view;resolvedPlane=plane;}
+        return resolved.computeIfAbsent(patch,this::match);
+    }
+
+    private List<GameObject> match(FarmRunPatch patch)
+    {
         if(patch.getPatchType()==PatchType.BIRDHOUSE)
         {
             BirdhouseRun.Site site=BirdhouseRun.site(patch);if(site==null)return Collections.emptyList();

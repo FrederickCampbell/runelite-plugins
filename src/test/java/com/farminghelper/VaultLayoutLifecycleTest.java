@@ -105,6 +105,22 @@ public class VaultLayoutLifecycleTest
         lifecycle.afterScript(SeedVaultViews.BUILD);lifecycle.postClientTick();
         assertFalse(h.isSelfHidden());assertEquals(128,fresh.getOriginalY());
         assertEquals(2,fresh.getIndex());assertEquals(6,fresh.getItemQuantity());
+        // A newly deposited sapling creates a native category that did not exist in the previous transaction.
+        lifecycle.beforeScript(SeedVaultViews.BUILD_CONTENTS);
+        when(plugin.vaultAllowed(99)).thenReturn(Set.of(PatchType.HERB,PatchType.TREE));
+        item(im,ItemID.PLANTPOT_YEW_SAPLING,"Yew sapling");
+        Widget sapling=node(SeedVaultViews.ITEMS,3,WidgetType.GRAPHIC,14,428,36,32,"",ItemID.PLANTPOT_YEW_SAPLING,1);
+        Widget saplingLabel=node(SeedVaultViews.LABELS,3,WidgetType.TEXT,7,460,50,30,"Yew sapling",-1,0);
+        Widget saplingHeader=node(SeedVaultViews.HEADERS,2,WidgetType.TEXT,5,400,100,20,"Saplings",-1,0);
+        Widget saplingLine=node(SeedVaultViews.LINES,2,3,5,420,300,1,"",-1,0);
+        when(ip.getChildren()).thenReturn(new Widget[]{potato,null,fresh,sapling});
+        when(lp.getChildren()).thenReturn(new Widget[]{l1,null,l2,saplingLabel});
+        when(hp.getChildren()).thenReturn(new Widget[]{a,h,saplingHeader});
+        when(dp.getChildren()).thenReturn(new Widget[]{al,hl,saplingLine});
+        lifecycle.afterScript(SeedVaultViews.BUILD_CONTENTS);lifecycle.postClientTick();
+        assertTrue(a.isSelfHidden());assertFalse(sapling.isSelfHidden());
+        assertTrue(saplingHeader.getOriginalY()<400);assertEquals(saplingHeader.getOriginalY()+28,sapling.getOriginalY());
+        assertEquals(3,sapling.getIndex());assertEquals(1,sapling.getItemQuantity());
         lifecycle.leave();assertFalse(a.isSelfHidden());assertFalse(al.isSelfHidden());assertEquals(250,h.getOriginalY());assertEquals(278,fresh.getOriginalY());
         assertEquals(520,height[0]);assertEquals(40,scroll[0]);
     }

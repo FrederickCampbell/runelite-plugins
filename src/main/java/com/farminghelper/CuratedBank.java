@@ -17,6 +17,18 @@ final class CuratedBank
     private static final Pattern BIRD=Pattern.compile("(?i)^(?:"+TRAVEL+")$");
     private static final Pattern GEAR=Pattern.compile("(?i)^(?:"+TRAVEL+"|farmer.s (?:strawhat|jacket|shirt|boro trousers|breeches|boots|trousers)|magic secateurs|secateurs|herb sack|silklined herb sack|reagent pouch|seed box|gricoller.s can|watering can(?:\\([0-8]\\))?|spade|rake|seed dibber|gardening trowel|plant cure|bottomless compost bucket.*|ultracompost|supercompost|compost|empty bucket|bucket|volcanic ash|compost potion.*|basket|sack|amulet of bounty.*|amulet of nature|pre-nature amulet|fishbowl helmet|diving apparatus|medallion of the deep|flippers|(?:bronze|iron|steel|black|mithril|adamant|rune|dragon|crystal|infernal|3rd age) axe.*|empty plant pot|filled plant pot|plant pot|(?:empty )?bottomless compost bucket.*)$");
     private static final List<String[]> ROWS=load();
+    private static final Set<Integer> travelVarbits=variables(5),travelVarps=variables(6);
+    private static Set<Integer> variables(int column)
+    {
+        Set<Integer> ids=new HashSet<>();
+        for(String[] row:ROWS)for(String condition:row[column].split(";"))
+        {
+            Matcher m=CONDITION.matcher(condition.trim());
+            if(m.matches())ids.add(Integer.parseInt(m.group(1)));
+        }
+        return ids;
+    }
+    static boolean travelChanged(int varbit,int varp){return travelVarbits.contains(varbit)||travelVarps.contains(varp);}
     private static final Map<Integer,List<String[]>> EXACT=index(false), FAMILIES=index(true);
     private static final Pattern CHARGED_NAME=Pattern.compile("(?i)^(.+?)\\s*\\(([1-9][0-9]*)\\)$");
     private static Map<Integer,List<String[]>> index(boolean fuzzy)

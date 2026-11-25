@@ -81,24 +81,6 @@ final class Waypoints
         return exact!=null?exact.point:FARM_AREAS.get(patch.getPatchType()+"~"+patch.getLocation());
     }
 
-    enum AccessState { AVAILABLE, LOCKED, UNKNOWN }
-
-    static final class Access
-    {
-        final AccessState state;
-        final String detail;
-        Access(AccessState state, String detail)
-        {
-            this.state = state;
-            this.detail = detail;
-        }
-        String issue(boolean acceptUnverified)
-        {
-            return state == AccessState.LOCKED ||
-                state == AccessState.UNKNOWN && !acceptUnverified ? detail : null;
-        }
-    }
-
     static int guildAccessLevel(PatchType type)
     {
         switch (type)
@@ -109,18 +91,12 @@ final class Waypoints
         }
     }
 
-    private static Access available(String detail) { return new Access(AccessState.AVAILABLE, detail); }
-    private static Access locked(String detail) { return new Access(AccessState.LOCKED, detail); }
-    private static Access unknown(String detail) { return new Access(AccessState.UNKNOWN, detail); }
-
-    private static Access quest(Client client, Quest quest, String description, boolean partial)
+    private static String quest(Client client,Map<Quest,QuestState> quests,Quest quest,String description,boolean partial)
     {
-        if (client == null) return unknown(description + " not verified.");
-        QuestState state = quest.getState(client);
-        if (state == QuestState.FINISHED) return available(description + " completed.");
-        if (partial && state == QuestState.IN_PROGRESS)
-            return unknown(description + " started; exact access progress is unverified.");
-        return locked(description + " required.");
+        if(client==null)return description+" not verified.";
+        QuestState state=quests.computeIfAbsent(quest,q->q.getState(client));
+        if(state==QuestState.FINISHED)return null;
+        return description+(partial&&state==QuestState.IN_PROGRESS?" started; exact access progress is unverified.":" required.");
     }
 
     /**
@@ -128,58 +104,53 @@ final class Waypoints
      * and Farming Guild tier access. Partial quest progress and unmapped
      * gates are not silently reported as unlocked.
      */
-    static Access access(Client client, PatchType type, String location, int farmingLevel)
+    static String accessIssue(Client client,PatchType type,String location,int farmingLevel,Map<Quest,QuestState> quests)
     {
         switch (location)
         {
             case "Farming Guild":
                 int min = guildAccessLevel(type);
                 return farmingLevel < min
-                    ? locked("Farming Guild " + type.getDisplayName() + " requires level " + min + " Farming (unboosted).")
-                    : available("Farming Guild tier: " + min + " Farming.");
+                    ? "Farming Guild " + type.getDisplayName() + " requires level " + min + " Farming (unboosted)."
+                    : null;
             case "Morytania":
-                return quest(client, Quest.PRIEST_IN_PERIL, "Priest in Peril", false);
+                return quest(client, quests, Quest.PRIEST_IN_PERIL, "Priest in Peril", false);
             case "Troll Stronghold":
-                return quest(client, Quest.MY_ARMS_BIG_ADVENTURE, "My Arm's Big Adventure", false);
+                return quest(client, quests, Quest.MY_ARMS_BIG_ADVENTURE, "My Arm's Big Adventure", false);
             case "Weiss":
-                return quest(client, Quest.MAKING_FRIENDS_WITH_MY_ARM, "Making Friends with My Arm", false);
+                return quest(client, quests, Quest.MAKING_FRIENDS_WITH_MY_ARM, "Making Friends with My Arm", false);
             case "Harmony Island":
                 if (type == PatchType.HERB)
                 {
-                    if (client == null) return unknown("Elite Morytania Diary not verified.");
+                    if (client == null) return "Elite Morytania Diary not verified.";
                     return client.getVarbitValue(VarbitID.MORYTANIA_DIARY_ELITE_COMPLETE) > 0
-                        ? available("Elite Morytania Diary completed.")
-                        : locked("Elite Morytania Diary required.");
+                        ? null
+                        : "Elite Morytania Diary required.";
                 }
-                return quest(client, Quest.THE_GREAT_BRAIN_ROBBERY, "The Great Brain Robbery", true);
+                return quest(client, quests, Quest.THE_GREAT_BRAIN_ROBBERY, "The Great Brain Robbery", true);
             case "Civitas illa Fortis": case "Auburnvale": case "Kastori": case "Aldarin":
-                return quest(client, Quest.CHILDREN_OF_THE_SUN, "Children of the Sun", false);
+                return quest(client, quests, Quest.CHILDREN_OF_THE_SUN, "Children of the Sun", false);
             case "Avium Savannah":
-                return quest(client, Quest.THE_RIBBITING_TALE_OF_A_LILY_PAD_LABOUR_DISPUTE,
+                return quest(client, quests, Quest.THE_RIBBITING_TALE_OF_A_LILY_PAD_LABOUR_DISPUTE,
                     "The Ribbiting Tale of a Lily Pad Labour Dispute", false);
             case "Great Conch":
-                return quest(client, Quest.TROUBLED_TORTUGANS, "Troubled Tortugans", false);
+                return quest(client, quests, Quest.TROUBLED_TORTUGANS, "Troubled Tortugans", false);
             case "Anglers' Retreat":
-                if (client == null) return unknown("51 Sailing requirement unverified.");
+                if (client == null) return "51 Sailing requirement unverified.";
                 return client.getRealSkillLevel(Skill.SAILING) >= 51
-                    ? available("51 Sailing requirement met.") : locked("51 Sailing required.");
+                    ? null : "51 Sailing required.";
             case "Fossil Island": case "Seaweed":
-                if(type==PatchType.BIRDHOUSE&&client!=null&&client.getRealSkillLevel(Skill.HUNTER)<5)return locked("5 Hunter required.");
-                return quest(client, Quest.BONE_VOYAGE, "Bone Voyage", false);
+                if(type==PatchType.BIRDHOUSE&&client!=null&&client.getRealSkillLevel(Skill.HUNTER)<5)return "5 Hunter required.";
+                return quest(client, quests, Quest.BONE_VOYAGE, "Bone Voyage", false);
             case "Prifddinas":
-                return quest(client, Quest.SONG_OF_THE_ELVES, "Song of the Elves", false);
+                return quest(client, quests, Quest.SONG_OF_THE_ELVES, "Song of the Elves", false);
             case "Lletya":
-                return quest(client, Quest.MOURNINGS_END_PART_I, "Mourning's End Part I", true);
+                return quest(client, quests, Quest.MOURNINGS_END_PART_I, "Mourning's End Part I", true);
             case "Etceteria":
-                return quest(client, Quest.THE_FREMENNIK_TRIALS, "The Fremennik Trials", false);
+                return quest(client, quests, Quest.THE_FREMENNIK_TRIALS, "The Fremennik Trials", false);
             default:
-                return available("No special access gate in the catalog; transport still unverified.");
+                return null;
         }
     }
 
-    static String accessIssue(Client client, PatchType type, String location,
-                              int farmingLevel, boolean acceptUnverified)
-    {
-        return access(client, type, location, farmingLevel).issue(acceptUnverified);
-    }
 }

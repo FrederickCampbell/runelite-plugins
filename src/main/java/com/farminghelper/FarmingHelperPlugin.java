@@ -424,6 +424,11 @@ public class FarmingHelperPlugin extends Plugin
         }
     }
 
+    @Subscribe public void onVarbitChanged(VarbitChanged event)
+    {
+        highlight.transformed();
+        if(!eligibleTravel.isEmpty()&&CuratedBank.travelChanged(event.getVarbitId(),event.getVarpId()))eligibleTravel.clear();
+    }
     @Subscribe public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
     {
         if("shortestpath".equals(event.getGroup()))thread.invokeLater(eligibleTravel::clear);
@@ -597,9 +602,10 @@ public class FarmingHelperPlugin extends Plugin
         lastAccessLevel=level;
         Map<String,String> notes = new HashMap<>();
         Set<String> accessible=new HashSet<>();
+        Map<Quest,QuestState> quests=new EnumMap<>(Quest.class);
         for (FarmRunPatch patch : patches)
         {
-            String issue = Waypoints.accessIssue(client,patch.getPatchType(),patch.getLocation(),level,false);
+            String issue = Waypoints.accessIssue(client,patch.getPatchType(),patch.getLocation(),level,quests);
             if(issue==null)accessible.add(patch.key());
             if (issue == null && patch.getPatchType()!=PatchType.COMPOST_BIN && patch.getPatchType()!=PatchType.BIRDHOUSE && CropCatalog.recommend(patch.getPatchType(),level) == null) issue = "Farming level too low";
             if (issue != null) notes.put(patch.key(),issue);

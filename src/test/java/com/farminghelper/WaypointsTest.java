@@ -8,21 +8,12 @@ public class WaypointsTest
     @Test
     public void farmingGuildRequires65ForBothPatches()
     {
-        assertTrue(Waypoints.accessIssue(null, PatchType.TREE,
-            "Farming Guild", 64, false).contains("65"));
-        assertNull(Waypoints.accessIssue(null, PatchType.TREE,
-            "Farming Guild", 65, false));
-        assertNull(Waypoints.accessIssue(null, PatchType.HERB,
-            "Farming Guild", 65, false));
-    }
-
-    @Test
-    public void unverifiedLocationsAreConservative()
-    {
-        assertNotNull(Waypoints.accessIssue(null, PatchType.HERB,
-            "Harmony Island", 99, false));
-        assertNull(Waypoints.accessIssue(null, PatchType.HERB,
-            "Harmony Island", 99, true));
+        assertTrue(issue(PatchType.TREE,
+            "Farming Guild", 64).contains("65"));
+        assertNull(issue(PatchType.TREE,
+            "Farming Guild", 65));
+        assertNull(issue(PatchType.HERB,
+            "Farming Guild", 65));
     }
 
     @Test
@@ -39,14 +30,25 @@ public class WaypointsTest
     @Test
     public void missingAccountStateIsNotAnUnlock()
     {
-        assertEquals(Waypoints.AccessState.UNKNOWN,
-            Waypoints.access(null, PatchType.TREE, "Auburnvale", 99).state);
-        assertEquals(Waypoints.AccessState.UNKNOWN,
-            Waypoints.access(null, PatchType.FRUIT_TREE, "Lletya", 99).state);
-        assertNotNull(Waypoints.access(null, PatchType.HERB,
-            "Harmony Island", 99).issue(false));
-        assertNull(Waypoints.access(null, PatchType.HERB,
-            "Harmony Island", 99).issue(true));
+        assertEquals("Children of the Sun not verified.",issue(PatchType.TREE,"Auburnvale",99));
+        assertEquals("Mourning's End Part I not verified.",issue(PatchType.FRUIT_TREE,"Lletya",99));
+        assertEquals("Elite Morytania Diary not verified.",issue(PatchType.HERB,"Harmony Island",99));
+    }
+
+    private static String issue(PatchType type,String site,int level)
+    {return Waypoints.accessIssue(null,type,site,level,new java.util.EnumMap<>(net.runelite.api.Quest.class));}
+
+    @Test public void repeatedPlotsShareAQuestObservationAndTheNextPollReadsAgain()
+    {
+        var client=org.mockito.Mockito.mock(net.runelite.api.Client.class);
+        org.mockito.Mockito.when(client.getIntStack()).thenReturn(new int[]{2});
+        var quests=new java.util.EnumMap<net.runelite.api.Quest,net.runelite.api.QuestState>(net.runelite.api.Quest.class);
+        assertNull(Waypoints.accessIssue(client,PatchType.TREE,"Auburnvale",99,quests));
+        assertNull(Waypoints.accessIssue(client,PatchType.FLOWER,"Kastori",99,quests));
+        org.mockito.Mockito.verify(client).getIntStack();
+        quests.clear();
+        assertNull(Waypoints.accessIssue(client,PatchType.FLOWER,"Kastori",99,quests));
+        org.mockito.Mockito.verify(client,org.mockito.Mockito.times(2)).getIntStack();
     }
 
     @Test

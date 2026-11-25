@@ -51,4 +51,21 @@ public class PatchCoverageTest
         assertEquals(StepEngine.Action.CHECK_HEALTH,
             StepEngine.action(PatchType.CACTUS, new Observation(CropState.UNCHECKED,Source.LIVE,1,null,"",0),false,true,false,false));
     }
+    @Test public void allReleasedObjectTypesAndGapsMatch() throws Exception
+    {
+        var digest=java.security.MessageDigest.getInstance("SHA-256");
+        java.util.BitSet union=new java.util.BitSet();
+        for(PatchType type:PatchType.values())
+        {
+            digest.update(type.name().getBytes(java.nio.charset.StandardCharsets.UTF_8));digest.update((byte)0);
+            for(int id=0;id<65536;id++)if(PatchObjects.matches(type,id))
+            {
+                digest.update(java.nio.ByteBuffer.allocate(4).putInt(id).array());union.set(id);
+            }
+        }
+        for(int id=0;id<65536;id++)assertEquals(union.get(id),PatchObjects.known(id));
+        StringBuilder hash=new StringBuilder();
+        for(byte b:digest.digest())hash.append(String.format("%02x",b));
+        assertEquals("8e3315211fc80b7a5a96e3d19769f844320fbea673f34e4a7ff19a5592950d30",hash.toString());
+    }
 }
