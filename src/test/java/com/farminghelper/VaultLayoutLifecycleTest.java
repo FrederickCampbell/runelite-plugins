@@ -80,7 +80,32 @@ public class VaultLayoutLifecycleTest
         SeedVaultViews view=new SeedVaultViews(c,im,plugin);view.select(VaultRanking.View.HIGHEST);view.filter(99);
         assertTrue(a.isSelfHidden());assertTrue(al.isSelfHidden());assertEquals(100,h.getOriginalY());assertEquals(128,best.getOriginalY());
         assertEquals(350,height[0]);assertEquals(0,scroll[0]);
-        view.leave();assertFalse(a.isSelfHidden());assertFalse(al.isSelfHidden());assertEquals(250,h.getOriginalY());assertEquals(278,best.getOriginalY());
-        assertEquals(500,height[0]);assertEquals(40,scroll[0]);
+        // An inventory transmit can invoke the inner procedure directly. Native
+        // code replaces child widgets and writes the final scroll size after that call.
+        SeedVaultViews lifecycle=spy(view);
+        doAnswer(invocation->{assertTrue(lifecycle.filter(99));return null;}).when(lifecycle).refresh();
+        lifecycle.beforeScript(SeedVaultViews.BUILD_CONTENTS);
+        assertEquals(500,height[0]);assertFalse(a.isSelfHidden());
+        Widget fresh=node(SeedVaultViews.ITEMS,2,WidgetType.GRAPHIC,79,278,36,32,"",ItemID.TORSTOL_SEED,6);
+        when(ip.getChildren()).thenReturn(new Widget[]{potato,null,fresh});
+        lifecycle.afterScript(SeedVaultViews.BUILD_CONTENTS);
+        height[0]=520;
+        lifecycle.invalidate();lifecycle.postClientTick();
+        assertTrue(a.isSelfHidden());assertEquals(370,height[0]);assertEquals(128,fresh.getOriginalY());
+        // Withdrawing the last stack leaves the section empty. Depositing it
+        // again must re-use the new native widget and its real slot/quantity.
+        lifecycle.beforeScript(SeedVaultViews.BUILD);
+        when(ip.getChildren()).thenReturn(new Widget[]{potato});
+        when(lp.getChildren()).thenReturn(new Widget[]{l1});
+        lifecycle.afterScript(SeedVaultViews.BUILD);lifecycle.postClientTick();
+        assertTrue(h.isSelfHidden());assertEquals(200,height[0]);
+        lifecycle.beforeScript(SeedVaultViews.BUILD);
+        when(ip.getChildren()).thenReturn(new Widget[]{potato,null,fresh});
+        when(lp.getChildren()).thenReturn(new Widget[]{l1,null,l2});
+        lifecycle.afterScript(SeedVaultViews.BUILD);lifecycle.postClientTick();
+        assertFalse(h.isSelfHidden());assertEquals(128,fresh.getOriginalY());
+        assertEquals(2,fresh.getIndex());assertEquals(6,fresh.getItemQuantity());
+        lifecycle.leave();assertFalse(a.isSelfHidden());assertFalse(al.isSelfHidden());assertEquals(250,h.getOriginalY());assertEquals(278,fresh.getOriginalY());
+        assertEquals(520,height[0]);assertEquals(40,scroll[0]);
     }
 }

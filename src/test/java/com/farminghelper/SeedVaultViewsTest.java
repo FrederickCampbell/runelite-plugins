@@ -11,7 +11,7 @@ import static org.mockito.Mockito.*;
 
 public class SeedVaultViewsTest
 {
-    @Test public void refreshRunsAtOutermostNativeScriptCompletionWithoutNestedScrollbarScript()
+    @Test public void refreshRunsOnceAfterAllNativeScriptsWithoutNestedScrollbarScript()
     {
         Client client=mock(Client.class);
         FarmingHelperPlugin plugin=mock(FarmingHelperPlugin.class);
@@ -23,11 +23,11 @@ public class SeedVaultViewsTest
         views.afterScript(ScriptID.SEED_VAULT_BUILD);
         verify(views,never()).refresh();
         views.afterScript(SeedVaultViews.CATEGORY);
-        verify(views).refresh();
+        verify(views,never()).refresh();
         verify(views,never()).flushScrollbar();
         verify(client,never()).runScript(any(Object[].class));
         views.postClientTick();
-        verify(views,times(2)).refresh();
+        verify(views).refresh();
         verify(views).flushScrollbar();
     }
     @Test public void unrelatedScriptsDoNotTriggerProjectionRefresh()
@@ -61,16 +61,6 @@ public class SeedVaultViewsTest
         assertEquals(java.util.Set.of(100,103),VaultRanking.selectRun(entries,java.util.Set.of(100,102,103)));
         assertEquals(java.util.Set.of(101),VaultRanking.selectRun(entries,java.util.Set.of(101)));
         assertTrue(VaultRanking.selectRun(entries,java.util.Set.of()).isEmpty());
-    }
-    @Test public void quantitiesOnlyChangeSelectionWhenRequiredIdsDisappear()
-    {
-        java.util.List<VaultRanking.Entry> entries=java.util.List.of(
-            new VaultRanking.Entry(100,20,null),new VaultRanking.Entry(101,5,null));
-        java.util.Set<Integer> required=java.util.Set.of(100,101);
-        assertEquals(VaultRanking.selectRun(entries,required),
-            VaultRanking.selectRun(SeedVaultViews.withQuantities(entries,java.util.Map.of(100,19,101,6)),required));
-        assertEquals(java.util.Set.of(101),
-            VaultRanking.selectRun(SeedVaultViews.withQuantities(entries,java.util.Map.of(101,6)),required));
     }
     @Test public void onlyMatchedNativePairsAreEligibleForFiltering()
     {

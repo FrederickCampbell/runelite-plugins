@@ -638,7 +638,7 @@ final class FarmingHelperPanel extends PluginPanel
             {
                 caption(type.getDisplayName());
                 JComboBox<String> mode=replacementChoice("Default behavior",plugin.setting("replacement_"+type.name(),""));
-                mode.addActionListener(e->plugin.save("replacement_"+type.name(),replacementMode(mode)));addRow(mode);
+                mode.addActionListener(e->{plugin.save("replacement_"+type.name(),replacementMode(mode));general();});addRow(mode);
             }
         }
         caption("These defaults apply to every run. Changes in Run settings are temporary.");finish();

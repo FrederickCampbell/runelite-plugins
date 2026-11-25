@@ -11,21 +11,23 @@ final class RunTeleports
     static
     {
         at("Farming Guild","Farming cape: Farming Guild","Max cape: Other Teleports: Farming Guild","Skills necklace: Farming Guild","Trinket of fairies: Tool Lep - Farming Guild","Trinket of fairies: Fairy Ring - CIR (South of Mount Karuulm)");
-        at("Falador farm","Explorer's ring: Teleport","Explorer's ring 2: Teleport","Trinket of fairies: Tool Lep - Falador Farm","Falador tablet");
+        at("South Falador","Explorer's ring: Teleport","Explorer's ring 2: Teleport","Trinket of fairies: Tool Lep - Falador Farm","Falador tablet");
         at("Falador Park","Ring of wealth: Falador Park","Trinket of fairies: Tool Lep - Falador Park","Falador tablet");
-        at("Ardougne farm","Ardougne cloak: Ardougne Farm","Trinket of fairies: Tool Lep - North of Ardougne","Skills necklace: Fishing Guild","Ardougne tablet");
+        at("North Ardougne","Ardougne cloak: Ardougne Farm","Trinket of fairies: Tool Lep - North of Ardougne","Skills necklace: Fishing Guild","Ardougne tablet");
         at("Ardougne Monastery","Ardougne cloak: Kandarin Monastery","Combat bracelet: Monastery","Trinket of fairies: Tool Lep - Ardougne Monastery");
         at("Catherby","Catherby tablet","Trinket of fairies: Tool Lep - Catherby","Camelot tablet");
-        at("Morytania farm","Ectophial","Fenkenstrain's Castle tablet","Trinket of fairies: Tool Lep - Port Phasmatys");
-        at("Morytania mushroom","Salve Graveyard tablet","Kharyrll tablet","Trinket of fairies: Tool Lep - West of Canifis");
+        at("Morytania","Ectophial","Fenkenstrain's Castle tablet","Trinket of fairies: Tool Lep - Port Phasmatys");
+        at("Canifis mushroom","Salve Graveyard tablet","Kharyrll tablet","Trinket of fairies: Tool Lep - West of Canifis");
         at("Hosidius","Xeric's talisman: 2. Xeric's Glade","Hosidius tablet","Book of the dead: Lunch by the Lancalliums","Kharedst's memoirs: Lunch by the Lancalliums","Trinket of fairies: Tool Lep - Hosidius Allotment");
-        at("Vinery","Trinket of fairies: Tool Lep - Hosidius Vinery","Trinket of fairies: Fairy Ring - AKR (Hosidius Vinery)");
+        at("Hosidius Vinery","Trinket of fairies: Tool Lep - Hosidius Vinery","Trinket of fairies: Fairy Ring - AKR (Hosidius Vinery)");
         at("Troll Stronghold","Stony basalt: Roof","Stony basalt","Trinket of fairies: Tool Lep - Troll Stronghold","Trollheim tablet");
         at("Weiss","Icy basalt","Trinket of fairies: Tool Lep - Weiss");
         at("Harmony Island","Harmony Island tablet","Trinket of fairies: Tool Lep - Harmony Island");
         at("Civitas illa Fortis","Civitas illa Fortis tablet","Quetzal whistle: Civitas illa Fortis","Perfected quetzal whistle(i): Civitas illa Fortis","Trinket of fairies: Tool Lep - Ortus Farm");
         at("Prifddinas","Eternal teleport crystal: Prifddinas","Teleport crystal: Prifddinas","Prifddinas tablet","Construction cape: Prifddinas","Trinket of fairies: Tool Lep - Prifddinas");
-        at("Lumbridge","Lumbridge tablet","Trinket of fairies: Tool Lep - Lumbridge");
+        at("Lumbridge Castle","Lumbridge tablet","Trinket of fairies: Tool Lep - Lumbridge");
+        at("Lumbridge farm","Chronicle","Combat bracelet: Champions' Guild","Lumbridge tablet");
+        at("Auburnvale belladonna","Trinket of fairies: Tool Lep - Nemus Retreat","Pendant of ates: 6. Nemus Retreat","Quetzal whistle: Auburnvale","Perfected quetzal whistle(i): Auburnvale");
         at("Varrock","Varrock tablet","Trinket of fairies: Tool Lep - Varrock");
         at("Gnome Stronghold","Royal seed pod: Grand Tree","Grand seed pod: Grand Tree","Slayer ring: Stronghold","Trinket of fairies: Spirit Tree - Gnome Stronghold");
         at("Tree Gnome Village","Trinket of fairies: Spirit Tree - Tree Gnome Village","Trinket of fairies: Tool Lep - Tree Gnome Village");
@@ -50,25 +52,12 @@ final class RunTeleports
         at("Entrana","Trinket of fairies: Tool Lep - Entrana");
     }
     private static void at(String site,String... destinations){REFERENCES.put(site,List.of(destinations));}
-    static String site(FarmRunPatch patch)
-    {
-        String l=patch.getLocation();PatchType t=patch.getPatchType();
-        if(l.equals("Falador"))return t==PatchType.TREE?"Falador Park":"Falador farm";
-        if(l.equals("Ardougne")||l.equals("North Ardougne"))return t==PatchType.BUSH?"Ardougne Monastery":"Ardougne farm";
-        if(l.equals("Morytania"))return t==PatchType.MUSHROOM?"Morytania mushroom":"Morytania farm";
-        if(l.equals("Kourend")||l.equals("Hosidius"))return t==PatchType.GRAPEVINE?"Vinery":"Hosidius";
-        if(l.equals("Seaweed"))return "Fossil Island";
-        if(l.equals("Lumbridge Castle"))return "Lumbridge";
-        if(l.equals("South Falador"))return "Falador farm";
-        return l;
-    }
-
     /** One useful owned option per site. Prefer carried, then an already chosen
      * item, then the reference order. Deduplicate identical item IDs. */
     static Map<Integer,Set<String>> select(Collection<FarmRunPatch> ready,Map<Integer,List<String>> eligible,
         Map<Integer,Integer> carried)
     {
-        Set<String> sites=new LinkedHashSet<>();for(FarmRunPatch p:ready)sites.add(site(p));
+        Set<String> sites=new LinkedHashSet<>();for(FarmRunPatch p:ready)sites.add(RunOrder.site(p));
         Map<Integer,Set<String>> result=new LinkedHashMap<>();
         for(String site:sites)
         {

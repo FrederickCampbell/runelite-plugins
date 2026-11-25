@@ -100,7 +100,7 @@ public class FarmingHelperPlugin extends Plugin
     private boolean activeClearOnly, compostAcknowledged;
     private volatile Set<Integer> stepItems=Collections.emptySet();
     private boolean visitedStorage, initialPreparation;
-    private Preparation.Bank preparationBank;
+    private WorldPoint preparationOrigin;
     private String preparationReason="";
     private List<FarmRunPatch> pinned;
     private boolean shortestPathAvailable;
@@ -222,7 +222,7 @@ public class FarmingHelperPlugin extends Plugin
         if(runBank!=null)runBank.close();
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
-        initialPrepChecked=false;preparing=false;visitedStorage=false;initialPreparation=false;preparationBank=null;preparationReason="";
+        initialPrepChecked=false;preparing=false;visitedStorage=false;initialPreparation=false;preparationOrigin=null;preparationReason="";
         pinned=null;
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
@@ -635,7 +635,6 @@ public class FarmingHelperPlugin extends Plugin
             if(!ManualSelection.includes(p,run,manualKeys)||!enabled(p)||!accessNote(p).isEmpty())continue;
             runProgress.include(List.of(p));
             if(!SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,type)||skipped.contains(p))continue;
-            if(pinned!=null && !pinned.contains(p))continue;
             QuestFarmingStateReader.Observation o=observe(p);
             if(o==null) continue;
             observations.put(p,o);
@@ -724,6 +723,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(pinned!=null)
         {
+            RunOrder.appendReady(pinned,ready);
             Map<FarmRunPatch,Integer> rank=new HashMap<>();
             for(int i=0;i<pinned.size();i++)rank.put(pinned.get(i),i);
             for(List<FarmRunPatch> list:List.of(ready,plant,visible))
@@ -856,11 +856,10 @@ public class FarmingHelperPlugin extends Plugin
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
         Map<Integer,Integer> physicalRequired=TreePreparation.physicalRequirements(required,pendingSaplings);
-        Map<Integer,Integer> materialCarried=TreePreparation.materialCarried(carried,prepSeeds,aliases);
         for(int id:SupplyOrder.ordered(required,this::observedItemName))
         {
             int n=required.get(id);
-            GuideView.ItemRow row=itemRow(id,n,materialCarried,false);
+            GuideView.ItemRow row=itemRow(id,n,carried,false);
             int pending=pendingSaplings.getOrDefault(id,0);
             if(pending>0)row=new GuideView.ItemRow(row.id,row.name+" ("+pending+" to prepare)",row.owned,row.needed,row.bank,row.vault,row.recommended);
             items.add(row);
@@ -910,8 +909,12 @@ public class FarmingHelperPlugin extends Plugin
                 if(reader.compostRecorded(type.name(),current.getLocation(),current.getName(),minimum))compostAcknowledged=true;
                 else action=StepEngine.Action.COMPOST;
             }
+            boolean needsSapling=action==StepEngine.Action.PLANT && activeCrop!=null && StepEngine.isTreeType(type)
+                && !replacementCarried;
+            if(needsSapling)action=StepEngine.Action.NEED_REPLACEMENT;
             activeAction=action;
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,false);
+            if(needsSapling)instruction="Bring a plantable "+activeCrop.getName()+". Seeds and seedlings must be prepared first.";
             if(activeClearOnly)instruction=ClearOnly.instruction(action,type);
             if(action==StepEngine.Action.PAY_REMOVE&&type==PatchType.REDWOOD)instruction="Pay Alexandra 2,000 coins to remove the mature redwood.";
             if(action==StepEngine.Action.HARVEST&&keep&&CropReplacement.producer(type))
@@ -970,8 +973,6 @@ public class FarmingHelperPlugin extends Plugin
                 initialPrepChecked=true;
                 if(rawSeeds+seedlings>0||Preparation.storedShortage(physicalRequired,carried,storage)){
                     beginPreparation(true,"Gather the listed supplies at the bank / Seed Vault. Start when ready; missing items never block the guide.");
-                    preparationBank=Preparation.chooseSupplies(level,location.normalized,true,
-                        Preparation.StartAt.load(setting("startAtV1","GUILD")),birdBankPhase(),plantingRequired,carried,bank,vault);
                 }
             }
         }
@@ -985,14 +986,14 @@ public class FarmingHelperPlugin extends Plugin
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
         if(preparing && loggedIn)
         {
-            if(preparationBank==null)preparationBank=Preparation.chooseSupplies(level,location.normalized,initialPreparation,
+            Preparation.Bank preparationBank=Preparation.chooseSupplies(level,preparationOrigin,initialPreparation,
                 Preparation.StartAt.load(setting("startAtV1","GUILD")),birdBankPhase(),plantingRequired,carried,bank,vault);
             boolean atStorage=storageOpen();visitedStorage|=atStorage;
             boolean vaultOutstanding=level>=45&&Preparation.vaultNeeded(plantingRequired,carried,bank,vault);
             boolean vaultTarget=preparationBank==Preparation.SEED_VAULT;
             // A known vault shortage may still remain after visiting a regular
             // bank. Only the explicit preparation session can suggest it.
-            boolean routeToStorage=!visitedStorage||vaultTarget&&vaultOutstanding&&!atStorage;
+            boolean routeToStorage=!missingStorageItems.isEmpty() && (!visitedStorage||vaultTarget&&vaultOutstanding&&!atStorage);
             prepMessage=GuidePresentation.preparation(routeToStorage,preparationBank.name,missingStorageItems.isEmpty());
             String sources=Preparation.sourceNote(plantingRequired,carried,bank,vault,!bankStale,!vaultStale);
             if(!sources.isEmpty())prepHelp+="\n"+sources;
@@ -1109,7 +1110,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     private void beginPreparation(boolean initial,String reason)
     {
-        preparationBank=null; // Select once from the freshly calculated remaining supplies.
+        preparationOrigin=LocationContext.capture(client).normalized;
         initialPreparation=initial;preparing=true;visitedStorage=false;preparationReason=reason;
     }
     void continueRun()

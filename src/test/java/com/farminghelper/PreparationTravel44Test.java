@@ -21,6 +21,25 @@ public class PreparationTravel44Test
         assertTrue(Preparation.sourceNote(needed,Map.of(),bank,vault,false,true).contains("outdated"));
     }
 
+    @Test public void lateReadyStopsKeepTheCurrentItineraryAndTerminalLegs()
+    {
+        FarmRunPatch first=new FarmRunPatch("Catherby","",PatchType.HERB),next=new FarmRunPatch("Weiss","",PatchType.HERB);
+        FarmRunPatch late=new FarmRunPatch("Morytania","",PatchType.HERB),end=BirdhouseRun.patches().get(0);
+        List<FarmRunPatch> itinerary=new ArrayList<>(List.of(first,next,end));
+        RunOrder.appendReady(itinerary,List.of(late,next,late));
+        assertEquals(List.of(first,next,late,end),itinerary);
+    }
+
+    @Test public void teleportReferencesMatchTheActualGrowingSite()
+    {
+        FarmRunPatch hops=new FarmRunPatch("Lumbridge","",PatchType.HOPS);
+        FarmRunPatch tree=new FarmRunPatch("Lumbridge","",PatchType.TREE);
+        FarmRunPatch belladonna=new FarmRunPatch("Auburnvale","",PatchType.BELLADONNA);
+        assertEquals(Map.of(1,Set.of("Lumbridge farm"),2,Set.of("Lumbridge Castle"),3,Set.of("Auburnvale belladonna")),
+            RunTeleports.select(List.of(hops,tree,belladonna),Map.of(1,List.of("Chronicle"),2,List.of("Lumbridge tablet"),
+                3,List.of("Trinket of fairies: Tool Lep - Nemus Retreat")),Map.of()));
+    }
+
     @Test public void plantingBeforeTools()
     {
         int palm=CropCatalog.findByName(PatchType.FRUIT_TREE,"Palm sapling").getItemId();

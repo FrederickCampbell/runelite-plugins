@@ -4,8 +4,6 @@ import java.util.*;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Skill;
-import net.runelite.api.InventoryID;
-import net.runelite.api.ItemContainer;
 import net.runelite.api.Point;
 import net.runelite.api.ScriptID;
 import net.runelite.api.gameval.VarClientID;
@@ -22,10 +20,14 @@ import org.slf4j.LoggerFactory;
  * edit native withdrawal widgets, quantities, actions or listeners. */
 final class SeedVaultViews
 {
-    static final int GROUP=InterfaceID.SEED_VAULT, INIT=2814, CATEGORY=2815, BUILD=ScriptID.SEED_VAULT_BUILD;
+    static final int GROUP=InterfaceID.SEED_VAULT, INIT=2818, CATEGORY=2814, BUILD=ScriptID.SEED_VAULT_BUILD;
+    // The nested build procedure is also called directly from resize/search scripts.
+    static final int BUILD_CONTENTS=2820;
     private static final Logger LOG=LoggerFactory.getLogger(SeedVaultViews.class);
-    static final int LEFT=(GROUP<<16)|7, CATEGORIES=(GROUP<<16)|9, ITEMS=(GROUP<<16)|18, LABELS=(GROUP<<16)|19;
-    static final int HEADERS=(GROUP<<16)|16, LINES=(GROUP<<16)|17, VIEWPORT=(GROUP<<16)|12, SCROLLBAR=(GROUP<<16)|11;
+    static final int LEFT=InterfaceID.SeedVault.LEFT_LIST, CATEGORIES=InterfaceID.SeedVault.CATEGORY_LIST,
+        ITEMS=InterfaceID.SeedVault.OBJ_LIST, LABELS=InterfaceID.SeedVault.TEXT_LIST;
+    static final int HEADERS=InterfaceID.SeedVault.CATEGORY_HEADERS, LINES=InterfaceID.SeedVault.CATEGORY_LINES,
+        VIEWPORT=InterfaceID.SeedVault.LIST, SCROLLBAR=InterfaceID.SeedVault.RIGHT_SCROLL;
     private static final Set<String> STANDARD_HEADERS=Set.of("allotment","allotments","flowers","flower","herbs","hops","bushes","trees","fruit trees","exotic","anima","saplings","coral");
     private final Client client;
     private final ItemManager items;
@@ -43,10 +45,6 @@ final class SeedVaultViews
     private VaultRanking.View active;
     private boolean dirty=true, quantityDirty, nativeRefresh;
     private int buildDepth;
-    private List<VaultRanking.Entry> lastEntries=Collections.emptyList();
-    private List<Integer> lastOrder=Collections.emptyList();
-    private Set<Integer> lastStockIds;
-    private Widget lastItemParent;
     private int lastLevel=-1;
     private long lastConfig=Long.MIN_VALUE,lastAccess=Long.MIN_VALUE;
 
@@ -54,16 +52,16 @@ final class SeedVaultViews
     {this.client=client;this.items=items;this.plugin=plugin;}
 
     void invalidate(){quantityDirty=true;}
-    private static boolean nativeBuild(int id){return id==INIT||id==CATEGORY||id==BUILD;}
+    private static boolean nativeBuild(int id){return id==INIT||id==CATEGORY||id==BUILD||id==BUILD_CONTENTS;}
     void beforeScript(int id)
     {
         if(!nativeBuild(id))return;
         // Native scripts own item identity and quantity. Restore before they rebuild,
         // but do not confuse a deposit/withdraw rebuild with a player selecting a tab.
-        if(buildDepth++==0){rememberScroll();restore(false);forgetProjection();}
+        if(buildDepth++==0){rememberScroll();restore(false);}
         // INIT can replace the left panel. Ordinary category and item builds
         // retain our own buttons unless the native interface actually replaces them.
-        if(id==INIT)removeButtons();
+        if(id==INIT||id==CATEGORY)removeButtons();
         dirty=true;
         LOG.debug("Farming vault pre {} depth {}",id,buildDepth);
     }
@@ -73,78 +71,28 @@ final class SeedVaultViews
         if(buildDepth>0)--buildDepth;
         dirty=true;nativeRefresh=true;
         LOG.debug("Farming vault post {} depth {}",id,buildDepth);
-        // Like RuneLite's Anti Drag seed-vault hook, work with freshly rebuilt
-        // native widgets at script completion. Do not invoke any clientscript here.
-        if(buildDepth==0)refresh();
     }
     void postClientTick()
     {
         if(buildDepth!=0)return;
         if(nativeRefresh||quantityDirty)
         {
-            boolean verify=nativeRefresh;nativeRefresh=false;
-            // The containing native script may have made further changes after
-            // our post hook; check once, after all scripts/menu work this tick.
-            if(verify&&active!=null&&!dirty&&(!projectionIntact()||!buttonsIntact()))
-            {
-                dirty=true;
-                LOG.debug("Farming vault projection overwritten; retrying after native scripts");
-            }
+            nativeRefresh=false;
             refresh();
         }
-        // The script VM is not reentrant. Keep the generic scrollbar script
-        // outside script hooks, even when the layout has already been applied.
         flushScrollbar();
-    }
-    private void forgetProjection()
-    {
-        lastEntries=Collections.emptyList();lastOrder=Collections.emptyList();
-        lastStockIds=null;lastItemParent=null;
-    }
-    private Map<Integer,Integer> stock()
-    {
-        ItemContainer c=client.getItemContainer(InventoryID.SEED_VAULT);
-        if(c==null)return null;
-        Map<Integer,Integer> result=new HashMap<>();
-        PhysicalStock.collect(result,c,items::getItemComposition);
-        return result;
-    }
-    static List<VaultRanking.Entry> withQuantities(List<VaultRanking.Entry> entries,Map<Integer,Integer> stock)
-    {
-        List<VaultRanking.Entry> result=new ArrayList<>();
-        for(VaultRanking.Entry e:entries)result.add(new VaultRanking.Entry(e.id,stock.getOrDefault(e.id,0),e.crop));
-        return result;
     }
     private Set<Integer> selection(List<VaultRanking.Entry> entries,int level)
     {
         return active==VaultRanking.View.RUN?VaultRanking.selectRun(entries,runItems==null?Collections.emptySet():runItems):
             VaultRanking.select(active,entries,level,plugin.vaultAllowed(level),plugin::priority,plugin.vaultOverrides(level));
     }
-    private boolean projectionIntact()
-    {
-        if(lastItemParent==null||lastItemParent!=client.getWidget(ITEMS)||
-            scrollParent==null||scrollParent!=client.getWidget(VIEWPORT)||
-            scrollParent.getScrollHeight()!=appliedHeight)return false;
-        for(Map.Entry<Widget,WidgetState> e:changed.entrySet())
-        {
-            Widget w=e.getKey(),p=client.getWidget(w.getId());int i=w.getIndex();
-            Widget[] children=p==null?null:p.getChildren();
-            if(children==null||i<0||i>=children.length||children[i]!=w||!e.getValue().matches(w))return false;
-        }
-        return true;
-    }
-    private boolean canKeepProjection(int level)
-    {
-        Map<Integer,Integer> now=stock();
-        if(now==null||lastStockIds==null||!lastStockIds.equals(now.keySet())||!projectionIntact())return false;
-        return lastOrder.equals(new ArrayList<>(selection(withQuantities(lastEntries,now),level)));
-    }
     void nativeMenu(int component)
     {
         if(component==CATEGORIES||component==InterfaceID.SeedVault.SEARCH)leave();
     }
     void close(){leave();removeButtons();buildDepth=0;nativeRefresh=false;quantityDirty=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastAccess=Long.MIN_VALUE;lastWidth=-1;runItems=null;opened=false;dirty=true;}
-    void leave(){restore(true);forgetProjection();active=null;paintButtons();dirty=true;customScroll=0;}
+    void leave(){restore(true);active=null;paintButtons();dirty=true;customScroll=0;}
     private void rememberScroll(){if(active!=null&&scrollParent!=null&&client.getWidget(VIEWPORT)==scrollParent)customScroll=scrollParent.getScrollY();}
 
     void tick()
@@ -153,14 +101,13 @@ final class SeedVaultViews
         if(buildDepth==0)flushScrollbar();
     }
 
-    /** Widget-only work; safe for a native ScriptPostFired callback. */
+    /** Apply the projection only after native scripts finish rebuilding their children and viewport. */
     void refresh()
     {
         if(buildDepth>0)return;
-        if(client.getGameState()!=GameState.LOGGED_IN||!plugin.flag("seedVaultViews",true)) {close();return;}
+        if(client.getGameState()!=GameState.LOGGED_IN||!plugin.flag("seedVaultViews",true)) {if(opened||parent!=null)close();return;}
         Widget root=client.getWidget(InterfaceID.SeedVault.UNIVERSE);
-        if(root==null||root.isHidden()){close();return;}
-        if(buildDepth>0)return;
+        if(root==null||root.isHidden()){if(opened||parent!=null)close();return;}
         Widget left=client.getWidget(LEFT), categories=client.getWidget(CATEGORIES);
         if(left==null||categories==null||categories.isHidden())return;
         Set<Integer> nextRun=plugin.vaultRunItems();
@@ -188,7 +135,7 @@ final class SeedVaultViews
         if(quantityDirty)
         {
             quantityDirty=false;
-            if(active!=null&&!dirty&&!canKeepProjection(level))dirty=true;
+            dirty=true;
         }
         if(dirty&&active!=null)
         {
@@ -265,7 +212,7 @@ final class SeedVaultViews
     }
     private Widget nativeBackground(Widget categories,Widget row)
     {
-        Widget layer=client.getWidget((GROUP<<16)|8);
+        Widget layer=client.getWidget(InterfaceID.SeedVault.CATEGORY_BACKGROUNDS);
         if(layer==null)return null;
         int rowY=categories.getRelativeY()+row.getRelativeY();
         for(Widget w:children(layer))if(w!=null&&!w.isSelfHidden()&&
@@ -388,7 +335,6 @@ final class SeedVaultViews
     boolean filter(int level)
     {
         restore(false);
-        forgetProjection();
         Widget itemParent=client.getWidget(ITEMS),textParent=client.getWidget(LABELS),headerParent=client.getWidget(HEADERS),lineParent=client.getWidget(LINES),viewport=client.getWidget(VIEWPORT);
         if(itemParent==null||textParent==null||headerParent==null||viewport==null)return false;
         int headerOffset=yOffset(headerParent,itemParent);
@@ -436,7 +382,9 @@ final class SeedVaultViews
         int lineOffset=lineParent==null?Integer.MIN_VALUE:yOffset(lineParent,itemParent);
         int layerOffset=yOffset(itemParent,viewport);
         if(layerOffset!=Integer.MIN_VALUE)layerOffset+=viewport.getScrollY();
-        int end=layerOffset==Integer.MIN_VALUE?Integer.MIN_VALUE:viewport.getScrollHeight()-layerOffset;
+        // A native scroll size of zero denotes a list that fits the viewport.
+        int nativeExtent=Math.max(viewport.getHeight(),viewport.getScrollHeight());
+        int end=layerOffset==Integer.MIN_VALUE?Integer.MIN_VALUE:nativeExtent-layerOffset;
         if(lineOffset==Integer.MIN_VALUE||layerOffset==Integer.MIN_VALUE||end<=sections.get(sections.size()-1).y)full=false;
         Widget[] lines=children(lineParent);
         Set<Widget> usedLines=Collections.newSetFromMap(new IdentityHashMap<>());
@@ -491,7 +439,7 @@ final class SeedVaultViews
         {
             scrollParent=viewport;nativeHeight=viewport.getScrollHeight();nativeScroll=viewport.getScrollY();
             nativeVarScroll=client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS);
-            appliedHeight=Math.max(viewport.getHeight(),nativeHeight-(full?shift:0));
+            appliedHeight=Math.max(viewport.getHeight(),nativeExtent-(full?shift:0));
             int scroll=Math.max(0,Math.min(customScroll,appliedHeight-viewport.getHeight()));
             if(viewport.getScrollHeight()!=appliedHeight||viewport.getScrollY()!=scroll)
             {
@@ -500,12 +448,6 @@ final class SeedVaultViews
             }
             if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=scroll)
                 client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,scroll);
-        }
-        Map<Integer,Integer> observed=stock();
-        if(observed!=null)
-        {
-            lastEntries=List.copyOf(entries);lastOrder=List.copyOf(keep);
-            lastStockIds=Set.copyOf(observed.keySet());lastItemParent=itemParent;
         }
         return true;
     }

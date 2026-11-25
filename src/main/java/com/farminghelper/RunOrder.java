@@ -175,7 +175,7 @@ final class RunOrder
             }
         }
         // Entrana comes before Fossil Island, both after ordinary surface work.
-        ordered.sort(Comparator.comparingInt(g->"Fossil Island".equals(g.site)?2:"Entrana".equals(g.site)?1:0));
+        ordered.sort(Comparator.comparingInt(g->terminalOrder(g.site)));
         return ordered;
     }
     private static boolean terminal(Group g){return "Entrana".equals(g.site)||"Fossil Island".equals(g.site);}
@@ -224,6 +224,18 @@ final class RunOrder
     private static void reverse(int[] a,int i,int j){while(i<j){int t=a[i];a[i++]=a[j];a[j--]=t;}}
     private static int[] move(int[] a,int start,int length,int at)
     {int[] out=new int[a.length];int k=0;for(int i=0;i<a.length;i++)if(i<start||i>=start+length)out[k++]=a[i];System.arraycopy(out,at,out,at+length,k-at);System.arraycopy(a,start,out,at,length);return out;}
+
+    /** Keep the established order. Insert newly ready mainland work before the terminal islands. */
+    static void appendReady(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready)
+    {
+        for(FarmRunPatch p:ready)if(!itinerary.contains(p))
+        {
+            int at=itinerary.size();
+            while(at>0 && terminalOrder(site(itinerary.get(at-1)))>terminalOrder(site(p)))at--;
+            itinerary.add(at,p);
+        }
+    }
+    private static int terminalOrder(String site){return "Fossil Island".equals(site)?2:"Entrana".equals(site)?1:0;}
 
     static List<FarmRunPatch> flatten(List<Group> groups)
     {List<FarmRunPatch> result=new ArrayList<>();for(Group g:groups)result.addAll(g.patches);return result;}
