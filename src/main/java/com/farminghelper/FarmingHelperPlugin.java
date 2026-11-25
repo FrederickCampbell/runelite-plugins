@@ -109,7 +109,7 @@ public class FarmingHelperPlugin extends Plugin
     private FarmingHelperPanel panel;
     private NavigationButton nav;
     private volatile FarmRunPatch current;
-    private String lastView;
+    private GuideView lastView;
     private volatile Map<String,String> accessNotes = Collections.emptyMap();
     private int lastAccessLevel=-1,accessTicks;
     // Quest.getState runs a clientscript; only compute this cache outside script callbacks.
@@ -266,12 +266,15 @@ public class FarmingHelperPlugin extends Plugin
         end();
     }
 
+    CompostChoice compostChoice(){return CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));}
+    SeedlessPolicy seedlessDefault(){return SeedlessPolicy.load(setting("seedlessPolicyV1","GUIDE"));}
+    Preparation.StartAt startAt(){return Preparation.StartAt.load(setting("startAtV1","GUILD"));}
     private void refreshRunPreferences()
     {
         // Old per-run saved overrides are intentionally ignored; all other preferences remain intact.
-        runPolicy=temporaryCare!=null?temporaryCare:RunPolicy.load("",CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true))!=CompostChoice.NONE,flag("directorProtectTrees",true));
+        runPolicy=temporaryCare!=null?temporaryCare:RunPolicy.of(compostChoice()!=CompostChoice.NONE,flag("directorProtectTrees",true));
         runPayRemoval=temporaryPay!=null?temporaryPay:flag("directorPayRemoval",true);
-        SeedlessPolicy choice=temporarySeedless!=null?temporarySeedless:SeedlessPolicy.load(setting("seedlessPolicyV1","GUIDE"));
+        SeedlessPolicy choice=temporarySeedless!=null?temporarySeedless:seedlessDefault();
         hideSeedless=choice.hide;clearSeedless=choice.hide?choice.clear:flag("clearSeedlessPreferenceV1",true);
     }
     RunPolicy runPolicy(){return runPolicy;}
@@ -632,7 +635,7 @@ public class FarmingHelperPlugin extends Plugin
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
         boolean protect=runPolicy.protection, pay=runPayRemoval;
         Map<Integer,Integer> aliases=supplies.aliases;
-        CompostChoice compost=CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));
+        CompostChoice compost=compostChoice();
         if(runPolicy.compost&&compost==CompostChoice.NONE)compost=CompostChoice.BOTTOMLESS;
         int compostId=runPolicy.compost?compost.resolve(stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)):-1;
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
@@ -715,7 +718,7 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn && pinned==null)
         {
             WorldPoint start=location.normalized;
-            boolean guildFirst=Preparation.StartAt.load(setting("startAtV1","GUILD"))==Preparation.StartAt.GUILD&&level>=45;
+            boolean guildFirst=startAt()==Preparation.StartAt.GUILD&&level>=45;
             Set<PatchType> carriedSaplings=EnumSet.noneOf(PatchType.class);
             for(FarmRunPatch p:plant)if(p.getPatchType().isTree()&&p.getPatchType()!=PatchType.SPIRIT_TREE&&
                 CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->c.getLevel()<=level&&bag.getOrDefault(c.getItemId(),0)>=c.getQuantity()))
@@ -968,7 +971,7 @@ public class FarmingHelperPlugin extends Plugin
         if(preparing() && loggedIn)
         {
             Preparation.Bank preparationBank=Preparation.chooseSupplies(level,preparationOrigin,phase==Preparation.Phase.INITIAL,
-                Preparation.StartAt.load(setting("startAtV1","GUILD")),birdBankPhase(),plantingRequired,carried,bank,vault);
+                startAt(),birdBankPhase(),plantingRequired,carried,bank,vault);
             boolean atStorage=storageOpen();visitedStorage|=atStorage;
             boolean vaultOutstanding=level>=45&&Preparation.vaultNeeded(plantingRequired,carried,bank,vault);
             boolean vaultTarget=preparationBank==Preparation.SEED_VAULT;
@@ -1044,10 +1047,9 @@ public class FarmingHelperPlugin extends Plugin
 
     private void publishView(GuideView view)
     {
-        String signature=view.signature();
-        if(!signature.equals(lastView))
+        if(!view.equals(lastView))
         {
-            lastView=signature;final long id=session;
+            lastView=view;final long id=session;
             SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view,id); });
         }
     }
@@ -1094,7 +1096,7 @@ public class FarmingHelperPlugin extends Plugin
         List<GuideView.Stop> stops=new ArrayList<>();stops.add(new GuideView.Stop(target,instruction,true,false));
         if(normalView!=null)for(GuideView.Stop stop:normalView.stops)if(stop.patch!=target)stops.add(new GuideView.Stop(stop.patch,stop.active?"Paused: "+stop.instruction:stop.instruction,false,stop.done));
         cacheIcons(items);
-        publishView(new GuideView(title,"Disease priority",items,stops,target,"","Disease detected — current guide paused. Resume: "+resume+". Cure only; no harvest or replant.",hideSeedless,clearSeedless,false,normalView==null?GuideView.Stats.UNKNOWN:normalView.stats));
+        publishView(new GuideView(title,"Disease priority",items,stops,target,"","Disease detected — current guide paused. Resume: "+resume+". Cure only; no harvest or replant.",hideSeedless,clearSeedless,false,normalView==null?GuideView.Stats.UNKNOWN:normalView.stats,GuideView.Notes.EMPTY));
         return true;
     }
 
@@ -1127,7 +1129,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
     {
-        if(itemManager==null)return;
+        if(itemManager==null||rows.stream().allMatch(row->icons.containsKey(row.id)))return;
         Map<Integer,ImageIcon> next=new HashMap<>(icons);
         for(GuideView.ItemRow row:rows) if(!next.containsKey(row.id))
             next.put(row.id,new ImageIcon(itemManager.getImage(row.id)));
@@ -1157,8 +1159,7 @@ public class FarmingHelperPlugin extends Plugin
 
     boolean keepSpecies(KeepCrop c)
     {
-        String mode=setting(c.key(),"");
-        return KeepCrop.explicit(mode)?"PRESERVE".equals(mode):KeepCrop.defaultKeep(c,setting("replacement_"+c.type.name(),""));
+        return KeepCrop.resolve(c.type,c,setting("replacement_"+c.type.name(),""),setting(c.key(),""),"","");
     }
     private boolean autoLily(FarmRunPatch p)
     {return resolveReplacement(p,KeepCrop.WHITE_LILY);}

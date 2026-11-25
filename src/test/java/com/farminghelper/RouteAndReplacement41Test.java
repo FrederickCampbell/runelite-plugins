@@ -40,7 +40,7 @@ public class RouteAndReplacement41Test
     {
         PatchType t=PatchType.BUSH;
         Observation check=live(CropState.UNCHECKED,255),berries=live(CropState.HARVESTABLE,209),depleted=live(CropState.GROWING,205);
-        assertFalse(CropReplacement.preserve(t,"",""));assertTrue(CropReplacement.preserve(t,"","PRESERVE"));
+        assertFalse(KeepCrop.resolve(t,null,"","","",""));assertTrue(KeepCrop.resolve(t,null,"","","PRESERVE",""));
         assertEquals(StepEngine.Action.CHECK_HEALTH,StepEngine.action(t,check,false,true,false,false));
         assertEquals(StepEngine.Action.HARVEST,StepEngine.action(t,berries,false,true,false,false));
         assertTrue(CropReplacement.actionable(t,depleted,false));
@@ -54,11 +54,11 @@ public class RouteAndReplacement41Test
     }
     @Test public void cactusAndSpecialTreeRemoval()
     {
-        assertTrue(CropReplacement.preserve(PatchType.CACTUS,"",""));
+        assertTrue(KeepCrop.resolve(PatchType.CACTUS,null,"","","",""));
         assertEquals(StepEngine.Action.CLEAR_LIVING,StepEngine.action(PatchType.CACTUS,live(CropState.GROWING,15),false,true,false,false));
         assertEquals(StepEngine.Action.CLEAR_LIVING,StepEngine.action(PatchType.CALQUAT,live(CropState.HARVESTABLE,12),false,true,false,false));
         assertEquals(StepEngine.Action.PAY_REMOVE,StepEngine.action(PatchType.REDWOOD,live(CropState.GROWING,18),false,true,false,false));
         assertFalse(CropReplacement.actionable(PatchType.REDWOOD,live(CropState.GROWING,18),true));
-        assertTrue(CropReplacement.preserve(PatchType.SPIRIT_TREE,"REPLANT","REPLANT"));
+        assertTrue(KeepCrop.resolve(PatchType.SPIRIT_TREE,null,"REPLANT","","REPLANT",""));
     }
 }

@@ -18,14 +18,6 @@ final class CropReplacement
         }
     }
     static boolean preferenceType(PatchType t){return (configurable(t)&&t!=PatchType.CELASTRUS)||t==PatchType.FLOWER;}
-    static boolean defaultPreserve(PatchType t){return t==PatchType.CACTUS;}
-    static boolean preserve(PatchType t,String typeValue,String patchValue)
-    {
-        if(t==PatchType.SPIRIT_TREE)return true;
-        if(!preferenceType(t))return false;
-        String mode=patchValue.isEmpty()?typeValue:patchValue;
-        return "PRESERVE".equals(mode)||(!"REPLANT".equals(mode)&&defaultPreserve(t));
-    }
     static boolean producer(PatchType t)
     {return t==PatchType.BUSH||t==PatchType.CACTUS||t==PatchType.FRUIT_TREE||t==PatchType.CALQUAT||t==PatchType.CELASTRUS;}
     static boolean mature(PatchType t,Observation o)

@@ -56,24 +56,23 @@ enum KeepCrop
         return CropCatalog.findByName(type,name);
     }
     @Override public String toString(){return label;}
+    private static final java.util.Map<String,KeepCrop> PRODUCE=new java.util.HashMap<>();
+    static{for(KeepCrop crop:values())PRODUCE.put(crop.name(),crop);}
     static KeepCrop observed(PatchType type,Observation o)
     {
         String key=QuestFarmingStateReader.livingProduceKey(type.name(),o);
-        try{KeepCrop c=valueOf(key);return c.type==type?c:null;}catch(IllegalArgumentException e){return null;}
+        KeepCrop crop=PRODUCE.get(key);
+        return crop!=null&&crop.type==type?crop:null;
     }
     static boolean explicit(String mode){return "PRESERVE".equals(mode)||"REPLANT".equals(mode);}
-    static boolean defaultKeep(KeepCrop species,String typeMode)
-    {return species==WHITE_LILY&&!explicit(typeMode)||CropReplacement.preserve(species.type,typeMode,"");}
     static boolean resolve(PatchType type,KeepCrop species,String typeMode,String speciesMode,String patchMode,String runMode)
     {
         if(type==PatchType.SPIRIT_TREE)return true;
         if(!CropReplacement.preferenceType(type))return false;
         if(explicit(runMode))return "PRESERVE".equals(runMode);
         if(explicit(patchMode))return "PRESERVE".equals(patchMode);
-        if(species!=null){
-            if(explicit(speciesMode))return "PRESERVE".equals(speciesMode);
-            return defaultKeep(species,typeMode);
-        }
-        return CropReplacement.preserve(type,typeMode,"");
+        if(species!=null&&explicit(speciesMode))return "PRESERVE".equals(speciesMode);
+        if(explicit(typeMode))return "PRESERVE".equals(typeMode);
+        return type==PatchType.CACTUS||species==WHITE_LILY;
     }
 }

@@ -7,8 +7,8 @@ public class RunPolicyTest
 {
     @Test public void choicesAndFallback()
     {
-        assertEquals(RunPolicy.BOTH,RunPolicy.load("",true,true));
-        assertEquals(RunPolicy.NONE,RunPolicy.load("NONE",true,true));
+        assertEquals(RunPolicy.BOTH,RunPolicy.of(true,true));
+        assertEquals(RunPolicy.NONE,RunPolicy.of(false,false));
         assertFalse(RunPolicy.PROTECTION.compost);
         assertFalse(RunPolicy.COMPOST.protection);
     }
