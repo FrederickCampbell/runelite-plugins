@@ -23,7 +23,7 @@ final class StepItems
                 else result.add(ItemID.PLANT_CURE);
                 break;
             case PROTECT_TREE:
-                for(ProtectionPayment cost:ProtectionPaymentCatalog.forCrop(crop))result.add(cost.getItemId());
+                for(ProtectionPayment cost:CropCatalog.protection(crop))result.add(cost.getItemId());
                 break;
             default:break;
         }

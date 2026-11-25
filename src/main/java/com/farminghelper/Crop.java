@@ -10,6 +10,8 @@ final class Crop
 	private final int level;
 	private final int itemId;
 	private final int quantity;
+	private final CropXp.Score score;
+	private final java.util.List<ProtectionPayment> payments;
 
 	@Override
 	public boolean equals(Object other)

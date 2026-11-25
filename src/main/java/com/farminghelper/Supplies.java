@@ -54,7 +54,7 @@ final class Supplies
             case ItemID.BUCKET_SUPERCOMPOST: return "Supercompost";
             case ItemID.BUCKET_ULTRACOMPOST: return "Ultracompost";
             default:
-                String payment = ProtectionPaymentCatalog.nameForItem(id);
+                String payment = CropCatalog.paymentName(id);
                 return payment == null ? "Item #" + id : payment;
         }
     }

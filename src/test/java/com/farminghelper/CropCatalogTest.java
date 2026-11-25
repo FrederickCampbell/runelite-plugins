@@ -65,4 +65,19 @@ public class CropCatalogTest
 		assertEquals(crop, CropCatalog.findByItemId(crop.getItemId()));
 		assertNull(CropCatalog.findByItemId(-1));
 	}
+    @Test public void allReleasedCropDefinitionsAndXpInputsMatch() throws Exception
+    {
+        java.util.List<String> rows=new java.util.ArrayList<>();
+        for(PatchType type:PatchType.values())for(Crop c:CropCatalog.crops(type))
+        {
+            CropXp.Score xp=c.getScore();
+            rows.add(String.join("\t",type.name(),c.getName(),c.getItemName(),""+c.getLevel(),""+c.getItemId(),""+c.getQuantity(),
+                ""+xp.planting,""+xp.health,""+xp.harvest,""+xp.yield,""+xp.estimated));
+        }
+        try(var reader=new java.io.BufferedReader(new java.io.InputStreamReader(getClass().getResourceAsStream("/v1-crops.tsv"),
+            java.nio.charset.StandardCharsets.UTF_8)))
+        {
+            assertEquals(reader.lines().collect(java.util.stream.Collectors.toList()),rows);
+        }
+    }
 }

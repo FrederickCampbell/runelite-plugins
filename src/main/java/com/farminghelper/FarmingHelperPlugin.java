@@ -686,8 +686,8 @@ public class FarmingHelperPlugin extends Plugin
                 {ready.add(p);visible.add(p);continue;}
                 if(hideSeedless&&clearSeedless&&activeClearOnly&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.EMPTY)
                 {runProgress.finish(p,false);visible.add(p);continue;}
-                boolean wants=protect && activeCrop!=null && type.supportsProtection() && !ProtectionPaymentCatalog.forCrop(activeCrop).isEmpty();
-                boolean hasPayment=wants && ProtectionPaymentCatalog.forCrop(activeCrop).stream().allMatch(cost -> bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
+                boolean wants=protect && activeCrop!=null && type.supportsProtection() && !CropCatalog.protection(activeCrop).isEmpty();
+                boolean hasPayment=wants && CropCatalog.protection(activeCrop).stream().allMatch(cost -> bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
 
                 // The player may carry a lower-ranked seed than the initially allocated bank crop.
                 // Prefer a usable carried replacement for the active mature patch over preserving it prematurely.
@@ -830,7 +830,7 @@ public class FarmingHelperPlugin extends Plugin
             if(protect && (c!=null || (p==current && progress.planted() && activeCrop!=null)))
             {
                 Crop paymentCrop=c!=null?c:activeCrop;
-                if(type.supportsProtection()) for(ProtectionPayment cost:ProtectionPaymentCatalog.forCrop(paymentCrop))
+                if(type.supportsProtection()) for(ProtectionPayment cost:CropCatalog.protection(paymentCrop))
                     required.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);
             }
         }

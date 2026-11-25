@@ -11,7 +11,7 @@ public class CropXpTest
     @Test public void everyExistingCropHasMetadata()
     {
         for(PatchType t:PatchType.values())for(Crop c:CropCatalog.crops(t))
-            assertNotNull(c.getName(),CropXp.score(c));
+            assertNotNull(c.getName(),c.getScore());
     }
     @Test public void exactCycleXpAndEstimatedYieldAreSeparate()
     {
@@ -19,8 +19,8 @@ public class CropXpTest
         assertEquals(141.5,CropXp.perSeed(crop(PatchType.FLOWER,"Limpwurt")),1e-9);
         assertEquals(292,CropXp.perSeed(crop(PatchType.FLOWER,"White lily")),1e-9);
         assertEquals(23352,CropXp.perSeed(crop(PatchType.HARDWOOD_TREE,"Rosewood sapling")),1e-9);
-        assertTrue(CropXp.score(crop(PatchType.HERB,"Torstol")).estimated);
-        assertTrue(CropXp.score(crop(PatchType.CORAL,"Umbral fragment")).unknownYield());
+        assertTrue(crop(PatchType.HERB,"Torstol").getScore().estimated);
+        assertTrue(crop(PatchType.CORAL,"Umbral fragment").getScore().unknownYield());
         assertEquals((82+82*37.5)/3,CropXp.perSeed(crop(PatchType.ALLOTMENT,"Snape grass")),1e-9);
         assertEquals(3,crop(PatchType.HOPS,"Jute").getQuantity());
         // Flax has more XP per seed than higher-level Krandorian.

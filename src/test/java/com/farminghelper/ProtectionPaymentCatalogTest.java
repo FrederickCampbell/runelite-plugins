@@ -25,7 +25,7 @@ public class ProtectionPaymentCatalogTest
 			{
 				catalogItems.add(crop.getItemId());
 				List<ExpectedPayment> cropExpected = expected.get(crop.getItemId());
-				List<ProtectionPayment> actual = ProtectionPaymentCatalog.forCrop(crop);
+				List<ProtectionPayment> actual = CropCatalog.protection(crop);
 				int expectedSize = cropExpected == null ? 0 : cropExpected.size();
 				assertEquals(crop.getName(), expectedSize, actual.size());
 				for (int i = 0; i < expectedSize; i++)
@@ -46,7 +46,7 @@ public class ProtectionPaymentCatalogTest
 	@Test
 	public void nullCropHasNoPayment()
 	{
-		assertTrue(ProtectionPaymentCatalog.forCrop(null).isEmpty());
+		assertTrue(CropCatalog.protection(null).isEmpty());
 	}
 
 	private static Map<Integer, List<ExpectedPayment>> expectedPayments()
