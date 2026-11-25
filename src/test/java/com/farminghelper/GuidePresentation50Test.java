@@ -34,10 +34,10 @@ public class GuidePresentation50Test
         assertEquals("",GuidePresentation.routeWarning("Checking route…"));
         assertFalse(GuidePresentation.routeWarning("No verified route for this leg.").isEmpty());
         SwingUtilities.invokeAndWait(()->{
-            JButton info=FarmingHelperPanel.infoButton(GuidePresentation.STORAGE_HELP);
+            JButton info=FarmingHelperPanel.infoButton("Observed storage",GuidePresentation.STORAGE_HELP);
             assertNotNull(info.getIcon());
             assertTrue(info.getToolTipText().contains("refresh")||info.getToolTipText().contains("Refresh"));
-            assertEquals("More information",info.getAccessibleContext().getAccessibleName());
+            assertEquals("Help for Observed storage",info.getAccessibleContext().getAccessibleName());
         });
     }
 }

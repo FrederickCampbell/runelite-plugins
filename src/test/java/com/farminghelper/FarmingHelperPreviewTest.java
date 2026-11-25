@@ -27,7 +27,7 @@ public class FarmingHelperPreviewTest
                     new GuideView.Stop(new FarmRunPatch("Ardougne","",PatchType.HERB),"Plant ranarr.",false,false)),patch,"","",false,false,false,GuideView.Stats.UNKNOWN,GuideView.Notes.EMPTY),1L);
             assertNotNull(findButton(panel,"End farming run"));
             assertNull("Active guides must not have a Home/Back exit",findButton(panel,"Back"));
-            JButton settings=findButton(panel,"Settings");assertNotNull(settings);settings.doClick(0);
+            JButton settings=findButton(panel,"Run settings");assertNotNull(settings);settings.doClick(0);
             JButton back=findButton(panel,"Back");assertNotNull(back);back.doClick(0);
             assertNotNull(findButton(panel,"End farming run"));assertNull(findButton(panel,"Back"));
             panel.setSize(image.getWidth(),image.getHeight());

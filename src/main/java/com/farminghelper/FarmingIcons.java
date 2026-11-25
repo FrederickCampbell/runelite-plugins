@@ -52,6 +52,6 @@ final class FarmingIcons
         b.putClientProperty("FlatLaf.styleClass","iconButton legacyIconButton");
         b.setPreferredSize(new Dimension(28,28));b.setMinimumSize(new Dimension(28,28));
         b.setMargin(new Insets(3,3,3,3));b.setToolTipText(tooltip);b.getAccessibleContext().setAccessibleName(tooltip);
-        b.addActionListener(e->action.run());return b;
+        if(action!=null)b.addActionListener(e->action.run());return b;
     }
 }
