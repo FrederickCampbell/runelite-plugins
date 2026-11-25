@@ -15,10 +15,8 @@ public class SpecialtyStagesTest
         assertFalse(SpecialtyStages.includes(true,true,PatchType.SEAWEED));
         assertTrue(SpecialtyStages.includes(true,true,PatchType.BIRDHOUSE));
         assertTrue(SpecialtyStages.includes(false,false,PatchType.BIRDHOUSE));
-        RunOrder.Group fossil=new RunOrder.Group("Fossil Island",List.of()),other=new RunOrder.Group("Great Conch",List.of());
-        assertEquals(List.of(other,fossil),SpecialtyStages.fossilLast(List.of(fossil,other)));
         assertTrue(RunPreset.SPECIALTY.defaultEnabled(PatchType.BIRDHOUSE));
-        assertEquals(Map.of(1,5,2,1),SpecialtyStages.birdStock(Map.of(1,2),Map.of(1,3,2,1)));
+        assertEquals(Map.of(1,5,2,1),PhysicalStock.combine(Map.of(1,2),Map.of(1,3,2,1)));
         assertEquals(SpecialRoutes.SEAWEED_ISLAND,Preparation.FOSSIL_BANK.point);
     }
     @Test public void manualFossilIslandOrderAndBirdStage()
@@ -29,7 +27,7 @@ public class SpecialtyStagesTest
         FarmRunPatch seaweed=new FarmRunPatch("Seaweed","North",PatchType.SEAWEED);
         List<FarmRunPatch> birds=BirdhouseRun.patches();
         List<FarmRunPatch> scrambled=new ArrayList<>(List.of(birds.get(3),seaweed,herb,birds.get(0),hardwood,outside));
-        List<FarmRunPatch> ordered=RunOrder.flatten(SpecialtyStages.fossilLast(RunOrder.groups(scrambled,null)));
+        List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(scrambled,null,true,false));
         assertEquals(List.of(herb,outside,hardwood,seaweed,birds.get(0),birds.get(3)),ordered);
         assertTrue(SpecialtyStages.stageBirds("manual",EnumSet.of(FarmRunType.HERB,FarmRunType.BIRDHOUSE)));
         assertFalse(SpecialtyStages.stageBirds("manual",EnumSet.of(FarmRunType.BIRDHOUSE)));

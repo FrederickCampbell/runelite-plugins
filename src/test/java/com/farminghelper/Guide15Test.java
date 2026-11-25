@@ -46,12 +46,12 @@ public class Guide15Test
         FarmRunPatch hespori=new FarmRunPatch("Farming Guild","Hespori",PatchType.HESPORI);
         FarmRunPatch seaweed=new FarmRunPatch("Seaweed","North",PatchType.SEAWEED);
         FarmRunPatch coral=new FarmRunPatch("Great Conch","East",PatchType.CORAL);
-        assertEquals(new WorldPoint(1230,3730,0),Waypoints.navigationTarget(hespori,outside));
-        assertNull(Waypoints.navigationTarget(hespori,new WorldPoint((5021>>8)*64+32,(5021&255)*64+32,0)));
-        assertEquals(new WorldPoint(3764,3899,0),Waypoints.navigationTarget(seaweed,outside));
-        assertEquals(new WorldPoint(3271,2463,0),Waypoints.navigationTarget(coral,outside));
-        assertEquals(Waypoints.destination(seaweed),Waypoints.navigationTarget(seaweed,Waypoints.destination(seaweed)));
-        assertEquals(Waypoints.destination(coral),Waypoints.navigationTarget(coral,Waypoints.destination(coral)));
+        assertEquals(new WorldPoint(1230,3730,0),SpecialRoutes.leg(hespori,outside,false,false,false,Waypoints.destination(hespori)).point);
+        assertNull(SpecialRoutes.leg(hespori,new WorldPoint((5021>>8)*64+32,(5021&255)*64+32,0),false,false,false,Waypoints.destination(hespori)).point);
+        assertEquals(new WorldPoint(3764,3899,0),SpecialRoutes.leg(seaweed,outside,false,false,false,Waypoints.destination(seaweed)).point);
+        assertEquals(new WorldPoint(3271,2463,0),SpecialRoutes.leg(coral,outside,false,false,false,Waypoints.destination(coral)).point);
+        assertEquals(Waypoints.destination(seaweed),SpecialRoutes.leg(seaweed,Waypoints.destination(seaweed),false,false,false,Waypoints.destination(seaweed)).point);
+        assertEquals(Waypoints.destination(coral),SpecialRoutes.leg(coral,Waypoints.destination(coral),false,false,false,Waypoints.destination(coral)).point);
         assertFalse(PatchType.CORAL.usesCompost());
     }
 }

@@ -23,20 +23,6 @@ final class CropCatalog
 		return ranked.isEmpty() ? null : ranked.get(0);
 	}
 
-	static List<Crop> recommendations(int farmingLevel)
-	{
-		List<Crop> recommendations = new ArrayList<>();
-		for (PatchType patchType : PatchType.values())
-		{
-			Crop crop = recommend(patchType, farmingLevel);
-			if (crop != null)
-			{
-				recommendations.add(crop);
-			}
-		}
-		return recommendations;
-	}
-
 	static List<Crop> crops(PatchType patchType)
 	{
 		return CROPS.getOrDefault(patchType, Collections.emptyList());
@@ -70,37 +56,6 @@ final class CropCatalog
 			}
 		}
 		return null;
-	}
-
-	static Crop findInText(String text, PatchType patchType)
-	{
-		String normalized = text.toLowerCase();
-		Crop best = null;
-		int bestLength = 0;
-		for (Crop crop : CROPS.getOrDefault(patchType, Collections.emptyList()))
-		{
-			String name = crop.getName().toLowerCase().replace(" sapling", "");
-			if (normalized.contains(name) && name.length() > bestLength)
-			{
-				best = crop;
-				bestLength = name.length();
-			}
-		}
-		return best;
-	}
-
-	static Crop findInAnyText(String text)
-	{
-		Crop best = null;
-		for (PatchType patchType : PatchType.values())
-		{
-			Crop candidate = findInText(text, patchType);
-			if (candidate != null && (best == null || candidate.getName().length() > best.getName().length()))
-			{
-				best = candidate;
-			}
-		}
-		return best;
 	}
 
 	private static Map<PatchType, List<Crop>> buildCatalog()

@@ -80,7 +80,6 @@ public class FarmingHelperPlugin extends Plugin
     private volatile boolean guideRequested;
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
     private String stockProfile;
-    private boolean bankObservedThisSession,vaultObservedThisSession;
     private long bankObservedAt,vaultObservedAt;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
     private Set<FarmRunType> run = Collections.emptySet();
@@ -101,7 +100,6 @@ public class FarmingHelperPlugin extends Plugin
     private volatile Set<Integer> stepItems=Collections.emptySet();
     private boolean visitedStorage, initialPreparation;
     private WorldPoint preparationOrigin;
-    private String preparationReason="";
     private List<FarmRunPatch> pinned;
     private boolean shortestPathAvailable;
     private FarmingHelperPanel panel;
@@ -222,7 +220,7 @@ public class FarmingHelperPlugin extends Plugin
         if(runBank!=null)runBank.close();
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
-        initialPrepChecked=false;preparing=false;visitedStorage=false;initialPreparation=false;preparationOrigin=null;preparationReason="";
+        initialPrepChecked=false;preparing=false;visitedStorage=false;initialPreparation=false;preparationOrigin=null;
         pinned=null;
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
@@ -261,7 +259,7 @@ public class FarmingHelperPlugin extends Plugin
         bank.clear();
         vault.clear();
         stockProfile=null;
-        bankObservedThisSession=false;vaultObservedThisSession=false;bankObservedAt=0;vaultObservedAt=0;
+        bankObservedAt=0;vaultObservedAt=0;
         end();
     }
 
@@ -291,20 +289,11 @@ public class FarmingHelperPlugin extends Plugin
     boolean hideSeedless(){return hideSeedless;}
     boolean clearSeedless(){return clearSeedless;}
     Set<Integer> activeStepItems(){return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:!preparing?stepItems:Collections.emptySet();}
-    void setClearSeedless(boolean value)
-    {
-        long id=session;thread.invokeLater(()->{
-            if(id!=session||!guideRequested||run.isEmpty())return;
-            if(!hideSeedless)return;
-            temporarySeedless=SeedlessPolicy.of(true,value);refreshRunPreferences();
-            sampleStorage();lastView=null;update();
-        });
-    }
     void resetObservedStock()
     {
         long id=session;thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
-            loadStock();bank.clear();vault.clear();bankObservedThisSession=false;vaultObservedThisSession=false;bankObservedAt=0;vaultObservedAt=0;
+            loadStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
             save("observedBankV1","");save("observedVaultV1","");
             sampleStorage();lastView=null;update();
         });
@@ -316,18 +305,6 @@ public class FarmingHelperPlugin extends Plugin
             compostAcknowledged=true;lastView=null;update();
         });
     }
-    void setHideSeedless(boolean value)
-    {
-        final long id=session;
-        thread.invokeLater(()->{
-            if(id!=session||!guideRequested||run.isEmpty())return;
-            temporarySeedless=SeedlessPolicy.of(value,clearSeedless);refreshRunPreferences();
-            sampleStorage();
-            lastView=null;
-            update();
-        });
-    }
-
     void setSeedlessPolicy(SeedlessPolicy policy)
     {
         long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||run.isEmpty())return;temporarySeedless=policy;refreshRunPreferences();sampleStorage();lastView=null;update();});
@@ -504,7 +481,7 @@ public class FarmingHelperPlugin extends Plugin
         String profile=config.getRSProfileKey();
         if(Objects.equals(profile,stockProfile))return;
         bank.clear();vault.clear();stockProfile=profile;
-        bankObservedThisSession=false;vaultObservedThisSession=false;bankObservedAt=0;vaultObservedAt=0;
+        bankObservedAt=0;vaultObservedAt=0;
         if(profile!=null)
         {
             bank.putAll(StockSnapshot.decode(setting("observedBankV1","")));
@@ -541,8 +518,8 @@ public class FarmingHelperPlugin extends Plugin
         if (container == null) return;
         Map<Integer,Integer> observed=new HashMap<>();
         addItems(observed,container);
-        if(id==InventoryID.BANK){bankObservedThisSession=true;bankObservedAt=System.currentTimeMillis();}
-        if(id==InventoryID.SEED_VAULT){vaultObservedThisSession=true;vaultObservedAt=System.currentTimeMillis();}
+        if(id==InventoryID.BANK)bankObservedAt=System.currentTimeMillis();
+        if(id==InventoryID.SEED_VAULT)vaultObservedAt=System.currentTimeMillis();
         if(!observed.equals(snapshot))
         {
             snapshot.clear();snapshot.putAll(observed);
@@ -789,7 +766,7 @@ public class FarmingHelperPlugin extends Plugin
         activeClearOnly=clearOnly.contains(current);
         activeCareOnly=careOnly.contains(current);
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
-        Map<Integer,Integer> required=Supplies.guideKit(ready.stream().filter(p->p.getPatchType()!=PatchType.BIRDHOUSE&&!careOnly.contains(p)).collect(java.util.stream.Collectors.toList()),-1,false,false,
+        Map<Integer,Integer> required=Supplies.guideKit(ready.stream().filter(p->p.getPatchType()!=PatchType.BIRDHOUSE&&!careOnly.contains(p)).collect(java.util.stream.Collectors.toList()),
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
             loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
         if(!clearOnly.isEmpty()&&seeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
@@ -844,14 +821,14 @@ public class FarmingHelperPlugin extends Plugin
         }
         int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
-        if(compostId>=0 && compostCount>0) required.merge(compostId,compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:compostCount,Integer::sum);
+        Supplies.addCompost(required,compostId,compostCount);
         if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.CORAL))
         {
             Map<Integer,Integer> diveStock=new HashMap<>(bank);carried.forEach((id,n)->diveStock.merge(id,n,Integer::sum));
             DivingKit.require(required,diveStock,carried);
         }
         Map<Integer,Integer> farmingRequirements=new LinkedHashMap<>(required);
-        Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?SpecialtyStages.birdStock(bag,bank):stock;
+        Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?PhysicalStock.combine(bag,bank):stock;
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
@@ -972,7 +949,7 @@ public class FarmingHelperPlugin extends Plugin
             {
                 initialPrepChecked=true;
                 if(rawSeeds+seedlings>0||Preparation.storedShortage(physicalRequired,carried,storage)){
-                    beginPreparation(true,"Gather the listed supplies at the bank / Seed Vault. Start when ready; missing items never block the guide.");
+                    beginPreparation(true);
                 }
             }
         }
@@ -1108,10 +1085,10 @@ public class FarmingHelperPlugin extends Plugin
         var b=client.getWidget(InterfaceID.Bankmain.UNIVERSE);var v=client.getWidget(InterfaceID.SeedVault.UNIVERSE);
         return b!=null&&!b.isHidden()||v!=null&&!v.isHidden();
     }
-    private void beginPreparation(boolean initial,String reason)
+    private void beginPreparation(boolean initial)
     {
         preparationOrigin=LocationContext.capture(client).normalized;
-        initialPreparation=initial;preparing=true;visitedStorage=false;preparationReason=reason;
+        initialPreparation=initial;preparing=true;visitedStorage=false;
     }
     void continueRun()
     {
@@ -1121,7 +1098,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     void resupply()
     {
-        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(false,"Gather remaining supplies. Continue when ready.");update();});
+        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(false);update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)

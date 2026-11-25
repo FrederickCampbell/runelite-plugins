@@ -12,52 +12,19 @@ final class Supplies
 
     // Wiki item IDs: saltpetre and gardening trowel, used together at the Vinery.
     static final int SALTPETRE=13421, GARDENING_TROWEL=5325;
-    static Map<Integer, Integer> required(List<FarmRunPatch> patches,
-                                          boolean compost, boolean filledBucket,
-                                          boolean carriedSecateurs)
+    static Map<Integer,Integer> guideKit(List<FarmRunPatch> patches,boolean autoWeed,boolean barbarianPlanting)
     {
-        return required(patches, compost, filledBucket, carriedSecateurs, false);
-    }
-
-    static Map<Integer, Integer> required(List<FarmRunPatch> patches, boolean compost,
-                                          boolean filledBucket, boolean carriedSecateurs, boolean payRemoval)
-    {
-        return required(patches, compost ? (filledBucket ? ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED : ItemID.BUCKET_ULTRACOMPOST) : -1, carriedSecateurs, payRemoval);
-    }
-
-    static Map<Integer, Integer> required(List<FarmRunPatch> patches, int compostItem, boolean carriedSecateurs, boolean payRemoval)
-    {
-        Map<Integer, Integer> items = new LinkedHashMap<>();
-        if (patches.isEmpty() || patches.stream().allMatch(p->p.getPatchType()==PatchType.COMPOST_BIN||p.getPatchType()==PatchType.BIRDHOUSE)) return items;
-        items.put(ItemID.RAKE, 1);
-        items.put(ItemID.SPADE, 1);
-        if (patches.stream().anyMatch(p -> p.getPatchType().usesDibber()))
-            items.put(ItemID.DIBBER, 1);
-        if (carriedSecateurs && patches.stream().anyMatch(p -> p.getPatchType() == PatchType.HERB))
-            items.put(ItemID.FAIRY_ENCHANTED_SECATEURS, 1);
-        int doses = patches.stream().filter(p -> p.getPatchType().usesCompost())
-            .mapToInt(FarmRunPatch::getPatchCount).sum();
-        if (compostItem >= 0 && doses > 0)
-            items.put(compostItem, compostItem == ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED ? 1 : doses);
-        int coins = 0;
-        if (payRemoval) for (FarmRunPatch patch : patches)
-        {
-            QuestTargets.Definition def = QuestTargets.get(patch);
-            if (def != null && def.gardenerId >= 0) coins += 200 * patch.getPatchCount();
-        }
-        if (coins > 0) items.put(ItemID.COINS, coins);
+        Map<Integer,Integer> items=new LinkedHashMap<>();
+        if(patches.stream().allMatch(p->p.getPatchType()==PatchType.COMPOST_BIN||p.getPatchType()==PatchType.BIRDHOUSE))return items;
+        if(!autoWeed)items.put(ItemID.RAKE,1);
+        items.put(ItemID.SPADE,1);
+        if(!barbarianPlanting&&patches.stream().anyMatch(p->p.getPatchType().usesDibber()))items.put(ItemID.DIBBER,1);
         return items;
     }
 
-    /** Match Quest Helper's unlock-dependent tools without changing the legacy planner API. */
-    static Map<Integer, Integer> guideKit(List<FarmRunPatch> patches, int compostItem,
-                                         boolean magicSecateurs, boolean payRemoval,
-                                         boolean autoWeed, boolean barbarianPlanting)
+    static void addCompost(Map<Integer,Integer> required,int item,int count)
     {
-        Map<Integer, Integer> items = required(patches, compostItem, magicSecateurs, payRemoval);
-        if (autoWeed) items.remove(ItemID.RAKE);
-        if (barbarianPlanting) items.remove(ItemID.DIBBER);
-        return items;
+        if(item>=0 && count>0)required.merge(item,item==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:count,Integer::sum);
     }
 
     static String name(int id)

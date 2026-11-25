@@ -27,16 +27,16 @@ public class RunPresetTest
         FarmRunPatch guildTree=p("Farming Guild",PatchType.TREE),guildFruit=p("Farming Guild",PatchType.FRUIT_TREE),
             gnomeTree=p("Gnome Stronghold",PatchType.TREE),gnomeFruit=p("Gnome Stronghold",PatchType.FRUIT_TREE),varrock=p("Varrock",PatchType.TREE);
         List<FarmRunPatch> input=List.of(varrock,gnomeTree,guildFruit,gnomeFruit,guildTree);
-        for(boolean optimize:List.of(false,true))
+        for(boolean freeSpace:List.of(false,true))
         {
-            List<RunOrder.Group> groups=RunOrder.preset(input,new WorldPoint(3229,3459,0),RunPreset.TREE.reference,optimize);
+            List<RunOrder.Group> groups=RunOrder.shared(input,new WorldPoint(3229,3459,0),true,freeSpace);
             assertEquals("Farming Guild",groups.get(0).site);
             assertEquals(2,groups.get(0).patches.size());
             assertEquals(3,groups.size());
             assertEquals(new HashSet<>(input),new HashSet<>(RunOrder.flatten(groups)));
             assertEquals(input.size(),RunOrder.flatten(groups).size());
         }
-        List<RunOrder.Group> fixed=RunOrder.preset(input,null,RunPreset.TREE.reference,false);
+        List<RunOrder.Group> fixed=RunOrder.shared(input,null,true,false);
         assertEquals(List.of("Farming Guild","Gnome Stronghold","Varrock"),fixed.stream().map(g->g.site).collect(Collectors.toList()));
     }
     @Test public void bankAndCapacityAreAdvisory()

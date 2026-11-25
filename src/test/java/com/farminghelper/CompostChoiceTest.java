@@ -1,6 +1,5 @@
 package com.farminghelper;
 
-import java.util.Arrays;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import net.runelite.api.gameval.ItemID;
@@ -16,9 +15,10 @@ public class CompostChoiceTest
 
     @Test public void selectedCompostIsBudgetedExactly()
     {
-        FarmRunPatch patch = new FarmRunPatch("Catherby", "", PatchType.HERB);
-        assertEquals(Integer.valueOf(1), Supplies.required(Arrays.asList(patch), ItemID.BUCKET_SUPERCOMPOST, false, false).get(ItemID.BUCKET_SUPERCOMPOST));
-        assertFalse(Supplies.required(Arrays.asList(patch), -1, false, false).containsKey(ItemID.BUCKET_ULTRACOMPOST));
+        java.util.Map<Integer,Integer> required=new java.util.HashMap<>();
+        Supplies.addCompost(required,ItemID.BUCKET_SUPERCOMPOST,3);
+        Supplies.addCompost(required,-1,2);
+        assertEquals(java.util.Map.of(ItemID.BUCKET_SUPERCOMPOST,3),required);
         assertEquals(ItemID.BUCKET_ULTRACOMPOST, CompostChoice.BOTTOMLESS.resolve(false));
         assertEquals(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED, CompostChoice.BOTTOMLESS.resolve(true));
     }

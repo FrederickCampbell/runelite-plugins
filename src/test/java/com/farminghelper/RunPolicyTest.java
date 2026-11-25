@@ -21,7 +21,7 @@ public class RunPolicyTest
         assertEquals(1,stock.get(crop.getItemId()).intValue());
         Map<FarmRunPatch,Crop> plans=new LinkedHashMap<>();
         for(int i=0;i<3;i++)plans.put(new FarmRunPatch("P"+i,"",PatchType.TREE),crop);
-        assertEquals(Map.of(5316,2),TreePreparation.preparation(plans,stock,aliases));
+        assertEquals(Map.of(5316,2),TreePreparation.preparation(plans,stock,aliases,Map.of(),id->"Magic seed"));
         assertEquals(Set.of(5316),VaultRanking.selectRun(List.of(new VaultRanking.Entry(5316,2,crop)),Set.of(crop.getItemId())));
     }
     @Test public void axesRespectSkillAndObservedStock()

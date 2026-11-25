@@ -29,38 +29,13 @@ public class Guide17Test
             falHerb=p("Falador",PatchType.HERB),falTree=p("Falador",PatchType.TREE),
             grapes=p("Kourend",PatchType.GRAPEVINE),hos=p("Kourend",PatchType.HERB);
         List<FarmRunPatch> in=List.of(hes,herb,sea,falHerb,hard,tree,falTree,grapes,hos);
-        List<RunOrder.Group> groups=RunOrder.groups(in,null);
+        List<RunOrder.Group> groups=RunOrder.shared(in,null,true,false);
         assertEquals(6,groups.size());
-        assertEquals(List.of(herb,tree,hes),groups.get(0).patches);
-        assertEquals(List.of(hard,sea),groups.get(1).patches);
-        List<FarmRunPatch> out=RunOrder.flatten(RunOrder.plan(groups,new WorldPoint(1238,3726,0)));
+        assertEquals(List.of(tree,herb,hes),groups.get(0).patches);
+        assertEquals(List.of(hard,sea),groups.get(groups.size()-1).patches);
+        List<FarmRunPatch> out=RunOrder.flatten(groups);
         assertEquals(in.size(),out.size());assertEquals(new HashSet<>(in),new HashSet<>(out));
-        assertEquals(out.indexOf(herb)+1,out.indexOf(tree));assertEquals(out.indexOf(tree)+1,out.indexOf(hes));
+        assertEquals(out.indexOf(tree)+1,out.indexOf(herb));assertEquals(out.indexOf(herb)+1,out.indexOf(hes));
         assertNotEquals(RunOrder.site(falHerb),RunOrder.site(falTree));assertNotEquals(RunOrder.site(grapes),RunOrder.site(hos));
-    }
-    @Test public void exactOptimizerUsesDirectedCostsNotNearestOnly()
-    {
-        double[] first={1,2,3};double[][] legs={{0,100,1},{1,0,100},{100,1,0}};
-        int[] order=RunOrder.optimize(first,legs);assertArrayEquals(new int[]{0,2,1},order);
-        assertEquals(3,RunOrder.cost(order,first,legs),0.001);
-    }
-    @Test public void largeOptimizerReturnsEveryStopExactlyOnceAndIsDeterministic()
-    {
-        int n=36;double[] first=new double[n];double[][] legs=new double[n][n];
-        Random rng=new Random(17);for(int i=0;i<n;i++){first[i]=rng.nextInt(100);for(int j=0;j<n;j++)legs[i][j]=rng.nextInt(100);}
-        int[] order=RunOrder.optimize(first,legs);assertEquals(n,Arrays.stream(order).distinct().count());
-        assertArrayEquals(order,RunOrder.optimize(first,legs));assertTrue(Double.isFinite(RunOrder.cost(order,first,legs)));
-    }
-    @Test public void nativeRefinementNeverMovesActiveClusterOrSpecialtyEntrances()
-    {
-        RunOrder.Group first=new RunOrder.Group("Falador",List.of(p("Falador",PatchType.HERB)));
-        RunOrder.Group second=new RunOrder.Group("Catherby",List.of(p("Catherby",PatchType.HERB)));
-        RunOrder.Group third=new RunOrder.Group("Ardougne",List.of(p("Ardougne",PatchType.HERB)));
-        RunOrder.Group sea=new RunOrder.Group("Fossil",List.of(p("Seaweed",PatchType.SEAWEED)));
-        List<RunOrder.Group> order=List.of(first,second,third,sea);
-        assertEquals(List.of(second.entry(),third.entry()),RunOrder.candidates(order));
-        List<RunOrder.Group> refined=RunOrder.preferNext(order,third.entry());
-        assertSame(first,refined.get(0));assertSame(third,refined.get(1));assertEquals(new HashSet<>(order),new HashSet<>(refined));
-        assertSame(order,RunOrder.preferNext(order,sea.entry()));
     }
 }

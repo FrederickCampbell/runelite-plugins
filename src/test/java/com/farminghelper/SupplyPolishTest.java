@@ -36,7 +36,7 @@ public class SupplyPolishTest
         Map<Integer,Integer> pending=TreePreparation.pending(prep,aliases);
         Map<Integer,Integer> physical=TreePreparation.physicalRequirements(Map.of(SAPLING,5,WET,2),pending);
         assertEquals(Map.of(SAPLING,3,WET,2),physical);
-        assertEquals(Integer.valueOf(5),TreePreparation.materialCarried(Map.of(SAPLING,3,WET,2),prep,aliases).get(SAPLING));
+        assertEquals(Map.of(SAPLING,2),pending);
         assertTrue(GuideView.missingItems(physical,Map.of(SAPLING,3,WET,2)).isEmpty());
         assertEquals(Set.of(WET),GuideView.missingItems(physical,Map.of(SAPLING,3,WET,1)));
         assertFalse(physical.containsKey(RAW));
@@ -57,7 +57,7 @@ public class SupplyPolishTest
         Map<Integer,Integer> bag=Map.of(WET,2);
         Map<Integer,Integer> aliases=TreePreparation.aliases(bag,NAMES);
         Map<Integer,Integer> prep=TreePreparation.preparation(plan(2),bag,aliases,bag,NAMES);
-        assertEquals(Integer.valueOf(2),TreePreparation.materialCarried(bag,prep,aliases).get(SAPLING));
+        assertEquals(Map.of(SAPLING,2),TreePreparation.pending(prep,aliases));
         assertFalse(bag.containsKey(SAPLING));
         assertTrue(SeedChoices.allocate(new ArrayList<>(plan(1).keySet()),99,bag,t->"Palm sapling",p->"",Map.of(),true).isEmpty());
         assertTrue(GuideView.missingItems(Map.of(17,10),Map.of(17,10)).isEmpty());

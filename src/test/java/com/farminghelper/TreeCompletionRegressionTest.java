@@ -32,6 +32,6 @@ public class TreeCompletionRegressionTest
     @Test public void strongholdFruitTreeFirst()
     {
         FarmRunPatch tree=new FarmRunPatch("Gnome Stronghold","",PatchType.TREE),fruit=new FarmRunPatch("Gnome Stronghold","",PatchType.FRUIT_TREE);
-        assertEquals(List.of(fruit,tree),RunOrder.groups(List.of(tree,fruit),null).get(0).patches);
+        assertEquals(List.of(fruit,tree),RunOrder.shared(List.of(tree,fruit),null,true,false).get(0).patches);
     }
 }

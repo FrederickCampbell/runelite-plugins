@@ -27,11 +27,9 @@ public class StockPreparationRegressionTest
         Map<Integer,Integer> aliases=TreePreparation.aliases(physical,id->"Calquat tree seed");
         Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b),99,TreePreparation.allocationStock(physical,aliases),t->"",p->"",Map.of(),true);
         assertEquals(1,plan.size());
-        Map<Integer,Integer> prep=TreePreparation.preparation(plan,physical,aliases);
+        Map<Integer,Integer> prep=TreePreparation.preparation(plan,physical,aliases,Map.of(),id->"Calquat tree seed");
         assertEquals(Map.of(raw,1),prep);
-        String evidence=TreePreparation.evidence(prep,Map.of(),physical,Map.of(),id->"Calquat tree seed",false,true);
-        assertTrue(evidence.contains("bank 1 (cached/unknown)"));
-        assertTrue(evidence.contains("vault 0 (observed)"));
+        assertTrue(Preparation.sourceNote(prep,Map.of(),physical,Map.of(),false,true).contains("outdated"));
         Map<Integer,Integer> refreshed=StockSnapshot.decode("");
         assertTrue(SeedChoices.allocate(List.of(a,b),99,TreePreparation.allocationStock(refreshed,TreePreparation.aliases(refreshed,id->"Calquat tree seed")),t->"",p->"",Map.of(),true).isEmpty());
     }

@@ -9,7 +9,7 @@ public class BirdhouseNavigationTest
     {
         List<FarmRunPatch> birds=BirdhouseRun.patches();
         List<FarmRunPatch> reverse=new ArrayList<>(birds);Collections.reverse(reverse);
-        assertEquals(birds,RunOrder.groups(reverse,null).get(0).patches);
+        assertEquals(birds,RunOrder.shared(reverse,null,true,false).get(0).patches);
         assertEquals("Tar Swamp entrance",birds.get(0).getName());
         assertEquals("Verdant Valley (Northeast)",birds.get(3).getName());
         Set<WorldPoint> targets=new HashSet<>();for(FarmRunPatch p:birds)targets.add(Waypoints.destination(p));

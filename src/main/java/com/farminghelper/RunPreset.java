@@ -29,21 +29,6 @@ enum RunPreset
         for(FarmRunPatch p:patches)if(included(p.getPatchType(),flag))keys.add(p.key());
         return keys;
     }
-    static List<String> individual(PatchType type)
-    {
-        switch(type)
-        {
-            case HERB:return List.of("Farming Guild","South Falador","Morytania","North Ardougne","Catherby","Hosidius","Civitas illa Fortis","Troll Stronghold","Weiss","Harmony Island");
-            case TREE:return List.of("Farming Guild","Lumbridge Castle","Varrock","Falador Park","Taverley","Gnome Stronghold","Auburnvale");
-            case FRUIT_TREE:return List.of("Farming Guild","Gnome Stronghold","Tree Gnome Village","Catherby","Lletya","Brimhaven","Kastori");
-            case HARDWOOD_TREE:return List.of("Fossil Island","Avium Savannah","Anglers' Retreat");
-            case HOPS:return List.of("Champions' Guild","Aldarin","Seers' Village","Yanille","Entrana");
-            case BUSH:return List.of("Farming Guild","Champions' Guild","Rimmington","Ardougne Monastery","Etceteria");
-            case ALLOTMENT:case FLOWER:case COMPOST_BIN:return CROP.reference;
-            case CALQUAT:return TREE.reference;
-            default:return List.of("Farming Guild");
-        }
-    }
     static String individualTitle(PatchType type)
     {String n=type.getDisplayName();return Character.toUpperCase(n.charAt(0))+n.substring(1)+" Run";}
 }
