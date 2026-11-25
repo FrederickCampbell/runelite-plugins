@@ -116,6 +116,38 @@ final class FarmingHelperPanel extends PluginPanel
         label.setBorder(BorderFactory.createEmptyBorder(5,3,1,3));addRow(label);
     }
 
+    /** Same icon treatment as the rest of the sidebar. Click or hover for help. */
+    static JButton infoButton(String help)
+    {
+        String html="<html><div style='width:210px'>"+escape(help).replace("\n","<br>")+"</div></html>";
+        JButton button=new JButton(FarmingIcons.of(INFO,FarmingTheme.MUTED));
+        button.putClientProperty("farming.icon",Boolean.TRUE);
+        button.putClientProperty("FlatLaf.styleClass","iconButton legacyIconButton");
+        button.setPreferredSize(new Dimension(24,24));button.setMinimumSize(new Dimension(24,24));
+        button.setToolTipText(html);button.getAccessibleContext().setAccessibleName("More information");
+        button.addActionListener(e->{
+            JPopupMenu popup=new JPopupMenu();
+            JLabel content=new JLabel(html);content.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
+            content.setFont(FarmingTheme.font(Font.PLAIN,11));content.setForeground(FarmingTheme.TEXT);
+            popup.add(content);popup.show(button,Math.min(0,button.getWidth()-popup.getPreferredSize().width),button.getHeight());
+        });
+        return button;
+    }
+
+    private void helpRow(String value,Color color,String help)
+    {
+        JPanel row=new JPanel(new BorderLayout(2,0));row.setOpaque(false);
+        JTextArea label=text(value,color);label.setFont(FarmingTheme.font(Font.PLAIN,11));
+        row.add(label,BorderLayout.CENTER);row.add(infoButton(help),BorderLayout.EAST);addRow(row);
+    }
+
+    private void heading(String value,String help)
+    {
+        JPanel row=new JPanel(new BorderLayout(2,0));row.setOpaque(false);
+        JLabel label=new JLabel(value);label.setFont(FarmingTheme.font(Font.BOLD,12));label.setForeground(FarmingTheme.ACCENT);
+        row.add(label,BorderLayout.CENTER);row.add(infoButton(help),BorderLayout.EAST);addRow(row);
+    }
+
     private void line(String text, boolean active)
     {
         JTextArea label = text(text,active ? FarmingTheme.ACCENT : Color.LIGHT_GRAY);
@@ -371,7 +403,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.stats.signature().equals(b.stats.signature()) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.signature().equals(b.stats.signature()) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || !a.notes.signature().equals(b.notes.signature()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)if(!rowKey(a.items.get(i)).equals(rowKey(b.items.get(i))))return false;
         for(int i=0;i<a.stops.size();i++)if(a.stops.get(i).patch!=b.stops.get(i).patch || a.stops.get(i).done!=b.stops.get(i).done || a.stops.get(i).active!=b.stops.get(i).active)return false;
         return true;
@@ -441,21 +473,23 @@ final class FarmingHelperPanel extends PluginPanel
         page(GUIDE,view.title,null,this::runSettings,true);
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
-        int total=view.stats.total>=0?view.stats.total:view.stops.size();
-        int remaining=view.stats.pending>=0?view.stats.pending:(int)pending;
-        int complete=view.stats.processed>=0?view.stats.processed:(int)done;
+        int remaining=GuidePresentation.remaining(view.stats,(int)pending);
+        int complete=GuidePresentation.done(view.stats,(int)done);
+        int total=complete+remaining;
         if(!plugin.diseaseInterruptActive()&&total>0)
         {
-            caption(complete+" completed · "+remaining+" remaining");
-            JProgressBar progress=new JProgressBar(0,total);progress.setValue(Math.max(0,total-remaining));progress.setForeground(FarmingTheme.SUCCESS);
-            progress.setToolTipText("Reviewed "+(total-remaining)+" of "+total+" selected patches (includes skipped, preserved and deferred).");
+            caption(complete+" done · "+remaining+" remaining");
+            JProgressBar progress=new JProgressBar(0,total);progress.setValue(complete);progress.setForeground(FarmingTheme.SUCCESS);
+            progress.setToolTipText("Completed or preserved: "+complete+". Remaining: "+remaining+". Growing, skipped and unavailable patches are excluded.");
             progress.setPreferredSize(new Dimension(1,6));addRow(progress);
         }
         // The current task, or banking instructions while preparing, comes first.
         if(isPreparing)
         {
-            heading("Preparation / resupply");line(view.preparation,true);
-            addRow(runButton(view.preparation.startsWith("Gather the listed supplies")?"Start Run":"Continue Run",plugin::continueRun));
+            heading(view.notes.initial?"Preparation":"Resupply",view.notes.preparationHelp.isEmpty()?GuidePresentation.PREPARATION_HELP:view.notes.preparationHelp);
+            line(view.preparation,true);
+            if(!view.notes.storageWarning.isEmpty())helpRow(view.notes.storageWarning,FarmingTheme.WARNING,GuidePresentation.STORAGE_HELP);
+            addRow(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
         }
         else if(view.active!=null)
         {
@@ -475,6 +509,8 @@ final class FarmingHelperPanel extends PluginPanel
             }
             button("Return home",plugin::stop);
         }
+        if(!isPreparing&&!view.notes.storageWarning.isEmpty()&&!plugin.diseaseInterruptActive())
+            helpRow(view.notes.storageWarning,FarmingTheme.WARNING,GuidePresentation.STORAGE_HELP);
         if(view.items.stream().anyMatch(r->!r.recommended))
         {
             requirementsHeader=collapse(requirementsTitle(view),requiredOpen,()->{requiredOpen=!requiredOpen;previousGuide=null;renderGuide(latestGuide);});
@@ -483,12 +519,12 @@ final class FarmingHelperPanel extends PluginPanel
         else requirementsHeader=null;
         if(view.items.stream().anyMatch(r->r.recommended))
         {
-            collapse("Recommended teleports",teleportsOpen,()->{teleportsOpen=!teleportsOpen;previousGuide=null;renderGuide(latestGuide);});
-            if(teleportsOpen)
-            {
-                caption("Optional owned travel items for remaining locations. Bring enough charges; Shortest Path chooses the actual route.");
-                requirements("Travel items",view.items,true);
-            }
+            JPanel travel=new JPanel(new BorderLayout(2,0));travel.setOpaque(false);
+            JButton fold=new JButton("Recommended teleports",FarmingIcons.of(teleportsOpen?COLLAPSE:EXPAND,FarmingTheme.MUTED));
+            fold.setHorizontalAlignment(SwingConstants.LEFT);
+            fold.addActionListener(e->{teleportsOpen=!teleportsOpen;previousGuide=null;renderGuide(latestGuide);});
+            travel.add(fold,BorderLayout.CENTER);travel.add(infoButton(GuidePresentation.TRAVEL_HELP),BorderLayout.EAST);addRow(travel);
+            if(teleportsOpen)requirements("Travel items",view.items,true);
         }
         if(isPreparing||view.active!=null)
         {
@@ -496,6 +532,7 @@ final class FarmingHelperPanel extends PluginPanel
             if(!isPreparing&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
         }
         if(!view.supplyNote.isEmpty())caption(view.supplyNote);
+        if(!view.notes.details.isEmpty())helpRow("Run details",FarmingTheme.MUTED,view.notes.details);
         if(view.stops.stream().anyMatch(stop->!stop.done&&!stop.active))
         {
             heading("Upcoming patches");

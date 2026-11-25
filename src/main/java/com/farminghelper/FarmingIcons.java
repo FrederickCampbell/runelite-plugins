@@ -6,7 +6,7 @@ import javax.swing.*;
 /** Small antialiased line icons, drawn at logical Swing coordinates for HiDPI. */
 final class FarmingIcons
 {
-    enum Kind{PLAY,BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK,LEAF,LAYERS,PIN,LIST,STORAGE,TOOLS,SLIDERS}
+    enum Kind{PLAY,BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK,LEAF,LAYERS,PIN,LIST,STORAGE,TOOLS,SLIDERS,INFO}
     static Icon of(Kind kind,Color color)
     {
         return new Icon()
@@ -36,6 +36,7 @@ final class FarmingIcons
                     case STORAGE:p.drawRoundRect(2,4,12,10,2,2);p.drawLine(2,8,14,8);p.drawLine(7,8,9,8);break;
                     case TOOLS:p.drawLine(3,13,10,6);p.drawLine(4,14,11,7);p.drawArc(8,1,6,6,40,235);break;
                     case SLIDERS:for(int i=4;i<=12;i+=4)p.drawLine(2,i,14,i);p.fillRect(5,2,2,4);p.fillRect(10,6,2,4);p.fillRect(7,10,2,4);break;
+                    case INFO:p.drawOval(2,2,12,12);p.fillOval(7,4,2,2);p.drawLine(8,8,8,11);break;
                     case GEAR:
                         java.awt.geom.Path2D path=new java.awt.geom.Path2D.Double();
                         for(int i=0;i<32;i++){double a=(i/4*4+(i%4))*Math.PI/16;double radius=i%4==0||i%4==3?5.4:7.1;double xx=8+radius*Math.cos(a), yy=8+radius*Math.sin(a);if(i==0)path.moveTo(xx,yy);else path.lineTo(xx,yy);}

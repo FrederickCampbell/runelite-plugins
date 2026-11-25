@@ -81,6 +81,7 @@ public class FarmingHelperPlugin extends Plugin
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
     private String stockProfile;
     private boolean bankObservedThisSession,vaultObservedThisSession;
+    private long bankObservedAt,vaultObservedAt;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
     private Set<FarmRunType> run = Collections.emptySet();
     private Set<String> manualKeys; // physical selections, never persisted as a session
@@ -260,7 +261,7 @@ public class FarmingHelperPlugin extends Plugin
         bank.clear();
         vault.clear();
         stockProfile=null;
-        bankObservedThisSession=false;vaultObservedThisSession=false;
+        bankObservedThisSession=false;vaultObservedThisSession=false;bankObservedAt=0;vaultObservedAt=0;
         end();
     }
 
@@ -303,7 +304,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         long id=session;thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
-            loadStock();bank.clear();vault.clear();bankObservedThisSession=false;vaultObservedThisSession=false;
+            loadStock();bank.clear();vault.clear();bankObservedThisSession=false;vaultObservedThisSession=false;bankObservedAt=0;vaultObservedAt=0;
             save("observedBankV1","");save("observedVaultV1","");
             sampleStorage();lastView=null;update();
         });
@@ -503,7 +504,7 @@ public class FarmingHelperPlugin extends Plugin
         String profile=config.getRSProfileKey();
         if(Objects.equals(profile,stockProfile))return;
         bank.clear();vault.clear();stockProfile=profile;
-        bankObservedThisSession=false;vaultObservedThisSession=false;
+        bankObservedThisSession=false;vaultObservedThisSession=false;bankObservedAt=0;vaultObservedAt=0;
         if(profile!=null)
         {
             bank.putAll(StockSnapshot.decode(setting("observedBankV1","")));
@@ -540,8 +541,8 @@ public class FarmingHelperPlugin extends Plugin
         if (container == null) return;
         Map<Integer,Integer> observed=new HashMap<>();
         addItems(observed,container);
-        if(id==InventoryID.BANK)bankObservedThisSession=true;
-        if(id==InventoryID.SEED_VAULT)vaultObservedThisSession=true;
+        if(id==InventoryID.BANK){bankObservedThisSession=true;bankObservedAt=System.currentTimeMillis();}
+        if(id==InventoryID.SEED_VAULT){vaultObservedThisSession=true;vaultObservedAt=System.currentTimeMillis();}
         if(!observed.equals(snapshot))
         {
             snapshot.clear();snapshot.putAll(observed);
@@ -884,7 +885,7 @@ public class FarmingHelperPlugin extends Plugin
         missingTeleports=Set.copyOf(missingTravel);
         List<GuideView.Stop> stops=new ArrayList<>();
         GuideView.Stats summary=runProgress.stats();
-        String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain. Review deferred and missing-supply counts below.":"Run finished. Close the helper to start another run.";
+        String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain.":"Run finished.";
         activeAction=StepEngine.Action.INSPECT;
         activeLive=false;
         Set<Integer> localStepItems=Collections.emptySet();
@@ -920,7 +921,7 @@ public class FarmingHelperPlugin extends Plugin
             if(activeCareOnly&&action==StepEngine.Action.CURE)instruction="Nearby diseased crop — "+instruction+" Then resume the run without replanting.";
             if(action==StepEngine.Action.CURE&&!CropCare.prunes(type)&&bag.getOrDefault(ItemID.PLANT_CURE,0)==0)instruction+=" Obtain plant cure from a nearby farmer or Farming shop, if available; skip if you cannot cure it.";
             if(action==StepEngine.Action.WATER)instruction="Water this crop with the watering can you are carrying.";
-            if(action==StepEngine.Action.COMPOST)instruction="Apply the selected compost to this patch. The next step is planting; use Compost applied / skip if the tracker cannot confirm it.";
+            if(action==StepEngine.Action.COMPOST)instruction="Apply compost.";
             if(activeLive)
             {
                 if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
@@ -942,7 +943,7 @@ public class FarmingHelperPlugin extends Plugin
             List<FarmRunPatch> birds=new ArrayList<>();
             for(FarmRunPatch p:patches)if(p.getPatchType()==PatchType.BIRDHOUSE&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!skipped.contains(p)&&Waypoints.accessIssue(client,p.getPatchType(),p.getLocation(),level,false)==null)birds.add(p);
             birds.sort(Comparator.comparingInt(BirdhouseRun::order));
-            for(FarmRunPatch p:birds)stops.add(new GuideView.Stop(p,"Final birdhouse stage — readiness and supplies checked after farming.",false,false));
+            for(FarmRunPatch p:birds)stops.add(new GuideView.Stop(p,"Birdhouses — after farming.",false,false));
         }
         WorldPoint player=loggedIn?location.normalized:null;
         boolean instance=loggedIn&&location.instance;
@@ -950,16 +951,20 @@ public class FarmingHelperPlugin extends Plugin
         boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
         WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
         String supplyNote=TreePreparation.instruction(rawSeeds,seedlings,watered);
-        if(hideSeedless&&!birdBankPhase()&&(!bankObservedThisSession||!vaultObservedThisSession))
-            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Storage may be out of date. Open "+(!bankObservedThisSession&&!vaultObservedThisSession?"the bank and Seed Vault":!bankObservedThisSession?"the bank":"the Seed Vault")+" to verify stock this session.";
+        StringJoiner details=new StringJoiner("\n");
+        long now=System.currentTimeMillis();
+        boolean bankStale=GuidePresentation.stale(bankObservedAt,now);
+        boolean vaultStale=GuidePresentation.stale(vaultObservedAt,now);
+        String storageWarning=loggedIn?GuidePresentation.storageWarning(bankStale,level>=45&&!birdBankPhase()&&vaultStale):"";
+        String prepHelp=GuidePresentation.PREPARATION_HELP;
         if(specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
-            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Birdhouses are last. Bring their supplies or use Resupply when you choose.";
+            details.add("Birdhouses are last. Use Resupply if needed.");
         if(specialtyStaged&&specialtyBirdPhase&&current!=null)
-            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Birdhouse stage: check logs or houses, hammer, chisel, bait and clockworks. Resupply is optional.";
+            details.add("Birdhouse supplies: logs or houses, hammer, chisel, bait and clockworks.");
         if(runLabel!=null && loggedIn && current!=null)
         {
             int slots=Preparation.slots(physicalRequired,equipped,this::stackable);
-            if(slots>28)supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Required supplies need at least "+slots+" inventory slots. Take a portion, note harvests and resupply as needed. No inventory limit blocks the guide.";
+            if(slots>28){supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Take a partial load and resupply as needed.";details.add("Estimated supply slots: "+slots+".");}
             if(!initialPrepChecked)
             {
                 initialPrepChecked=true;
@@ -970,9 +975,8 @@ public class FarmingHelperPlugin extends Plugin
                 }
             }
         }
-        if(seedlessCount>0)
-            supplyNote+=(supplyNote.isEmpty()?"":"\n")+seedlessCount+" patch"+(seedlessCount==1?"":"es")+" hidden: insufficient planting stock.";
-        if(!clearOnly.isEmpty())supplyNote+=(supplyNote.isEmpty()?"":"\n")+clearOnly.size()+" occupied seedless patch(es) retained for clearing.";
+        if(seedlessCount>0)details.add(seedlessCount+" patch(es) skipped for missing seeds.");
+        if(!clearOnly.isEmpty())details.add(clearOnly.size()+" patch(es) to harvest / clear without replanting.");
         if(current==null)preparing=false;
         // All processed patches remain visible in the completed history across stages.
         Set<FarmRunPatch> listed=new HashSet<>();for(GuideView.Stop stop:stops)listed.add(stop.patch);
@@ -989,12 +993,12 @@ public class FarmingHelperPlugin extends Plugin
             // A known vault shortage may still remain after visiting a regular
             // bank. Only the explicit preparation session can suggest it.
             boolean routeToStorage=!visitedStorage||vaultTarget&&vaultOutstanding&&!atStorage;
-            prepMessage=preparationReason+"\n"+(routeToStorage?"Suggested storage: "+preparationBank.name+".":"Use the storage you visited; continue when ready.");
-            String sources=Preparation.sourceNote(plantingRequired,carried,bank,vault,bankObservedThisSession,vaultObservedThisSession);
-            if(!sources.isEmpty())prepMessage+="\n"+sources;
-            if(vaultOutstanding)prepMessage+="\nSeed Vault is directly west of the Farming Guild bank chest.";
+            prepMessage=GuidePresentation.preparation(routeToStorage,preparationBank.name,missingStorageItems.isEmpty());
+            String sources=Preparation.sourceNote(plantingRequired,carried,bank,vault,!bankStale,!vaultStale);
+            if(!sources.isEmpty())prepHelp+="\n"+sources;
+            if(vaultOutstanding)prepHelp+="\nThe Seed Vault is west of the Guild bank chest.";
             if(physicalRequired.entrySet().stream().anyMatch(e->e.getValue()>carried.getOrDefault(e.getKey(),0)&&SupplyOrder.tool(observedItemName(e.getKey()))))
-                prepMessage+="\nMissing tools may also be stored with a tool leprechaun.";
+                prepHelp+="\nCheck a tool leprechaun for missing tools.";
             // Preparation is entered only at run start or by the Resupply button.
             // Keep the explicit Start/Continue action available even when supplies are ready.
             {
@@ -1003,7 +1007,10 @@ public class FarmingHelperPlugin extends Plugin
                 else if(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
                     leg=exit.instruction.isEmpty()?RouteLeg.manual("Leave the current instance before banking.",RouteLeg.Interaction.NONE):exit;
                 else leg=RouteLeg.approach(preparationBank.point,vaultTarget?"Travel to the Guild bank approach, then use the Seed Vault immediately west of the chest.":"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
-                if(!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
+                // Ordinary bank approach is already named above. Preserve actual
+                // special-transport/instance instructions when necessary.
+                if(routeToStorage&&(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
+                    &&!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
             }
         }
         if(!preparing&&current!=null&&current.getPatchType()==PatchType.CORAL)
@@ -1020,12 +1027,15 @@ public class FarmingHelperPlugin extends Plugin
         TransportHint transport=currentTransport();
         if(transport!=null)instruction=transport.instruction()+"\n"+instruction;
         String routeNote=navigation==null?"":navigation.status();
-        if(!routeNote.isEmpty())instruction+="\n"+routeNote;
+        String routeWarning=GuidePresentation.routeWarning(routeNote);
+        if(!routeWarning.isEmpty()&&!preparing)instruction+="\n"+routeWarning;
+        if(!routeNote.isEmpty()&&!routeNote.equals("Checking route…"))details.add(routeNote);
         if(current!=null)
             for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,!preparing,false));
-        if(preparing&&!routeNote.isEmpty())prepMessage+="\n"+routeNote;
+        if(preparing&&!routeWarning.isEmpty())prepMessage+="\n"+routeWarning;
         cacheIcons(items);
-        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST,runProgress.stats());
+        GuideView view=new GuideView(title,instruction,items,stops,preparing?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing&&activeAction==StepEngine.Action.COMPOST,runProgress.stats(),
+            new GuideView.Notes(initialPreparation,storageWarning,prepHelp,details.toString()));
         normalView=view;
         publishView(view);
     }

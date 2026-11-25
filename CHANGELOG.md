@@ -1,3 +1,9 @@
+## v0.50 — Player-facing UX polish
+
+- Concise preparation/resupply instructions; contextual info icons for storage, preparation and optional teleports. Keep real transport instructions and supply actions visible.
+- Show a single actionable storage refresh warning for relevant interfaces not observed this session or in the last 30 minutes. Dismiss automatically on observation; no new preference or persistent cache change.
+- Progress counts completed/preserved plus remaining actionable patches, not deferred or skipped patches. Existing routing and supply allocation unchanged.
+
 ## v0.42-beta.4 — Preparation and travel polish
 
 - Initial preparation and explicit resupply share stock-aware planting-material destination selection. Use the existing Guild bank approach for the adjacent Seed Vault; keep Start/Continue available and respect already-open storage. No automatic mid-run bank diversions.

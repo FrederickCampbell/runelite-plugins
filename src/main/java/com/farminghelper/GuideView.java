@@ -44,6 +44,17 @@ final class GuideView
         Stats(int processed,int skipped,int deferred,int seedless,int total,int pending,int preserved){this.processed=processed;this.skipped=skipped;this.deferred=deferred;this.seedless=seedless;this.total=total;this.pending=pending;this.preserved=preserved;}
         String signature(){return processed+":"+skipped+":"+deferred+":"+seedless+":"+total+":"+pending+":"+preserved;}
     }
+    /** Optional help and warning text belongs to the presentation snapshot. */
+    static final class Notes
+    {
+        static final Notes EMPTY=new Notes(false,"","","");
+        final boolean initial;
+        final String storageWarning,preparationHelp,details;
+        Notes(boolean initial,String storageWarning,String preparationHelp,String details)
+        {this.initial=initial;this.storageWarning=storageWarning;this.preparationHelp=preparationHelp;this.details=details;}
+        String signature(){return initial+"|"+storageWarning+"|"+preparationHelp+"|"+details;}
+    }
+    final Notes notes;
     final Stats stats;
     final String title, message, preparation, supplyNote;
     final List<ItemRow> items;
@@ -57,10 +68,13 @@ final class GuideView
     GuideView(String title,String message,List<ItemRow> items,List<Stop> stops,FarmRunPatch active,String preparation,String supplyNote,boolean hideSeedless,boolean clearSeedless,boolean compostStep)
     {this(title,message,items,stops,active,preparation,supplyNote,hideSeedless,clearSeedless,compostStep,Stats.UNKNOWN);}
     GuideView(String title,String message,List<ItemRow> items,List<Stop> stops,FarmRunPatch active,String preparation,String supplyNote,boolean hideSeedless,boolean clearSeedless,boolean compostStep,Stats stats)
-    { this.title=title;this.message=message;this.items=List.copyOf(items);this.stops=List.copyOf(stops);this.active=active;this.preparation=preparation;this.supplyNote=supplyNote;this.hideSeedless=hideSeedless;this.clearSeedless=clearSeedless;this.compostStep=compostStep;this.stats=stats; }
+    {this(title,message,items,stops,active,preparation,supplyNote,hideSeedless,clearSeedless,compostStep,stats,
+        new Notes(preparation.startsWith("Gather the listed supplies"),"","",""));}
+    GuideView(String title,String message,List<ItemRow> items,List<Stop> stops,FarmRunPatch active,String preparation,String supplyNote,boolean hideSeedless,boolean clearSeedless,boolean compostStep,Stats stats,Notes notes)
+    { this.title=title;this.message=message;this.items=List.copyOf(items);this.stops=List.copyOf(stops);this.active=active;this.preparation=preparation;this.supplyNote=supplyNote;this.hideSeedless=hideSeedless;this.clearSeedless=clearSeedless;this.compostStep=compostStep;this.stats=stats;this.notes=notes; }
     String signature()
     {
-        StringBuilder b=new StringBuilder(title).append('|').append(message).append('|').append(preparation).append('|').append(supplyNote).append('|').append(hideSeedless).append('|').append(clearSeedless).append('|').append(compostStep).append('|').append(stats.signature());
+        StringBuilder b=new StringBuilder(title).append('|').append(message).append('|').append(preparation).append('|').append(supplyNote).append('|').append(hideSeedless).append('|').append(clearSeedless).append('|').append(compostStep).append('|').append(stats.signature()).append('|').append(notes.signature());
         for(ItemRow r:items)b.append('|').append(r.signature());
         for(Stop s:stops)b.append('|').append(s.signature());
         return b.toString();

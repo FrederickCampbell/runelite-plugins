@@ -33,3 +33,6 @@ No new bank overlay or native widget actions. Existing vault outlines use an imm
 
 ## v0.42-beta.4 travel recommendations
 Optional bank item outlines use RuneLite's normal WidgetItemOverlay and a missing-owned-recommendation snapshot. No native bank layout or click modification. Storage destination advice is only during player-initiated preparation/resupply; no independent navigation engine or game action. Live verification remains necessary.
+
+## v0.50 UX
+Presentation-only changes, local Swing info buttons and observation freshness. No new gameplay action, navigation policy, storage mutation or dependency. Verify sidebar width and actual popup positioning in the live client.

@@ -2,7 +2,7 @@
 
 Quest Helper for your farm runs!
 
-**v0.42-beta.4 — stock-aware preparation and optional teleports**
+**v0.50 — concise guide and contextual help**
 
 ## Features
 - Grouped, individual and custom farm runs share guide-based regional ordering.
