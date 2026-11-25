@@ -1,3 +1,10 @@
+## v0.42-beta.2 — Simplicity and consistency audit
+
+- Keep planted and temporary replacement controls are collapsed until requested. Grouped preset counts and toggles use the actual effective exclusions.
+- Remove obsolete active itinerary probing and unused per-entry routing arguments. Shortest Path continues active-leg navigation only.
+- Do not silently complete a mature replacement crop merely because its seed is in storage. Keep the safe replacement advisory when a crop is still actionable. Preserved renewable crops explicitly instruct the player to leave the plant standing.
+- Remove Celastrus preservation choice (bark is not renewable), retaining contract and missing-supply safeguards. Add regression coverage.
+
 ## v0.42-beta.1 — Crop preservation preferences
 
 - Add common species-specific keep preferences and an extensible Also keep list for other persistent crops. Detect the actual planted species, not the recommended seed. Preserve selected flowers unpicked and harvest renewable produce before retaining a bush/cactus/fruit tree.

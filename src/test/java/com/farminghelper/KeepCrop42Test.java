@@ -31,6 +31,20 @@ public class KeepCrop42Test
         assertFalse(KeepCrop.resolve(PatchType.CACTUS,KeepCrop.POTATO_CACTUS,"","REPLANT","",""));
         assertTrue(KeepCrop.resolve(PatchType.SPIRIT_TREE,null,"REPLANT","REPLANT","REPLANT","REPLANT"));
     }
+    @Test public void nonrenewableCelastrusHasNoPreservationOption()
+    {
+        assertFalse(CropReplacement.preferenceType(PatchType.CELASTRUS));
+        assertFalse(KeepCrop.resolve(PatchType.CELASTRUS,null,"PRESERVE","PRESERVE","PRESERVE","PRESERVE"));
+        assertEquals(StepEngine.Action.REMOVE_TREE,CropReplacement.action(PatchType.CELASTRUS,live(CropState.HARVESTABLE,17),false,true,false));
+    }
+    @Test public void groupedSelectionUsesSameEffectivePreferenceAsUi()
+    {
+        FarmRunPatch bush=new FarmRunPatch("Farming Guild","",PatchType.BUSH);
+        FarmRunPatch hops=new FarmRunPatch("Lumbridge","",PatchType.HOPS);
+        java.util.function.BiPredicate<String,Boolean> flag=(key,fallback)->key.equals("skipType_BUSH")||key.equals("preset_HOPS_BUSH_BUSH")?key.equals("preset_HOPS_BUSH_BUSH")||key.equals("skipType_BUSH"):fallback;
+        assertFalse(RunPreset.HOPS_BUSH.included(PatchType.BUSH,flag));
+        assertEquals(Set.of(hops.key()),RunPreset.HOPS_BUSH.select(List.of(bush,hops),flag));
+    }
     @Test public void preservedBushHarvestsThenStops()
     {
         assertEquals(StepEngine.Action.HARVEST,CropReplacement.action(PatchType.BUSH,live(CropState.HARVESTABLE,63),true,false,false));

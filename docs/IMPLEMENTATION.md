@@ -70,3 +70,7 @@ All selection modes use `RunOrder.shared`, with same-visit blocks and guide-base
 ## v0.42 species preservation
 
 KeepCrop uses native decoded Produce identity. Precedence is protected spirit trees/contracts, temporary run replacement, physical patch override, explicit species preference, and type default (white lilies default to preserve). The common list and Also keep settings are character-scoped; annual crops cannot be added. Preserved flowers are left unpicked. Auto-lily allocation respects effective preferences and explicit planting override. Grouped runs may omit types; individual/manual selection remains explicit. Skip remaining type is session-only and irreversible within that session; replacement overrides affect unfinished work. No forced banking. Existing route order remains pinned.
+
+### v0.42-beta.2 audit
+
+The active guide uses only the shared pinned itinerary; retired order-probe code is removed. Existing pure routing helpers remain for regression compatibility. Grouped UI and selection share `RunPreset.included`. Keep planted and temporary crop replacement sections are expandable; no home-screen changes. Celastrus is a replacement crop; active contracts and missing supplies still prevent unsafe clearing. Manual and individual runs remain explicit.

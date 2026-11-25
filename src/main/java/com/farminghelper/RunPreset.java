@@ -21,10 +21,12 @@ enum RunPreset
     {this.title=title;this.types=Collections.unmodifiableSet(types);this.reference=List.of(reference.split("\\|"));}
     boolean defaultEnabled(PatchType type){return type!=PatchType.GRAPEVINE && type!=PatchType.COMPOST_BIN;}
     String key(PatchType type){return "preset_"+name()+"_"+type.name();}
+    boolean included(PatchType type,BiPredicate<String,Boolean> flag)
+    {return types.contains(type)&&flag.test(key(type),defaultEnabled(type))&&!flag.test("skipType_"+type.name(),false);}
     Set<String> select(List<FarmRunPatch> patches,BiPredicate<String,Boolean> flag)
     {
         Set<String> keys=new LinkedHashSet<>();
-        for(FarmRunPatch p:patches)if(types.contains(p.getPatchType())&&flag.test(key(p.getPatchType()),defaultEnabled(p.getPatchType())))keys.add(p.key());
+        for(FarmRunPatch p:patches)if(included(p.getPatchType(),flag))keys.add(p.key());
         return keys;
     }
     static List<String> individual(PatchType type)

@@ -17,7 +17,7 @@ final class CropReplacement
             default:return false;
         }
     }
-    static boolean preferenceType(PatchType t){return configurable(t)||t==PatchType.FLOWER;}
+    static boolean preferenceType(PatchType t){return (configurable(t)&&t!=PatchType.CELASTRUS)||t==PatchType.FLOWER;}
     static boolean defaultPreserve(PatchType t){return t==PatchType.CACTUS;}
     static boolean preserve(PatchType t,String typeValue,String patchValue)
     {

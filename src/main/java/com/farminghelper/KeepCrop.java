@@ -59,6 +59,7 @@ enum KeepCrop
     static boolean resolve(PatchType type,KeepCrop species,String typeMode,String speciesMode,String patchMode,String runMode)
     {
         if(type==PatchType.SPIRIT_TREE)return true;
+        if(!CropReplacement.preferenceType(type))return false;
         if(explicit(runMode))return "PRESERVE".equals(runMode);
         if(explicit(patchMode))return "PRESERVE".equals(patchMode);
         if(species!=null){

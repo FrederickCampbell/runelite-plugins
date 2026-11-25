@@ -92,19 +92,14 @@ public class FarmingHelperPlugin extends Plugin
     private volatile Map<PatchType,String> temporaryReplacement=Collections.emptyMap();
     private boolean hopping;
     private String runProfile;
-    private List<String> referenceOrder;
-    private boolean optimizeManual, initialPrepChecked;
+    private boolean initialPrepChecked;
     private volatile boolean preparing, hideSeedless, clearSeedless;
     private boolean activeClearOnly, compostAcknowledged;
     private volatile Set<Integer> stepItems=Collections.emptySet();
     private boolean visitedStorage, initialPreparation;
     private Preparation.Bank preparationBank;
     private String preparationReason="";
-    private List<RunOrder.Group> runOrder;
     private List<FarmRunPatch> pinned;
-    private boolean orderProbeSent,orderFrozen;
-    private String orderProbeId;
-    private int orderTicks,orderProbeSequence;
     private boolean shortestPathAvailable;
     private FarmingHelperPanel panel;
     private NavigationButton nav;
@@ -159,37 +154,35 @@ public class FarmingHelperPlugin extends Plugin
 
     void start(Set<FarmRunType> types)
     {
-        start(types,null,null,null,false,"legacy_"+types.toString());
+        start(types,null,null,"legacy_"+types.toString());
     }
 
     void startPreset(RunPreset preset)
     {
-        Set<String> keys=preset.select(patches,this::flag);
-        for(FarmRunPatch p:patches)if(flag("skipType_"+p.getPatchType().name(),false))keys.remove(p.key());
-        startSelected(keys,preset.title,preset.reference,false,"group_"+preset.name());
+        startSelected(preset.select(patches,this::flag),preset.title,"group_"+preset.name());
     }
     void startIndividual(PatchType type)
     {
         Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getPatchType()==type)keys.add(p.key());
-        startSelected(keys,RunPreset.individualTitle(type),RunPreset.individual(type),false,"individual_"+type.name());
+        startSelected(keys,RunPreset.individualTitle(type),"individual_"+type.name());
     }
     void startCombinedShortcut(FarmRunType type)
     {
         Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getFarmRunType()==type)keys.add(p.key());
-        startSelected(keys,type.getDisplayName(),type==FarmRunType.ALLOTMENT_FLOWER?RunPreset.CROP.reference:RunPreset.TREE.reference,false,"shortcut_"+type.name());
+        startSelected(keys,type.getDisplayName(),"shortcut_"+type.name());
     }
     void startManual(Set<String> keys)
-    {startSelected(keys,"Manual Run",List.of(),true,"manual");}
-    private void startSelected(Set<String> keys,String label,List<String> reference,boolean optimize,String policyKey)
+    {startSelected(keys,"Manual Run","manual");}
+    private void startSelected(Set<String> keys,String label,String policyKey)
     {
         Set<String> chosen=Set.copyOf(keys);
         Set<FarmRunType> types=EnumSet.noneOf(FarmRunType.class);
         for(FarmRunPatch p:patches)if(chosen.contains(p.key())&&enabled(p))types.add(p.getFarmRunType());
         if(types.isEmpty()) {SwingUtilities.invokeLater(()->panel.emptySelection());return;}
-        start(types,chosen,label,reference,optimize,policyKey);
+        start(types,chosen,label,policyKey);
     }
 
-    private void start(Set<FarmRunType> types,Set<String> keys,String label,List<String> reference,boolean optimize,String policyKey)
+    private void start(Set<FarmRunType> types,Set<String> keys,String label,String policyKey)
     {
         if (types.isEmpty()) return;
         Set<FarmRunType> selected=EnumSet.copyOf(types);
@@ -199,7 +192,7 @@ public class FarmingHelperPlugin extends Plugin
             if (!running || !guideRequested || requested != session) return;
             clearRun();
             run = selected;
-            manualKeys=keys;runLabel=label;referenceOrder=reference;optimizeManual=optimize;
+            manualKeys=keys;runLabel=label;
             runPolicyKey=policyKey;
             specialtyStaged=SpecialtyStages.stageBirds(policyKey,run);
             runProfile=config.getRSProfileKey();
@@ -225,9 +218,9 @@ public class FarmingHelperPlugin extends Plugin
         run = Collections.emptySet();
         if(runBank!=null)runBank.close();
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
-        manualKeys=null;runLabel=null;referenceOrder=null;optimizeManual=false;
+        manualKeys=null;runLabel=null;
         initialPrepChecked=false;preparing=false;visitedStorage=false;initialPreparation=false;preparationBank=null;preparationReason="";
-        runOrder=null;pinned=null;orderProbeId=null;orderProbeSent=false;orderFrozen=false;orderTicks=0;
+        pinned=null;
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
@@ -378,7 +371,6 @@ public class FarmingHelperPlugin extends Plugin
             if (!running) return;
             shortestPathAvailable=event.isLoaded();
             navigation.enabled(shortestPathAvailable);
-            if(!shortestPathAvailable){orderProbeId=null;orderFrozen=true;}
             if (!run.isEmpty()) update();
         });
     }
@@ -386,38 +378,7 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onPluginMessage(PluginMessage event)
     {
         if(navigation!=null)navigation.message(event);
-        if(diseaseTarget!=null||!guideRequested||orderProbeId==null||!"shortestpath".equals(event.getNamespace())||
-            !"result".equals(event.getName())||event.getData()==null||!orderProbeId.equals(event.getData().get("id")))return;
-        orderProbeId=null;orderFrozen=true;
-        Object target=event.getData().get("target"),cost=event.getData().get("cost");
-        if(runOrder==null||runOrder.isEmpty()||current==null||!runOrder.get(0).patches.contains(current)||
-            !Boolean.TRUE.equals(event.getData().get("reached"))||!(target instanceof WorldPoint)||
-            !(cost instanceof Number)||((Number)cost).doubleValue()<0)return;
-        // Refinement is allowed only while the first cluster is still being worked.
-        // The native search compares candidate destinations directly, never mixes its
-        // cost units with the fallback spatial proxy.
-        runOrder=RunOrder.preferNext(runOrder,(WorldPoint)target);
-        pinned=RunOrder.flatten(runOrder);
     }
-
-    private void refineOrder()
-    {
-        if(diseaseTarget!=null||preparing||orderFrozen||orderProbeSent||!shortestPathAvailable||runOrder==null||runOrder.isEmpty()||current==null)return;
-        if(!runOrder.get(0).patches.contains(current)){orderFrozen=true;return;}
-        if(++orderTicks<3 || navigation==null || !navigation.canProbeOrder())return;
-        // Do not compete with the initial long-distance route. Probe while the
-        // player is at the active site, before committing to the next cluster.
-        WorldPoint here=client.getLocalPlayer()==null?null:client.getLocalPlayer().getWorldLocation();
-        WorldPoint approach=RunOrder.surface(current);
-        if(here==null||approach==null||here.getPlane()!=approach.getPlane()||here.distanceTo(approach)>18)return;
-        orderProbeSent=true;
-        List<WorldPoint> targets=RunOrder.candidates(runOrder);
-        WorldPoint from=runOrder.get(0).exit();
-        if(targets.isEmpty()||from==null){orderFrozen=true;return;}
-        orderProbeId="farming-helper-order-"+(++orderProbeSequence);
-        bus.post(new PluginMessage("shortestpath","query",Map.of("id",orderProbeId,"start",from,"target",targets)));
-    }
-
 
     @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
     @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { if(!guideRequested||!Objects.equals(runProfile,config.getRSProfileKey()))reset(); }
@@ -432,7 +393,7 @@ public class FarmingHelperPlugin extends Plugin
             // Preserve same-character run decisions, but release scene-local routes/widgets.
             hopping=true;highlight.clear();if(navigation!=null)navigation.stop();
             if(runBank!=null)runBank.close();if(vaultViews!=null)vaultViews.close();
-            orderProbeId=null;orderProbeSent=false;activeLive=false;stepItems=Collections.emptySet();lastAccessLevel=-1;
+            activeLive=false;stepItems=Collections.emptySet();lastAccessLevel=-1;
         }
     }
 
@@ -448,7 +409,6 @@ public class FarmingHelperPlugin extends Plugin
         {
             if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(LocationContext.capture(client).pathStart());
             update();
-            refineOrder();
         }
         if(vaultViews!=null)vaultViews.tick();
         updateRunBank(false);
@@ -724,8 +684,7 @@ public class FarmingHelperPlugin extends Plugin
                 boolean replace=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
                 boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
                 if(mature&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state!=CropState.UNCHECKED&&
-                    CropReplacement.action(type,o,preserveCrop,replace,activeClearOnly)==StepEngine.Action.COMPLETE &&
-                    (preserveCrop||hideSeedless))
+                    CropReplacement.action(type,o,preserveCrop,replace,activeClearOnly)==StepEngine.Action.COMPLETE && preserveCrop)
                 {preserved.add(p);completed.add(p);visible.add(p);continue;}
                 if(!mature&&progress.finished(type,o,wants,hasPayment,preserveCrop)) { completed.add(p); visible.add(p); continue; }
                 // Only the active newly planted crop may remain for optional gardener payment.
@@ -755,10 +714,8 @@ public class FarmingHelperPlugin extends Plugin
                 CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->c.getLevel()<=level&&bag.getOrDefault(c.getItemId(),0)>=c.getQuantity()))
                 carriedSaplings.add(p.getPatchType());
             int usedSlots=Preparation.slots(bag,Collections.emptyMap(),this::stackable);
-            runOrder=RunOrder.shared(ready,start,guildFirst,usedSlots>=25?carriedSaplings:Collections.emptySet());
-            // Native Shortest Path owns individual legs, not the itinerary.
-            orderFrozen=true;orderProbeId=null;
-            pinned=RunOrder.flatten(runOrder);
+            // Shortest Path navigates the active leg; the shared planner alone orders patches.
+            pinned=RunOrder.flatten(RunOrder.shared(ready,start,guildFirst,usedSlots>=25?carriedSaplings:Collections.emptySet()));
         }
         if(pinned!=null)
         {
@@ -819,15 +776,13 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&ready.isEmpty()&&run.contains(FarmRunType.BIRDHOUSE))
         {
             specialtyBirdPhase=true;current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
-            preparing=false;visitedStorage=false;initialPrepChecked=true;runOrder=null;pinned=null;orderProbeId=null;orderFrozen=true;
+            preparing=false;visitedStorage=false;initialPrepChecked=true;pinned=null;
             update();return;
         }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current) { current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
         activeClearOnly=clearOnly.contains(current);
         activeCareOnly=careOnly.contains(current);
-        if(!activeCareOnly&&runOrder!=null&&!runOrder.isEmpty()&&(current==null||!runOrder.get(0).patches.contains(current)))
-        {orderFrozen=true;orderProbeId=null;}
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
         Map<Integer,Integer> required=Supplies.guideKit(ready.stream().filter(p->p.getPatchType()!=PatchType.BIRDHOUSE&&!careOnly.contains(p)).collect(java.util.stream.Collectors.toList()),-1,false,false,
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
@@ -909,7 +864,7 @@ public class FarmingHelperPlugin extends Plugin
             boolean replacementCarried=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
             boolean keep=preserveReplacement(current,o);
             StepEngine.Action action=CropReplacement.action(type,o,keep,replacementCarried,activeClearOnly);
-            if(action==StepEngine.Action.COMPLETE&&!keep&&!hideSeedless&&CropReplacement.configurable(type)&&CropReplacement.mature(type,o)&&!replacementCarried)
+            if(action==StepEngine.Action.COMPLETE&&!keep&&CropReplacement.configurable(type)&&CropReplacement.mature(type,o)&&!replacementCarried)
                 action=StepEngine.Action.NEED_REPLACEMENT;
             if(progress.planted() && o.state==CropState.GROWING) action=StepEngine.Action.PROTECT_TREE;
             if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,wateringCan))action=StepEngine.Action.WATER;
@@ -927,6 +882,8 @@ public class FarmingHelperPlugin extends Plugin
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:StepEngine.instruction(action,activeCrop,type,false);
             if(activeClearOnly)instruction=ClearOnly.instruction(action,type);
             if(action==StepEngine.Action.PAY_REMOVE&&type==PatchType.REDWOOD)instruction="Pay Alexandra 2,000 coins to remove the mature redwood.";
+            if(action==StepEngine.Action.HARVEST&&keep&&CropReplacement.producer(type))
+                instruction="Harvest the produce, then leave this plant standing.";
             if(action==StepEngine.Action.CHECK_HEALTH&&CropReplacement.configurable(type))
                 instruction="Check health"+(CropReplacement.producer(type)?", then harvest produce.":".")+(preserveReplacement(current,o)?" Preserve the crop.":" Replant when replacement supplies are carried.");
             if(activeCareOnly&&action==StepEngine.Action.CURE)instruction="Nearby diseased crop — "+instruction+" Then resume the run without replanting.";
@@ -1063,7 +1020,7 @@ public class FarmingHelperPlugin extends Plugin
             if(previous!=null)lastView=null;
             diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();return false;
         }
-        if(previous!=target){orderProbeId=null;orderProbeSent=false;lastView=null;}
+        if(previous!=target){lastView=null;}
         // Record the disease transition only when the interrupted patch itself is
         // the diseased one, so its existing completion tracker can see recovery.
         if(current==target)progress.observe(verified.get(target));
@@ -1105,7 +1062,7 @@ public class FarmingHelperPlugin extends Plugin
     void continueRun()
     {
         long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested)return;
-            if(initialPreparation){pinned=null;runOrder=null;current=null;activeCrop=null;progress.reset();orderFrozen=true;orderProbeId=null;}
+            if(initialPreparation){pinned=null;current=null;activeCrop=null;progress.reset();}
             initialPreparation=false;preparing=false;update();});
     }
     void resupply()
