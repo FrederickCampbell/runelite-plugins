@@ -8,11 +8,11 @@ import java.util.function.BiPredicate;
 enum RunPreset
 {
     TREE("Combined Tree Run", EnumSet.of(PatchType.TREE,PatchType.FRUIT_TREE,PatchType.HARDWOOD_TREE,PatchType.CALQUAT,PatchType.CELASTRUS,PatchType.CRYSTAL_TREE,PatchType.REDWOOD),
-        "Farming Guild|Gnome Stronghold|Tree Gnome Village|Lumbridge|Varrock|Falador Park|Taverley|Catherby|Brimhaven|Tai Bwo Wannai|Lletya|Kastori|Auburnvale|Great Conch|Fossil Island|Avium Savannah|Anglers' Retreat|Prifddinas"),
+        "Farming Guild|Gnome Stronghold|Tree Gnome Village|Lumbridge Castle|Varrock|Falador Park|Taverley|Catherby|Brimhaven|Tai Bwo Wannai|Lletya|Prifddinas|Kastori|Auburnvale|Avium Savannah|Great Conch|Anglers' Retreat|Fossil Island"),
     CROP("Crop Run", EnumSet.of(PatchType.HERB,PatchType.ALLOTMENT,PatchType.FLOWER,PatchType.COMPOST_BIN),
-        "Farming Guild|South Falador|Morytania|North Ardougne|Catherby|Hosidius|Prifddinas|Harmony Island|Civitas illa Fortis|Troll Stronghold|Weiss|Kastori"),
+        "Farming Guild|South Falador|Morytania|North Ardougne|Catherby|Hosidius|Prifddinas|Civitas illa Fortis|Kastori|Harmony Island|Troll Stronghold|Weiss"),
     HOPS_BUSH("Hops & Bush Run", EnumSet.of(PatchType.HOPS,PatchType.BUSH),
-        "Farming Guild|Champions' Guild|Lumbridge|Ardougne Monastery|Aldarin|Seers' Village|Etceteria|Yanille|Rimmington|Entrana"),
+        "Farming Guild|Champions' Guild|Ardougne Monastery|Aldarin|Seers' Village|Etceteria|Yanille|Rimmington|Entrana"),
     SPECIALTY("Specialty Run", EnumSet.of(PatchType.CACTUS,PatchType.BELLADONNA,PatchType.MUSHROOM,PatchType.SEAWEED,PatchType.CORAL,PatchType.GRAPEVINE,PatchType.BIRDHOUSE),
         "Farming Guild|Al Kharid|Draynor Manor|Morytania|Hosidius Vinery|Auburnvale|Great Conch|Fossil Island");
 
@@ -32,10 +32,10 @@ enum RunPreset
         switch(type)
         {
             case HERB:return List.of("Farming Guild","South Falador","Morytania","North Ardougne","Catherby","Hosidius","Civitas illa Fortis","Troll Stronghold","Weiss","Harmony Island");
-            case TREE:return List.of("Farming Guild","Lumbridge","Varrock","Falador Park","Taverley","Gnome Stronghold","Auburnvale");
+            case TREE:return List.of("Farming Guild","Lumbridge Castle","Varrock","Falador Park","Taverley","Gnome Stronghold","Auburnvale");
             case FRUIT_TREE:return List.of("Farming Guild","Gnome Stronghold","Tree Gnome Village","Catherby","Lletya","Brimhaven","Kastori");
             case HARDWOOD_TREE:return List.of("Fossil Island","Avium Savannah","Anglers' Retreat");
-            case HOPS:return List.of("Lumbridge","Seers' Village","Aldarin","Yanille","Entrana");
+            case HOPS:return List.of("Champions' Guild","Aldarin","Seers' Village","Yanille","Entrana");
             case BUSH:return List.of("Farming Guild","Champions' Guild","Rimmington","Ardougne Monastery","Etceteria");
             case ALLOTMENT:case FLOWER:case COMPOST_BIN:return CROP.reference;
             case CALQUAT:return TREE.reference;

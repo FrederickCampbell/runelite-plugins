@@ -29,12 +29,16 @@ final class GuideProgress
     }
     boolean finished(PatchType type, QuestFarmingStateReader.Observation o, boolean protectionWanted, boolean paymentCarried)
     {
+        return finished(type,o,protectionWanted,paymentCarried,type==PatchType.SPIRIT_TREE||type==PatchType.REDWOOD||type==PatchType.BUSH||type==PatchType.CACTUS);
+    }
+    boolean finished(PatchType type, QuestFarmingStateReader.Observation o, boolean protectionWanted, boolean paymentCarried,boolean preserve)
+    {
         if (o==null||o.source != QuestFarmingStateReader.Source.LIVE) return false;
         if (o.state != CropState.GROWING && o.state != CropState.FILLING) return false;
         if (planted && protectionWanted && paymentCarried && !protectionConfirmed(o)) return false;
         // A replacement crop requires an observed empty -> growing transition.
         // Permanent crops may finish a health check/harvest without replanting.
-        boolean perennial=type==PatchType.SPIRIT_TREE||type==PatchType.REDWOOD||type==PatchType.BUSH||type==PatchType.CACTUS;
+        boolean perennial=type==PatchType.SPIRIT_TREE||preserve;
         return planted || cured || (perennial && sawWork && changedLive);
     }
     boolean protectionConfirmed(QuestFarmingStateReader.Observation o)

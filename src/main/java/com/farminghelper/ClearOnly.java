@@ -19,6 +19,7 @@ final class ClearOnly
             case PAY_REMOVE:return "Pay the gardener 200 coins to remove the tree. Leave the patch empty.";
             case CHOP_TREE:return "Chop the tree, then dig out the stump. Leave the patch empty.";
             case DIG_STUMP:return "Dig out the stump. Leave the patch empty.";
+            case CLEAR_LIVING:return "Clear the mature crop. Leave the patch empty.";
             case CLEAR_DEAD:return "Clear the dead crop. Leave the patch empty.";
             case HARVEST:return type==PatchType.CELASTRUS?"Harvest the bark, then clear the tree. No replacement allocated.":"Harvest the crop. Clear the patch if needed; do not replant.";
             default:return "Clear the existing crop without replanting.";

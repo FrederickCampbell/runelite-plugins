@@ -2,8 +2,11 @@
 
 Quest Helper for your farm runs!
 
+**v0.41-beta.1 — routing and crop replacement candidate**
+
 ## Features
-- Grouped, individual and custom farm runs.
+- Grouped, individual and custom farm runs share guide-based regional ordering.
+- Choose Bank or Farming Guild preparation and harvest/replant or preserve mature crops.
 - Step-by-step farming, compost and birdhouse guides.
 - Seed selection based on available supplies and your preferences.
 - Highlights for patches, tools and required items.

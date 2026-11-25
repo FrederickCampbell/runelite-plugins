@@ -379,6 +379,23 @@ public final class QuestFarmingStateReader
     /** Explicit Check-health action values documented in the vendored decoder.
      * Do not infer this from the final growth stage: several ordinary growing
      * values share the stage index, but do not have the health-check action. */
+    /** Raw decoder distinguishes a mature crop with no produce from true growth.
+     * Keep existing normalized Time Tracking semantics; only the guide uses this distinction. */
+    public static boolean matureDepleted(String type,int value)
+    {
+        if(value<0)return false;
+        PatchImplementation implementation;
+        try{implementation=PatchImplementation.valueOf(type);}catch(IllegalArgumentException e){return false;}
+        PatchState raw=implementation.forVarbitValue(value);
+        if(raw==null||awaitingHealthCheck(implementation,value)||raw.getCropState()!=CropState.HARVESTABLE)return false;
+        switch(implementation)
+        {
+            case BUSH: case CACTUS: case FRUIT_TREE: case CALQUAT:return raw.getStage()==0;
+            case CELASTRUS:return value==17;
+            case REDWOOD:return true;
+            default:return false;
+        }
+    }
     static boolean awaitingHealthCheck(PatchImplementation implementation,int value)
     {
         switch(implementation)

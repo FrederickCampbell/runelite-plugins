@@ -21,6 +21,7 @@ final class StepEngine
         RAKE,
         DIG_STUMP,
         CLEAR_DEAD,
+        CLEAR_LIVING,
         CURE,
         PLANT,
         COMPOST,
@@ -135,7 +136,7 @@ final class StepEngine
                 if (type == PatchType.SPIRIT_TREE) return "Check health and leave the spirit tree planted for travel.";
                 if (type == PatchType.REDWOOD) return "Check health and leave the redwood planted.";
                 if (type == PatchType.CACTUS) return "Check health and pick the cactus produce.";
-                if (type == PatchType.BUSH) return "Check health, harvest the berries and leave the bush planted.";
+                if (type == PatchType.BUSH) return "Check health, then harvest the berries.";
                 if (type == PatchType.CELASTRUS) return crop == null
                     ? "Check health, then harvest the bark and leave the tree planted."
                     : "Check health, then harvest the bark before removing the tree.";
@@ -147,6 +148,7 @@ final class StepEngine
             case RAKE: return "Rake the weeds.";
             case DIG_STUMP:
                 return "Dig out the tree stump with a spade.";
+            case CLEAR_LIVING: return "Clear the mature crop using your spade.";
             case CLEAR_DEAD:
                 return "Clear the dead crop, then plant " + name + ".";
             case CURE:

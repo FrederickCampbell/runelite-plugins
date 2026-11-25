@@ -14,7 +14,7 @@ final class StepItems
             case COMPOST: if(compost>=0)result.add(compost);break;
             case PLANT: if(crop!=null)result.add(crop.getItemId());break;
             case RAKE: result.add(ItemID.RAKE);break;
-            case DIG_STUMP: case CLEAR_DEAD: result.add(ItemID.SPADE);break;
+            case DIG_STUMP: case CLEAR_DEAD: case CLEAR_LIVING: result.add(ItemID.SPADE);break;
             case PAY_REMOVE: result.add(ItemID.COINS);break;
             case CHOP_TREE: if(axe>0)result.add(axe);break;
             case CURE:

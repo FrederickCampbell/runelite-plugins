@@ -29,6 +29,20 @@ final class Preparation
         if(from==null)return choices.get(0);
         return choices.stream().min(Comparator.comparingInt(b->Math.max(Math.abs(b.point.getX()-from.getX()),Math.abs(b.point.getY()-from.getY())))).orElse(choices.get(0));
     }
+    enum StartAt { GUILD("Farming Guild"), BANK("Bank");
+        final String label; StartAt(String label){this.label=label;}
+        @Override public String toString(){return label;}
+        static StartAt load(String value){return "BANK".equals(value)?BANK:GUILD;}
+    }
+    static Bank choose(int level,WorldPoint from,boolean initial,boolean entrana,StartAt start,boolean vaultNeeded)
+    {
+        if(!initial||entrana)return choose(level,from,initial,entrana);
+        if(level>=45&&(start==StartAt.GUILD||vaultNeeded))return GUILD_BANK;
+        if(from==null)return PUBLIC.get(0);
+        return PUBLIC.stream().min(Comparator.comparingInt(b->Math.max(Math.abs(b.point.getX()-from.getX()),Math.abs(b.point.getY()-from.getY())))).orElse(PUBLIC.get(0));
+    }
+    static boolean vaultNeeded(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> bank,Map<Integer,Integer> vault)
+    {return required.entrySet().stream().anyMatch(e->e.getValue()>carried.getOrDefault(e.getKey(),0)+bank.getOrDefault(e.getKey(),0)&&vault.getOrDefault(e.getKey(),0)>0);}
     static boolean missing(Map<Integer,Integer> required,Map<Integer,Integer> carried)
     {return required.entrySet().stream().anyMatch(e->carried.getOrDefault(e.getKey(),0)<e.getValue());}
     static boolean storedShortage(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> storage)

@@ -16,6 +16,9 @@ final class RunOrder
         String loc=p.getLocation(); PatchType t=p.getPatchType();
         switch(loc)
         {
+            case "Lumbridge": return t==PatchType.HOPS?"Lumbridge farm":"Lumbridge Castle";
+            case "Morytania": return t==PatchType.MUSHROOM?"Canifis mushroom":"Morytania";
+            case "Auburnvale": return t==PatchType.BELLADONNA?"Auburnvale belladonna":"Auburnvale";
             case "Falador": return t==PatchType.TREE?"Falador Park":"South Falador";
             case "Ardougne": return t==PatchType.BUSH?"Ardougne Monastery":"North Ardougne";
             case "Kourend": return t==PatchType.GRAPEVINE?"Hosidius Vinery":"Hosidius";
@@ -95,6 +98,77 @@ final class RunOrder
         result.addAll(optimize?plan(all,guild==null?start:guild.exit()):all);
         return result;
     }
+    // Shared route selection: preset identity never changes the itinerary.
+    // Physical site identities are retained; only known same-visit blocks are merged.
+    private static final List<String> MIXED=List.of("Farming Guild","Gnome Stronghold","Tree Gnome Village",
+        "Lumbridge Castle","Varrock","Champions' Guild","Al Kharid","Draynor Manor","South Falador",
+        "Falador Park","Taverley","Rimmington","Port Sarim","North Ardougne","Ardougne Monastery",
+        "Yanille","Seers' Village","Catherby","Brimhaven","Tai Bwo Wannai","Canifis mushroom","Morytania",
+        "Harmony Island","Lletya","Prifddinas","Troll Stronghold","Weiss","Etceteria","Hosidius",
+        "Hosidius Vinery","Civitas illa Fortis","Avium Savannah","Auburnvale","Auburnvale belladonna",
+        "Kastori","Aldarin","Great Conch","Anglers' Retreat","Entrana","Fossil Island");
+    private static String block(String site)
+    {return "Lumbridge farm".equals(site)?"Champions' Guild":site;}
+    private static int localOrder(FarmRunPatch p)
+    {
+        if(p.getPatchType()==PatchType.HESPORI||p.getPatchType()==PatchType.CORAL||p.getPatchType()==PatchType.SEAWEED)return 5;
+        if(p.getPatchType()==PatchType.BIRDHOUSE)return 6;
+        if("Champions' Guild".equals(p.getLocation())||"Gnome Stronghold".equals(p.getLocation())&&p.getPatchType()==PatchType.FRUIT_TREE)return 0;
+        if(p.getPatchType()==PatchType.COMPOST_BIN)return 4;
+        if(StepEngine.isTreeType(p.getPatchType()))return 1;
+        return 2;
+    }
+    static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,boolean freeSpace)
+    {
+        Set<PatchType> types=EnumSet.noneOf(PatchType.class);
+        patches.forEach(p->types.add(p.getPatchType()));
+        List<String> reference=MIXED;
+        for(RunPreset preset:RunPreset.values())
+            if(!types.isEmpty()&&preset.types.containsAll(types))
+            {reference=preset.reference;break;}
+        if(types.size()==1&&!types.stream().anyMatch(t->RunPreset.TREE.types.contains(t)||RunPreset.CROP.types.contains(t)||RunPreset.HOPS_BUSH.types.contains(t)||RunPreset.SPECIALTY.types.contains(t)))
+            reference=MIXED;
+        Map<String,List<FarmRunPatch>> byBlock=new LinkedHashMap<>();
+        for(Group g:groups(patches,start))byBlock.computeIfAbsent(block(g.site),k->new ArrayList<>()).addAll(g.patches);
+        List<Group> ordered=new ArrayList<>();
+        byBlock.forEach((site,ps)->{
+            ps.sort(Comparator.comparingInt(RunOrder::localOrder)
+                .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?BirdhouseRun.order(p):0));
+            ordered.add(new Group(site,ps));
+        });
+        final List<String> ref=reference;
+        ordered.sort(Comparator.comparingInt((Group g)->{
+            int n=ref.indexOf(g.site);
+            if(n>=0)return n;
+            int m=MIXED.indexOf(g.site);return ref.size()+(m<0?MIXED.size():m);
+        }).thenComparing(g->g.site));
+        Group guild=ordered.stream().filter(g->"Farming Guild".equals(g.site)).findFirst().orElse(null);
+        if(guild!=null&&!guildFirst)ordered.remove(guild);
+        // If Bank was chosen, prefer an actually nearby first block, not a guessed long-distance teleport.
+        if(!guildFirst&&guild!=null)ordered.add(guild);
+        if(!guildFirst&&start!=null)
+        {
+            Group near=ordered.stream().filter(g->!terminal(g)&&g.entry()!=null&&proxy(start,g.entry())<70)
+                .min(Comparator.comparingDouble(g->proxy(start,g.entry()))).orElse(null);
+            if(near!=null){ordered.remove(near);ordered.add(0,near);}
+            else if(guild!=null){ordered.remove(guild);ordered.add(Math.min(1,ordered.size()),guild);}
+        }
+        // Full inventories benefit from an early carried-sapling block. Never split a site or move terminal legs.
+        if(freeSpace)
+        {
+            int first=guildFirst&&!ordered.isEmpty()&&"Farming Guild".equals(ordered.get(0).site)?1:0;
+            for(int i=first;i<ordered.size();i++)
+            {
+                Group g=ordered.get(i);
+                if(!terminal(g)&&g.patches.stream().anyMatch(p->StepEngine.isTreeType(p.getPatchType())&&p.getPatchType()!=PatchType.SPIRIT_TREE))
+                {ordered.remove(i);ordered.add(first,g);break;}
+            }
+        }
+        // Entrana comes before Fossil Island, both after ordinary surface work.
+        ordered.sort(Comparator.comparingInt(g->"Fossil Island".equals(g.site)?2:"Entrana".equals(g.site)?1:0));
+        return ordered;
+    }
+    private static boolean terminal(Group g){return "Entrana".equals(g.site)||"Fossil Island".equals(g.site);}
     static int[] optimize(double[] first,double[][] legs)
     {return first.length<=EXACT_LIMIT?exact(first,legs):heuristic(first,legs);}
     private static int[] exact(double[] first,double[][] legs)

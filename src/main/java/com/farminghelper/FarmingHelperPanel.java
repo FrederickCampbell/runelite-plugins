@@ -532,6 +532,10 @@ final class FarmingHelperPanel extends PluginPanel
     private void general()
     {
         page(GENERAL,"Farming preferences",this::preferences,null,latestGuide!=null);
+        heading("Run preparation");caption("Start At");
+        JComboBox<Preparation.StartAt> startAt=new JComboBox<>(Preparation.StartAt.values());
+        startAt.setSelectedItem(Preparation.StartAt.load(plugin.setting("startAtV1","GUILD")));
+        startAt.addActionListener(e->plugin.save("startAtV1",((Preparation.StartAt)startAt.getSelectedItem()).name()));addRow(startAt);
         heading("Default crop care");caption("Compost type");
         JComboBox<CompostChoice> compost=new JComboBox<>(CompostChoice.values());
         compost.setSelectedItem(CompostChoice.load(plugin.setting("directorCompostChoice",""),plugin.flag("directorUseCompost",true)));
@@ -630,7 +634,14 @@ final class FarmingHelperPanel extends PluginPanel
                 {
                     String old=plugin.override(p);JButton edit=FarmingIcons.button(MORE,"Preferred crop: "+(old.isEmpty()?"Automatic":old),old.isEmpty()?FarmingTheme.MUTED:FarmingTheme.SUCCESS,()->{
                         JComboBox<String> choose=crops(p.getPatchType(),"Automatic");if(!old.isEmpty())choose.setSelectedItem(old);FarmingTheme.apply(choose);
-                        if(JOptionPane.showConfirmDialog(this,choose,p.getDisplayName()+" crop",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION){plugin.save("directorCrop_"+p.key(),choose.getSelectedIndex()==0?"":String.valueOf(choose.getSelectedItem()));fillPatches(results);}
+                        JPanel options=new JPanel();options.setLayout(new BoxLayout(options,BoxLayout.Y_AXIS));options.add(choose);
+                        JComboBox<String> behavior=new JComboBox<>(new String[]{"Use crop type default","Harvest & replant","Harvest & preserve"});
+                        String saved=plugin.setting("replacementPatch_"+p.key(),"");behavior.setSelectedIndex("REPLANT".equals(saved)?1:"PRESERVE".equals(saved)?2:0);
+                        if(CropReplacement.configurable(p.getPatchType()))options.add(behavior);
+                        if(JOptionPane.showConfirmDialog(this,options,p.getDisplayName()+" crop",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION){
+                            plugin.save("directorCrop_"+p.key(),choose.getSelectedIndex()==0?"":String.valueOf(choose.getSelectedItem()));
+                            if(CropReplacement.configurable(p.getPatchType()))plugin.save("replacementPatch_"+p.key(),behavior.getSelectedIndex()==1?"REPLANT":behavior.getSelectedIndex()==2?"PRESERVE":"");
+                            fillPatches(results);}
                     });row.add(edit,BorderLayout.EAST);
                 }
                 resultRow(results,row);
@@ -665,6 +676,13 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void ranking(PatchType type)
     {
+        if(CropReplacement.configurable(type))
+        {
+            caption("Mature crop behavior");
+            JComboBox<String> care=new JComboBox<>(new String[]{"Harvest & replant","Harvest & preserve"});
+            care.setSelectedIndex(CropReplacement.preserve(type,plugin.setting("replacement_"+type.name(),""),"")?1:0);
+            care.addActionListener(e->plugin.save("replacement_"+type.name(),care.getSelectedIndex()==1?"PRESERVE":"REPLANT"));addRow(care);
+        }
         String csv=plugin.priority(type);
         List<String> names=new ArrayList<>();if(!csv.isBlank())names.addAll(Arrays.asList(csv.split(",\\s*")));
         line(names.isEmpty()?"Automatic · highest estimated XP per seed in stock":"Preferred crops first, then highest XP per seed",false);

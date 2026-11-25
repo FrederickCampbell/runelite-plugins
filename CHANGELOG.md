@@ -258,6 +258,13 @@ Simplified the plugin to run selection, guide and preferences. Restored Quest He
 
 # Farming Helper development history
 
+## v0.41-beta.1 — Shared routing and crop replacement
+
+- Route individual, grouped and manual selections through the same reference-based order; link Champions' Guild and Lumbridge hops, separate physical sites, preserve terminal Entrana/Fossil Island constraints and stop native itinerary reordering.
+- Add character-scoped Start At preference; account for vault-only shortages and replan after initial preparation. Low-space tree preference remains advisory. No automatic banking.
+- Add type/patch harvest-preserve vs replant controls and live mature-crop clearing guidance. Raw mature-empty states are distinct from actual growth; verify replacement stock before clearing. Preserve active contracts, lilies and spirit trees.
+- Add route and crop policy regression tests. Staging CI and live client validation required.
+
 ## v0.12.0-beta.1 — Patch coverage and lifecycle reliability
 
 - Published RuneLite farm-area markers extend navigation to all catalogued categories, distinct from exact Quest Helper object tiles.
