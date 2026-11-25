@@ -6,7 +6,7 @@ import javax.swing.*;
 /** Small antialiased line icons, drawn at logical Swing coordinates for HiDPI. */
 final class FarmingIcons
 {
-    enum Kind{PLAY,BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK,LEAF,LAYERS,PIN,LIST,STORAGE,TOOLS,SLIDERS,INFO}
+    enum Kind{PLAY,FORWARD,BACK,GEAR,END,EXPAND,COLLAPSE,UP,DOWN,MORE,CHECK,LEAF,LAYERS,PIN,LIST,STORAGE,TOOLS,SLIDERS,INFO}
     static Icon of(Kind kind,Color color)
     {
         return new Icon()
@@ -22,6 +22,7 @@ final class FarmingIcons
                 switch(kind)
                 {
                     case PLAY:p.fillPolygon(new int[]{5,13,5},new int[]{3,8,13},3);break;
+                    case FORWARD:p.drawLine(3,8,12,8);p.drawLine(12,8,8,4);p.drawLine(12,8,8,12);break;
                     case BACK:p.drawLine(12,8,3,8);p.drawLine(3,8,7,4);p.drawLine(3,8,7,12);break;
                     case END:p.drawLine(4,4,12,12);p.drawLine(4,12,12,4);break;
                     case EXPAND:p.drawLine(6,4,10,8);p.drawLine(10,8,6,12);break;
@@ -48,10 +49,16 @@ final class FarmingIcons
     }
     static JButton button(Kind kind,String tooltip,Color color,Runnable action)
     {
+        JButton button=button(kind,tooltip,color);
+        button.addActionListener(e->action.run());
+        return button;
+    }
+    static JButton button(Kind kind,String tooltip,Color color)
+    {
         JButton b=new JButton(of(kind,color));b.putClientProperty("farming.icon",Boolean.TRUE);
         b.putClientProperty("FlatLaf.styleClass","iconButton legacyIconButton");
         b.setPreferredSize(new Dimension(28,28));b.setMinimumSize(new Dimension(28,28));
         b.setMargin(new Insets(3,3,3,3));b.setToolTipText(tooltip);b.getAccessibleContext().setAccessibleName(tooltip);
-        if(action!=null)b.addActionListener(e->action.run());return b;
+        return b;
     }
 }

@@ -479,18 +479,27 @@ public class FarmingHelperPlugin extends Plugin
         shelfInputs=inputs;
         return shelfItems;
     }
-    private void updateRunBank(boolean manual)
+    private String updateRunBank(boolean manual)
     {
-        if(runBank==null)return;
+        if(runBank==null)return "The farming bank view is unavailable.";
         boolean enabled=flag("activeRunBank",true);
         if(!enabled||!guideRequested||run.isEmpty()||!runBank.bankOpen())
-        {runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return;}
+        {runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
         Map<Integer,Integer> owned=stock().shelf;
         Set<Integer> eligible=bankRunItems(owned);
-        if(manual)runBank.show(eligible,shelfCandidates,birdBankPhase());
-        else runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase());
+        if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase());
+        runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase());return "";
     }
-    void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested&&flag("activeRunBank",true)){sampleStorage();update();updateRunBank(true);}});}
+    void showActiveRunBank(java.util.function.Consumer<String> feedback)
+    {
+        long id=session;
+        thread.invokeLater(()->{
+            if(id!=session||!guideRequested||!flag("activeRunBank",true))return;
+            sampleStorage();update();
+            String message=updateRunBank(true);
+            if(!message.isEmpty())SwingUtilities.invokeLater(()->{if(id==session&&guideRequested)feedback.accept(message);});
+        });
+    }
     TransportHint currentTransport()
     {
         if(!guideRequested||diseaseTarget!=null||preparing()||current==null||navigation==null||client.getLocalPlayer()==null)return null;

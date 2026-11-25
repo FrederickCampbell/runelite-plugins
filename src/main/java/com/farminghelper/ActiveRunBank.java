@@ -85,14 +85,17 @@ final class ActiveRunBank
         else if(offered&&(stageChanged||!Arrays.equals(layout,lastLayout)))open(api,layout);
         else if(offered&&changed&&search!=null)search.layoutBank();
     }
-    void show(Set<Integer> next,Set<Integer> owned,boolean bird)
+    String show(Set<Integer> next,Set<Integer> owned,boolean bird)
     {
         BankTagsPlugin api=service();
-        if(api==null||next==null||next.isEmpty()||!bankOpen())return;
+        if(api==null)return "Enable Bank Tags to show the farming layout.";
+        if(!bankOpen())return "Open a bank, then choose Show farming bank.";
         updateEligible(next,owned);
+        if(ids.isEmpty() && (!opened || birdPhase!=bird || lastLayout.length==0))return "No matching farming items or placeholders in this bank view.";
         if(!opened||birdPhase!=bird)lastLayout=new int[0];birdPhase=bird;
         register();opened=true;offered=true;
         open(api,BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory));
+        return "";
     }
     private boolean updateEligible(Set<Integer> next,Set<Integer> owned)
     {
