@@ -84,7 +84,7 @@ public class FarmingHelperPlugin extends Plugin
     private Map<FarmRunPatch,Crop> allocated=Map.of();
     private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
     private List<?> shelfInputs=List.of();
-    private Set<Integer> shelfItems=Set.of();
+    private Set<Integer> shelfItems=Set.of(), shelfCandidates=Set.of(), bankPlaceholders=Set.of();
     private String stockProfile;
     private long bankObservedAt,vaultObservedAt;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
@@ -457,10 +457,25 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> runItems=vaultRunItems();
         if(runItems==null)return null;
         boolean bird=birdBankPhase();
-        List<?> inputs=List.of(session,quantities,runItems,bird,preferenceRevision,vaultAccessRevision);
+        List<?> inputs=List.of(session,quantities,bankPlaceholders,runItems,bird,preferenceRevision,vaultAccessRevision);
         if(inputs.equals(shelfInputs))return shelfItems;
         boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
-        shelfItems=CuratedBank.shelf(runItems,owned,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving,teleports(owned).keySet());
+        Set<Integer> candidates = new HashSet<>(owned.keySet());
+        candidates.addAll(bankPlaceholders);
+        shelfCandidates = Set.copyOf(candidates);
+        Set<Integer> tagged = new HashSet<>(CuratedBank.shelf(runItems,shelfCandidates,this::observedItemName,client,config,
+            bird,!bird&&runHasTrees,diving,teleports(shelfCandidates).keySet()));
+        // A native placeholder can survive a change to the stock-based crop recommendation.
+        if (!bird && !bankPlaceholders.isEmpty())
+        {
+            List<PatchType> types = selectedRunTypes();
+            for (int id : bankPlaceholders)
+            {
+                Crop crop = VaultRanking.resolve(id,observedItemName(id));
+                if (crop != null && types.contains(crop.getPatchType())) tagged.add(id);
+            }
+        }
+        shelfItems = Set.copyOf(tagged);
         shelfInputs=inputs;
         return shelfItems;
     }
@@ -472,8 +487,8 @@ public class FarmingHelperPlugin extends Plugin
         {runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return;}
         Map<Integer,Integer> owned=stock().shelf;
         Set<Integer> eligible=bankRunItems(owned);
-        if(manual)runBank.show(eligible,owned.keySet(),birdBankPhase());
-        else runBank.tick(eligible,owned.keySet(),enabled,birdBankPhase());
+        if(manual)runBank.show(eligible,shelfCandidates,birdBankPhase());
+        else runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase());
     }
     void showActiveRunBank(){thread.invokeLater(()->{if(runBank!=null&&guideRequested&&flag("activeRunBank",true)){sampleStorage();update();updateRunBank(true);}});}
     TransportHint currentTransport()
@@ -545,7 +560,14 @@ public class FarmingHelperPlugin extends Plugin
         if(id==InventoryID.BANK)bankObservedAt=System.currentTimeMillis();
         if(id==InventoryID.SEED_VAULT)vaultObservedAt=System.currentTimeMillis();
         if(!sampledStorage.add(id))return;
-        Map<Integer,Integer> observed=readItems(container);
+        Map<Integer,Integer> observed;
+        if (id == InventoryID.BANK && itemManager != null)
+        {
+            Set<Integer> placeholders = new HashSet<>();
+            observed = PhysicalStock.read(container,itemManager::getItemComposition,placeholders);
+            bankPlaceholders = Set.copyOf(placeholders);
+        }
+        else observed = readItems(container);
         if(!observed.equals(snapshot))
         {
             quantities=null;snapshot.clear();snapshot.putAll(observed);
@@ -557,7 +579,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private void invalidateStock()
     {
-        quantities=null;sampledStorage.clear();invalidateTravel();
+        quantities=null;bankPlaceholders=Set.of();sampledStorage.clear();invalidateTravel();
     }
 
     private Map<Integer,Integer> readItems(ItemContainer container)
@@ -575,10 +597,10 @@ public class FarmingHelperPlugin extends Plugin
         return quantities;
     }
 
-    private Map<Integer,List<String>> teleports(Map<Integer,Integer> owned)
+    private Map<Integer,List<String>> teleports(Set<Integer> candidates)
     {
-        return eligibleTravel.computeIfAbsent(owned.keySet(),ids->
-            CuratedBank.eligibleTeleports(owned,this::observedItemName,client,config));
+        return eligibleTravel.computeIfAbsent(candidates,ids->
+            CuratedBank.eligibleTeleports(ids,this::observedItemName,client,config));
     }
 
     static boolean actionable(PatchType type, CropState state)
@@ -888,7 +910,7 @@ public class FarmingHelperPlugin extends Plugin
         // Only observed bank/inventory/equipment stock. Keep the existing bank
         // shelf broad and stable; recommendations never change its membership.
         Map<Integer,Set<String>> teleports=loggedIn&&config!=null&&itemManager!=null
-            ?RunTeleports.select(ready,teleports(supplies.travel),carried)
+            ?RunTeleports.select(ready,teleports(supplies.travel.keySet()),carried)
             :Collections.emptyMap();
         Set<Integer> missingTravel=new HashSet<>();
         teleports.forEach((id,sites)->{

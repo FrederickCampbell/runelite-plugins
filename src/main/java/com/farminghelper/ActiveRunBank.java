@@ -45,10 +45,14 @@ final class ActiveRunBank
         return client.getGameState()==GameState.LOGGED_IN&&root!=null&&!root.isHidden();
     }
     static boolean includes(Set<Integer> ids,int id,ItemComposition definition)
-    {return ids.contains(id)&&definition!=null&&definition.getPlaceholderTemplateId()==-1;}
+    {
+        if (definition == null) return false;
+        int base = definition.getPlaceholderTemplateId() == -1 ? id : definition.getPlaceholderId();
+        return ids.contains(base);
+    }
     private void register()
     {
-        if(!registered){tags.registerTag(TAG,id->includes(admitted,id,items.getItemComposition(id))&&ids.contains(id));registered=true;}
+        if(!registered){tags.registerTag(TAG,id->includes(admitted,id,items.getItemComposition(id)));registered=true;}
     }
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
     private int slot(int id){var s=items.getItemStats(id);return s==null||s.getEquipment()==null?-1:s.getEquipment().getSlot();}

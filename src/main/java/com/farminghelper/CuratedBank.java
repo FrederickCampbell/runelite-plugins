@@ -159,16 +159,14 @@ final class CuratedBank
         return true;
     }
     static boolean divingEquipment(String n){return n.equals("fishbowl helmet")||n.equals("diving apparatus")||n.equals("medallion of the deep")||n.equals("flippers");}
-    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config,boolean bird,boolean trees,boolean diving,Set<Integer> eligible)
+    static Set<Integer> shelf(Set<Integer> run,Set<Integer> candidates,IntFunction<String> names,Client client,ConfigManager config,boolean bird,boolean trees,boolean diving,Set<Integer> eligible)
     {
         if(run==null)return null;
         Set<Integer> result=new HashSet<>(run);
         Set<Integer> blocked=blocked(config(config,"blockedTeleportItems"));
         boolean fairy=!"false".equalsIgnoreCase(config(config,"useFairyRings"));
-        for(var entry:owned.entrySet())
+        for(int id:candidates)
         {
-            if(entry.getValue()<=0)continue;
-            int id=entry.getKey();String name=names.apply(id);
             if(contextualEquipment(id,names,bird,trees,diving))result.add(id);
             if(fairy&&!blocked.contains(id)&&(id==772||id==9084)&&fairyAccess(client))result.add(id);
         }
@@ -177,15 +175,15 @@ final class CuratedBank
     }
 
     /** Same per-destination eligibility for the shelf and optional recommendations. */
-    static Map<Integer,List<String>> eligibleTeleports(Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config)
+    static Map<Integer,List<String>> eligibleTeleports(Set<Integer> candidates,IntFunction<String> names,Client client,ConfigManager config)
     {
         Map<Integer,List<String>> result=new TreeMap<>();
         String mode=config(config,"useTeleportationItems");
         Set<Integer> blocked=blocked(config(config,"blockedTeleportItems"));
         boolean quetzal=!"false".equalsIgnoreCase(config(config,"useQuetzals"));
-        for(var entry:owned.entrySet())if(entry.getValue()>0)for(String[] row:teleportRows(entry.getKey(),names))
+        for(int id:candidates)for(String[] row:teleportRows(id,names))
         {
-            int id=entry.getKey(),source=Integer.parseInt(row[0]),family=Integer.parseInt(row[1]);
+            int source=Integer.parseInt(row[0]),family=Integer.parseInt(row[1]);
             if(blocked.contains(id)||blocked.contains(source)||blocked.contains(family)||!modeAllows(mode,"T".equals(row[2])))continue;
             if("whistle".equals(row[7])&&!quetzal)continue;
             try

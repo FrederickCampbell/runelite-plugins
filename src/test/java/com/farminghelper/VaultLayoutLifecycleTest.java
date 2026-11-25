@@ -105,6 +105,19 @@ public class VaultLayoutLifecycleTest
         lifecycle.afterScript(SeedVaultViews.BUILD);lifecycle.postClientTick();
         assertFalse(h.isSelfHidden());assertEquals(128,fresh.getOriginalY());
         assertEquals(2,fresh.getIndex());assertEquals(6,fresh.getItemQuantity());
+        // When the game leaves a placeholder, keep its native item/label/menu and its compact section.
+        lifecycle.beforeScript(SeedVaultViews.BUILD);
+        int ghostId=900001;
+        item(im,ghostId,"Torstol seed");
+        when(im.getItemComposition(ghostId).getPlaceholderTemplateId()).thenReturn(14401);
+        Widget ghost=node(SeedVaultViews.ITEMS,2,WidgetType.GRAPHIC,79,278,36,32,"",ghostId,0);
+        when(ip.getChildren()).thenReturn(new Widget[]{potato,null,ghost});
+        lifecycle.afterScript(SeedVaultViews.BUILD);lifecycle.postClientTick();
+        assertFalse(ghost.isSelfHidden());assertFalse(l2.isSelfHidden());assertFalse(h.isSelfHidden());
+        assertEquals(128,ghost.getOriginalY());assertEquals(160,l2.getOriginalY());
+        assertEquals(0,ghost.getItemQuantity());assertEquals(2,ghost.getIndex());
+        verify(ghost,never()).setAction(anyInt(),anyString());
+        verify(ghost,never()).setItemQuantity(anyInt());
         // A newly deposited sapling creates a native category that did not exist in the previous transaction.
         lifecycle.beforeScript(SeedVaultViews.BUILD_CONTENTS);
         when(plugin.vaultAllowed(99)).thenReturn(Set.of(PatchType.HERB,PatchType.TREE));

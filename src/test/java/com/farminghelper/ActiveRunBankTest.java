@@ -83,7 +83,13 @@ public class ActiveRunBankTest
         when(real.getPlaceholderTemplateId()).thenReturn(-1);
         when(placeholder.getPlaceholderTemplateId()).thenReturn(14401);
         assertTrue(ActiveRunBank.includes(Set.of(1513,1755),1513,real));
-        assertFalse(ActiveRunBank.includes(Set.of(1513),1513,placeholder));
+        when(placeholder.getPlaceholderId()).thenReturn(1513);
+        assertTrue(ActiveRunBank.includes(Set.of(1513),900001,placeholder));
+        assertFalse(ActiveRunBank.includes(Set.of(1515),900001,placeholder));
+        Set<Integer> displayed=new java.util.HashSet<>();
+        assertEquals(Map.of(1755,1),PhysicalStock.read(container(new Item(900001,0),new Item(1755,1)),
+            id->id==900001?placeholder:real,displayed));
+        assertEquals(Set.of(1513),displayed);
         assertFalse(ActiveRunBank.includes(Set.of(1513),1515,real));
     }
 }
