@@ -663,13 +663,13 @@ public class FarmingHelperPlugin extends Plugin
                 else if(p==current){completed.add(p);visible.add(p);}
                 continue;
             }
-            if(p==current){progress.observe(o);if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);}
+            if(p==current&&!preparing){progress.observe(o);if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);}
             // Preserve lilies, but let a newly planted lily finish watering first.
             if((type==PatchType.FLOWER && QuestFarmingStateReader.isLivingWhiteLily(o) && !(p==current&&progress.planted())) ||
                 ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
             {preserved.add(p);completed.add(p);continue;}
             if(completed.contains(p)) { visible.add(p); continue; }
-            if(p==current)
+            if(p==current&&!preparing)
             {
                 if(activeCareOnly)
                 {
@@ -684,6 +684,14 @@ public class FarmingHelperPlugin extends Plugin
                 boolean wants=protect && activeCrop!=null && StepEngine.supportsProtection(type) && !ProtectionPaymentCatalog.forCrop(activeCrop).isEmpty();
                 boolean hasPayment=wants && ProtectionPaymentCatalog.forCrop(activeCrop).stream().allMatch(cost -> bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
                 boolean preserveCrop=preserveReplacement(p);
+                // The player may carry a lower-ranked seed than the initially allocated bank crop.
+                // Prefer a usable carried replacement for the active mature patch over preserving it prematurely.
+                if(CropReplacement.configurable(type)&&!preserveCrop&&CropReplacement.mature(type,o)&&!progress.planted()&&
+                    (activeCrop==null||bag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()))
+                {
+                    Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,bag,this::priority,this::override,Collections.emptyMap(),true).get(p);
+                    if(carriedReplacement!=null)activeCrop=carriedReplacement;
+                }
                 boolean replace=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
                 boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
                 if(mature&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state!=CropState.UNCHECKED&&
@@ -712,11 +720,12 @@ public class FarmingHelperPlugin extends Plugin
         {
             WorldPoint start=location.normalized;
             boolean guildFirst=Preparation.StartAt.load(setting("startAtV1","GUILD"))==Preparation.StartAt.GUILD&&level>=45;
-            boolean carriedSapling=ready.stream().filter(p->StepEngine.isTreeType(p.getPatchType())).anyMatch(p->
-                CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->bag.getOrDefault(c.getItemId(),0)>0));
+            Set<PatchType> carriedSaplings=EnumSet.noneOf(PatchType.class);
+            for(FarmRunPatch p:plant)if(StepEngine.isTreeType(p.getPatchType())&&p.getPatchType()!=PatchType.SPIRIT_TREE&&
+                CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->c.getLevel()<=level&&bag.getOrDefault(c.getItemId(),0)>=c.getQuantity()))
+                carriedSaplings.add(p.getPatchType());
             int usedSlots=Preparation.slots(bag,Collections.emptyMap(),this::stackable);
-            runOrder=RunOrder.shared(ready,start,guildFirst,usedSlots>=25&&carriedSapling);
-            if(runOrder.stream().anyMatch(g->"Fossil Island".equals(g.site)))runOrder=SpecialtyStages.fossilLast(runOrder);
+            runOrder=RunOrder.shared(ready,start,guildFirst,usedSlots>=25?carriedSaplings:Collections.emptySet());
             // Native Shortest Path owns individual legs, not the itinerary.
             orderFrozen=true;orderProbeId=null;
             pinned=RunOrder.flatten(runOrder);
@@ -768,7 +777,7 @@ public class FarmingHelperPlugin extends Plugin
             seedless.removeAll(seeds.keySet());
             if(clearSeedless)
             {
-                for(FarmRunPatch p:seedless)if(ClearOnly.eligible(observations.get(p).state))clearOnly.add(p);
+                for(FarmRunPatch p:seedless)if(ClearOnly.eligible(observations.get(p).state)||CropReplacement.mature(p.getPatchType(),observations.get(p)))clearOnly.add(p);
                 seedless.removeAll(clearOnly);
             }
             seedlessCount=seedless.size();

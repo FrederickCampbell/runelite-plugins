@@ -120,6 +120,12 @@ final class RunOrder
     }
     static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,boolean freeSpace)
     {
+        Set<PatchType> trees=EnumSet.noneOf(PatchType.class);
+        if(freeSpace)for(FarmRunPatch p:patches)if(StepEngine.isTreeType(p.getPatchType())&&p.getPatchType()!=PatchType.SPIRIT_TREE)trees.add(p.getPatchType());
+        return shared(patches,start,guildFirst,trees);
+    }
+    static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,Set<PatchType> carriedSaplings)
+    {
         Set<PatchType> types=EnumSet.noneOf(PatchType.class);
         patches.forEach(p->types.add(p.getPatchType()));
         List<String> reference=MIXED;
@@ -132,8 +138,12 @@ final class RunOrder
         for(Group g:groups(patches,start))byBlock.computeIfAbsent(block(g.site),k->new ArrayList<>()).addAll(g.patches);
         List<Group> ordered=new ArrayList<>();
         byBlock.forEach((site,ps)->{
+            // Birdhouse direction follows the actual island entry point when possible.
+            // Off-island use the documented stable south-to-north catalogue direction.
+            WorldPoint south=BirdhouseRun.Site.MEADOW_SOUTH.approach,north=BirdhouseRun.Site.VALLEY_NORTH.approach;
+            boolean reverse=start!=null&&proxy(start,north)<100&&proxy(start,north)<proxy(start,south);
             ps.sort(Comparator.comparingInt(RunOrder::localOrder)
-                .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?BirdhouseRun.order(p):0));
+                .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?(reverse?-BirdhouseRun.order(p):BirdhouseRun.order(p)):0));
             ordered.add(new Group(site,ps));
         });
         final List<String> ref=reference;
@@ -154,13 +164,13 @@ final class RunOrder
             else if(guild!=null){ordered.remove(guild);ordered.add(Math.min(1,ordered.size()),guild);}
         }
         // Full inventories benefit from an early carried-sapling block. Never split a site or move terminal legs.
-        if(freeSpace)
+        if(!carriedSaplings.isEmpty())
         {
             int first=guildFirst&&!ordered.isEmpty()&&"Farming Guild".equals(ordered.get(0).site)?1:0;
             for(int i=first;i<ordered.size();i++)
             {
                 Group g=ordered.get(i);
-                if(!terminal(g)&&g.patches.stream().anyMatch(p->StepEngine.isTreeType(p.getPatchType())&&p.getPatchType()!=PatchType.SPIRIT_TREE))
+                if(!terminal(g)&&g.patches.stream().anyMatch(p->carriedSaplings.contains(p.getPatchType())))
                 {ordered.remove(i);ordered.add(first,g);break;}
             }
         }

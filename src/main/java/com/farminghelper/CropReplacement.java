@@ -28,7 +28,7 @@ final class CropReplacement
     static boolean producer(PatchType t)
     {return t==PatchType.BUSH||t==PatchType.CACTUS||t==PatchType.FRUIT_TREE||t==PatchType.CALQUAT||t==PatchType.CELASTRUS;}
     static boolean mature(PatchType t,Observation o)
-    {return o!=null&&(o.state==CropState.UNCHECKED||o.state==CropState.HARVESTABLE||QuestFarmingStateReader.matureDepleted(t.name(),o.rawValue));}
+    {return o!=null&&(o.state==CropState.UNCHECKED||o.state==CropState.HARVESTABLE||o.state==CropState.GROWING&&QuestFarmingStateReader.matureDepleted(t.name(),o.rawValue));}
     static boolean depleted(PatchType t,Observation o)
     {return o!=null&&QuestFarmingStateReader.matureDepleted(t.name(),o.rawValue);}
     static boolean actionable(PatchType t,Observation o,boolean preserve)
