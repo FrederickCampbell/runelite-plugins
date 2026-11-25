@@ -32,6 +32,7 @@ final class Preparation
         if(from==null)return choices.get(0);
         return choices.stream().min(Comparator.comparingInt(b->Math.max(Math.abs(b.point.getX()-from.getX()),Math.abs(b.point.getY()-from.getY())))).orElse(choices.get(0));
     }
+    enum Phase { UNCHECKED, INITIAL, ACTIVE, RESUPPLY }
     enum StartAt { GUILD("Farming Guild"), BANK("Bank");
         final String label; StartAt(String label){this.label=label;}
         @Override public String toString(){return label;}

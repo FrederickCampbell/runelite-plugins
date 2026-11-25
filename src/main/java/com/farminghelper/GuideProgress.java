@@ -6,21 +6,20 @@ import com.farminghelper.queststate.QuestFarmingStateReader;
 /** Only live transitions on the active patch can confirm a player's interaction. */
 final class GuideProgress
 {
-    private boolean sawEmpty, sawWork, planted, changedLive, cured;
+    private boolean sawWork, planted, changedLive, cured;
     private CropState previous;
     private int previousRaw=-1;
     private Boolean priorProtection;
     private boolean protectionInitiallyKnown;
 
-    void reset() { sawEmpty=false; sawWork=false; planted=false; changedLive=false; cured=false; previous=null; previousRaw=-1; priorProtection=null; protectionInitiallyKnown=false; }
+    void reset() { sawWork=false; planted=false; changedLive=false; cured=false; previous=null; previousRaw=-1; priorProtection=null; protectionInitiallyKnown=false; }
     boolean planted() { return planted; }
     boolean observe(QuestFarmingStateReader.Observation o)
     {
         if (o==null||o.source != QuestFarmingStateReader.Source.LIVE || o.state == null) return false;
         if (!protectionInitiallyKnown) { priorProtection=o.protectedByFarmer; protectionInitiallyKnown=true; }
-        if (o.state == CropState.EMPTY) sawEmpty=true;
         if (o.state != CropState.EMPTY && o.state != CropState.GROWING && o.state != CropState.FILLING) sawWork=true;
-        if (o.state == CropState.GROWING && previous==CropState.EMPTY && sawEmpty) planted=true;
+        if (o.state == CropState.GROWING && previous==CropState.EMPTY) planted=true;
         if (o.state == CropState.GROWING && previous==CropState.DISEASED) cured=true;
         boolean changed=previous!=null && (previous!=o.state || previousRaw!=o.rawValue);
         changedLive|=changed;

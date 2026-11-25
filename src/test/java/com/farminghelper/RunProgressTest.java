@@ -8,15 +8,18 @@ public class RunProgressTest
     {
         FarmRunPatch herb=new FarmRunPatch("Catherby","",PatchType.HERB),flower=new FarmRunPatch("Catherby","",PatchType.FLOWER),tree=new FarmRunPatch("Varrock","",PatchType.TREE),seaweed=new FarmRunPatch("Seaweed","North",PatchType.SEAWEED),bird=BirdhouseRun.patches().get(0);
         RunProgress progress=new RunProgress();
-        progress.include(List.of(herb,flower,tree,seaweed,bird));
-        progress.update(p->p.getPatchType()!=PatchType.BIRDHOUSE,List.of(herb),Set.of(flower),Set.of(flower),Set.of(tree),Set.of(seaweed));
+        List.of(herb,flower,tree,seaweed,bird).forEach(progress::include);
+        progress.finish(flower,true);progress.skip(tree);
+        progress.update(p->p.getPatchType()!=PatchType.BIRDHOUSE,List.of(herb),Set.of(seaweed));
         GuideView.Stats first=progress.stats();
         assertEquals(5,first.total);assertEquals(2,first.pending);assertEquals(1,first.preserved);assertEquals(1,first.skipped);assertEquals(1,first.seedless);assertEquals(0,first.processed);
-        progress.update(p->p.getPatchType()!=PatchType.BIRDHOUSE,List.of(),Set.of(herb,flower),Set.of(flower),Set.of(tree),Set.of(seaweed));
-        progress.update(p->p.getPatchType()==PatchType.BIRDHOUSE,List.of(bird),Set.of(herb,flower),Set.of(flower),Set.of(tree),Set.of());
+        progress.finish(herb,false);
+        progress.update(p->p.getPatchType()!=PatchType.BIRDHOUSE,List.of(),Set.of(seaweed));
+        progress.update(p->p.getPatchType()==PatchType.BIRDHOUSE,List.of(bird),Set.of());
         GuideView.Stats birdPhase=progress.stats();
         assertEquals(5,birdPhase.total);assertEquals(1,birdPhase.pending);assertEquals(1,birdPhase.processed);assertEquals(1,birdPhase.seedless);assertEquals(1,birdPhase.preserved);
-        progress.update(p->p.getPatchType()==PatchType.BIRDHOUSE,List.of(),Set.of(herb,flower,bird),Set.of(flower),Set.of(tree),Set.of());
+        progress.finish(bird,false);
+        progress.update(p->p.getPatchType()==PatchType.BIRDHOUSE,List.of(),Set.of());
         GuideView.Stats end=progress.stats();
         assertEquals(0,end.pending);assertEquals(2,end.processed);
         progress.reset();assertEquals(0,progress.stats().total);
@@ -24,9 +27,23 @@ public class RunProgressTest
     @Test public void deferredIsNotCompletion()
     {
         FarmRunPatch patch=new FarmRunPatch("Kastori","",PatchType.FLOWER);
-        RunProgress progress=new RunProgress();progress.include(List.of(patch));
-        progress.update(p->true,List.of(),Set.of(),Set.of(),Set.of(),Set.of());
+        RunProgress progress=new RunProgress();progress.include(patch);
+        progress.update(p->true,List.of(),Set.of());
         assertEquals(1,progress.stats().deferred);assertEquals(0,progress.stats().processed);
+    }
+    @Test public void aDeferredPatchCanRejoinButAnExplicitSkipSurvivesUnlock()
+    {
+        FarmRunPatch flower=new FarmRunPatch("Kastori","",PatchType.FLOWER);
+        FarmRunPatch tree=new FarmRunPatch("Varrock","",PatchType.TREE);
+        RunProgress progress=new RunProgress();
+        progress.include(flower);progress.skip(tree);
+        progress.update(p->true,List.of(),Set.of());
+        assertEquals(1,progress.stats().total);
+        progress.include(tree);
+        progress.update(p->true,List.of(tree,flower),Set.of());
+        assertEquals(1,progress.stats().skipped);
+        assertEquals(1,progress.stats().pending);
+        assertEquals(0,progress.stats().deferred);
     }
     @Test public void seedlessModesMapToExistingPlannerFlags()
     {

@@ -7,22 +7,36 @@ import java.util.function.Predicate;
  * Deferred means not currently scheduled, not a verified player action. */
 final class RunProgress
 {
-    enum Status {PENDING, COMPLETED, PRESERVED, SKIPPED, DEFERRED, SEEDLESS}
+    enum Status { PENDING, COMPLETED, PRESERVED, SKIPPED, DEFERRED, SEEDLESS, SKIP_ON_UNLOCK }
     private final Map<FarmRunPatch,Status> states=new LinkedHashMap<>();
     void reset(){states.clear();}
-    void include(Collection<FarmRunPatch> selected){for(FarmRunPatch p:selected)states.putIfAbsent(p,Status.PENDING);}
-    void update(Predicate<FarmRunPatch> stage,Collection<FarmRunPatch> ready,Set<FarmRunPatch> completed,Set<FarmRunPatch> preserved,Set<FarmRunPatch> skipped,Set<FarmRunPatch> seedless)
+    void include(FarmRunPatch patch)
     {
+        states.putIfAbsent(patch,Status.PENDING);
+        states.replace(patch,Status.SKIP_ON_UNLOCK,Status.SKIPPED);
+    }
+    boolean is(FarmRunPatch patch,Status status){return states.get(patch)==status;}
+    boolean finished(FarmRunPatch patch){return is(patch,Status.COMPLETED)||is(patch,Status.PRESERVED);}
+    void finish(FarmRunPatch patch,boolean preserve){states.put(patch,preserve?Status.PRESERVED:Status.COMPLETED);}
+    void skip(FarmRunPatch patch)
+    {
+        states.compute(patch,(p,old)->old==null||old==Status.SKIP_ON_UNLOCK?Status.SKIP_ON_UNLOCK:Status.SKIPPED);
+    }
+    void update(Predicate<FarmRunPatch> stage,Collection<FarmRunPatch> ready,Set<FarmRunPatch> seedless)
+    {
+        Set<FarmRunPatch> actionable=new HashSet<>(ready);
         states.replaceAll((p,old)->{
-            if(skipped.contains(p))return Status.SKIPPED;
-            if(preserved.contains(p))return Status.PRESERVED;
-            if(completed.contains(p))return Status.COMPLETED;
-            if(!stage.test(p))return old;
-            if(ready.contains(p))return Status.PENDING;
-            if(seedless.contains(p))return Status.SEEDLESS;
-            return Status.DEFERRED;
+            if(finished(p)||old==Status.SKIPPED||old==Status.SKIP_ON_UNLOCK||!stage.test(p))return old;
+            if(actionable.contains(p))return Status.PENDING;
+            return seedless.contains(p)?Status.SEEDLESS:Status.DEFERRED;
         });
     }
-    private int count(Status status){return (int)states.values().stream().filter(s->s==status).count();}
-    GuideView.Stats stats(){return new GuideView.Stats(count(Status.COMPLETED),count(Status.SKIPPED),count(Status.DEFERRED),count(Status.SEEDLESS),states.size(),count(Status.PENDING),count(Status.PRESERVED));}
+    GuideView.Stats stats()
+    {
+        int[] counts=new int[Status.values().length];
+        for(Status state:states.values())counts[state.ordinal()]++;
+        return new GuideView.Stats(counts[Status.COMPLETED.ordinal()],counts[Status.SKIPPED.ordinal()],
+            counts[Status.DEFERRED.ordinal()],counts[Status.SEEDLESS.ordinal()],states.size()-counts[Status.SKIP_ON_UNLOCK.ordinal()],
+            counts[Status.PENDING.ordinal()],counts[Status.PRESERVED.ordinal()]);
+    }
 }
