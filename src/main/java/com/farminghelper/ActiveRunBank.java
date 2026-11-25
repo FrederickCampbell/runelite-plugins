@@ -1,12 +1,9 @@
 package com.farminghelper;
 
 import java.util.*;
-import java.util.function.IntFunction;
-import java.util.function.IntUnaryOperator;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.ItemComposition;
-import net.runelite.api.InventoryID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.bank.BankSearch;
@@ -53,21 +50,6 @@ final class ActiveRunBank
     {
         if(!registered){tags.registerTag(TAG,id->includes(admitted,id,items.getItemComposition(id))&&ids.contains(id));registered=true;}
     }
-    /** One live ownership snapshot for both curation and positional layout.
-     * Seed Vault stock and native bank placeholders are not bank shelf items. */
-    static Map<Integer,Integer> ownedStock(Client client,IntFunction<ItemComposition> definition)
-    {return ownedStock(client,definition,id->id);}
-    static Map<Integer,Integer> ownedStock(Client client,IntFunction<ItemComposition> definition,IntUnaryOperator canonicalizeWorn)
-    {
-        Map<Integer,Integer> result=new HashMap<>(),worn=new HashMap<>();
-        PhysicalStock.collect(result,client.getItemContainer(InventoryID.BANK),definition);
-        PhysicalStock.collect(result,client.getItemContainer(InventoryID.INVENTORY),definition);
-        PhysicalStock.collect(worn,client.getItemContainer(InventoryID.EQUIPMENT),definition);
-        // Only normalize worn IDs for this visual shelf; exact supply stock is unchanged.
-        worn.forEach((id,n)->result.merge(canonicalizeWorn.applyAsInt(id),n,Integer::sum));
-        return Map.copyOf(result);
-    }
-    Map<Integer,Integer> ownedStock(){return ownedStock(client,items::getItemComposition,items::canonicalize);}
     private String name(int id){ItemComposition d=items.getItemComposition(id);return d==null?"":d.getName();}
     private int slot(int id){var s=items.getItemStats(id);return s==null||s.getEquipment()==null?-1:s.getEquipment().getSlot();}
     static Set<Integer> admittedIds(int[] layout)

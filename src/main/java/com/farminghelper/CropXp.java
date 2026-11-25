@@ -70,13 +70,19 @@ final class CropXp
     private static void tree(PatchType t,String n,double p,double c,double h,double y,boolean estimate){add(t,n+" sapling",p,c,h,y,estimate);}
     static Score score(Crop crop){return DATA.get(key(crop.getPatchType(),crop.getName()));}
     static double perSeed(Crop crop){Score s=score(crop);return s==null?Double.NaN:s.total()/crop.getQuantity();}
+    private static final Map<PatchType,Map<Integer,List<Crop>>> rankings=new java.util.concurrent.ConcurrentHashMap<>();
     static List<Crop> ranked(PatchType type,int level)
+    {
+        return rankings.computeIfAbsent(type,t->new java.util.concurrent.ConcurrentHashMap<>())
+            .computeIfAbsent(Math.max(0,Math.min(99,level)),l->rank(type,l));
+    }
+    private static List<Crop> rank(PatchType type,int level)
     {
         List<Crop> out=new ArrayList<>();
         for(Crop c:CropCatalog.crops(type))if(c.getLevel()<=level)out.add(c);
         out.sort(Comparator.<Crop>comparingDouble(c->{double v=perSeed(c);return Double.isNaN(v)?-1:v;}).reversed()
             .thenComparing(Comparator.comparingInt(Crop::getLevel).reversed()));
-        return out;
+        return List.copyOf(out);
     }
     private CropXp(){}
 }

@@ -1,5 +1,6 @@
 package com.farminghelper;
 
+import com.farminghelper.queststate.QuestFarmingStateReader;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
@@ -21,19 +22,22 @@ final class PatchHighlight extends Overlay
     private final Set<GameObject> objects=new HashSet<>();
     @Inject PatchHighlight(Client client,Provider<FarmingHelperPlugin> plugin)
     {this.client=client;this.plugin=plugin;setPosition(OverlayPosition.DYNAMIC);}
+    Iterable<GameObject> objects(){return objects;}
     void spawned(GameObject object)
     {
         if(object==null)return;
         ObjectComposition c=client.getObjectDefinition(object.getId());
-        if(BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || isBin(c))
+        if(BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || verificationObject(c))
         {objects.add(object);return;}
         if(c!=null && c.getImpostorIds()!=null)
-            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || isBin(client.getObjectDefinition(id))){objects.add(object);return;}
+            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || verificationObject(client.getObjectDefinition(id))){objects.add(object);return;}
     }
     void despawned(GameObject o){objects.remove(o);}
     void clear(){objects.clear();}
     private static String name(ObjectComposition c){return c==null || c.getName()==null?"":c.getName().toLowerCase(Locale.ROOT);}
     private static boolean isBin(ObjectComposition c){return name(c).contains("compost bin");}
+    private static boolean verificationObject(ObjectComposition c)
+    {return c!=null&&(isBin(c)||QuestFarmingStateReader.matchesLiveName(c.getName(),true));}
     private static boolean isVine(ObjectComposition c){String n=name(c);return n.contains("grape") || n.contains("vine patch");}
     private static boolean hasAction(ObjectComposition c,String action)
     {if(c==null || c.getActions()==null)return false;for(String a:c.getActions())if(a!=null && a.equalsIgnoreCase(action))return true;return false;}

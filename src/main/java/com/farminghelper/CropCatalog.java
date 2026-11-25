@@ -58,6 +58,17 @@ final class CropCatalog
 		return null;
 	}
 
+    static List<Crop> preferences(PatchType type,String names)
+    {
+        List<Crop> result=new ArrayList<>();
+        for(String name:names.split(","))
+        {
+            Crop crop=findByName(type,name.trim());
+            if(crop!=null&&!result.contains(crop))result.add(crop);
+        }
+        return result;
+    }
+
 	private static Map<PatchType, List<Crop>> buildCatalog()
 	{
 		Map<PatchType, List<Crop>> crops = new EnumMap<>(PatchType.class);

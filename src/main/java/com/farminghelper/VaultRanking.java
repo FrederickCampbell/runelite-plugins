@@ -25,18 +25,7 @@ final class VaultRanking
     static Crop resolve(int id,String itemName)
     {
         Crop direct=CropCatalog.findByItemId(id);
-        if(direct!=null)return direct;
-        if(itemName==null)return null;
-        String name=itemName.trim().toLowerCase(Locale.ROOT);
-        for(PatchType type:PatchType.values())for(Crop c:CropCatalog.crops(type))
-        {
-            if(!c.getName().endsWith(" sapling"))continue;
-            String base=c.getName().substring(0,c.getName().length()-8).toLowerCase(Locale.ROOT);
-            if(name.equals(base+" seed")||name.equals(base+" tree seed")||
-                (base.equals("oak")&&name.equals("acorn"))||(base.equals("crystal")&&name.equals("crystal acorn"))||
-                TreePreparation.seedlingStage(base,name)!=null)return c;
-        }
-        return null;
+        return direct!=null?direct:TreePreparation.material(itemName);
     }
 
     /** Distinct canonical crops, but all of the chosen crop's stocked native
@@ -59,11 +48,7 @@ final class VaultRanking
             if(view==View.CUSTOM)
             {
                 for(Crop c:overrides.getOrDefault(type,Collections.emptySet()))if(!order.contains(c))order.add(c);
-                for(String n:priorities.apply(type).split(","))
-                {
-                    Crop c=CropCatalog.findByName(type,n.trim());
-                    if(c!=null&&!order.contains(c))order.add(c);
-                }
+                for(Crop c:CropCatalog.preferences(type,priorities.apply(type)))if(!order.contains(c))order.add(c);
             }
             else order.addAll(CropXp.ranked(type,level));
             int limit=view==View.HIGHEST?1:view==View.TOP_THREE?3:Integer.MAX_VALUE;

@@ -14,6 +14,10 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.GameObject;
+import net.runelite.api.ObjectComposition;
+import net.runelite.api.WorldView;
+import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.timetracking.Tab;
@@ -296,27 +300,30 @@ public final class QuestFarmingStateReader
         }
     }
 
-    private boolean confirmedObject(FarmingPatch match,WorldPoint marker,boolean flower)
+    private Iterable<GameObject> objects=Collections.emptyList();
+
+    public void useSceneObjects(Iterable<GameObject> objects){this.objects=objects;}
+
+    boolean confirmedObject(FarmingPatch match,WorldPoint marker,boolean flower)
     {
-        if(marker==null||client.getScene()==null||client.getScene().getTiles()==null)return false;
-        net.runelite.api.Tile[][][] tiles=client.getScene().getTiles();
-        int plane=marker.getPlane();if(plane<0||plane>=tiles.length||tiles[plane]==null)return false;
-        // Local scene only. Varbits are multiplexed between areas, so do not
-        // interpret a neighbour's transmit value as the requested patch.
-        for(net.runelite.api.Tile[] row:tiles[plane])if(row!=null)for(net.runelite.api.Tile tile:row)
+        WorldView view=client.getLocalPlayer()==null?null:client.getLocalPlayer().getWorldView();
+        if(marker==null||view==null)return false;
+        for(GameObject object:objects)
         {
-            if(tile==null||tile.getWorldLocation()==null||tile.getWorldLocation().distanceTo(marker)>(flower?6:25)||tile.getGameObjects()==null)continue;
-            for(net.runelite.api.GameObject object:tile.getGameObjects())if(object!=null)
-            {
-                net.runelite.api.ObjectComposition base=client.getObjectDefinition(object.getId());
-                if(base==null||base.getVarbitId()!=match.getVarbit())continue;
-                net.runelite.api.ObjectComposition actual=base.getImpostorIds()==null?base:base.getImpostor();
-                if(actual!=null&&matchesLiveName(actual.getName(),flower))return true;
-            }
+            if(object.getWorldView()!=view || object.getPlane()!=marker.getPlane())continue;
+            ObjectComposition base=client.getObjectDefinition(object.getId());
+            if(base==null||base.getVarbitId()!=match.getVarbit())continue;
+            ObjectComposition actual=base.getImpostorIds()==null?base:base.getImpostor();
+            if(actual==null||!matchesLiveName(actual.getName(),flower))continue;
+            var min=object.getSceneMinLocation();
+            if(min==null)continue;
+            WorldArea footprint=new WorldArea(view.getBaseX()+min.getX(),view.getBaseY()+min.getY(),
+                Math.max(1,object.sizeX()),Math.max(1,object.sizeY()),object.getPlane());
+            if(footprint.distanceTo(marker)<=(flower?6:25))return true;
         }
         return false;
     }
-    static boolean matchesLiveName(String name,boolean flower)
+    public static boolean matchesLiveName(String name,boolean flower)
     {
         if(name==null)return false;
         String n=name.toLowerCase(Locale.ROOT);

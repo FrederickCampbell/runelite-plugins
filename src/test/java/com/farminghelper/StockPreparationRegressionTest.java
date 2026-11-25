@@ -33,4 +33,19 @@ public class StockPreparationRegressionTest
         Map<Integer,Integer> refreshed=StockSnapshot.decode("");
         assertTrue(SeedChoices.allocate(List.of(a,b),99,TreePreparation.allocationStock(refreshed,TreePreparation.aliases(refreshed,id->"Calquat tree seed")),t->"",p->"",Map.of(),true).isEmpty());
     }
+    @org.junit.Test public void unchangedContainersReuseQuantitiesAndAContainerEventReplacesThem() throws Exception
+    {
+        var plugin=new FarmingHelperPlugin();
+        var client=org.mockito.Mockito.mock(net.runelite.api.Client.class);
+        var clientField=FarmingHelperPlugin.class.getDeclaredField("client");
+        clientField.setAccessible(true);clientField.set(plugin,client);
+        var first=plugin.stock();
+        assertSame(first,plugin.stock());
+        org.mockito.Mockito.verify(client).getItemContainer(net.runelite.api.InventoryID.INVENTORY);
+        var event=org.mockito.Mockito.mock(net.runelite.api.events.ItemContainerChanged.class);
+        org.mockito.Mockito.when(event.getContainerId()).thenReturn(net.runelite.api.InventoryID.INVENTORY.getId());
+        plugin.onItemContainerChanged(event);
+        assertNotSame(first,plugin.stock());
+        org.mockito.Mockito.verify(client,org.mockito.Mockito.times(2)).getItemContainer(net.runelite.api.InventoryID.INVENTORY);
+    }
 }

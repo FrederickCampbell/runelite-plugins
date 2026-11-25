@@ -146,10 +146,8 @@ final class CuratedBank
         if(!diving&&(divingEquipment(n)||divingEquipment(base)))return false;
         return true;
     }
-    private static boolean divingEquipment(String n){return n.equals("fishbowl helmet")||n.equals("diving apparatus")||n.equals("medallion of the deep")||n.equals("flippers");}
-    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config,boolean bird)
-    {return shelf(run,owned,names,client,config,bird,!bird,!bird);}
-    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config,boolean bird,boolean trees,boolean diving)
+    static boolean divingEquipment(String n){return n.equals("fishbowl helmet")||n.equals("diving apparatus")||n.equals("medallion of the deep")||n.equals("flippers");}
+    static Set<Integer> shelf(Set<Integer> run,Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config,boolean bird,boolean trees,boolean diving,Set<Integer> eligible)
     {
         if(run==null)return null;
         Set<Integer> result=new HashSet<>(run);
@@ -162,7 +160,7 @@ final class CuratedBank
             if(contextualEquipment(id,names,bird,trees,diving))result.add(id);
             if(fairy&&!blocked.contains(id)&&(id==772||id==9084)&&fairyAccess(client))result.add(id);
         }
-        result.addAll(eligibleTeleports(owned,names,client,config).keySet());
+        result.addAll(eligible);
         return Set.copyOf(result);
     }
 

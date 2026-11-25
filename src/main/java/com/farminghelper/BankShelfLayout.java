@@ -25,7 +25,6 @@ final class BankShelfLayout
     private static boolean outfit(String n,String kind){return n.contains(kind);}
     private static boolean diary(String n){return n.startsWith("ardougne cloak")||n.startsWith("explorer's ring")||n.startsWith("rada's blessing")||n.startsWith("karamja gloves")||n.startsWith("desert amulet")||n.startsWith("morytania legs")||n.startsWith("fremennik sea boots")||n.startsWith("kandarin headgear")||n.startsWith("wilderness sword")||n.startsWith("western banner");}
     private static boolean cape(String n){return n.contains("cape")&&!n.contains("graceful")&&!n.contains("escape");}
-    private static boolean dive(String n){return n.equals("fishbowl helmet")||n.equals("diving apparatus")||n.equals("medallion of the deep")||n.equals("flippers");}
     private static boolean spellGear(String n){return n.contains("rune pouch")||n.startsWith("tome of ")||(n.contains("staff")&&!n.equals("dramen staff")&&!n.equals("lunar staff"));}
     private static boolean consumableTeleport(String n){return n.contains("tablet")||n.endsWith(" basalt")||n.contains("teleport scroll")||n.endsWith(" teleport")||n.endsWith(" teleport scroll");}
     private static boolean jewellery(String n){return n.startsWith("amulet ")||n.startsWith("ring ")||n.startsWith("skills necklace")||n.startsWith("games necklace")||n.startsWith("combat bracelet")||n.startsWith("necklace of passage")||n.startsWith("slayer ring")||n.startsWith("digsite pendant")||n.startsWith("pendant of ates")||n.startsWith("xeric's talisman")||n.startsWith("teleport crystal")||n.startsWith("pharaoh's sceptre");}
@@ -90,7 +89,7 @@ final class BankShelfLayout
         block(out,overflow);
         if(!out.isEmpty()&&!left.isEmpty()){pad(out);for(int i=0;i<WIDTH;i++)out.add(-1);}
         block(out,take(left,id->cape(name(names,id)),byName));
-        block(out,take(left,id->dive(name(names,id)),Comparator.comparingInt((Integer id)->slot(name(names,id),equipment.applyAsInt(id))).thenComparing(byName)));
+        block(out,take(left,id->CuratedBank.divingEquipment(name(names,id)),Comparator.comparingInt((Integer id)->slot(name(names,id),equipment.applyAsInt(id))).thenComparing(byName)));
         block(out,take(left,id->diary(name(names,id)),byName));
         // Permanent travel accessories, then one row per jewellery family.
         block(out,take(left,id->transport.applyAsInt(id)==PERMANENT&&!jewellery(name(names,id))&&!consumableTeleport(name(names,id)),byName));

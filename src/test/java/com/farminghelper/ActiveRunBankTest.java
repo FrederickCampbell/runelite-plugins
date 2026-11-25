@@ -11,6 +11,14 @@ import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 public class ActiveRunBankTest
 {
+    private static Map<Integer,Integer> ownedStock(Client client,java.util.function.IntFunction<ItemComposition> definitions)
+    {return ownedStock(client,definitions,id->id);}
+    private static Map<Integer,Integer> ownedStock(Client client,java.util.function.IntFunction<ItemComposition> definitions,java.util.function.IntUnaryOperator canonical)
+    {
+        return new PhysicalStock(PhysicalStock.read(client.getItemContainer(InventoryID.INVENTORY),definitions),
+            PhysicalStock.read(client.getItemContainer(InventoryID.EQUIPMENT),definitions),
+            PhysicalStock.read(client.getItemContainer(InventoryID.BANK),definitions),Map.of(),id->"",canonical).shelf;
+    }
     @Test public void admitsOnlyIdsAlreadyInSuppliedNativeLayout()
     {
         assertEquals(Set.of(1513,1755),ActiveRunBank.admittedIds(new int[]{-1,1513,1755,-1,1513}));
@@ -35,7 +43,7 @@ public class ActiveRunBankTest
         when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(inventory);
         when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(equipment);
         assertEquals(Map.of(952,1,556,100,7409,1,11850,1),
-            ActiveRunBank.ownedStock(client,id->id==999?placeholder:real));
+            ownedStock(client,id->id==999?placeholder:real));
     }
     @Test public void transfersAndWearingDoNotChangeOwnership()
     {
@@ -49,7 +57,7 @@ public class ActiveRunBankTest
         when(client.getItemContainer(InventoryID.BANK)).thenReturn(initialBank,empty);
         when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(empty,inventory);
         when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(empty,equipment);
-        assertEquals(ActiveRunBank.ownedStock(client,id->real),ActiveRunBank.ownedStock(client,id->real));
+        assertEquals(ownedStock(client,id->real),ownedStock(client,id->real));
     }
     @Test public void wornCanonicalizationDoesNotDuplicateOrNormalizeOtherSources()
     {
@@ -60,7 +68,7 @@ public class ActiveRunBankTest
         when(client.getItemContainer(InventoryID.BANK)).thenReturn(bank);
         when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(bag);
         when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(worn);
-        assertEquals(Map.of(11850,2,952,1),ActiveRunBank.ownedStock(client,id->real,id->id==11851?11850:id));
+        assertEquals(Map.of(11850,2,952,1),ownedStock(client,id->real,id->id==11851?11850:id));
     }
     @Test public void combinedStockKeepsInputsAndAddsQuantities()
     {

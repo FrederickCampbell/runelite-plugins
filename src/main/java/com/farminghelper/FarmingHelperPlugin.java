@@ -78,6 +78,11 @@ public class FarmingHelperPlugin extends Plugin
     private volatile long session;
     private volatile boolean guideRequested;
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
+    private final Set<InventoryID> sampledStorage=EnumSet.noneOf(InventoryID.class);
+    private PhysicalStock quantities;
+    private List<?> allocationInputs=List.of();
+    private Map<FarmRunPatch,Crop> allocated=Map.of();
+    private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
     private String stockProfile;
     private long bankObservedAt,vaultObservedAt;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
@@ -120,6 +125,7 @@ public class FarmingHelperPlugin extends Plugin
     @Override protected void startUp()
     {
         running = true;
+        reader.useSceneObjects(highlight.objects());
         navigation=new NavigationBridge(bus::post);
         if(itemManager!=null)vaultViews=new SeedVaultViews(client,itemManager,this);
         if(itemManager!=null)runBank=new ActiveRunBank(client,plugins,itemManager);
@@ -218,7 +224,7 @@ public class FarmingHelperPlugin extends Plugin
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;preparationOrigin=null;
-        pinned=null;
+        pinned=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
@@ -252,6 +258,7 @@ public class FarmingHelperPlugin extends Plugin
         lastAccessLevel=-1;
         vaultAccessible=Collections.emptySet();vaultAccessRevision++;
         accessNotes=Collections.emptyMap();
+        invalidateStock();
         bank.clear();
         vault.clear();
         stockProfile=null;
@@ -289,7 +296,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         long id=session;thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
-            loadStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
+            loadStock();invalidateStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
             save("observedBankV1","");save("observedVaultV1","");
             sampleStorage();lastView=null;update();
         });
@@ -365,6 +372,7 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onGameStateChanged(GameStateChanged event)
     {
         if(event.getGameState()==GameState.LOADING || event.getGameState()==GameState.LOGIN_SCREEN) highlight.clear();
+        if(event.getGameState()==GameState.HOPPING || event.getGameState()==GameState.LOGGING_IN)invalidateStock();
         if(event.getGameState()==GameState.LOGIN_SCREEN){reset();return;}
         if(event.getGameState()==GameState.HOPPING&&guideRequested)
         {
@@ -379,10 +387,9 @@ public class FarmingHelperPlugin extends Plugin
     {
         if (client.getGameState() != GameState.LOGGED_IN) return;
         if(hopping){hopping=false;if(!Objects.equals(runProfile,config.getRSProfileKey()))reset();lastView=null;}
-        loadStock();
         sampleStorage();
         // Re-evaluate quest, diary, Hunter and Sailing gates even when Farming is unchanged.
-        if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;updateAccessNotes();}
+        if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;eligibleTravel.clear();updateAccessNotes();}
         if (!run.isEmpty() && guideRequested)
         {
             if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(LocationContext.capture(client).pathStart());
@@ -396,14 +403,28 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onWidgetLoaded(WidgetLoaded event)
     {
         if (event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.SEED_VAULT)
+        {
+            sampledStorage.remove(event.getGroupId()==InterfaceID.BANKMAIN?InventoryID.BANK:InventoryID.SEED_VAULT);
             thread.invokeLater(() -> { if (running) sampleStorage(); });
+        }
     }
 
     @Subscribe public void onItemContainerChanged(ItemContainerChanged event)
     {
-        if (event.getContainerId() == InventoryID.BANK.getId() || event.getContainerId() == InventoryID.SEED_VAULT.getId())
+        int id=event.getContainerId();
+        if(id==InventoryID.INVENTORY.getId()||id==InventoryID.EQUIPMENT.getId())quantities=null;
+        if(id==InventoryID.BANK.getId()||id==InventoryID.SEED_VAULT.getId())
+        {
+            sampledStorage.remove(id==InventoryID.BANK.getId()?InventoryID.BANK:InventoryID.SEED_VAULT);
             sampleStorage();
-        if(vaultViews!=null&&event.getContainerId()==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
+            if(vaultViews!=null&&id==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
+        }
+    }
+
+    @Subscribe public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
+    {
+        if("shortestpath".equals(event.getGroup()))thread.invokeLater(eligibleTravel::clear);
+        if("farming-helper".equals(event.getGroup())&&!event.getKey().startsWith("observed"))preferenceRevision++;
     }
 
     @Subscribe public void onPostClientTick(PostClientTick event)
@@ -433,7 +454,7 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> ids=new HashSet<>(runItems);
         boolean bird=birdBankPhase();
         boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
-        return CuratedBank.shelf(ids,owned,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving);
+        return CuratedBank.shelf(ids,owned,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving,teleports(owned).keySet());
     }
     private void updateRunBank(boolean manual)
     {
@@ -441,7 +462,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean enabled=flag("activeRunBank",true);
         if(!enabled||!guideRequested||run.isEmpty()||!runBank.bankOpen())
         {runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return;}
-        Map<Integer,Integer> owned=runBank.ownedStock();
+        Map<Integer,Integer> owned=stock().shelf;
         Set<Integer> eligible=bankRunItems(owned);
         if(manual)runBank.show(eligible,owned.keySet(),birdBankPhase());
         else runBank.tick(eligible,owned.keySet(),enabled,birdBankPhase());
@@ -476,7 +497,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         String profile=config.getRSProfileKey();
         if(Objects.equals(profile,stockProfile))return;
-        bank.clear();vault.clear();stockProfile=profile;
+        invalidateStock();bank.clear();vault.clear();stockProfile=profile;
         bankObservedAt=0;vaultObservedAt=0;
         if(profile!=null)
         {
@@ -509,23 +530,45 @@ public class FarmingHelperPlugin extends Plugin
 
     private void observeStorage(int component, InventoryID id, Map<Integer,Integer> snapshot,String key)
     {
-        if (client.getWidget(component) == null || client.getWidget(component).isHidden()) return;
+        var widget=client.getWidget(component);
+        if(widget==null||widget.isHidden()){sampledStorage.remove(id);return;}
         ItemContainer container = client.getItemContainer(id);
         if (container == null) return;
-        Map<Integer,Integer> observed=new HashMap<>();
-        addItems(observed,container);
         if(id==InventoryID.BANK)bankObservedAt=System.currentTimeMillis();
         if(id==InventoryID.SEED_VAULT)vaultObservedAt=System.currentTimeMillis();
+        if(!sampledStorage.add(id))return;
+        Map<Integer,Integer> observed=readItems(container);
         if(!observed.equals(snapshot))
         {
-            snapshot.clear();snapshot.putAll(observed);
+            quantities=null;snapshot.clear();snapshot.putAll(observed);
             if(Objects.equals(stockProfile,config.getRSProfileKey()))save(key,StockSnapshot.encode(snapshot));
         }
     }
 
-    private void addItems(Map<Integer,Integer> stock, ItemContainer container)
+    private void invalidateStock()
     {
-        if(itemManager!=null)PhysicalStock.collect(stock,container,itemManager::getItemComposition);
+        quantities=null;sampledStorage.clear();eligibleTravel.clear();
+    }
+
+    private Map<Integer,Integer> readItems(ItemContainer container)
+    {return itemManager==null?Map.of():PhysicalStock.read(container,itemManager::getItemComposition);}
+
+    PhysicalStock stock()
+    {
+        if(quantities==null)
+        {
+            eligibleTravel.clear();
+            quantities=new PhysicalStock(readItems(client.getItemContainer(InventoryID.INVENTORY)),
+                readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank,vault,this::observedItemName,
+                id->itemManager==null?id:itemManager.canonicalize(id));
+        }
+        return quantities;
+    }
+
+    private Map<Integer,List<String>> teleports(Map<Integer,Integer> owned)
+    {
+        return eligibleTravel.computeIfAbsent(owned.keySet(),ids->
+            CuratedBank.eligibleTeleports(owned,this::observedItemName,client,config));
     }
 
     static boolean actionable(PatchType type, CropState state)
@@ -579,38 +622,33 @@ public class FarmingHelperPlugin extends Plugin
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         LocationContext location=LocationContext.capture(client);
         int level = client.getRealSkillLevel(Skill.FARMING);
-        Map<Integer,Integer> bag=new HashMap<>(), equipped=new HashMap<>();
-        addItems(bag,client.getItemContainer(InventoryID.INVENTORY));
-        addItems(equipped,client.getItemContainer(InventoryID.EQUIPMENT));
-        Map<Integer,Integer> carried=PhysicalStock.combine(bag,equipped);
+        PhysicalStock supplies=stock();
+        Map<Integer,Integer> bag=supplies.bag,equipped=supplies.equipped,carried=supplies.carried;
         // Run this before normal planning, even during banking or birdhouses. No
         // mutations to the normal guide cursor, progress, or preparation state.
-        if(loggedIn&&showDiseaseInterrupt(title,bag,carried,location))return;
-        Map<Integer,Integer> storage=PhysicalStock.combine(bank,vault);
-        Map<Integer,Integer> stock=PhysicalStock.combine(bag,storage);
+        Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new HashMap<>();
+        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations))return;
+        Map<Integer,Integer> storage=supplies.storage,stock=supplies.stock;
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
         boolean protect=runPolicy.protection, pay=runPayRemoval;
-        Map<Integer,Integer> aliases=TreePreparation.aliases(stock,this::observedItemName);
-        Map<Integer,Integer> allocationStock=TreePreparation.allocationStock(stock,aliases);
+        Map<Integer,Integer> aliases=supplies.aliases;
         CompostChoice compost=CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));
         if(runPolicy.compost&&compost==CompostChoice.NONE)compost=CompostChoice.BOTTOMLESS;
         int compostId=runPolicy.compost?compost.resolve(stock.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)):-1;
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
-        Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new LinkedHashMap<>();
         int contract=loggedIn?client.getVarbitValue(VarbitID.FARMGUILD_CONTRACT_TYPE):0;
         int spiritSlots=spiritCapacity(level);
         if(loggedIn && run.contains(FarmRunType.SPECIALTY) && level<99)
             for(FarmRunPatch p:patches) if(p.getPatchType()==PatchType.SPIRIT_TREE)
-            { CropState state=observe(p).state; if(state!=null && state!=CropState.EMPTY && state!=CropState.DEAD) spiritSlots--; }
+            { CropState state=observations.computeIfAbsent(p,this::observe).state; if(state!=null && state!=CropState.EMPTY && state!=CropState.DEAD) spiritSlots--; }
         if(loggedIn) for(FarmRunPatch p:patches)
         {
             PatchType type=p.getPatchType();
             if(!ManualSelection.includes(p,run,manualKeys)||!enabled(p)||!accessNote(p).isEmpty())continue;
             runProgress.include(p);
             if(!SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,type)||runProgress.is(p,RunProgress.Status.SKIPPED))continue;
-            QuestFarmingStateReader.Observation o=observe(p);
+            QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
             if(o==null) continue;
-            observations.put(p,o);
             if(type==PatchType.BIRDHOUSE)
             {
                 if(runProgress.finished(p)){visible.add(p);continue;}
@@ -708,8 +746,7 @@ public class FarmingHelperPlugin extends Plugin
                 // Do not let routine watering pull Fossil Island ahead of remaining mainland work.
                 // Verified disease interruptions remain independent and can still interrupt.
                 if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
-                QuestFarmingStateReader.Observation o=observations.get(p);
-                if(o==null)o=observe(p);
+                QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
                 boolean water=ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,wateringCan)&&highlight.hasLocalPatch(p);
                 if(p==current&&activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
                 if(!water||wateredThisRun.contains(p))continue;
@@ -726,7 +763,13 @@ public class FarmingHelperPlugin extends Plugin
         Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current)!=null &&
             observations.get(current).source==QuestFarmingStateReader.Source.LIVE
             ? Map.of(current,activeCrop):Collections.emptyMap();
-        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,allocationStock,this::priority,this::override,committed,hideSeedless,this::autoLily);
+        List<?> inputs=List.of(List.copyOf(plant),level,supplies,preferenceRevision,committed,hideSeedless,temporaryReplacement);
+        if(!inputs.equals(allocationInputs))
+        {
+            allocated=SeedChoices.allocate(plant,level,supplies.allocation,this::priority,this::override,committed,hideSeedless,this::autoLily);
+            allocationInputs=inputs;
+        }
+        Map<FarmRunPatch,Crop> seeds=allocated;
         int seedlessCount=0;
         Set<FarmRunPatch> seedless=new HashSet<>();
         Set<FarmRunPatch> clearOnly=new HashSet<>();
@@ -814,11 +857,10 @@ public class FarmingHelperPlugin extends Plugin
         Supplies.addCompost(required,compostId,compostCount);
         if(ready.stream().anyMatch(p->p.getPatchType()==PatchType.CORAL))
         {
-            Map<Integer,Integer> diveStock=new HashMap<>(bank);carried.forEach((id,n)->diveStock.merge(id,n,Integer::sum));
-            DivingKit.require(required,diveStock,carried);
+            DivingKit.require(required,supplies.travel,carried);
         }
         Map<Integer,Integer> farmingRequirements=new LinkedHashMap<>(required);
-        Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?PhysicalStock.combine(bag,bank):stock;
+        Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?supplies.bankAndBag:stock;
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
@@ -836,9 +878,8 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
         // Only observed bank/inventory/equipment stock. Keep the existing bank
         // shelf broad and stable; recommendations never change its membership.
-        Map<Integer,Integer> travelStock=PhysicalStock.combine(carried,bank);
         Map<Integer,Set<String>> teleports=loggedIn&&config!=null&&itemManager!=null
-            ?RunTeleports.select(ready,CuratedBank.eligibleTeleports(travelStock,this::observedItemName,client,config),carried)
+            ?RunTeleports.select(ready,teleports(supplies.travel),carried)
             :Collections.emptyMap();
         Set<Integer> missingTravel=new HashSet<>();
         teleports.forEach((id,sites)->{
@@ -909,7 +950,7 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
         {
             List<FarmRunPatch> birds=new ArrayList<>();
-            for(FarmRunPatch p:patches)if(p.getPatchType()==PatchType.BIRDHOUSE&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!runProgress.is(p,RunProgress.Status.SKIPPED)&&Waypoints.accessIssue(client,p.getPatchType(),p.getLocation(),level,false)==null)birds.add(p);
+            for(FarmRunPatch p:patches)if(p.getPatchType()==PatchType.BIRDHOUSE&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!runProgress.is(p,RunProgress.Status.SKIPPED)&&accessNote(p).isEmpty())birds.add(p);
             birds.sort(Comparator.comparingInt(BirdhouseRun::order));
             for(FarmRunPatch p:birds)stops.add(new GuideView.Stop(p,"Birdhouses — after farming.",false,false));
         }
@@ -1016,7 +1057,8 @@ public class FarmingHelperPlugin extends Plugin
         }
     }
 
-    private boolean showDiseaseInterrupt(String title,Map<Integer,Integer> bag,Map<Integer,Integer> carried,LocationContext location)
+    private boolean showDiseaseInterrupt(String title,Map<Integer,Integer> carried,LocationContext location,
+        Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations)
     {
         if(highlight==null)return false;
         WorldPoint here=location.actual;
@@ -1026,7 +1068,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             PatchType type=p.getPatchType();
             if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),location.normalized))continue;
-            QuestFarmingStateReader.Observation o=observe(p);
+            QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
             if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.DISEASED||!highlight.hasVerifiedDisease(p))continue;
             verified.put(p,o);approaches.put(p,highlight.approach(p));
         }

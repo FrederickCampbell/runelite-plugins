@@ -34,6 +34,7 @@ final class SeedVaultViews
     private final FarmingHelperPlugin plugin;
     private final Map<Widget,WidgetState> changed=new IdentityHashMap<>();
     private Widget scrollParent;
+    private Widget[] projectedHeaders;
     private int nativeHeight,nativeScroll,nativeVarScroll,appliedHeight=-1,customScroll,lastWidth=-1;
     private boolean scrollbarDirty;
     private final EnumMap<VaultRanking.View,Widget> buttons=new EnumMap<>(VaultRanking.View.class);
@@ -97,6 +98,17 @@ final class SeedVaultViews
 
     void tick()
     {
+        if(scrollParent!=null)
+        {
+            Widget[] headers=children(client.getWidget(HEADERS));
+            if(scrollParent!=client.getWidget(VIEWPORT)||scrollParent.getScrollHeight()!=appliedHeight||
+                !Arrays.equals(projectedHeaders,headers))dirty=true;
+            else for(Widget header:headers)
+            {
+                WidgetState state=changed.get(header);
+                if(state!=null&&!state.matches(header)){dirty=true;break;}
+            }
+        }
         refresh();
         if(buildDepth==0)flushScrollbar();
     }
@@ -306,7 +318,7 @@ final class SeedVaultViews
             if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=nativeVarScroll)
                 client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,nativeVarScroll);
         }
-        scrollParent=null;appliedHeight=-1;
+        scrollParent=null;projectedHeaders=null;appliedHeight=-1;
         if(exit)customScroll=0;
     }
     private static final class Pair
@@ -437,6 +449,7 @@ final class SeedVaultViews
         }
         // Reset to the top on initial selection, or retain the local scroll on rebuild.
         {
+            projectedHeaders=children(headerParent).clone();
             scrollParent=viewport;nativeHeight=viewport.getScrollHeight();nativeScroll=viewport.getScrollY();
             nativeVarScroll=client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS);
             appliedHeight=Math.max(viewport.getHeight(),nativeExtent-(full?shift:0));

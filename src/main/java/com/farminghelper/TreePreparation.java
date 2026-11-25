@@ -9,26 +9,30 @@ final class TreePreparation
     static final int FILLED_POT=5354, WATERING_CAN=5331;
     enum Stage { WATERED, SEEDLING, SEED }
 
-    /** Exact native names; tolerate the optional space before the watered suffix. */
-    static Stage seedlingStage(String base,String name)
+    private static final Map<String,Crop> materials=new HashMap<>();
+    static
     {
-        String n=name.trim().toLowerCase(Locale.ROOT).replace(" (w)","(w)");
-        for(String prefix:List.of(base,base+" tree"))
+        for(PatchType type:PatchType.values())for(Crop crop:CropCatalog.crops(type))
         {
-            if(n.equals(prefix+" seedling(w)")||n.equals(prefix+" sapling(w)"))return Stage.WATERED;
-            if(n.equals(prefix+" seedling"))return Stage.SEEDLING;
+            if(!crop.getName().endsWith(" sapling"))continue;
+            String base=crop.getName().substring(0,crop.getName().length()-8).toLowerCase(Locale.ROOT);
+            for(String prefix:List.of(base,base+" tree"))
+                for(String suffix:List.of(" seed"," seedling"," seedling(w)"," sapling(w)"))materials.put(prefix+suffix,crop);
+            if(base.equals("oak"))materials.put("acorn",crop);
+            if(base.equals("crystal"))materials.put("crystal acorn",crop);
         }
-        return null;
     }
+    private static String normalized(String name)
+    {return name==null?"":name.trim().toLowerCase(Locale.ROOT).replace(" (w)","(w)");}
+
+    static Crop material(String name){return materials.get(normalized(name));}
 
     static Stage stage(int id,int sapling,IntFunction<String> name)
     {
-        Crop crop=CropCatalog.findByItemId(sapling);
-        String n=name.apply(id);
-        if(crop==null||n==null)return Stage.SEED;
-        String base=crop.getName().substring(0,crop.getName().length()-8).toLowerCase(Locale.ROOT);
-        Stage stage=seedlingStage(base,n);
-        return stage==null?Stage.SEED:stage;
+        String n=normalized(name.apply(id));
+        Crop crop=materials.get(n);
+        if(crop==null||crop.getItemId()!=sapling)return Stage.SEED;
+        return n.endsWith("(w)")?Stage.WATERED:n.endsWith(" seedling")?Stage.SEEDLING:Stage.SEED;
     }
     static Map<Integer,Integer> aliases(Map<Integer,Integer> stock,IntFunction<String> name)
     {

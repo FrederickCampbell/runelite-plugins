@@ -62,14 +62,10 @@ final class SeedChoices
             List<Crop> candidates = new ArrayList<>();
             Crop preferred=CropCatalog.findByName(type,overrides.apply(patch));
             if (preferred!=null && preferred.getLevel()<=level) candidates.add(preferred);
-            for (String name : priorities.apply(type).split(","))
-            {
-                Crop crop = CropCatalog.findByName(type,name.trim());
-                if (crop != null && crop.getLevel() <= level && !candidates.contains(crop)) candidates.add(crop);
-            }
-            List<Crop> automatic = CropXp.ranked(type,level);
-            for (Crop crop : automatic)
-                if (crop.getLevel() <= level && !candidates.contains(crop)) candidates.add(crop);
+            for(Crop crop:CropCatalog.preferences(type,priorities.apply(type)))
+                if(crop.getLevel()<=level&&!candidates.contains(crop))candidates.add(crop);
+            for(Crop crop:CropXp.ranked(type,level))
+                if(!candidates.contains(crop))candidates.add(crop);
             if (candidates.isEmpty()) continue;
             Crop choice = candidates.stream().filter(c -> remaining.getOrDefault(c.getItemId(),0) >= c.getQuantity())
                 .findFirst().orElse(stockedOnly?null:candidates.get(0));

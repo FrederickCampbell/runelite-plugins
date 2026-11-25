@@ -60,4 +60,19 @@ public class PreparationTravel44Test
         assertEquals(Map.of(2,Set.of("Lletya","Prifddinas"),3,Set.of("Weiss")),selected);
         assertTrue(RunTeleports.select(List.of(),eligible,Map.of()).isEmpty());
     }
+    @Test public void everyMainlandDestinationHasARealTransportAndAnglersRetreatUsesItsBoat() throws Exception
+    {
+        List<String> destinations=new ArrayList<>();
+        try(var reader=new java.io.BufferedReader(new java.io.InputStreamReader(
+            getClass().getResourceAsStream("/farming-teleport-shelf.tsv"),java.nio.charset.StandardCharsets.UTF_8)))
+        {
+            reader.lines().filter(line->!line.startsWith("#")).forEach(line->destinations.add(line.split("\\t",-1)[8]));
+        }
+        List<FarmRunPatch> patches=new ArrayList<>(FarmRunCatalog.patches());patches.addAll(BirdhouseRun.patches());
+        for(FarmRunPatch patch:patches)
+        {
+            boolean boat="Anglers' Retreat".equals(RunOrder.site(patch));
+            assertEquals(patch.key(),boat,RunTeleports.select(List.of(patch),Map.of(1,destinations),Map.of()).isEmpty());
+        }
+    }
 }

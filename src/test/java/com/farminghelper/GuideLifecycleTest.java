@@ -41,6 +41,28 @@ public class GuideLifecycleTest
     @Mock QuestFarmingStateReader reader;
     @InjectMocks FarmingHelperPlugin plugin;
 
+    @Test public void aHopRetainsRunPreferencesAndLogoutClearsTheSession() throws Exception
+    {
+        doAnswer(i->{((Runnable)i.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(config.getRSProfileKey()).thenReturn("one");
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(90);
+        plugin.startUp();
+        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.setRunPolicy(RunPolicy.NONE,false);
+        var hop=new net.runelite.api.events.GameStateChanged();
+        hop.setGameState(GameState.HOPPING);plugin.onGameStateChanged(hop);
+        plugin.onGameTick(null);
+        assertEquals(RunPolicy.NONE,plugin.runPolicy());
+        assertFalse(plugin.runPayRemoval());
+        hop.setGameState(GameState.LOGIN_SCREEN);plugin.onGameStateChanged(hop);
+        plugin.start(EnumSet.of(FarmRunType.HERB));
+        assertEquals(RunPolicy.BOTH,plugin.runPolicy());
+        assertTrue(plugin.runPayRemoval());
+        plugin.shutDown();
+    }
+
     @Test public void routesWithoutSeedsHonorsPreferencesAndStopsOnExplicitClose() throws Exception
     {
         Player player = mock(Player.class);
