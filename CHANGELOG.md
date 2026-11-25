@@ -1,3 +1,10 @@
+## v0.42-beta.3 — Supply and interface polish
+
+- Count native raw seeds, unwatered seedlings, watered seedlings and mature saplings as distinct physical resources for crop allocation; only actual mature saplings permit replacement. Count carried preparation materials toward the final material total, show remaining preparation, avoid redundant pot and watering requirements, and avoid double-counting saplings in the advisory load estimate.
+- Existing Seed Vault outlines reflect missing physical quantities; satisfied supplies retain their native positions. No new bank overlay or change to the native Bank Tags shelf. Inventory action highlights remain separate.
+- Keep planted uses native sprites and existing theme. Move crop-type preservation under Keep planted, use one replacement selector, preserve scroll, and make grouped inclusion editable only from the existing Grouped runs page (legacy exclusions remain honored). Read sidebar version from packaged metadata.
+- Preserve existing routing, patch verification, profile keys, storage layouts, and player-controlled preparation. Add regression coverage.
+
 ## v0.42-beta.2 — Simplicity and consistency audit
 
 - Keep planted and temporary replacement controls are collapsed until requested. Grouped preset counts and toggles use the actual effective exclusions.

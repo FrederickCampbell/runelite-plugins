@@ -47,6 +47,14 @@ enum KeepCrop
     final boolean common;
     KeepCrop(PatchType type,String label,boolean common){this.type=type;this.label=label;this.common=common;}
     String key(){return "keepSpeciesV1_"+name();}
+    Crop crop()
+    {
+        String name=label.split(" \\(")[0];
+        if(type==PatchType.BUSH)name=name.replace(" bush","");
+        if(StepEngine.isTreeType(type)||type==PatchType.CALQUAT)
+            name=name.replace(" tree","").replace(" plant","")+" sapling";
+        return CropCatalog.findByName(type,name);
+    }
     @Override public String toString(){return label;}
     static KeepCrop observed(PatchType type,Observation o)
     {

@@ -3,7 +3,7 @@ package com.farminghelper;
 import java.util.*;
 import java.util.function.Function;
 
-/** Pure selection of existing vault item ids; raw seed aliases never become
+/** Pure selection of existing vault item ids; seed and seedling aliases never become
  * plantable saplings or inflate the guide's plant-ready inventory. */
 final class VaultRanking
 {
@@ -33,7 +33,8 @@ final class VaultRanking
             if(!c.getName().endsWith(" sapling"))continue;
             String base=c.getName().substring(0,c.getName().length()-8).toLowerCase(Locale.ROOT);
             if(name.equals(base+" seed")||name.equals(base+" tree seed")||
-                (base.equals("oak")&&name.equals("acorn"))||(base.equals("crystal")&&name.equals("crystal acorn")))return c;
+                (base.equals("oak")&&name.equals("acorn"))||(base.equals("crystal")&&name.equals("crystal acorn"))||
+                TreePreparation.seedlingStage(base,name)!=null)return c;
         }
         return null;
     }

@@ -2,7 +2,7 @@
 
 Quest Helper for your farm runs!
 
-**v0.42-beta.2 — crop preservation preferences**
+**v0.42-beta.3 — supply and interface polish**
 
 ## Features
 - Grouped, individual and custom farm runs share guide-based regional ordering.

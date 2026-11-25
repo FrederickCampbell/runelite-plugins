@@ -29,7 +29,14 @@ dependencies {
 }
 
 group = 'com.farminghelper'
-version = '0.42-beta.2'
+version = '0.42-beta.3'
+
+// Keep the sidebar version tied to the published plugin metadata.
+tasks.named('processResources') {
+    from('runelite-plugin.properties') {
+        into 'com/farminghelper'
+    }
+}
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'

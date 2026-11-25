@@ -74,6 +74,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile StepEngine.Action activeAction = StepEngine.Action.INSPECT;
     private volatile boolean activeLive;
     private volatile Set<Integer> requiredItems = Collections.emptySet();
+    private volatile Set<Integer> missingStorageItems = Collections.emptySet();
     private volatile long session;
     private volatile boolean guideRequested;
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
@@ -233,6 +234,7 @@ public class FarmingHelperPlugin extends Plugin
         activeAction = StepEngine.Action.INSPECT;
         activeLive=false;
         requiredItems = Collections.emptySet();
+        missingStorageItems = Collections.emptySet();
         lastView = null;
         activeLeg=null;
         if(navigation!=null)navigation.stop();
@@ -821,14 +823,21 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(coins>0) required.merge(ItemID.COINS,coins,Integer::sum);
         if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;required.put(axeId,1);}
-        Map<Integer,Integer> prepSeeds=TreePreparation.preparation(seeds,stock,aliases);
-        if(!prepSeeds.isEmpty())
+        Map<Integer,Integer> prepSeeds=TreePreparation.preparation(seeds,stock,aliases,bag,this::observedItemName);
+        int rawSeeds=TreePreparation.count(prepSeeds,aliases,this::observedItemName,TreePreparation.Stage.SEED);
+        int seedlings=TreePreparation.count(prepSeeds,aliases,this::observedItemName,TreePreparation.Stage.SEEDLING);
+        int watered=TreePreparation.count(prepSeeds,aliases,this::observedItemName,TreePreparation.Stage.WATERED);
+        prepSeeds.forEach((id,n)->required.merge(id,n,Integer::sum));
+        if(rawSeeds>0)
         {
-            prepSeeds.forEach((id,n)->required.merge(id,n,Integer::sum));
-            required.put(TreePreparation.FILLED_POT,prepSeeds.values().stream().mapToInt(Integer::intValue).sum());
+            required.put(TreePreparation.FILLED_POT,rawSeeds);
             required.merge(Supplies.GARDENING_TROWEL,1,Math::max);
-            int can=stock.keySet().stream().filter(id->observedItemName(id).matches("(?i)watering can\\([1-8]\\)|Gricoller.s can")).findFirst().orElse(5333);
-            required.merge(can,1,Math::max);
+        }
+        if(rawSeeds+seedlings>0)
+        {
+            int can=CropCare.wateringCan(bag,this::observedItemName);
+            if(can<=0)can=CropCare.wateringCan(stock,this::observedItemName);
+            required.merge(can>0?can:5333,1,Math::max);
         }
         int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
@@ -842,15 +851,17 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?SpecialtyStages.birdStock(bag,bank):stock;
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
         List<GuideView.ItemRow> items=new ArrayList<>();
-        Map<Integer,Integer> pendingSaplings=new HashMap<>();
-        prepSeeds.forEach((raw,n)->{Integer sapling=aliases.get(raw);if(sapling!=null)pendingSaplings.merge(sapling,n,Integer::sum);});
+        Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
+        Map<Integer,Integer> physicalRequired=TreePreparation.physicalRequirements(required,pendingSaplings);
+        Map<Integer,Integer> materialCarried=TreePreparation.materialCarried(carried,prepSeeds,aliases);
         required.forEach((id,n)->{
-            GuideView.ItemRow row=itemRow(id,n,carried,false);
+            GuideView.ItemRow row=itemRow(id,n,materialCarried,false);
             int pending=pendingSaplings.getOrDefault(id,0);
-            if(pending>0)row=new GuideView.ItemRow(row.id,row.name+" (prepare "+pending+")",row.owned,row.needed,row.bank,row.vault,row.recommended);
+            if(pending>0)row=new GuideView.ItemRow(row.id,row.name+" ("+pending+" to prepare)",row.owned,row.needed,row.bank,row.vault,row.recommended);
             items.add(row);
         });
         requiredItems=Set.copyOf(required.keySet());
+        missingStorageItems=GuideView.missingItems(physicalRequired,carried);
         List<GuideView.Stop> stops=new ArrayList<>();
         GuideView.Stats summary=runProgress.stats();
         String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain. Review deferred and missing-supply counts below.":"Run finished. Close the helper to start another run.";
@@ -918,7 +929,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean aboard=loggedIn && client.getVarbitValue(VarbitID.SAILING_BOARDED_BOAT)!=0;
         boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
         WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
-        String supplyNote=prepSeeds.isEmpty()?"":"Prepare "+prepSeeds.values().stream().mapToInt(Integer::intValue).sum()+" sapling(s): fill empty pots with soil if needed, plant seeds, water, then wait for growth.\n"+TreePreparation.evidence(prepSeeds,bag,bank,vault,this::observedItemName,bankObservedThisSession,vaultObservedThisSession);
+        String supplyNote=TreePreparation.instruction(rawSeeds,seedlings,watered);
         if(hideSeedless&&!birdBankPhase()&&(!bankObservedThisSession||!vaultObservedThisSession))
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Storage may be out of date. Open "+(!bankObservedThisSession&&!vaultObservedThisSession?"the bank and Seed Vault":!bankObservedThisSession?"the bank":"the Seed Vault")+" to verify stock this session.";
         if(specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
@@ -927,15 +938,15 @@ public class FarmingHelperPlugin extends Plugin
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Birdhouse stage: check logs or houses, hammer, chisel, bait and clockworks. Resupply is optional.";
         if(runLabel!=null && loggedIn && current!=null)
         {
-            int slots=Preparation.slots(required,equipped,this::stackable);
+            int slots=Preparation.slots(physicalRequired,equipped,this::stackable);
             if(slots>28)supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Required supplies need at least "+slots+" inventory slots. Take a portion, note harvests and resupply as needed. No inventory limit blocks the guide.";
             if(!initialPrepChecked)
             {
                 initialPrepChecked=true;
-                if(!prepSeeds.isEmpty()||Preparation.storedShortage(required,carried,storage)){
+                if(rawSeeds+seedlings>0||Preparation.storedShortage(physicalRequired,carried,storage)){
                     beginPreparation(true,"Gather the listed supplies at the bank / Seed Vault. Start when ready; missing items never block the guide.");
                     preparationBank=Preparation.choose(level,location.normalized,true,false,
-                        Preparation.StartAt.load(setting("startAtV1","GUILD")),Preparation.vaultNeeded(required,carried,bank,vault));
+                        Preparation.StartAt.load(setting("startAtV1","GUILD")),Preparation.vaultNeeded(physicalRequired,carried,bank,vault));
                 }
             }
         }
@@ -1027,6 +1038,7 @@ public class FarmingHelperPlugin extends Plugin
         PatchType type=target.getPatchType();
         int cure=CropCare.prunes(type)?(carried.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0?ItemID.FAIRY_ENCHANTED_SECATEURS:ItemID.SECATEURS):ItemID.PLANT_CURE;
         diseaseItems=Set.of(cure);
+        missingStorageItems=GuideView.missingItems(Map.of(cure,1),carried);
         WorldPoint approach=approaches.get(target);
         diseaseLeg=RouteLeg.walk(approach,false);
         diseaseTarget=target;
@@ -1120,6 +1132,7 @@ public class FarmingHelperPlugin extends Plugin
     boolean activeLive() { return guideRequested && (diseaseTarget!=null||activeLive&&!preparing); }
     int patchCount(FarmRunPatch p) { return reader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
     Set<Integer> requiredItems() { return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:requiredItems; }
+    Set<Integer> missingStorageItems() {return guideRequested?missingStorageItems:Collections.emptySet();}
     Set<Integer> recommendedItems() { return Collections.emptySet(); } // compatibility: all live guide supplies are required
     int gardener(FarmRunPatch p) { return reader.gardenerId(p.getPatchType().name(),p.getLocation(),p.getName()); }
 

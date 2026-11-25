@@ -74,3 +74,7 @@ KeepCrop uses native decoded Produce identity. Precedence is protected spirit tr
 ### v0.42-beta.2 audit
 
 The active guide uses only the shared pinned itinerary; retired order-probe code is removed. Existing pure routing helpers remain for regression compatibility. Grouped UI and selection share `RunPreset.included`. Keep planted and temporary crop replacement sections are expandable; no home-screen changes. Celastrus is a replacement crop; active contracts and missing supplies still prevent unsafe clearing. Manual and individual runs remain explicit.
+
+### v0.42-beta.3 polish
+
+Tree aliases include exact native seedling names and watered variants. Material allocation prefers carried seedlings, then stored mature saplings, then stored seedlings and raw seeds; physical requirements and plant-ready inventory remain separate. Only exact mature sapling IDs authorize living-crop replacement. The sidebar material total can be satisfied before seedlings finish growing; concise stage guidance remains visible. Existing vault outlines use missing physical requirements, independent of layout and current inventory-action highlights. The bank continues to use native Bank Tags without adding an overlay. Crop-type defaults live under Keep planted and grouped inclusion remains on Grouped runs; existing profile keys and precedence are unchanged. Sidebar version comes from packaged metadata. No route or scene-verification changes.

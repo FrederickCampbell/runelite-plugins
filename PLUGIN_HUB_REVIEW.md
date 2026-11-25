@@ -27,3 +27,6 @@ No new external dependency or gameplay action. Cached eligibility is evaluated o
 
 ## v0.39-beta.3 player control
 The experimental item-aware bank-detour API and automatic mid-run banking diversions have been removed. Only initial preparation or an explicit Resupply request can direct a player to a bank; Entrana and birdhouse notices are advisory. Start/Continue remains a manual plugin button, not a game input action. This supersedes the bank-detour acceptance item above.
+
+## v0.42-beta.3 polish
+No new bank overlay or native widget actions. Existing vault outlines use an immutable missing-physical-quantity snapshot; inventory step outlines remain independent. Seedling aliases affect advisory material accounting only, never readiness to clear a living crop. No new dependency, game action, route behavior, or storage projection changes. Confirm withdrawals, growth transitions, and the 225px sidebar in the live client.

@@ -42,7 +42,7 @@ final class FarmingHelperPanel extends PluginPanel
     private String patchSearch="",individualSearch="";
     private final Set<String> patchExpanded=new HashSet<>(),manualGroups=new HashSet<>(),presetExpanded=new HashSet<>();
     private PatchType priorityOpen;
-    private boolean keepPlantsOpen,runReplacementOpen;
+    private boolean keepPlantsOpen,runReplacementOpen,keepTypesOpen;
     // BorderLayout.NORTH alone does not constrain a normal JPanel's preferred width.
     // Scrollable explicitly follows the viewport, including the scrollbar's width.
     static final class GuideScrollContent extends JPanel implements Scrollable
@@ -62,7 +62,7 @@ final class FarmingHelperPanel extends PluginPanel
         {
             java.awt.Graphics2D p=(java.awt.Graphics2D)g.create();
             p.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-            p.setColor(new Color(124,209,119));
+            p.setColor(FarmingTheme.SUCCESS);
             p.setStroke(new java.awt.BasicStroke(2f,java.awt.BasicStroke.CAP_ROUND,java.awt.BasicStroke.JOIN_ROUND));
             p.drawLine(x+2,y+7,x+6,y+11);p.drawLine(x+6,y+11,x+12,y+3);p.dispose();
         }
@@ -224,9 +224,21 @@ final class FarmingHelperPanel extends PluginPanel
             fillIndividual(results);addRow(results);
         }
         addRow(navRow("Manual Run","Choose your own patches",LIST,-1,false,this::openManual));
-        JLabel version=new JLabel("Farming Helper · v0.35",SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
+        JLabel version=new JLabel(versionLabel(),SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
         footer.add(version);finish();
     }
+    static String versionLabel()
+    {
+        Properties metadata=new Properties();
+        try(java.io.InputStream stream=FarmingHelperPanel.class.getResourceAsStream("runelite-plugin.properties"))
+        {
+            if(stream!=null)metadata.load(stream);
+        }
+        catch(java.io.IOException ignored){}
+        String version=metadata.getProperty("version","");
+        return version.isEmpty()?"Farming Helper":"Farming Helper · v"+version;
+    }
+
     private static int patchSprite(PatchType type)
     {
         List<Crop> crops=CropCatalog.crops(type);if(!crops.isEmpty())return crops.get(0).getItemId();
@@ -348,11 +360,11 @@ final class FarmingHelperPanel extends PluginPanel
     }
 
     private static String rowKey(GuideView.ItemRow row){return row.id+":"+row.recommended;}
-    private static Color itemColor(GuideView.ItemRow row){return row.owned>=row.needed?new Color(124,209,119):new Color(236,125,120);}
+    private static Color itemColor(GuideView.ItemRow row){return row.satisfied()?FarmingTheme.SUCCESS:FarmingTheme.DANGER;}
     private static String stockTip(GuideView.ItemRow row){return "Carried: "+row.owned+" / "+row.needed+" · Last observed bank: "+row.bank+" · Seed Vault: "+row.vault;}
     static void updateQuantity(JLabel label,GuideView.ItemRow row)
     {
-        boolean enough=row.owned>=row.needed;
+        boolean enough=row.satisfied();
         label.setText(enough?"":row.owned+"/"+row.needed);
         label.setIcon(enough?SATISFIED:null);
         label.setForeground(itemColor(row));label.setToolTipText(stockTip(row));
@@ -410,7 +422,7 @@ final class FarmingHelperPanel extends PluginPanel
         if(navigation.acceptGuide())renderGuide(view);
     }
     private String requirementsTitle(GuideView view)
-    {long missing=view.items.stream().filter(r->!r.recommended&&r.owned<r.needed).count();return "Required items"+(missing>0?" · "+missing+" missing":"");}
+    {long missing=view.items.stream().filter(r->!r.recommended&&!r.satisfied()).count();return "Required items"+(missing>0?" · "+missing+" missing":"");}
     private void renderGuide(GuideView view)
     {
         if(sameStructure(previousGuide,view)){previousGuide=view;refreshRows(view);return;}
@@ -532,8 +544,9 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void general()
     {
+        int y=scroll.getVerticalScrollBar().getValue();
         page(GENERAL,"Farming preferences",this::preferences,null,latestGuide!=null);
-        heading("Run preparation");caption("Start At");
+        heading("Run preparation");caption("Start at");
         JComboBox<Preparation.StartAt> startAt=new JComboBox<>(Preparation.StartAt.values());
         startAt.setSelectedItem(Preparation.StartAt.load(plugin.setting("startAtV1","GUILD")));
         startAt.addActionListener(e->plugin.save("startAtV1",((Preparation.StartAt)startAt.getSelectedItem()).name()));addRow(startAt);
@@ -548,29 +561,66 @@ final class FarmingHelperPanel extends PluginPanel
         JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());seedless.setToolTipText("Guide anyway: show missing supplies. Harvest / clear: clear occupied patches. Skip: omit seedless patches.");seedless.setSelectedItem(SeedlessPolicy.load(plugin.setting("seedlessPolicyV1","GUIDE")));
         seedless.addActionListener(e->plugin.save("seedlessPolicyV1",((SeedlessPolicy)seedless.getSelectedItem()).name()));addRow(seedless);
         collapse("Keep planted",keepPlantsOpen,()->{keepPlantsOpen=!keepPlantsOpen;general();});
-        if(keepPlantsOpen){
-        caption("Harvest renewable produce; leave selected flowers and trees standing. Per-patch and run overrides take precedence.");
-        for(KeepCrop crop:KeepCrop.values())if(crop.common)
+        if(keepPlantsOpen)
         {
-            JCheckBox keep=new JCheckBox(crop.label,plugin.keepSpecies(crop));
-            keep.addActionListener(e->plugin.save(crop.key(),keep.isSelected()?"PRESERVE":"REPLANT"));addRow(keep);
-        }
-        caption("Spirit trees and active Guild contracts are protected.");
-        heading("Also keep");
-        caption("Add other persistent plants to your keep list.");
-        for(KeepCrop crop:KeepCrop.values())if(!crop.common&&plugin.keepSpecies(crop))
-        {
-            JPanel row=new JPanel(new BorderLayout(4,0));row.setOpaque(false);row.add(new JLabel(crop.label),BorderLayout.CENTER);
-            JButton remove=FarmingIcons.button(END,"Stop keeping "+crop.label,FarmingTheme.MUTED,()->{plugin.save(crop.key(),"REPLANT");general();});
-            row.add(remove,BorderLayout.EAST);addRow(row);
-        }
-        JComboBox<Object> alsoKeep=new JComboBox<>();alsoKeep.addItem("Add a plant…");
-        for(KeepCrop crop:KeepCrop.values())if(!crop.common&&!plugin.keepSpecies(crop))alsoKeep.addItem(crop);
-        alsoKeep.addActionListener(e->{if(alsoKeep.getSelectedItem() instanceof KeepCrop){
-            KeepCrop crop=(KeepCrop)alsoKeep.getSelectedItem();plugin.save(crop.key(),"PRESERVE");general();}});addRow(alsoKeep);
+            caption("Harvest renewable produce; leave selected flowers and trees standing. Patch and run overrides take precedence.");
+            for(KeepCrop crop:KeepCrop.values())if(crop.common)
+            {
+                JCheckBox keep=new JCheckBox("<html><div style='width:125px'>"+escape(crop.label)+"</div></html>",plugin.keepSpecies(crop));
+                keep.addActionListener(e->plugin.save(crop.key(),keep.isSelected()?"PRESERVE":"REPLANT"));
+                JPanel row=keepRow(crop);row.add(keep,BorderLayout.CENTER);addRow(row);
+            }
+            caption("Spirit trees and active Guild contracts are protected.");
+            heading("Also keep");
+            for(KeepCrop crop:KeepCrop.values())if(!crop.common&&plugin.keepSpecies(crop))
+            {
+                JPanel row=keepRow(crop);
+                row.add(new JLabel("<html><div style='width:105px'>"+escape(crop.label)+"</div></html>"),BorderLayout.CENTER);
+                row.add(FarmingIcons.button(END,"Stop keeping "+crop.label,FarmingTheme.DANGER,()->{plugin.save(crop.key(),"REPLANT");general();}),BorderLayout.EAST);
+                addRow(row);
+            }
+            JComboBox<Object> alsoKeep=new JComboBox<>();alsoKeep.addItem("Add a plant…");
+            for(KeepCrop crop:KeepCrop.values())if(!crop.common&&!plugin.keepSpecies(crop))alsoKeep.addItem(crop);
+            alsoKeep.addActionListener(e->{
+                if(alsoKeep.getSelectedItem() instanceof KeepCrop)
+                {
+                    KeepCrop crop=(KeepCrop)alsoKeep.getSelectedItem();plugin.save(crop.key(),"PRESERVE");general();
+                }
+            });addRow(alsoKeep);
+            collapse("Crop type defaults",keepTypesOpen,()->{keepTypesOpen=!keepTypesOpen;general();});
+            if(keepTypesOpen)for(PatchType type:PatchType.values())if(CropReplacement.preferenceType(type))
+            {
+                caption(type.getDisplayName());
+                JComboBox<String> mode=replacementChoice("Default behavior",plugin.setting("replacement_"+type.name(),""));
+                mode.addActionListener(e->plugin.save("replacement_"+type.name(),replacementMode(mode)));addRow(mode);
+            }
         }
         caption("These defaults apply to every run. Changes in Run settings are temporary.");finish();
+        SwingUtilities.invokeLater(()->{if(navigation.page()==GENERAL)scroll.getVerticalScrollBar().setValue(y);});
     }
+
+    private JPanel keepRow(KeepCrop crop)
+    {
+        JPanel row=new JPanel(new BorderLayout(4,0));row.setOpaque(false);
+        Crop item=crop.crop();
+        if(item!=null)
+        {
+            JLabel sprite=new JLabel();sprite.setPreferredSize(new Dimension(32,25));
+            plugin.decorateSprite(sprite,item.getItemId());row.add(sprite,BorderLayout.WEST);
+        }
+        return row;
+    }
+
+    static JComboBox<String> replacementChoice(String inherited,String saved)
+    {
+        JComboBox<String> mode=new JComboBox<>(new String[]{inherited,"Harvest & replant","Keep planted"});
+        mode.setSelectedIndex("REPLANT".equals(saved)?1:"PRESERVE".equals(saved)?2:0);
+        FarmingTheme.apply(mode);return mode;
+    }
+
+    static String replacementMode(JComboBox<String> mode)
+    {return mode.getSelectedIndex()==1?"REPLANT":mode.getSelectedIndex()==2?"PRESERVE":"";}
+
     private void preferenceCheck(String title,String key,boolean fallback)
     {JCheckBox check=new JCheckBox(title,plugin.flag(key,fallback));check.addActionListener(e->plugin.save(key,Boolean.toString(check.isSelected())));addRow(check);}
     private void groupedPreferences()
@@ -612,6 +662,7 @@ final class FarmingHelperPanel extends PluginPanel
     private void runSettings()
     {
         if(latestGuide==null){showHome();return;}
+        int y=scroll.getVerticalScrollBar().getValue();
         page(RUN_SETTINGS,"Run settings",this::returnToGuide,null,true);
         caption("Changes apply only to this run.");
         heading("Missing planting supplies");
@@ -624,17 +675,18 @@ final class FarmingHelperPanel extends PluginPanel
         List<PatchType> runTypes=plugin.selectedRunTypes();
         if(runTypes.stream().anyMatch(CropReplacement::preferenceType))
         {
-        collapse("Crop replacement",runReplacementOpen,()->{runReplacementOpen=!runReplacementOpen;runSettings();});
-        if(runReplacementOpen){
-        caption("Overrides apply to unfinished patches for this run only.");
-        for(PatchType type:runTypes)if(CropReplacement.preferenceType(type))
-        {
-            caption(type.getDisplayName());
-            JComboBox<String> mode=new JComboBox<>(new String[]{"Use preferences","Harvest & replant","Harvest & preserve"});
-            String saved=plugin.runReplacement(type);mode.setSelectedIndex("REPLANT".equals(saved)?1:"PRESERVE".equals(saved)?2:0);
-            mode.addActionListener(e->plugin.setRunReplacement(type,mode.getSelectedIndex()==1?"REPLANT":mode.getSelectedIndex()==2?"PRESERVE":""));addRow(mode);
+            collapse("Crop replacement",runReplacementOpen,()->{runReplacementOpen=!runReplacementOpen;runSettings();});
+            if(runReplacementOpen)
+            {
+                caption("Overrides apply to unfinished patches for this run only.");
+                for(PatchType type:runTypes)if(CropReplacement.preferenceType(type))
+                {
+                    caption(type.getDisplayName());
+                    JComboBox<String> mode=replacementChoice("Use preferences",plugin.runReplacement(type));
+                    mode.addActionListener(e->plugin.setRunReplacement(type,replacementMode(mode)));addRow(mode);
+                }
+            }
         }
-        }}
         if(!runTypes.isEmpty()){
             heading("Skip remaining crop type");JComboBox<Object> skipType=new JComboBox<>();skipType.addItem("Choose crop type…");
             for(PatchType type:runTypes)skipType.addItem(type);
@@ -645,6 +697,7 @@ final class FarmingHelperPanel extends PluginPanel
             }});addRow(skipType);
         }
         button("All settings",()->settings(true));finish();
+        SwingUtilities.invokeLater(()->{if(navigation.page()==RUN_SETTINGS)scroll.getVerticalScrollBar().setValue(y);});
     }
     void accessChanged()
     {
@@ -686,15 +739,17 @@ final class FarmingHelperPanel extends PluginPanel
                 enabled.addActionListener(e->{plugin.save("patchEnabled_"+p.key(),Boolean.toString(enabled.isSelected()));fillPatches(results);});row.add(enabled);
                 if(p.getPatchType()!=PatchType.BIRDHOUSE&&p.getPatchType()!=PatchType.COMPOST_BIN)
                 {
-                    String old=plugin.override(p);JButton edit=FarmingIcons.button(MORE,"Preferred crop: "+(old.isEmpty()?"Automatic":old),old.isEmpty()?FarmingTheme.MUTED:FarmingTheme.SUCCESS,()->{
+                    String old=plugin.override(p);
+                    String saved=plugin.setting("replacementPatch_"+p.key(),"");
+                    JButton edit=FarmingIcons.button(MORE,"Crop preferences: "+(old.isEmpty()?"Automatic":old),old.isEmpty()&&!KeepCrop.explicit(saved)?FarmingTheme.MUTED:FarmingTheme.SUCCESS,()->{
                         JComboBox<String> choose=crops(p.getPatchType(),"Automatic");if(!old.isEmpty())choose.setSelectedItem(old);FarmingTheme.apply(choose);
                         JPanel options=new JPanel();options.setLayout(new BoxLayout(options,BoxLayout.Y_AXIS));options.add(choose);
-                        JComboBox<String> behavior=new JComboBox<>(new String[]{"Use crop type default","Harvest & replant","Harvest & preserve"});
-                        String saved=plugin.setting("replacementPatch_"+p.key(),"");behavior.setSelectedIndex("REPLANT".equals(saved)?1:"PRESERVE".equals(saved)?2:0);
+                        JComboBox<String> behavior=replacementChoice("Use preferences",saved);
                         if(CropReplacement.preferenceType(p.getPatchType()))options.add(behavior);
+                        FarmingTheme.apply(options);
                         if(JOptionPane.showConfirmDialog(this,options,p.getDisplayName()+" crop",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION){
                             plugin.save("directorCrop_"+p.key(),choose.getSelectedIndex()==0?"":String.valueOf(choose.getSelectedItem()));
-                            if(CropReplacement.preferenceType(p.getPatchType()))plugin.save("replacementPatch_"+p.key(),behavior.getSelectedIndex()==1?"REPLANT":behavior.getSelectedIndex()==2?"PRESERVE":"");
+                            if(CropReplacement.preferenceType(p.getPatchType()))plugin.save("replacementPatch_"+p.key(),replacementMode(behavior));
                             fillPatches(results);}
                     });row.add(edit,BorderLayout.EAST);
                 }
@@ -730,14 +785,6 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void ranking(PatchType type)
     {
-        preferenceCheck("Skip in grouped runs","skipType_"+type.name(),false);
-        if(CropReplacement.preferenceType(type))
-        {
-            caption("Mature crop behavior");
-            JComboBox<String> care=new JComboBox<>(new String[]{"Harvest & replant","Harvest & preserve"});
-            care.setSelectedIndex(CropReplacement.preserve(type,plugin.setting("replacement_"+type.name(),""),"")?1:0);
-            care.addActionListener(e->plugin.save("replacement_"+type.name(),care.getSelectedIndex()==1?"PRESERVE":"REPLANT"));addRow(care);
-        }
         String csv=plugin.priority(type);
         List<String> names=new ArrayList<>();if(!csv.isBlank())names.addAll(Arrays.asList(csv.split(",\\s*")));
         line(names.isEmpty()?"Automatic · highest estimated XP per seed in stock":"Preferred crops first, then highest XP per seed",false);

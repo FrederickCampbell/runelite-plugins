@@ -45,7 +45,7 @@ final class GuideItemHighlight extends WidgetItemOverlay
             color=Color.CYAN;
         }
         else if(group==InterfaceID.SEED_VAULT)
-            color=helper.requiredItems().contains(id)?Color.CYAN:helper.recommendedItems().contains(id)?Color.YELLOW:null;
+            color=helper.missingStorageItems().contains(id)?Color.CYAN:null;
         else return;
         if(color==null)return;
         BufferedImage outline=items.getItemOutline(id,widget.getQuantity(),color);

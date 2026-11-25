@@ -15,8 +15,17 @@ final class GuideView
             this.id=id; this.name=name; this.owned=owned; this.needed=needed;
             this.bank=bank; this.vault=vault; this.recommended=recommended;
         }
+        boolean satisfied(){return owned>=needed;}
         String signature() { return id+":"+name+":"+owned+":"+needed+":"+bank+":"+vault+":"+recommended; }
     }
+    /** Shared quantity semantics; overlays do not change native storage layouts. */
+    static Set<Integer> missingItems(Map<Integer,Integer> required,Map<Integer,Integer> carried)
+    {
+        Set<Integer> missing=new HashSet<>();
+        required.forEach((id,n)->{if(carried.getOrDefault(id,0)<n)missing.add(id);});
+        return Set.copyOf(missing);
+    }
+
     static final class Stop
     {
         final FarmRunPatch patch;
