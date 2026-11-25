@@ -13,9 +13,9 @@ public class SeedlessRunTest
         FarmRunPatch b=new FarmRunPatch("B","",PatchType.ALLOTMENT);
         Crop crop=CropCatalog.recommend(PatchType.ALLOTMENT,99);
         Map<Integer,Integer> stock=Map.of(crop.getItemId(),crop.getQuantity());
-        assertEquals(Set.of(a),SeedChoices.allocate(List.of(a,b),99,stock,t->"",p->"",Map.of(),true).keySet());
-        assertEquals(2,SeedChoices.allocate(List.of(a,b),99,stock,t->"",p->"",Map.of(),false).size());
-        assertTrue(SeedChoices.allocate(List.of(a),99,Map.of(crop.getItemId(),crop.getQuantity()-1),t->"",p->"",Map.of(),true).isEmpty());
+        assertEquals(Set.of(a),SeedChoices.allocate(List.of(a,b),99,stock,t->"",p->"",Map.of(),true,patchChoice->true).keySet());
+        assertEquals(2,SeedChoices.allocate(List.of(a,b),99,stock,t->"",p->"",Map.of(),false,patchChoice->true).size());
+        assertTrue(SeedChoices.allocate(List.of(a),99,Map.of(crop.getItemId(),crop.getQuantity()-1),t->"",p->"",Map.of(),true,patchChoice->true).isEmpty());
     }
 
     @Test public void satisfiedCountsUseIconAndShortagesRestoreNumbers()

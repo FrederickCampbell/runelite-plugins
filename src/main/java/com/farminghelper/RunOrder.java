@@ -64,12 +64,6 @@ final class RunOrder
         if(p.getPatchType().isTree())return 1;
         return 2;
     }
-    static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,boolean freeSpace)
-    {
-        Set<PatchType> trees=EnumSet.noneOf(PatchType.class);
-        if(freeSpace)for(FarmRunPatch p:patches)if(p.getPatchType().isTree()&&p.getPatchType()!=PatchType.SPIRIT_TREE)trees.add(p.getPatchType());
-        return shared(patches,start,guildFirst,trees);
-    }
     static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,Set<PatchType> carriedSaplings)
     {
         Set<PatchType> types=EnumSet.noneOf(PatchType.class);

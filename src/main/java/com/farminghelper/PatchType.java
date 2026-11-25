@@ -42,7 +42,12 @@ enum PatchType
 
     boolean isTree()
     {
-        return !usesDibber && this!=BIRDHOUSE && this!=COMPOST_BIN;
+        switch(this)
+        {
+            case TREE: case FRUIT_TREE: case HARDWOOD_TREE: case CALQUAT: case SPIRIT_TREE:
+            case REDWOOD: case CELASTRUS: case CRYSTAL_TREE:return true;
+            default:return false;
+        }
     }
 
     boolean supportsProtection()

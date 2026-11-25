@@ -15,14 +15,14 @@ public class Guide15Test
     {
         FarmRunPatch a=new FarmRunPatch("Falador","",PatchType.HERB), b=new FarmRunPatch("Catherby","",PatchType.HERB);
         Crop ranarr=CropCatalog.findByName(PatchType.HERB,"Ranarr");
-        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b),72,Map.of(),t->"Ranarr");
+        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b),72,Map.of(),t->"Ranarr",p->"",java.util.Map.of(),false,p->true);
         assertEquals(ranarr,plan.get(a));assertEquals(ranarr,plan.get(b));
     }
     @Test public void explicitOverrideReservesAvailableStockBeforeAutomaticChoices()
     {
         FarmRunPatch a=new FarmRunPatch("Falador","",PatchType.HERB), b=new FarmRunPatch("Catherby","",PatchType.HERB);
         Crop ranarr=CropCatalog.findByName(PatchType.HERB,"Ranarr"), snap=CropCatalog.findByName(PatchType.HERB,"Snapdragon");
-        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b),72,Map.of(ranarr.getItemId(),1,snap.getItemId(),1),t->"Ranarr",p->p==b?"Ranarr":"");
+        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b),72,Map.of(ranarr.getItemId(),1,snap.getItemId(),1),t->"Ranarr",p->p==b?"Ranarr":"",java.util.Map.of(),false,p->true);
         assertEquals(snap,plan.get(a));assertEquals(ranarr,plan.get(b));
     }
     @Test public void cureDoesNotTriggerProtectionAndPlantingDoes()

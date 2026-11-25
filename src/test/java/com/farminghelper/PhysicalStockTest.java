@@ -24,11 +24,11 @@ public class PhysicalStockTest
         PhysicalStock.sanitize(physical,definitions::get);
         assertTrue(physical.isEmpty());
         FarmRunPatch p=new FarmRunPatch("Tai Bwo Wannai","",PatchType.CALQUAT);
-        assertTrue(SeedChoices.allocate(List.of(p),99,physical,t->"",q->"",Map.of(),true).isEmpty());
+        assertTrue(SeedChoices.allocate(List.of(p),99,physical,t->"",q->"",Map.of(),true,patchChoice->true).isEmpty());
         physical.put(seed,1);
         PhysicalStock.sanitize(physical,definitions::get);
         Map<Integer,Integer> aliases=TreePreparation.aliases(physical,id->definitions.get(id).getName());
-        assertEquals(1,SeedChoices.allocate(List.of(p),99,TreePreparation.allocationStock(physical,aliases),t->"",q->"",Map.of(),true).size());
+        assertEquals(1,SeedChoices.allocate(List.of(p),99,TreePreparation.allocationStock(physical,aliases),t->"",q->"",Map.of(),true,patchChoice->true).size());
     }
     @Test public void cachedPlaceholdersAndNonpositiveEntriesArePurged()
     {

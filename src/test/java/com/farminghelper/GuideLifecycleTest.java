@@ -49,7 +49,7 @@ public class GuideLifecycleTest
         when(client.getIntStack()).thenReturn(new int[]{2});
         when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(90);
         plugin.startUp();
-        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.startIndividual(PatchType.HERB);
         plugin.setRunPolicy(RunPolicy.NONE,false);
         var hop=new net.runelite.api.events.GameStateChanged();
         hop.setGameState(GameState.HOPPING);plugin.onGameStateChanged(hop);
@@ -57,7 +57,7 @@ public class GuideLifecycleTest
         assertEquals(RunPolicy.NONE,plugin.runPolicy());
         assertFalse(plugin.runPayRemoval());
         hop.setGameState(GameState.LOGIN_SCREEN);plugin.onGameStateChanged(hop);
-        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.startIndividual(PatchType.HERB);
         assertEquals(RunPolicy.BOTH,plugin.runPolicy());
         assertTrue(plugin.runPayRemoval());
         plugin.shutDown();
@@ -83,7 +83,7 @@ public class GuideLifecycleTest
         }).when(thread).invokeLater(any(Runnable.class));
         when(shortestPath.getName()).thenReturn("Shortest Path");
         plugin.startUp();
-        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.startIndividual(PatchType.HERB);
         assertEquals("Farming Guild",plugin.activePatch().getLocation());
         verifyNoInteractions(bus);
         QuestFarmingStateReader.Observation growing = new QuestFarmingStateReader.Observation(
@@ -96,7 +96,7 @@ public class GuideLifecycleTest
         plugin.stop();
         verifyNoInteractions(bus);
         plugin.onPluginChanged(new net.runelite.client.events.PluginChanged(shortestPath,true));
-        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.startIndividual(PatchType.HERB);
         assertEquals("Farming Guild",plugin.activePatch().getLocation());
         verify(bus).post(new PluginMessage("shortestpath","path",Map.of("start",start,"target",new WorldPoint(1238,3726,0))));
         plugin.onGameTick(null);
@@ -137,11 +137,11 @@ public class GuideLifecycleTest
         assertNull(plugin.activePatch());
         plugin.onGameTick(null);
         verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
-        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.startIndividual(PatchType.HERB);
         assertEquals("Farming Guild",plugin.activePatch().getLocation());
         plugin.stop();
         when(config.getRSProfileConfiguration("farming-helper","patchEnabled_Falador~HERB~")).thenReturn("true");
-        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.startIndividual(PatchType.HERB);
         int[][] herbTargets = {{1238,3726},{3058,3311},{3605,3529},{2670,3374},{2813,3463},{1738,3550},
             {1582,3094},{3789,2837},{2826,3694},{2848,3934}};
         for (int[] xy : herbTargets)
@@ -169,7 +169,7 @@ public class GuideLifecycleTest
         when(reader.observeType(anyString(),anyString(),anyString(),any())).thenReturn(new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
         doAnswer(invocation->{((Runnable)invocation.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
         plugin.startUp();
-        plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.startIndividual(PatchType.HERB);
         assertEquals(RunPolicy.COMPOST,plugin.runPolicy());assertTrue(plugin.runPayRemoval());
         plugin.setRunPolicy(RunPolicy.NONE,false);plugin.setSeedlessPolicy(SeedlessPolicy.SKIP);
         assertEquals(RunPolicy.NONE,plugin.runPolicy());assertFalse(plugin.runPayRemoval());assertTrue(plugin.hideSeedless());assertFalse(plugin.clearSeedless());
@@ -179,7 +179,7 @@ public class GuideLifecycleTest
         when(hop.getGameState()).thenReturn(GameState.HOPPING);plugin.onGameStateChanged(hop);
         assertSame(before,plugin.activePatch());
         plugin.onGameTick(null);assertSame(before,plugin.activePatch());assertEquals(RunPolicy.NONE,plugin.runPolicy());
-        plugin.stop();plugin.start(EnumSet.of(FarmRunType.HERB));
+        plugin.stop();plugin.startIndividual(PatchType.HERB);
         assertEquals(RunPolicy.COMPOST,plugin.runPolicy());assertTrue(plugin.runPayRemoval());assertFalse(plugin.hideSeedless());
         verify(config,never()).getRSProfileConfiguration(eq("farming-helper"),startsWith("runPolicy_"));
         verify(config,never()).getRSProfileConfiguration(eq("farming-helper"),startsWith("runPayRemoval_"));

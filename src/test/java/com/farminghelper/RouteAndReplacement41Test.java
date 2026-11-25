@@ -15,11 +15,11 @@ public class RouteAndReplacement41Test
         FarmRunPatch guild=p("Farming Guild",PatchType.BUSH),champ=p("Champions' Guild",PatchType.BUSH),
             hops=p("Lumbridge",PatchType.HOPS),entrana=p("Entrana",PatchType.HOPS),tree=p("Lumbridge",PatchType.TREE),
             fossil=p("Fossil Island",PatchType.HARDWOOD_TREE);
-        List<FarmRunPatch> result=RunOrder.flatten(RunOrder.shared(List.of(hops,fossil,entrana,champ,tree,guild),null,true,false));
+        List<FarmRunPatch> result=RunOrder.flatten(RunOrder.shared(List.of(hops,fossil,entrana,champ,tree,guild),null,true,java.util.Set.of()));
         assertEquals(guild,result.get(0));assertEquals(result.indexOf(champ)+1,result.indexOf(hops));
         assertNotEquals(RunOrder.site(tree),RunOrder.site(hops));
         assertEquals(entrana,result.get(result.size()-2));assertEquals(fossil,result.get(result.size()-1));
-        assertEquals(result,RunOrder.flatten(RunOrder.shared(List.of(guild,tree,champ,entrana,fossil,hops),null,true,false)));
+        assertEquals(result,RunOrder.flatten(RunOrder.shared(List.of(guild,tree,champ,entrana,fossil,hops),null,true,java.util.Set.of())));
     }
     @Test public void lowSpacePrioritizesCarriedSaplingTypeOnly()
     {

@@ -33,8 +33,8 @@ public class CropCareTest
     {
         FarmRunPatch p=new FarmRunPatch("Falador","",PatchType.FLOWER);
         Crop lily=CropCatalog.findByName(PatchType.FLOWER,"White lily"),limp=CropCatalog.findByName(PatchType.FLOWER,"Limpwurt");
-        assertEquals(lily,SeedChoices.allocate(List.of(p),99,Map.of(lily.getItemId(),1,limp.getItemId(),10),t->"Limpwurt",q->"",Map.of(),true).get(p));
-        assertEquals(limp,SeedChoices.allocate(List.of(p),99,Map.of(limp.getItemId(),10),t->"",q->"",Map.of(),true).get(p));
+        assertEquals(lily,SeedChoices.allocate(List.of(p),99,Map.of(lily.getItemId(),1,limp.getItemId(),10),t->"Limpwurt",q->"",Map.of(),true,patchChoice->true).get(p));
+        assertEquals(limp,SeedChoices.allocate(List.of(p),99,Map.of(limp.getItemId(),10),t->"",q->"",Map.of(),true,patchChoice->true).get(p));
         assertTrue(RunPreset.CROP.defaultEnabled(PatchType.FLOWER));
         assertTrue(KeepCrop.WHITE_LILY==KeepCrop.observed(PatchType.FLOWER,observation(CropState.HARVESTABLE,Source.LIVE,41)));
         assertFalse(KeepCrop.WHITE_LILY==KeepCrop.observed(PatchType.FLOWER,observation(CropState.HARVESTABLE,Source.LIVE,32)));

@@ -15,10 +15,10 @@ public class Guide16Test
         Crop ranarr=CropCatalog.findByName(PatchType.HERB,"Ranarr"), snap=CropCatalog.findByName(PatchType.HERB,"Snapdragon"),
             irit=CropCatalog.findByName(PatchType.HERB,"Irit");
         Map<Integer,Integer> stock=Map.of(ranarr.getItemId(),1,snap.getItemId(),1,irit.getItemId(),2);
-        Map<FarmRunPatch,Crop> result=SeedChoices.allocate(patches,72,stock,t->"Ranarr",p->"Ranarr");
+        Map<FarmRunPatch,Crop> result=SeedChoices.allocate(patches,72,stock,t->"Ranarr",p->"Ranarr",java.util.Map.of(),false,p->true);
         assertEquals(List.of(ranarr,snap,irit,irit),new ArrayList<>(result.values()));
-        assertEquals(snap,SeedChoices.allocate(List.of(patches.get(0)),72,Map.of(snap.getItemId(),1),t->"Ranarr",p->"Ranarr").get(patches.get(0)));
-        assertEquals(ranarr,SeedChoices.allocate(List.of(patches.get(0)),72,Map.of(),t->"",p->"Ranarr").get(patches.get(0)));
+        assertEquals(snap,SeedChoices.allocate(List.of(patches.get(0)),72,Map.of(snap.getItemId(),1),t->"Ranarr",p->"Ranarr",java.util.Map.of(),false,p->true).get(patches.get(0)));
+        assertEquals(ranarr,SeedChoices.allocate(List.of(patches.get(0)),72,Map.of(),t->"",p->"Ranarr",java.util.Map.of(),false,p->true).get(patches.get(0)));
     }
     @Test public void stockSnapshotRoundTripIgnoresInvalidEntries()
     {

@@ -28,7 +28,7 @@ public class FarmingGuideTest
     @Test public void emptyStockCannotRemoveAnUnknownOrReadyHerbPatch()
     {
         List<FarmRunPatch> patches = herbs();
-        assertEquals(10,SeedChoices.allocate(patches,99,Map.of(),t -> "").size());
+        assertEquals(10,SeedChoices.allocate(patches,99,Map.of(),t -> "",p->"",java.util.Map.of(),false,p->true).size());
         assertEquals(10,patches.size());
         assertTrue(FarmingHelperPlugin.actionable(PatchType.HERB,null));
         for (CropState state : CropState.values())
@@ -44,7 +44,7 @@ public class FarmingGuideTest
         Crop irit = CropCatalog.findByName(PatchType.HERB,"Irit");
         Map<Integer,Integer> stock = Map.of(ranarr.getItemId(),1,snap.getItemId(),1,irit.getItemId(),2);
         Map<FarmRunPatch,Crop> plan = SeedChoices.allocate(patches,65,stock,
-            t -> "Ranarr, Irit");
+            t -> "Ranarr, Irit",p->"",java.util.Map.of(),false,p->true);
         assertEquals(List.of(ranarr,irit,irit,snap),patches.stream().map(plan::get).collect(Collectors.toList()));
     }
 
@@ -55,6 +55,6 @@ public class FarmingGuideTest
         Crop poor = CropCatalog.findByName(PatchType.ALLOTMENT,"Sweetcorn");
         Crop ok = CropCatalog.findByName(PatchType.ALLOTMENT,"Potato");
         Map<Integer,Integer> stock = Map.of(high.getItemId(),99,poor.getItemId(),2,ok.getItemId(),3);
-        assertEquals(ok,SeedChoices.allocate(List.of(patch),30,stock,t -> "Sweetcorn").get(patch));
+        assertEquals(ok,SeedChoices.allocate(List.of(patch),30,stock,t -> "Sweetcorn",p->"",java.util.Map.of(),false,p->true).get(patch));
     }
 }

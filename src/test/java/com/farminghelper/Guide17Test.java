@@ -29,7 +29,7 @@ public class Guide17Test
             falHerb=p("Falador",PatchType.HERB),falTree=p("Falador",PatchType.TREE),
             grapes=p("Kourend",PatchType.GRAPEVINE),hos=p("Kourend",PatchType.HERB);
         List<FarmRunPatch> in=List.of(hes,herb,sea,falHerb,hard,tree,falTree,grapes,hos);
-        List<RunOrder.Group> groups=RunOrder.shared(in,null,true,false);
+        List<RunOrder.Group> groups=RunOrder.shared(in,null,true,java.util.Set.of());
         assertEquals(6,groups.size());
         assertEquals(List.of(tree,herb,hes),groups.get(0).patches);
         assertEquals(List.of(hard,sea),groups.get(groups.size()-1).patches);

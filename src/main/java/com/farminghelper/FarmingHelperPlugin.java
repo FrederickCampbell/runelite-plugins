@@ -156,11 +156,6 @@ public class FarmingHelperPlugin extends Plugin
         highlight.clear();
     }
 
-    void start(Set<FarmRunType> types)
-    {
-        start(types,null,null,"legacy_"+types.toString());
-    }
-
     void startPreset(RunPreset preset)
     {
         startSelected(preset.select(patches,this::flag),preset.title,"group_"+preset.name());
@@ -627,7 +622,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         if (run.isEmpty() || !guideRequested || hopping) return;
         refreshRunPreferences();
-        String title = runLabel!=null ? runLabel : run.size() == 1 ? run.iterator().next().getDisplayName() : "Combined run";
+        String title=runLabel;
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         LocationContext location=LocationContext.capture(client);
         int level = client.getRealSkillLevel(Skill.FARMING);
@@ -703,7 +698,7 @@ public class FarmingHelperPlugin extends Plugin
                 if(CropReplacement.configurable(type)&&!preserveCrop&&CropReplacement.mature(type,o)&&!progress.planted()&&
                     (activeCrop==null||bag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()))
                 {
-                    Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,bag,this::priority,this::override,Collections.emptyMap(),true).get(p);
+                    Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,bag,this::priority,this::override,Collections.emptyMap(),true,this::autoLily).get(p);
                     if(carriedReplacement!=null)activeCrop=carriedReplacement;
                 }
                 boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
@@ -954,7 +949,7 @@ public class FarmingHelperPlugin extends Plugin
             details.add("Birdhouses are last. Use Resupply if needed.");
         if(specialtyStaged&&specialtyBirdPhase&&current!=null)
             details.add("Birdhouse supplies: logs or houses, hammer, chisel, bait and clockworks.");
-        if(runLabel!=null && loggedIn && current!=null)
+        if(loggedIn && current!=null)
         {
             int slots=Preparation.slots(physicalRequired,equipped,this::stackable);
             if(slots>28){supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Take a partial load and resupply as needed.";details.add("Estimated supply slots: "+slots+".");}

@@ -27,7 +27,7 @@ public class SpecialtyStagesTest
         FarmRunPatch seaweed=new FarmRunPatch("Seaweed","North",PatchType.SEAWEED);
         List<FarmRunPatch> birds=BirdhouseRun.patches();
         List<FarmRunPatch> scrambled=new ArrayList<>(List.of(birds.get(3),seaweed,herb,birds.get(0),hardwood,outside));
-        List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(scrambled,null,true,false));
+        List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(scrambled,null,true,java.util.Set.of()));
         assertEquals(List.of(herb,outside,hardwood,seaweed,birds.get(0),birds.get(3)),ordered);
         assertTrue(SpecialtyStages.stageBirds("manual",EnumSet.of(FarmRunType.HERB,FarmRunType.BIRDHOUSE)));
         assertFalse(SpecialtyStages.stageBirds("manual",EnumSet.of(FarmRunType.BIRDHOUSE)));

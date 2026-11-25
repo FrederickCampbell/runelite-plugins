@@ -15,7 +15,7 @@ public class StockPreparationRegressionTest
         {
             Map<Integer,Integer> aliases=TreePreparation.aliases(observed,id->"Calquat tree seed");
             Map<Integer,Integer> allocation=TreePreparation.allocationStock(observed,aliases);
-            assertTrue(SeedChoices.allocate(List.of(p),99,allocation,t->"",patch->"",Map.of(),true).isEmpty());
+            assertTrue(SeedChoices.allocate(List.of(p),99,allocation,t->"",patch->"",Map.of(),true,patchChoice->true).isEmpty());
         }
     }
     @Test public void rawSeedReservesExactlyOnePatchAndReportsItsSource()
@@ -25,13 +25,13 @@ public class StockPreparationRegressionTest
         int raw=5290;
         Map<Integer,Integer> physical=Map.of(raw,1);
         Map<Integer,Integer> aliases=TreePreparation.aliases(physical,id->"Calquat tree seed");
-        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b),99,TreePreparation.allocationStock(physical,aliases),t->"",p->"",Map.of(),true);
+        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b),99,TreePreparation.allocationStock(physical,aliases),t->"",p->"",Map.of(),true,patchChoice->true);
         assertEquals(1,plan.size());
         Map<Integer,Integer> prep=TreePreparation.preparation(plan,physical,aliases,Map.of(),id->"Calquat tree seed");
         assertEquals(Map.of(raw,1),prep);
         assertTrue(Preparation.sourceNote(prep,Map.of(),physical,Map.of(),false,true).contains("outdated"));
         Map<Integer,Integer> refreshed=StockSnapshot.decode("");
-        assertTrue(SeedChoices.allocate(List.of(a,b),99,TreePreparation.allocationStock(refreshed,TreePreparation.aliases(refreshed,id->"Calquat tree seed")),t->"",p->"",Map.of(),true).isEmpty());
+        assertTrue(SeedChoices.allocate(List.of(a,b),99,TreePreparation.allocationStock(refreshed,TreePreparation.aliases(refreshed,id->"Calquat tree seed")),t->"",p->"",Map.of(),true,patchChoice->true).isEmpty());
     }
     @org.junit.Test public void unchangedContainersReuseQuantitiesAndAContainerEventReplacesThem() throws Exception
     {

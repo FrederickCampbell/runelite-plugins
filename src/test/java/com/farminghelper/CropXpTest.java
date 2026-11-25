@@ -31,7 +31,7 @@ public class CropXpTest
         List<FarmRunPatch> patches=new ArrayList<>();
         for(int i=0;i<5;i++)patches.add(new FarmRunPatch("Falador","Test "+i,PatchType.HERB));
         Map<Integer,Integer> stock=Map.of(ItemID.TORSTOL_SEED,1,ItemID.DWARF_WEED_SEED,1,ItemID.LANTADYME_SEED,1,ItemID.CADANTINE_SEED,1,ItemID.RANARR_SEED,1);
-        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(patches,99,stock,t->"Ranarr");
+        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(patches,99,stock,t->"Ranarr",p->"",java.util.Map.of(),false,p->true);
         assertEquals(List.of("Ranarr","Torstol","Dwarf weed","Lantadyme","Cadantine"),
             patches.stream().map(p->plan.get(p).getName()).collect(java.util.stream.Collectors.toList()));
     }

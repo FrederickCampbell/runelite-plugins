@@ -6,30 +6,6 @@ import java.util.function.Function;
 /** Allocate observed stock without making missing supplies a condition of guidance. */
 final class SeedChoices
 {
-    static Map<FarmRunPatch, Crop> allocate(List<FarmRunPatch> patches, int level,
-        Map<Integer, Integer> stock, Function<PatchType, String> priorities)
-    {
-        return allocate(patches, level, stock, priorities, p -> "");
-    }
-
-    static Map<FarmRunPatch, Crop> allocate(List<FarmRunPatch> patches, int level,
-        Map<Integer, Integer> stock, Function<PatchType, String> priorities,
-        Function<FarmRunPatch, String> overrides)
-    {
-        return allocate(patches,level,stock,priorities,overrides,Collections.emptyMap());
-    }
-
-    static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
-        Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed)
-    {
-        return allocate(patches,level,stock,priorities,overrides,committed,false);
-    }
-
-    static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
-        Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,boolean stockedOnly)
-    {
-        return allocate(patches,level,stock,priorities,overrides,committed,stockedOnly,p->true);
-    }
     static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
         Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,
         boolean stockedOnly,java.util.function.Predicate<FarmRunPatch> autoLily)
