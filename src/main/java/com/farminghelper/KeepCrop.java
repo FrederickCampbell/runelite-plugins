@@ -1,0 +1,70 @@
+package com.farminghelper;
+
+import com.farminghelper.queststate.QuestFarmingStateReader;
+import com.farminghelper.queststate.QuestFarmingStateReader.Observation;
+
+/** Species preferences use the actual planted produce, not the proposed replacement.
+ * Only plants that can remain planted are offered. Celastrus is not a renewable bark source. */
+enum KeepCrop
+{
+    WHITE_LILY(PatchType.FLOWER,"White lily",true),
+    WHITEBERRIES(PatchType.BUSH,"Whiteberry bush",true),
+    POISON_IVY(PatchType.BUSH,"Poison ivy bush",true),
+    CACTUS(PatchType.CACTUS,"Cactus",true),
+    POTATO_CACTUS(PatchType.CACTUS,"Potato cactus",true),
+    PAPAYA(PatchType.FRUIT_TREE,"Papaya tree",true),
+    PALM(PatchType.FRUIT_TREE,"Palm tree",true),
+    DRAGONFRUIT(PatchType.FRUIT_TREE,"Dragonfruit tree",true),
+    REDWOOD(PatchType.REDWOOD,"Redwood tree",true),
+    REDBERRIES(PatchType.BUSH,"Redberry bush",false),
+    CADAVABERRIES(PatchType.BUSH,"Cadavaberry bush",false),
+    DWELLBERRIES(PatchType.BUSH,"Dwellberry bush",false),
+    JANGERBERRIES(PatchType.BUSH,"Jangerberry bush",false),
+    APPLE(PatchType.FRUIT_TREE,"Apple tree",false),
+    BANANA(PatchType.FRUIT_TREE,"Banana tree",false),
+    ORANGE(PatchType.FRUIT_TREE,"Orange tree",false),
+    CURRY(PatchType.FRUIT_TREE,"Curry tree",false),
+    PINEAPPLE(PatchType.FRUIT_TREE,"Pineapple plant",false),
+    CALQUAT(PatchType.CALQUAT,"Calquat tree",false),
+    OAK(PatchType.TREE,"Oak tree",false),
+    WILLOW(PatchType.TREE,"Willow tree",false),
+    MAPLE(PatchType.TREE,"Maple tree",false),
+    YEW(PatchType.TREE,"Yew tree",false),
+    MAGIC(PatchType.TREE,"Magic tree",false),
+    TEAK(PatchType.HARDWOOD_TREE,"Teak tree",false),
+    MAHOGANY(PatchType.HARDWOOD_TREE,"Mahogany tree",false),
+    CAMPHOR(PatchType.HARDWOOD_TREE,"Camphor tree",false),
+    IRONWOOD(PatchType.HARDWOOD_TREE,"Ironwood tree",false),
+    ROSEWOOD(PatchType.HARDWOOD_TREE,"Rosewood tree",false),
+    MARIGOLD(PatchType.FLOWER,"Marigold (leave unpicked)",false),
+    ROSEMARY(PatchType.FLOWER,"Rosemary (leave unpicked)",false),
+    NASTURTIUM(PatchType.FLOWER,"Nasturtium (leave unpicked)",false),
+    WOAD(PatchType.FLOWER,"Woad (leave unpicked)",false),
+    LIMPWURT(PatchType.FLOWER,"Limpwurt (leave unpicked)",false);
+
+    final PatchType type;
+    final String label;
+    final boolean common;
+    KeepCrop(PatchType type,String label,boolean common){this.type=type;this.label=label;this.common=common;}
+    String key(){return "keepSpeciesV1_"+name();}
+    @Override public String toString(){return label;}
+    static KeepCrop observed(PatchType type,Observation o)
+    {
+        String key=QuestFarmingStateReader.livingProduceKey(type.name(),o);
+        try{KeepCrop c=valueOf(key);return c.type==type?c:null;}catch(IllegalArgumentException e){return null;}
+    }
+    static boolean explicit(String mode){return "PRESERVE".equals(mode)||"REPLANT".equals(mode);}
+    static boolean defaultKeep(KeepCrop species,String typeMode)
+    {return species==WHITE_LILY&&!explicit(typeMode)||CropReplacement.preserve(species.type,typeMode,"");}
+    static boolean resolve(PatchType type,KeepCrop species,String typeMode,String speciesMode,String patchMode,String runMode)
+    {
+        if(type==PatchType.SPIRIT_TREE)return true;
+        if(explicit(runMode))return "PRESERVE".equals(runMode);
+        if(explicit(patchMode))return "PRESERVE".equals(patchMode);
+        if(species!=null){
+            if(explicit(speciesMode))return "PRESERVE".equals(speciesMode);
+            return defaultKeep(species,typeMode);
+        }
+        return CropReplacement.preserve(type,typeMode,"");
+    }
+}

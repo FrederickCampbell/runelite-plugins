@@ -546,6 +546,26 @@ final class FarmingHelperPanel extends PluginPanel
         heading("Missing planting supplies");
         JComboBox<SeedlessPolicy> seedless=new JComboBox<>(SeedlessPolicy.values());seedless.setToolTipText("Guide anyway: show missing supplies. Harvest / clear: clear occupied patches. Skip: omit seedless patches.");seedless.setSelectedItem(SeedlessPolicy.load(plugin.setting("seedlessPolicyV1","GUIDE")));
         seedless.addActionListener(e->plugin.save("seedlessPolicyV1",((SeedlessPolicy)seedless.getSelectedItem()).name()));addRow(seedless);
+        heading("Keep planted");
+        caption("Harvest renewable produce; leave selected flowers and trees standing. Per-patch and run overrides take precedence.");
+        for(KeepCrop crop:KeepCrop.values())if(crop.common)
+        {
+            JCheckBox keep=new JCheckBox(crop.label,plugin.keepSpecies(crop));
+            keep.addActionListener(e->plugin.save(crop.key(),keep.isSelected()?"PRESERVE":"REPLANT"));addRow(keep);
+        }
+        caption("Spirit trees and active Guild contracts are protected.");
+        heading("Also keep");
+        caption("Add other persistent plants to your keep list.");
+        for(KeepCrop crop:KeepCrop.values())if(!crop.common&&plugin.keepSpecies(crop))
+        {
+            JPanel row=new JPanel(new BorderLayout(4,0));row.setOpaque(false);row.add(new JLabel(crop.label),BorderLayout.CENTER);
+            JButton remove=FarmingIcons.button(END,"Stop keeping "+crop.label,FarmingTheme.MUTED,()->{plugin.save(crop.key(),"REPLANT");general();});
+            row.add(remove,BorderLayout.EAST);addRow(row);
+        }
+        JComboBox<Object> alsoKeep=new JComboBox<>();alsoKeep.addItem("Add a plant…");
+        for(KeepCrop crop:KeepCrop.values())if(!crop.common&&!plugin.keepSpecies(crop))alsoKeep.addItem(crop);
+        alsoKeep.addActionListener(e->{if(alsoKeep.getSelectedItem() instanceof KeepCrop){
+            KeepCrop crop=(KeepCrop)alsoKeep.getSelectedItem();plugin.save(crop.key(),"PRESERVE");general();}});addRow(alsoKeep);
         caption("These defaults apply to every run. Changes in Run settings are temporary.");finish();
     }
     private void preferenceCheck(String title,String key,boolean fallback)
@@ -590,6 +610,25 @@ final class FarmingHelperPanel extends PluginPanel
         heading("Crop care");JComboBox<RunPolicy> care=new JComboBox<>(RunPolicy.values());care.setSelectedItem(plugin.runPolicy());
         care.addActionListener(e->plugin.setRunPolicy((RunPolicy)care.getSelectedItem(),null));addRow(care);
         if(plugin.runHasTrees()){heading("Tree removal");JComboBox<String> remove=new JComboBox<>(new String[]{"Pay to remove","Manual removal"});remove.setSelectedIndex(plugin.runPayRemoval()?0:1);remove.addActionListener(e->plugin.setRunPolicy(null,remove.getSelectedIndex()==0));addRow(remove);}
+        heading("Crop replacement");
+        caption("Overrides apply to unfinished patches for this run only.");
+        List<PatchType> runTypes=plugin.selectedRunTypes();
+        for(PatchType type:runTypes)if(CropReplacement.preferenceType(type))
+        {
+            caption(type.getDisplayName());
+            JComboBox<String> mode=new JComboBox<>(new String[]{"Use preferences","Harvest & replant","Harvest & preserve"});
+            String saved=plugin.runReplacement(type);mode.setSelectedIndex("REPLANT".equals(saved)?1:"PRESERVE".equals(saved)?2:0);
+            mode.addActionListener(e->plugin.setRunReplacement(type,mode.getSelectedIndex()==1?"REPLANT":mode.getSelectedIndex()==2?"PRESERVE":""));addRow(mode);
+        }
+        if(!runTypes.isEmpty()){
+            heading("Skip remaining crop type");JComboBox<Object> skipType=new JComboBox<>();skipType.addItem("Choose crop type…");
+            for(PatchType type:runTypes)skipType.addItem(type);
+            skipType.addActionListener(e->{if(skipType.getSelectedItem() instanceof PatchType){
+                PatchType type=(PatchType)skipType.getSelectedItem();
+                if(JOptionPane.showConfirmDialog(this,"Skip remaining "+type.getDisplayName()+" patches in this run?","Skip crop type",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)plugin.skipRemainingType(type);
+                skipType.setSelectedIndex(0);
+            }});addRow(skipType);
+        }
         button("All settings",()->settings(true));finish();
     }
     void accessChanged()
@@ -637,10 +676,10 @@ final class FarmingHelperPanel extends PluginPanel
                         JPanel options=new JPanel();options.setLayout(new BoxLayout(options,BoxLayout.Y_AXIS));options.add(choose);
                         JComboBox<String> behavior=new JComboBox<>(new String[]{"Use crop type default","Harvest & replant","Harvest & preserve"});
                         String saved=plugin.setting("replacementPatch_"+p.key(),"");behavior.setSelectedIndex("REPLANT".equals(saved)?1:"PRESERVE".equals(saved)?2:0);
-                        if(CropReplacement.configurable(p.getPatchType()))options.add(behavior);
+                        if(CropReplacement.preferenceType(p.getPatchType()))options.add(behavior);
                         if(JOptionPane.showConfirmDialog(this,options,p.getDisplayName()+" crop",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION){
                             plugin.save("directorCrop_"+p.key(),choose.getSelectedIndex()==0?"":String.valueOf(choose.getSelectedItem()));
-                            if(CropReplacement.configurable(p.getPatchType()))plugin.save("replacementPatch_"+p.key(),behavior.getSelectedIndex()==1?"REPLANT":behavior.getSelectedIndex()==2?"PRESERVE":"");
+                            if(CropReplacement.preferenceType(p.getPatchType()))plugin.save("replacementPatch_"+p.key(),behavior.getSelectedIndex()==1?"REPLANT":behavior.getSelectedIndex()==2?"PRESERVE":"");
                             fillPatches(results);}
                     });row.add(edit,BorderLayout.EAST);
                 }
@@ -676,7 +715,8 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void ranking(PatchType type)
     {
-        if(CropReplacement.configurable(type))
+        preferenceCheck("Skip in grouped runs","skipType_"+type.name(),false);
+        if(CropReplacement.preferenceType(type))
         {
             caption("Mature crop behavior");
             JComboBox<String> care=new JComboBox<>(new String[]{"Harvest & replant","Harvest & preserve"});

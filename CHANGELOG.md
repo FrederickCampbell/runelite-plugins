@@ -1,3 +1,11 @@
+## v0.42-beta.1 — Crop preservation preferences
+
+- Add common species-specific keep preferences and an extensible Also keep list for other persistent crops. Detect the actual planted species, not the recommended seed. Preserve selected flowers unpicked and harvest renewable produce before retaining a bush/cactus/fruit tree.
+- Retain spirit-tree and active contract safeguards. White lily preservation and automatic lily seed allocation are configurable; defaults remain compatible. Celastrus bark does not regrow.
+- Add skip-by-type for grouped presets, explicit individual/manual selections remain available, and temporary replacement/skip controls for remaining run patches.
+- Keep a living crop intact when replacement is missing; Guide anyway offers a replacement advisory, not forced banking.
+- Retain v0.41 shared itineraries and preparation preferences. No new dependencies or automated actions.
+
 ## v0.40-beta.1 — Final visual release candidate
 
 - Replace the Plugin Hub (48×48) and sidebar (16×16) PNGs with the selected AI-generated RuneScape-inspired branding, cropped and resized for their actual UI sizes.

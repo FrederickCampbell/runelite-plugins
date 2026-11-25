@@ -22,6 +22,7 @@ final class StepEngine
         DIG_STUMP,
         CLEAR_DEAD,
         CLEAR_LIVING,
+        NEED_REPLACEMENT,
         CURE,
         PLANT,
         COMPOST,
@@ -149,6 +150,7 @@ final class StepEngine
             case DIG_STUMP:
                 return "Dig out the tree stump with a spade.";
             case CLEAR_LIVING: return "Clear the mature crop using your spade.";
+            case NEED_REPLACEMENT: return "Bring "+name+" before clearing the living crop, or Skip to leave it planted." ;
             case CLEAR_DEAD:
                 return "Clear the dead crop, then plant " + name + ".";
             case CURE:

@@ -28,6 +28,12 @@ final class SeedChoices
     static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
         Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,boolean stockedOnly)
     {
+        return allocate(patches,level,stock,priorities,overrides,committed,stockedOnly,p->true);
+    }
+    static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
+        Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,
+        boolean stockedOnly,java.util.function.Predicate<FarmRunPatch> autoLily)
+    {
         Map<Integer,Integer> remaining = new HashMap<>(stock);
         Map<FarmRunPatch,Crop> result = new LinkedHashMap<>();
         // Reserve a live, already-selected crop first, but never force an exhausted crop.
@@ -38,7 +44,7 @@ final class SeedChoices
         }
         // White lilies are permanent allotment protection. Reserve stocked lilies
         // before ordinary flower XP preferences, without inventing unavailable stock.
-        for(FarmRunPatch patch:patches)if(patch.getPatchType()==PatchType.FLOWER&&!result.containsKey(patch))
+        for(FarmRunPatch patch:patches)if(patch.getPatchType()==PatchType.FLOWER&&!result.containsKey(patch)&&autoLily.test(patch)&&overrides.apply(patch).isBlank())
         {
             Crop lily=CropCatalog.findByName(PatchType.FLOWER,"White lily");
             if(available(patch,lily,level,remaining))assign(patch,lily,remaining,result);

@@ -89,6 +89,7 @@ public class FarmingHelperPlugin extends Plugin
     private RunPolicy temporaryCare;
     private Boolean temporaryPay;
     private SeedlessPolicy temporarySeedless;
+    private volatile Map<PatchType,String> temporaryReplacement=Collections.emptyMap();
     private boolean hopping;
     private String runProfile;
     private List<String> referenceOrder;
@@ -162,7 +163,11 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     void startPreset(RunPreset preset)
-    { startSelected(preset.select(patches,this::flag),preset.title,preset.reference,false,"group_"+preset.name()); }
+    {
+        Set<String> keys=preset.select(patches,this::flag);
+        for(FarmRunPatch p:patches)if(flag("skipType_"+p.getPatchType().name(),false))keys.remove(p.key());
+        startSelected(keys,preset.title,preset.reference,false,"group_"+preset.name());
+    }
     void startIndividual(PatchType type)
     {
         Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getPatchType()==type)keys.add(p.key());
@@ -229,7 +234,7 @@ public class FarmingHelperPlugin extends Plugin
         specialtyStaged=false;specialtyBirdPhase=false;
         skipped.clear();
         completed.clear();preserved.clear();runProgress.reset();
-        temporaryCare=null;temporaryPay=null;temporarySeedless=null;hopping=false;runProfile=null;
+        temporaryCare=null;temporaryPay=null;temporarySeedless=null;temporaryReplacement=Collections.emptyMap();hopping=false;runProfile=null;
         progress.reset();
         activeCrop = null;
         activeAction = StepEngine.Action.INSPECT;
@@ -328,6 +333,30 @@ public class FarmingHelperPlugin extends Plugin
     void setSeedlessPolicy(SeedlessPolicy policy)
     {
         long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||run.isEmpty())return;temporarySeedless=policy;refreshRunPreferences();sampleStorage();lastView=null;update();});
+    }
+    String runReplacement(PatchType type){return temporaryReplacement.getOrDefault(type,"");}
+    void setRunReplacement(PatchType type,String mode)
+    {
+        long id=session;thread.invokeLater(()->{
+            if(id!=session||!guideRequested||run.isEmpty())return;
+            Map<PatchType,String> next=new EnumMap<>(PatchType.class);next.putAll(temporaryReplacement);
+            if(KeepCrop.explicit(mode))next.put(type,mode);else next.remove(type);
+            temporaryReplacement=Map.copyOf(next);lastView=null;update();
+        });
+    }
+    void skipRemainingType(PatchType type)
+    {
+        long id=session;thread.invokeLater(()->{
+            if(id!=session||!guideRequested)return;
+            for(FarmRunPatch p:patches)if(p.getPatchType()==type&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!completed.contains(p))skipped.add(p);
+            lastView=null;update();
+        });
+    }
+    List<PatchType> selectedRunTypes()
+    {
+        Set<PatchType> result=EnumSet.noneOf(PatchType.class);
+        for(FarmRunPatch p:patches)if(ManualSelection.includes(p,run,manualKeys)&&enabled(p))result.add(p.getPatchType());
+        return new ArrayList<>(result);
     }
     void skip(FarmRunPatch displayed)
     {
@@ -664,8 +693,8 @@ public class FarmingHelperPlugin extends Plugin
                 continue;
             }
             if(p==current&&!preparing){progress.observe(o);if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);}
-            // Preserve lilies, but let a newly planted lily finish watering first.
-            if((type==PatchType.FLOWER && QuestFarmingStateReader.isLivingWhiteLily(o) && !(p==current&&progress.planted())) ||
+            // Preserve selected flower species without picking them; newly planted flowers may finish care.
+            if((type==PatchType.FLOWER && KeepCrop.observed(type,o)!=null && preserveReplacement(p,o) && !(p==current&&progress.planted())) ||
                 ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
             {preserved.add(p);completed.add(p);continue;}
             if(completed.contains(p)) { visible.add(p); continue; }
@@ -683,7 +712,7 @@ public class FarmingHelperPlugin extends Plugin
                 {completed.add(p);visible.add(p);continue;}
                 boolean wants=protect && activeCrop!=null && StepEngine.supportsProtection(type) && !ProtectionPaymentCatalog.forCrop(activeCrop).isEmpty();
                 boolean hasPayment=wants && ProtectionPaymentCatalog.forCrop(activeCrop).stream().allMatch(cost -> bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
-                boolean preserveCrop=preserveReplacement(p);
+                boolean preserveCrop=preserveReplacement(p,o);
                 // The player may carry a lower-ranked seed than the initially allocated bank crop.
                 // Prefer a usable carried replacement for the active mature patch over preserving it prematurely.
                 if(CropReplacement.configurable(type)&&!preserveCrop&&CropReplacement.mature(type,o)&&!progress.planted()&&
@@ -695,13 +724,14 @@ public class FarmingHelperPlugin extends Plugin
                 boolean replace=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
                 boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
                 if(mature&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state!=CropState.UNCHECKED&&
-                    CropReplacement.action(type,o,preserveCrop,replace,activeClearOnly)==StepEngine.Action.COMPLETE)
+                    CropReplacement.action(type,o,preserveCrop,replace,activeClearOnly)==StepEngine.Action.COMPLETE &&
+                    (preserveCrop||hideSeedless))
                 {preserved.add(p);completed.add(p);visible.add(p);continue;}
                 if(!mature&&progress.finished(type,o,wants,hasPayment,preserveCrop)) { completed.add(p); visible.add(p); continue; }
                 // Only the active newly planted crop may remain for optional gardener payment.
                 if(progress.planted() && o.state==CropState.GROWING && wants && hasPayment)
                 { ready.add(p);visible.add(p);continue; }
-                if(!CropReplacement.actionable(type,o,preserveReplacement(p)))
+                if(!CropReplacement.actionable(type,o,preserveReplacement(p,o)))
                 {
                     // A remote prediction or already-growing crop is not evidence
                     // of completion. If we have not witnessed planting, simply
@@ -709,10 +739,10 @@ public class FarmingHelperPlugin extends Plugin
                     continue;
                 }
             }
-            if(!CropReplacement.actionable(type,o,preserveReplacement(p))){continue;}
+            if(!CropReplacement.actionable(type,o,preserveReplacement(p,o))){continue;}
             if(type==PatchType.SPIRIT_TREE && !StepEngine.keepExisting(type,o.state) && spiritSlots<=0) continue;
             ready.add(p);visible.add(p);
-            if(!(CropReplacement.configurable(type)?preserveReplacement(p)&&CropReplacement.mature(type,o):StepEngine.keepExisting(type,o.state)) && o.state!=CropState.DISEASED) { plant.add(p); if(type==PatchType.SPIRIT_TREE) spiritSlots--; }
+            if(!(CropReplacement.configurable(type)?preserveReplacement(p,o)&&CropReplacement.mature(type,o):StepEngine.keepExisting(type,o.state)) && o.state!=CropState.DISEASED) { plant.add(p); if(type==PatchType.SPIRIT_TREE) spiritSlots--; }
         }
         // Plan only from initially actionable patches. A manual run keeps its selected
         // subset for the session, and its remaining order is pinned after the first cluster.
@@ -767,7 +797,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current)!=null &&
             observations.get(current).source==QuestFarmingStateReader.Source.LIVE
             ? Map.of(current,activeCrop):Collections.emptyMap();
-        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,allocationStock,this::priority,this::override,committed,hideSeedless);
+        Map<FarmRunPatch,Crop> seeds=SeedChoices.allocate(plant,level,allocationStock,this::priority,this::override,committed,hideSeedless,this::autoLily);
         int seedlessCount=0;
         Set<FarmRunPatch> seedless=new HashSet<>();
         Set<FarmRunPatch> clearOnly=new HashSet<>();
@@ -877,7 +907,10 @@ public class FarmingHelperPlugin extends Plugin
             PatchType type=current.getPatchType();QuestFarmingStateReader.Observation o=observations.get(current);
             activeLive=o.source==QuestFarmingStateReader.Source.LIVE;
             boolean replacementCarried=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
-            StepEngine.Action action=CropReplacement.action(type,o,preserveReplacement(current),replacementCarried,activeClearOnly);
+            boolean keep=preserveReplacement(current,o);
+            StepEngine.Action action=CropReplacement.action(type,o,keep,replacementCarried,activeClearOnly);
+            if(action==StepEngine.Action.COMPLETE&&!keep&&!hideSeedless&&CropReplacement.configurable(type)&&CropReplacement.mature(type,o)&&!replacementCarried)
+                action=StepEngine.Action.NEED_REPLACEMENT;
             if(progress.planted() && o.state==CropState.GROWING) action=StepEngine.Action.PROTECT_TREE;
             if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,wateringCan))action=StepEngine.Action.WATER;
             if(activeCareOnly&&o.state==CropState.DISEASED)action=StepEngine.Action.CURE;
@@ -895,7 +928,7 @@ public class FarmingHelperPlugin extends Plugin
             if(activeClearOnly)instruction=ClearOnly.instruction(action,type);
             if(action==StepEngine.Action.PAY_REMOVE&&type==PatchType.REDWOOD)instruction="Pay Alexandra 2,000 coins to remove the mature redwood.";
             if(action==StepEngine.Action.CHECK_HEALTH&&CropReplacement.configurable(type))
-                instruction="Check health"+(CropReplacement.producer(type)?", then harvest produce.":".")+(preserveReplacement(current)?" Preserve the crop.":" Replant when replacement supplies are carried.");
+                instruction="Check health"+(CropReplacement.producer(type)?", then harvest produce.":".")+(preserveReplacement(current,o)?" Preserve the crop.":" Replant when replacement supplies are carried.");
             if(activeCareOnly&&action==StepEngine.Action.CURE)instruction="Nearby diseased crop — "+instruction+" Then resume the run without replanting.";
             if(action==StepEngine.Action.CURE&&!CropCare.prunes(type)&&bag.getOrDefault(ItemID.PLANT_CURE,0)==0)instruction+=" Obtain plant cure from a nearby farmer or Farming shop, if available; skip if you cannot cure it.";
             if(action==StepEngine.Action.WATER)instruction="Water this crop with the watering can you are carrying.";
@@ -1110,8 +1143,20 @@ public class FarmingHelperPlugin extends Plugin
             bank.getOrDefault(id,0),vault.getOrDefault(id,0),recommended);
     }
 
-    boolean preserveReplacement(FarmRunPatch p)
-    {return CropReplacement.preserve(p.getPatchType(),setting("replacement_"+p.getPatchType().name(),""),setting("replacementPatch_"+p.key(),""));}
+    boolean keepSpecies(KeepCrop c)
+    {
+        String mode=setting(c.key(),"");
+        return KeepCrop.explicit(mode)?"PRESERVE".equals(mode):KeepCrop.defaultKeep(c,setting("replacement_"+c.type.name(),""));
+    }
+    private boolean autoLily(FarmRunPatch p)
+    {return resolveReplacement(p,KeepCrop.WHITE_LILY);}
+    private boolean resolveReplacement(FarmRunPatch p,KeepCrop c)
+    {
+        return KeepCrop.resolve(p.getPatchType(),c,setting("replacement_"+p.getPatchType().name(),""),
+            c==null?"":setting(c.key(),""),setting("replacementPatch_"+p.key(),""),runReplacement(p.getPatchType()));
+    }
+    boolean preserveReplacement(FarmRunPatch p,QuestFarmingStateReader.Observation o)
+    {return resolveReplacement(p,KeepCrop.observed(p.getPatchType(),o));}
     String override(FarmRunPatch p) { return setting("directorCrop_"+p.key(),""); }
     String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
     StepEngine.Action activeAction() { return diseaseTarget!=null?StepEngine.Action.CURE:activeAction; }

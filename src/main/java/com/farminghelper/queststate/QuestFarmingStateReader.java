@@ -107,6 +107,15 @@ public final class QuestFarmingStateReader
             worldPoint, implementation);
     }
 
+    public static String livingProduceKey(String type,Observation o)
+    {
+        if(o==null||o.rawValue<0||o.state==null||o.state==CropState.EMPTY||o.state==CropState.DEAD||
+            o.state==CropState.STUMP||o.state==CropState.DISEASED)return "";
+        PatchImplementation impl=implementation(type);
+        PatchState raw=impl==null?null:impl.forVarbitValue(o.rawValue);
+        return raw==null||raw.getProduce()==Produce.WEEDS?"":raw.getProduce().name();
+    }
+
     public static boolean isLivingWhiteLily(Observation o)
     {
         if(o==null||o.rawValue<0||o.state==null||o.state==CropState.DEAD||o.state==CropState.EMPTY||o.state==CropState.DISEASED)return false;

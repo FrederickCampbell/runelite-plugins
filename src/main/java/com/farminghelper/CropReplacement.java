@@ -17,11 +17,12 @@ final class CropReplacement
             default:return false;
         }
     }
+    static boolean preferenceType(PatchType t){return configurable(t)||t==PatchType.FLOWER;}
     static boolean defaultPreserve(PatchType t){return t==PatchType.CACTUS;}
     static boolean preserve(PatchType t,String typeValue,String patchValue)
     {
         if(t==PatchType.SPIRIT_TREE)return true;
-        if(!configurable(t))return false;
+        if(!preferenceType(t))return false;
         String mode=patchValue.isEmpty()?typeValue:patchValue;
         return "PRESERVE".equals(mode)||(!"REPLANT".equals(mode)&&defaultPreserve(t));
     }
