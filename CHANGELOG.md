@@ -1,3 +1,8 @@
+## v1.0
+
+- First 1.0 release of Farming Helper, including shared grouped, individual and manual runs, stock-aware preparation, optional teleport recommendations and contextual help.
+- Updated Plugin Hub description and player-facing README. Upstream credits and licenses retained.
+
 ## v0.50 — Player-facing UX polish
 
 - Concise preparation/resupply instructions; contextual info icons for storage, preparation and optional teleports. Keep real transport instructions and supply actions visible.

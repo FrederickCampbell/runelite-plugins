@@ -34,7 +34,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 
-@PluginDescriptor(name = "Farming Helper", description = "Farming guides with stock-aware seed choices",
+@PluginDescriptor(name = "Farming Helper", description = "Quest Helper for your farm runs! Includes Shortest Path integration.",
     tags = {"farming", "seed", "herb", "tree"})
 public class FarmingHelperPlugin extends Plugin
 {

@@ -74,6 +74,6 @@ public class SupplyPolishTest
             assertEquals(FarmingTheme.INPUT,combo.getBackground());
             for(KeepCrop crop:KeepCrop.values())assertNotNull(crop.label,crop.crop());
         });
-        assertEquals("Farming Helper · v0.50",FarmingHelperPanel.versionLabel());
+        assertEquals("Farming Helper · v1.0",FarmingHelperPanel.versionLabel());
     }
 }
