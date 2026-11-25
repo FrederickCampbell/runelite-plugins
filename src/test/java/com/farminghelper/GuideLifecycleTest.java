@@ -1,7 +1,7 @@
 package com.farminghelper;
 
 import com.farminghelper.queststate.QuestFarmingStateReader;
-import java.util.EnumSet;
+import java.util.Set;
 import java.util.Map;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -40,6 +40,60 @@ public class GuideLifecycleTest
     @Spy FarmingHelperConfig legacy = new FarmingHelperConfig() {};
     @Mock QuestFarmingStateReader reader;
     @InjectMocks FarmingHelperPlugin plugin;
+
+    @Test public void preparationRetargetsAfterStorageObservationsAndReleasesWhenCarried() throws Exception
+    {
+        int seed=net.runelite.api.gameval.ItemID.RANARR_SEED;
+        var start=new WorldPoint(3092,3243,0);
+        Player player=mock(Player.class);when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(start);
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(72);
+        when(config.getRSProfileKey()).thenReturn("one");
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");
+        when(config.getRSProfileConfiguration("farming-helper","observedBankV1")).thenReturn(seed+":1");
+        doAnswer(i->{((Runnable)i.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        when(reader.observeType(anyString(),anyString(),anyString(),any())).thenReturn(
+            new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
+
+        var items=mock(net.runelite.client.game.ItemManager.class);
+        var field=FarmingHelperPlugin.class.getDeclaredField("itemManager");field.setAccessible(true);field.set(plugin,items);
+        var definition=mock(net.runelite.api.ItemComposition.class);
+        when(definition.getNote()).thenReturn(-1);when(definition.getPlaceholderTemplateId()).thenReturn(-1);
+        when(definition.getName()).thenReturn("Ranarr seed");
+        when(items.getItemComposition(anyInt())).thenReturn(definition);
+        when(items.getImage(anyInt())).thenReturn(new net.runelite.client.util.AsyncBufferedImage(thread,1,1,java.awt.image.BufferedImage.TYPE_INT_ARGB));
+        plugin.startUp();
+        plugin.startManual(Set.of("Catherby~HERB~"));
+        assertEquals(Preparation.DRAYNOR,plugin.activeLeg().point);
+
+        var bank=mock(net.runelite.api.ItemContainer.class);
+        var vault=mock(net.runelite.api.ItemContainer.class);
+        var root=mock(net.runelite.api.widgets.Widget.class);
+        when(bank.getItems()).thenReturn(new net.runelite.api.Item[0]);
+        when(vault.getItems()).thenReturn(new net.runelite.api.Item[]{new net.runelite.api.Item(seed,1)});
+        when(client.getItemContainer(net.runelite.api.InventoryID.BANK)).thenReturn(bank);
+        when(client.getItemContainer(net.runelite.api.InventoryID.SEED_VAULT)).thenReturn(vault);
+        when(client.getWidget(net.runelite.api.gameval.InterfaceID.Bankmain.UNIVERSE)).thenReturn(root);
+        plugin.onGameTick(null);
+        when(client.getWidget(net.runelite.api.gameval.InterfaceID.Bankmain.UNIVERSE)).thenReturn(null);
+        when(client.getWidget(net.runelite.api.gameval.InterfaceID.SeedVault.UNIVERSE)).thenReturn(root);
+        plugin.onGameTick(null);
+        when(client.getWidget(net.runelite.api.gameval.InterfaceID.SeedVault.UNIVERSE)).thenReturn(null);
+        plugin.onGameTick(null);
+        assertEquals(Preparation.SEED_VAULT.point,plugin.activeLeg().point);
+
+        var inventory=mock(net.runelite.api.ItemContainer.class);
+        when(inventory.getItems()).thenReturn(plugin.requiredItems().stream().map(id->new net.runelite.api.Item(id,1000)).toArray(net.runelite.api.Item[]::new));
+        when(client.getItemContainer(net.runelite.api.InventoryID.INVENTORY)).thenReturn(inventory);
+        var changed=mock(net.runelite.api.events.ItemContainerChanged.class);
+        when(changed.getContainerId()).thenReturn(net.runelite.api.InventoryID.INVENTORY.getId());
+        plugin.onItemContainerChanged(changed);plugin.onGameTick(null);
+        assertTrue(plugin.missingStorageItems().isEmpty());
+        assertNull(plugin.activeLeg().point);
+        plugin.shutDown();
+    }
 
     @Test public void aHopRetainsRunPreferencesAndLogoutClearsTheSession() throws Exception
     {

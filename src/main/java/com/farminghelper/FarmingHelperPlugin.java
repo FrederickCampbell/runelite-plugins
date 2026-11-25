@@ -83,6 +83,8 @@ public class FarmingHelperPlugin extends Plugin
     private List<?> allocationInputs=List.of();
     private Map<FarmRunPatch,Crop> allocated=Map.of();
     private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
+    private List<?> shelfInputs=List.of();
+    private Set<Integer> shelfItems=Set.of();
     private String stockProfile;
     private long bankObservedAt,vaultObservedAt;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
@@ -387,7 +389,7 @@ public class FarmingHelperPlugin extends Plugin
         if(hopping){hopping=false;if(!Objects.equals(runProfile,config.getRSProfileKey()))reset();lastView=null;}
         sampleStorage();
         // Re-evaluate quest, diary, Hunter and Sailing gates even when Farming is unchanged.
-        if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;eligibleTravel.clear();updateAccessNotes();}
+        if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;invalidateTravel();updateAccessNotes();}
         if (!run.isEmpty() && guideRequested)
         {
             if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(LocationContext.capture(client).pathStart());
@@ -422,11 +424,11 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onVarbitChanged(VarbitChanged event)
     {
         highlight.transformed();
-        if(!eligibleTravel.isEmpty()&&CuratedBank.travelChanged(event.getVarbitId(),event.getVarpId()))eligibleTravel.clear();
+        if(!eligibleTravel.isEmpty()&&CuratedBank.travelChanged(event.getVarbitId(),event.getVarpId()))invalidateTravel();
     }
     @Subscribe public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
     {
-        if("shortestpath".equals(event.getGroup()))thread.invokeLater(eligibleTravel::clear);
+        if("shortestpath".equals(event.getGroup()))thread.invokeLater(this::invalidateTravel);
         if("farming-helper".equals(event.getGroup())&&!event.getKey().startsWith("observed"))preferenceRevision++;
     }
 
@@ -454,10 +456,13 @@ public class FarmingHelperPlugin extends Plugin
     {
         Set<Integer> runItems=vaultRunItems();
         if(runItems==null)return null;
-        Set<Integer> ids=new HashSet<>(runItems);
         boolean bird=birdBankPhase();
+        List<?> inputs=List.of(session,quantities,runItems,bird,preferenceRevision,vaultAccessRevision);
+        if(inputs.equals(shelfInputs))return shelfItems;
         boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
-        return CuratedBank.shelf(ids,owned,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving,teleports(owned).keySet());
+        shelfItems=CuratedBank.shelf(runItems,owned,this::observedItemName,client,config,bird,!bird&&runHasTrees,diving,teleports(owned).keySet());
+        shelfInputs=inputs;
+        return shelfItems;
     }
     private void updateRunBank(boolean manual)
     {
@@ -548,9 +553,11 @@ public class FarmingHelperPlugin extends Plugin
         }
     }
 
+    private void invalidateTravel(){eligibleTravel.clear();shelfInputs=List.of();}
+
     private void invalidateStock()
     {
-        quantities=null;sampledStorage.clear();eligibleTravel.clear();
+        quantities=null;sampledStorage.clear();invalidateTravel();
     }
 
     private Map<Integer,Integer> readItems(ItemContainer container)
@@ -560,7 +567,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(quantities==null)
         {
-            eligibleTravel.clear();
+            invalidateTravel();
             quantities=new PhysicalStock(readItems(client.getItemContainer(InventoryID.INVENTORY)),
                 readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank,vault,this::observedItemName,
                 id->itemManager==null?id:itemManager.canonicalize(id));
