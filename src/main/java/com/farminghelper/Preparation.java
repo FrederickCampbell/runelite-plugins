@@ -16,6 +16,9 @@ final class Preparation
     // Existing verified seaweed rowboat approach on the same small bank island.
     static final Bank FOSSIL_BANK=new Bank("Bank Chest-wreck (north Fossil Island)",SpecialRoutes.SEAWEED_ISLAND);
     private static final Bank GUILD_BANK=new Bank("Farming Guild",GUILD);
+    // The vault is immediately west of the guild bank chest. Use the known
+    // bank approach rather than inventing an exact vault interaction tile.
+    static final Bank SEED_VAULT=new Bank("Farming Guild Seed Vault",GUILD);
     private static final List<Bank> PUBLIC=List.of(new Bank("Draynor Village",DRAYNOR),
         new Bank("Falador east",new WorldPoint(3013,3355,0)),new Bank("Varrock east",new WorldPoint(3253,3420,0)),
         new Bank("Al Kharid",new WorldPoint(3269,3166,0)),new Bank("Edgeville",new WorldPoint(3094,3491,0)),
@@ -41,6 +44,38 @@ final class Preparation
         if(from==null)return PUBLIC.get(0);
         return PUBLIC.stream().min(Comparator.comparingInt(b->Math.max(Math.abs(b.point.getX()-from.getX()),Math.abs(b.point.getY()-from.getY())))).orElse(PUBLIC.get(0));
     }
+    /** Prefer a planting-material source over generic tools. All decisions remain advisory. */
+    static Bank chooseSupplies(int level,WorldPoint from,boolean initial,StartAt preference,boolean bird,
+        Map<Integer,Integer> planting,Map<Integer,Integer> carried,Map<Integer,Integer> bank,Map<Integer,Integer> vault)
+    {
+        if(level>=45&&vaultNeeded(planting,carried,bank,vault))return SEED_VAULT;
+        if(bird&&!initial)return FOSSIL_BANK;
+        return choose(level,from,initial,false,preference,false);
+    }
+
+    static String sourceNote(Map<Integer,Integer> planting,Map<Integer,Integer> carried,Map<Integer,Integer> bank,Map<Integer,Integer> vault,
+        boolean bankObserved,boolean vaultObserved)
+    {
+        boolean inBank=false,inVault=false,unknown=false;
+        for(var e:planting.entrySet())
+        {
+            int id=e.getKey(),missing=Math.max(0,e.getValue()-carried.getOrDefault(id,0));
+            if(missing==0)continue;
+            int b=Math.max(0,bank.getOrDefault(id,0)),v=Math.max(0,vault.getOrDefault(id,0));
+            if(b>=missing&&v>=missing){inBank=true;inVault=true;}
+            else if(b>=missing)inBank=true;
+            else if(v>=missing)inVault=true;
+            else {inBank|=b>0;inVault|=v>0;unknown|=b+v<missing;}
+        }
+        StringJoiner note=new StringJoiner(" ");
+        if(inBank&&inVault)note.add("Planting supplies observed in bank / Seed Vault.");
+        else if(inVault)note.add("Planting supplies observed in Seed Vault.");
+        else if(inBank)note.add("Planting supplies observed in bank.");
+        if(unknown)note.add("Some planting stock is missing or unverified.");
+        if((inBank&&!bankObserved)||(inVault&&!vaultObserved))note.add("Storage counts may be outdated.");
+        return note.toString();
+    }
+
     static boolean vaultNeeded(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> bank,Map<Integer,Integer> vault)
     {return required.entrySet().stream().anyMatch(e->e.getValue()>carried.getOrDefault(e.getKey(),0)+bank.getOrDefault(e.getKey(),0)&&vault.getOrDefault(e.getKey(),0)>0);}
     static boolean missing(Map<Integer,Integer> required,Map<Integer,Integer> carried)

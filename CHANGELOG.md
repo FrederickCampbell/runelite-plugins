@@ -1,3 +1,9 @@
+## v0.42-beta.4 — Preparation and travel polish
+
+- Initial preparation and explicit resupply share stock-aware planting-material destination selection. Use the existing Guild bank approach for the adjacent Seed Vault; keep Start/Continue available and respect already-open storage. No automatic mid-run bank diversions.
+- Planting supplies first, consumables next, reusable tools last. Source hints distinguish cached storage from confirmed observations; missing tools may be in leprechaun storage.
+- Collapsed optional Recommended teleports uses existing eligible Shortest Path transport rows and location-specific reference alternatives, favoring carried items. Yellow bank outlines disappear when collected; native bank and vault membership are unchanged. Not a charge planner or required loadout.
+
 ## v0.42-beta.3 — Supply and interface polish
 
 - Count native raw seeds, unwatered seedlings, watered seedlings and mature saplings as distinct physical resources for crop allocation; only actual mature saplings permit replacement. Count carried preparation materials toward the final material total, show remaining preparation, avoid redundant pot and watering requirements, and avoid double-counting saplings in the advisory load estimate.

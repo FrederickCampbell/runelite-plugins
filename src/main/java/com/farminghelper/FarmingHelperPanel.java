@@ -36,7 +36,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final SidebarNavigation navigation=new SidebarNavigation();
     private GuideView latestGuide;
     private long guideSession=Long.MIN_VALUE;
-    private boolean requiredOpen=false,completedOpen=false,lastPreparing=false;
+    private boolean requiredOpen=false,completedOpen=false,lastPreparing=false,teleportsOpen=false;
     private JButton requirementsHeader;
     private boolean settingsFromRun=false,patchByLocation=true,showLocked=false,manualByLocation=false;
     private String patchSearch="",individualSearch="";
@@ -194,7 +194,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     void home()
     {
-        latestGuide=null;guideSession=Long.MIN_VALUE;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=false;completedOpen=false;lastPreparing=false;
+        latestGuide=null;guideSession=Long.MIN_VALUE;previousGuide=null;expanded.clear();lastActive=null;navigation.reset();requiredOpen=false;completedOpen=false;lastPreparing=false;teleportsOpen=false;
         showHome();
     }
     private void showHome()
@@ -360,12 +360,12 @@ final class FarmingHelperPanel extends PluginPanel
     }
 
     private static String rowKey(GuideView.ItemRow row){return row.id+":"+row.recommended;}
-    private static Color itemColor(GuideView.ItemRow row){return row.satisfied()?FarmingTheme.SUCCESS:FarmingTheme.DANGER;}
+    private static Color itemColor(GuideView.ItemRow row){return row.satisfied()?FarmingTheme.SUCCESS:row.recommended?FarmingTheme.WARNING:FarmingTheme.DANGER;}
     private static String stockTip(GuideView.ItemRow row){return "Carried: "+row.owned+" / "+row.needed+" · Last observed bank: "+row.bank+" · Seed Vault: "+row.vault;}
     static void updateQuantity(JLabel label,GuideView.ItemRow row)
     {
         boolean enough=row.satisfied();
-        label.setText(enough?"":row.owned+"/"+row.needed);
+        label.setText(enough?"":row.recommended?"Bank":row.owned+"/"+row.needed);
         label.setIcon(enough?SATISFIED:null);
         label.setForeground(itemColor(row));label.setToolTipText(stockTip(row));
     }
@@ -417,7 +417,7 @@ final class FarmingHelperPanel extends PluginPanel
         // A new backend session must open the guide even if it was started via
         // the plugin API rather than by a sidebar button. Same-session ticks
         // must never change the user's selected screen.
-        if(guideSession!=session){guideSession=session;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=!view.preparation.isEmpty();lastPreparing=!view.preparation.isEmpty();completedOpen=false;navigation.starting();}
+        if(guideSession!=session){guideSession=session;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=!view.preparation.isEmpty();lastPreparing=!view.preparation.isEmpty();completedOpen=false;teleportsOpen=false;navigation.starting();}
         latestGuide=view;
         if(navigation.acceptGuide())renderGuide(view);
     }
@@ -475,12 +475,21 @@ final class FarmingHelperPanel extends PluginPanel
             }
             button("Return home",plugin::stop);
         }
-        if(!view.items.isEmpty())
+        if(view.items.stream().anyMatch(r->!r.recommended))
         {
             requirementsHeader=collapse(requirementsTitle(view),requiredOpen,()->{requiredOpen=!requiredOpen;previousGuide=null;renderGuide(latestGuide);});
             if(requiredOpen)requirements("Supplies",view.items,false);
         }
         else requirementsHeader=null;
+        if(view.items.stream().anyMatch(r->r.recommended))
+        {
+            collapse("Recommended teleports",teleportsOpen,()->{teleportsOpen=!teleportsOpen;previousGuide=null;renderGuide(latestGuide);});
+            if(teleportsOpen)
+            {
+                caption("Optional owned travel items for remaining locations. Bring enough charges; Shortest Path chooses the actual route.");
+                requirements("Travel items",view.items,true);
+            }
+        }
         if(isPreparing||view.active!=null)
         {
             if(plugin.flag("activeRunBank",true))button("Show farming bank",plugin::showActiveRunBank);

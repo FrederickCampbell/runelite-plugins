@@ -153,10 +153,8 @@ final class CuratedBank
     {
         if(run==null)return null;
         Set<Integer> result=new HashSet<>(run);
-        String mode=config(config,"useTeleportationItems");
         Set<Integer> blocked=blocked(config(config,"blockedTeleportItems"));
         boolean fairy=!"false".equalsIgnoreCase(config(config,"useFairyRings"));
-        boolean quetzal=!"false".equalsIgnoreCase(config(config,"useQuetzals"));
         for(var entry:owned.entrySet())
         {
             if(entry.getValue()<=0)continue;
@@ -164,6 +162,17 @@ final class CuratedBank
             if(contextualEquipment(id,names,bird,trees,diving))result.add(id);
             if(fairy&&!blocked.contains(id)&&(id==772||id==9084)&&fairyAccess(client))result.add(id);
         }
+        result.addAll(eligibleTeleports(owned,names,client,config).keySet());
+        return Set.copyOf(result);
+    }
+
+    /** Same per-destination eligibility for the shelf and optional recommendations. */
+    static Map<Integer,List<String>> eligibleTeleports(Map<Integer,Integer> owned,IntFunction<String> names,Client client,ConfigManager config)
+    {
+        Map<Integer,List<String>> result=new TreeMap<>();
+        String mode=config(config,"useTeleportationItems");
+        Set<Integer> blocked=blocked(config(config,"blockedTeleportItems"));
+        boolean quetzal=!"false".equalsIgnoreCase(config(config,"useQuetzals"));
         for(var entry:owned.entrySet())if(entry.getValue()>0)for(String[] row:teleportRows(entry.getKey(),names))
         {
             int id=entry.getKey(),source=Integer.parseInt(row[0]),family=Integer.parseInt(row[1]);
@@ -171,9 +180,10 @@ final class CuratedBank
             if("whistle".equals(row[7])&&!quetzal)continue;
             try
             {
-                if(skills(client,row[3])&&quests(client,row[4])&&conditions(row[5],client::getVarbitValue)&&conditions(row[6],client::getVarpValue))result.add(id);
+                if(skills(client,row[3])&&quests(client,row[4])&&conditions(row[5],client::getVarbitValue)&&conditions(row[6],client::getVarpValue))
+                    result.computeIfAbsent(id,k->new ArrayList<>()).add(row[8]);
             }catch(RuntimeException ignored){}
         }
-        return Set.copyOf(result);
+        return result;
     }
 }

@@ -75,6 +75,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile boolean activeLive;
     private volatile Set<Integer> requiredItems = Collections.emptySet();
     private volatile Set<Integer> missingStorageItems = Collections.emptySet();
+    private volatile Set<Integer> missingTeleports = Collections.emptySet();
     private volatile long session;
     private volatile boolean guideRequested;
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
@@ -235,6 +236,7 @@ public class FarmingHelperPlugin extends Plugin
         activeLive=false;
         requiredItems = Collections.emptySet();
         missingStorageItems = Collections.emptySet();
+        missingTeleports = Collections.emptySet();
         lastView = null;
         activeLeg=null;
         if(navigation!=null)navigation.stop();
@@ -854,14 +856,32 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
         Map<Integer,Integer> physicalRequired=TreePreparation.physicalRequirements(required,pendingSaplings);
         Map<Integer,Integer> materialCarried=TreePreparation.materialCarried(carried,prepSeeds,aliases);
-        required.forEach((id,n)->{
+        for(int id:SupplyOrder.ordered(required,this::observedItemName))
+        {
+            int n=required.get(id);
             GuideView.ItemRow row=itemRow(id,n,materialCarried,false);
             int pending=pendingSaplings.getOrDefault(id,0);
             if(pending>0)row=new GuideView.ItemRow(row.id,row.name+" ("+pending+" to prepare)",row.owned,row.needed,row.bank,row.vault,row.recommended);
             items.add(row);
-        });
+        }
         requiredItems=Set.copyOf(required.keySet());
         missingStorageItems=GuideView.missingItems(physicalRequired,carried);
+        Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
+        // Only observed bank/inventory/equipment stock. Keep the existing bank
+        // shelf broad and stable; recommendations never change its membership.
+        Map<Integer,Integer> travelStock=PhysicalStock.combine(carried,bank);
+        Map<Integer,Set<String>> teleports=loggedIn&&config!=null&&itemManager!=null
+            ?RunTeleports.select(ready,CuratedBank.eligibleTeleports(travelStock,this::observedItemName,client,config),carried)
+            :Collections.emptyMap();
+        Set<Integer> missingTravel=new HashSet<>();
+        teleports.forEach((id,sites)->{
+            GuideView.ItemRow row=itemRow(id,1,carried,true);
+            String name=observedItemName(id);
+            items.add(new GuideView.ItemRow(id,(name.isEmpty()?row.name:name)+" — "+String.join(", ",sites),
+                row.owned,row.needed,row.bank,row.vault,true));
+            if(!row.satisfied()&&row.bank>0)missingTravel.add(id);
+        });
+        missingTeleports=Set.copyOf(missingTravel);
         List<GuideView.Stop> stops=new ArrayList<>();
         GuideView.Stats summary=runProgress.stats();
         String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain. Review deferred and missing-supply counts below.":"Run finished. Close the helper to start another run.";
@@ -945,8 +965,8 @@ public class FarmingHelperPlugin extends Plugin
                 initialPrepChecked=true;
                 if(rawSeeds+seedlings>0||Preparation.storedShortage(physicalRequired,carried,storage)){
                     beginPreparation(true,"Gather the listed supplies at the bank / Seed Vault. Start when ready; missing items never block the guide.");
-                    preparationBank=Preparation.choose(level,location.normalized,true,false,
-                        Preparation.StartAt.load(setting("startAtV1","GUILD")),Preparation.vaultNeeded(physicalRequired,carried,bank,vault));
+                    preparationBank=Preparation.chooseSupplies(level,location.normalized,true,
+                        Preparation.StartAt.load(setting("startAtV1","GUILD")),birdBankPhase(),plantingRequired,carried,bank,vault);
                 }
             }
         }
@@ -959,19 +979,30 @@ public class FarmingHelperPlugin extends Plugin
         for(FarmRunPatch p:patches)if(completed.contains(p)&&!listed.contains(p))stops.add(new GuideView.Stop(p,preserved.contains(p)?"Preserved":"Completed",false,true));
         String prepMessage="";
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
-        if(preparing && loggedIn && preparationBank!=null)
+        if(preparing && loggedIn)
         {
+            if(preparationBank==null)preparationBank=Preparation.chooseSupplies(level,location.normalized,initialPreparation,
+                Preparation.StartAt.load(setting("startAtV1","GUILD")),birdBankPhase(),plantingRequired,carried,bank,vault);
             boolean atStorage=storageOpen();visitedStorage|=atStorage;
-            // Existing bank or vault is sufficient: never require leaving an open bank for a specific one.
-            prepMessage=preparationReason+"\n"+(visitedStorage?"Use the storage you visited; continue when ready.":"Suggested bank: "+preparationBank.name+" (or any accessible bank).");
+            boolean vaultOutstanding=level>=45&&Preparation.vaultNeeded(plantingRequired,carried,bank,vault);
+            boolean vaultTarget=preparationBank==Preparation.SEED_VAULT;
+            // A known vault shortage may still remain after visiting a regular
+            // bank. Only the explicit preparation session can suggest it.
+            boolean routeToStorage=!visitedStorage||vaultTarget&&vaultOutstanding&&!atStorage;
+            prepMessage=preparationReason+"\n"+(routeToStorage?"Suggested storage: "+preparationBank.name+".":"Use the storage you visited; continue when ready.");
+            String sources=Preparation.sourceNote(plantingRequired,carried,bank,vault,bankObservedThisSession,vaultObservedThisSession);
+            if(!sources.isEmpty())prepMessage+="\n"+sources;
+            if(vaultOutstanding)prepMessage+="\nSeed Vault is directly west of the Farming Guild bank chest.";
+            if(physicalRequired.entrySet().stream().anyMatch(e->e.getValue()>carried.getOrDefault(e.getKey(),0)&&SupplyOrder.tool(observedItemName(e.getKey()))))
+                prepMessage+="\nMissing tools may also be stored with a tool leprechaun.";
             // Preparation is entered only at run start or by the Resupply button.
             // Keep the explicit Start/Continue action available even when supplies are ready.
             {
                 RouteLeg exit=SpecialRoutes.leg(null,player,aboard,rowboat,instance,null);
-                if(visitedStorage)leg=RouteLeg.walk(null,false);
+                if(!routeToStorage)leg=RouteLeg.walk(null,false);
                 else if(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
                     leg=exit.instruction.isEmpty()?RouteLeg.manual("Leave the current instance before banking.",RouteLeg.Interaction.NONE):exit;
-                else leg=RouteLeg.approach(preparationBank.point,"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
+                else leg=RouteLeg.approach(preparationBank.point,vaultTarget?"Travel to the Guild bank approach, then use the Seed Vault immediately west of the chest.":"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
                 if(!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
             }
         }
@@ -1039,6 +1070,7 @@ public class FarmingHelperPlugin extends Plugin
         int cure=CropCare.prunes(type)?(carried.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0?ItemID.FAIRY_ENCHANTED_SECATEURS:ItemID.SECATEURS):ItemID.PLANT_CURE;
         diseaseItems=Set.of(cure);
         missingStorageItems=GuideView.missingItems(Map.of(cure,1),carried);
+        missingTeleports=Collections.emptySet();
         WorldPoint approach=approaches.get(target);
         diseaseLeg=RouteLeg.walk(approach,false);
         diseaseTarget=target;
@@ -1067,8 +1099,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     private void beginPreparation(boolean initial,String reason)
     {
-        WorldPoint from=client.getLocalPlayer()==null?null:client.getLocalPlayer().getWorldLocation();
-        preparationBank=Preparation.choose(client.getRealSkillLevel(Skill.FARMING),from,initial,false);
+        preparationBank=null; // Select once from the freshly calculated remaining supplies.
         initialPreparation=initial;preparing=true;visitedStorage=false;preparationReason=reason;
     }
     void continueRun()
@@ -1079,7 +1110,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     void resupply()
     {
-        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||diseaseTarget!=null||current==null)return;beginPreparation(false,"Resupply at a nearby bank. Continue when ready.");if(specialtyStaged&&specialtyBirdPhase)preparationBank=Preparation.FOSSIL_BANK;update();});
+        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(false,"Gather remaining supplies. Continue when ready.");update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
@@ -1133,7 +1164,7 @@ public class FarmingHelperPlugin extends Plugin
     int patchCount(FarmRunPatch p) { return reader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
     Set<Integer> requiredItems() { return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:requiredItems; }
     Set<Integer> missingStorageItems() {return guideRequested?missingStorageItems:Collections.emptySet();}
-    Set<Integer> recommendedItems() { return Collections.emptySet(); } // compatibility: all live guide supplies are required
+    Set<Integer> recommendedItems() { return guideRequested?missingTeleports:Collections.emptySet(); }
     int gardener(FarmRunPatch p) { return reader.gardenerId(p.getPatchType().name(),p.getLocation(),p.getName()); }
 
     RouteLeg activeLeg(){return !guideRequested?null:diseaseTarget!=null?diseaseLeg:activeLeg;}

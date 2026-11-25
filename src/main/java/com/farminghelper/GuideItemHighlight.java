@@ -25,7 +25,7 @@ final class GuideItemHighlight extends WidgetItemOverlay
     @Inject GuideItemHighlight(Client client,ItemManager items,Provider<FarmingHelperPlugin> plugin)
     {
         this.client=client;this.items=items;this.plugin=plugin;
-        showOnInventory();showOnInterfaces(InterfaceID.SEED_VAULT);
+        showOnInventory();showOnBank();showOnInterfaces(InterfaceID.SEED_VAULT);
     }
     @Override public void renderItemOverlay(Graphics2D graphics,int id,WidgetItem widget)
     {
@@ -46,6 +46,8 @@ final class GuideItemHighlight extends WidgetItemOverlay
         }
         else if(group==InterfaceID.SEED_VAULT)
             color=helper.missingStorageItems().contains(id)?Color.CYAN:null;
+        else if(group==InterfaceID.BANKMAIN)
+            color=helper.recommendedItems().contains(id)?FarmingTheme.WARNING:null;
         else return;
         if(color==null)return;
         BufferedImage outline=items.getItemOutline(id,widget.getQuantity(),color);

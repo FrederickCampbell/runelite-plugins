@@ -30,3 +30,6 @@ The experimental item-aware bank-detour API and automatic mid-run banking divers
 
 ## v0.42-beta.3 polish
 No new bank overlay or native widget actions. Existing vault outlines use an immutable missing-physical-quantity snapshot; inventory step outlines remain independent. Seedling aliases affect advisory material accounting only, never readiness to clear a living crop. No new dependency, game action, route behavior, or storage projection changes. Confirm withdrawals, growth transitions, and the 225px sidebar in the live client.
+
+## v0.42-beta.4 travel recommendations
+Optional bank item outlines use RuneLite's normal WidgetItemOverlay and a missing-owned-recommendation snapshot. No native bank layout or click modification. Storage destination advice is only during player-initiated preparation/resupply; no independent navigation engine or game action. Live verification remains necessary.

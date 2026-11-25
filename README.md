@@ -2,7 +2,7 @@
 
 Quest Helper for your farm runs!
 
-**v0.42-beta.3 — supply and interface polish**
+**v0.42-beta.4 — stock-aware preparation and optional teleports**
 
 ## Features
 - Grouped, individual and custom farm runs share guide-based regional ordering.
@@ -13,6 +13,7 @@ Quest Helper for your farm runs!
 - Highlights for patches, tools and required items.
 - Optional farming bank and Seed Vault views.
 - Customizable crops and patch locations.
+- Optional owned teleport recommendations for remaining farming locations.
 - Optional Shortest Path integration.
 
 Choose a run, gather your supplies and follow the guide. All gameplay actions are manual.
