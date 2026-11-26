@@ -192,18 +192,4 @@ final class SeedBoxStock
         }
         return false;
     }
-    static int slots(Map<Integer,Integer> required,Map<Integer,Integer> equipped,Map<Integer,Integer> box,
-        java.util.function.IntPredicate stackable)
-    {
-        if (box.isEmpty()) return Preparation.slots(required,equipped,stackable);
-        Map<Integer,Integer> loose=new HashMap<>(required);
-        boolean used=false;
-        for(var entry:box.entrySet())
-        {
-            int n=Math.min(loose.getOrDefault(entry.getKey(),0),entry.getValue());
-            if(n>0){used=true;loose.computeIfPresent(entry.getKey(),(id,count)->count>n?count-n:null);}
-        }
-        int slots=Preparation.slots(loose,equipped,stackable);
-        return used&&boxId(required)<0?PhysicalStock.sum(slots,1):slots;
-    }
 }
