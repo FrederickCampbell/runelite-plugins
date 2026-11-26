@@ -3,6 +3,7 @@ package com.farminghelper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.runelite.api.gameval.ItemID;
 
 /** Conservative per-wave tools and compost using the existing Advisor patch traits. */
@@ -14,11 +15,20 @@ final class Supplies
     static final int SALTPETRE=13421, GARDENING_TROWEL=5325;
     static Map<Integer,Integer> guideKit(List<FarmRunPatch> patches,boolean autoWeed,boolean barbarianPlanting)
     {
+        return guideKit(patches,Set.of(),autoWeed,barbarianPlanting);
+    }
+    static Map<Integer,Integer> guideKit(List<FarmRunPatch> patches,Set<FarmRunPatch> excluded,boolean autoWeed,boolean barbarianPlanting)
+    {
         Map<Integer,Integer> items=new LinkedHashMap<>();
-        if(patches.stream().allMatch(p->p.getPatchType()==PatchType.COMPOST_BIN||p.getPatchType()==PatchType.BIRDHOUSE))return items;
-        if(!autoWeed)items.put(ItemID.RAKE,1);
-        items.put(ItemID.SPADE,1);
-        if(!barbarianPlanting&&patches.stream().anyMatch(p->p.getPatchType().usesDibber()))items.put(ItemID.DIBBER,1);
+        boolean dibber=false;
+        for(FarmRunPatch patch:patches)
+        {
+            PatchType type=patch.getPatchType();
+            if(type==PatchType.COMPOST_BIN||type==PatchType.BIRDHOUSE||excluded.contains(patch))continue;
+            if(items.isEmpty()){if(!autoWeed)items.put(ItemID.RAKE,1);items.put(ItemID.SPADE,1);}
+            if(barbarianPlanting|| (dibber=type.usesDibber()))break;
+        }
+        if(dibber)items.put(ItemID.DIBBER,1);
         return items;
     }
 

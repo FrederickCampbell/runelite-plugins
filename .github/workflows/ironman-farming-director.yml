@@ -90,7 +90,7 @@ jobs:
               rows = [s.split() for s in (temp / (name + '.txt')).read_text().splitlines() if s.startswith('PROBE ')]
               return {op: (int(value), int(size)) for _, op, value, size in rows}
           base, tip = read('baseline'), read('candidate')
-          assert len(base) == 4 and base.keys() == tip.keys()
+          assert len(base) == 7 and base.keys() == tip.keys()
           for op, (result, size) in base.items():
               assert result == tip[op][0], op
               print(f'{op}: result={result}, bytes/op={size} -> {tip[op][1]}')

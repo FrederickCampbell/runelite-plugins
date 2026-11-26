@@ -37,26 +37,24 @@ final class CropCare
     }
 
     static boolean waterNeeded(PatchType type,Observation o,boolean enabled)
+    {return enabled&&type.canBeWatered()&&liveGrowing(o)&&dryStage(type,o.rawValue);}
+    static boolean watered(PatchType type,Observation o)
     {
-        if(!enabled||!type.canBeWatered()||o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;
-        int r=o.rawValue;
+        if(!liveGrowing(o))return false;
+        int raw=o.rawValue;
+        // The final allotment stage has a 65-value offset, unlike earlier stages.
+        if(type==PatchType.ALLOTMENT&&raw>=127)return between(raw,128,134);
+        return dryStage(type,raw-(type==PatchType.HOPS?128:64));
+    }
+    private static boolean liveGrowing(Observation o)
+    {return o!=null&&o.source==Source.LIVE&&o.state==CropState.GROWING;}
+    private static boolean dryStage(PatchType type,int r)
+    {
         switch(type)
         {
             case ALLOTMENT:return between(r,6,9)||between(r,13,16)||between(r,20,23)||between(r,27,30)||between(r,34,39)||between(r,43,48)||between(r,52,59)||between(r,63,69);
             case FLOWER:return between(r,8,11)||between(r,13,16)||between(r,18,21)||between(r,23,26)||between(r,28,31)||between(r,37,40);
             case HOPS:return between(r,4,7)||between(r,14,18)||between(r,26,31)||between(r,40,46)||between(r,56,63)||between(r,74,77)||between(r,84,88)||between(r,96,98)||between(r,104,107)||between(r,114,118);
-            default:return false;
-        }
-    }
-    static boolean watered(PatchType type,Observation o)
-    {
-        if(o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;
-        int r=o.rawValue;
-        switch(type)
-        {
-            case ALLOTMENT:return between(r,70,73)||between(r,77,80)||between(r,84,87)||between(r,91,94)||between(r,98,103)||between(r,107,112)||between(r,116,123)||between(r,128,134);
-            case FLOWER:return between(r,72,75)||between(r,77,80)||between(r,82,85)||between(r,87,90)||between(r,92,95)||between(r,101,104);
-            case HOPS:return between(r,132,135)||between(r,142,146)||between(r,154,159)||between(r,168,174)||between(r,184,191)||between(r,202,205)||between(r,212,216)||between(r,224,226)||between(r,232,235)||between(r,242,246);
             default:return false;
         }
     }

@@ -22,8 +22,9 @@ final class SupplyOrder
 
     static int rank(int id,IntFunction<String> names)
     {
-        if(planting(id,names))return 0;
-        String name=Objects.toString(names.apply(id),"").toLowerCase(Locale.ROOT);
+        String actual=names.apply(id);
+        if(VaultRanking.resolve(id,actual)!=null)return 0;
+        String name=Objects.toString(actual,"").toLowerCase(Locale.ROOT);
         if(tool(name))return 3;
         if(name.contains("compost")||name.equals("plant cure"))return 1;
         return 2;
@@ -38,8 +39,10 @@ final class SupplyOrder
 
     static List<Integer> ordered(Map<Integer,Integer> required,IntFunction<String> names)
     {
-        List<Integer> result=new ArrayList<>(required.keySet());
-        result.sort(Comparator.comparingInt(id->rank(id,names)));
+        List<List<Integer>> buckets=List.of(new ArrayList<>(),new ArrayList<>(),new ArrayList<>(),new ArrayList<>());
+        for(int id:required.keySet())buckets.get(rank(id,names)).add(id);
+        List<Integer> result=new ArrayList<>(required.size());
+        for(List<Integer> bucket:buckets)result.addAll(bucket);
         return result;
     }
     private SupplyOrder(){}

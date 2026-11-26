@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.08 — runtime refactoring and compost lifecycle
+
+- Read verified native compost tiers for physical patches, preserving pretreated soil and preventing stale treatment acknowledgements after crop removal. Retain conservative historical fallback and explicit manual skips.
+- Cache shared patch regions, reuse stock and supply calculations, reduce overlay allocation, and consolidate watering stages and storage decoding.
+- Classify checklist supplies once in stable category order and avoid intermediate filtered guide-kit lists. Preserve existing manual gameplay, preferences and integrations.
+- Compare baseline and candidate regression tests, Java 11 classfiles, allocation fixtures and sidebar pixels in CI. Live-client acceptance remains separate.
+
 ## v1.07.7 — watering lifecycle correction
 
 - Record verified wet observations for every selected local waterable patch, including crops watered ahead of the guide. Reset suppression on verified empty/dead state; do not offer repeat watering merely because growth advances.

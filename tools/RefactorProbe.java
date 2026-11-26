@@ -62,6 +62,16 @@ public final class RefactorProbe
             CompostRun.addSupplies(kit, ordinary, Map.of(), stock, new HashMap<>());
             return kit.size() + BirdhouseRun.supplies(ordinary, Map.of(), stock, kit, 80, 80).size();
         });
+        String encoded=StockSnapshot.encode(stock);
+        measure("snapshot-decode", () -> StockSnapshot.decode(encoded).hashCode());
+        Map<Integer,Integer> required=new java.util.LinkedHashMap<>();
+        for(int id=10000;id<10128;id++)required.put(id,1);
+        String[] names={"Watering can(7)","Oak seed","Plant cure","Coins"};
+        measure("supply-order", () -> SupplyOrder.ordered(required,id->names[id%4]).hashCode());
+        int[] calls={0};
+        SupplyOrder.ordered(required,id->{calls[0]++;return names[id%4];});
+        System.out.printf("NAME_LOOKUPS supply-order %d%n",calls[0]);
+        measure("guide-kit", () -> Supplies.guideKit(patches,false,false).hashCode());
         measure("timestamps", () -> {
             int result = 1;
             for (String input : SAMPLES)

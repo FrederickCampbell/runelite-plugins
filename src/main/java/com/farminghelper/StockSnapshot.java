@@ -20,11 +20,14 @@ final class StockSnapshot
     {
         Map<Integer,Integer> result=new HashMap<>();
         if(raw==null || raw.isEmpty())return result;
-        for(String pair:raw.split(","))
+        for(int start=0,end;start<raw.length();start=end+1)
         {
-            String[] fields=pair.split(":",-1);
-            if(fields.length!=2)continue;
-            try {int id=Integer.parseInt(fields[0]),count=Integer.parseInt(fields[1]);if(id>0 && count>0)result.put(id,count);}
+            end=raw.indexOf(',',start);
+            if(end<0)end=raw.length();
+            int colon=start;
+            while(colon<end&&raw.charAt(colon)!=':')colon++;
+            if(colon==start||colon>=end-1)continue;
+            try {int id=Integer.parseInt(raw,start,colon,10),count=Integer.parseInt(raw,colon+1,end,10);if(id>0&&count>0)result.put(id,count);}
             catch(NumberFormatException ignored) { /* Ignore malformed entry, not the whole snapshot. */ }
         }
         return result;

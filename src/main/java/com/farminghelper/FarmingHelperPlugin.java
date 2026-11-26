@@ -1212,7 +1212,7 @@ public class FarmingHelperPlugin extends Plugin
         activeClearOnly=clearOnly.contains(current);
         activeCareOnly=careOnly.contains(current);
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
-        Map<Integer,Integer> required=Supplies.guideKit(ready.stream().filter(p->p.getPatchType()!=PatchType.BIRDHOUSE&&!careOnly.contains(p)).collect(java.util.stream.Collectors.toList()),
+        Map<Integer,Integer> required=Supplies.guideKit(ready,careOnly,
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
             loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
         if(!clearOnly.isEmpty()&&seeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
