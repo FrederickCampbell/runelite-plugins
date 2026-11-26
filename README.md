@@ -2,28 +2,30 @@
 
 <img src="icon.png" alt="Farming Helper icon" align="right" width="48">
 
-**Quest Helper for your farm runs!** · Development version 1.02
+**Quest Helper for your farm runs!** · Version 1.05
 
 Pick a run, grab your supplies and follow the guide. Farming Helper helps you decide what to plant, what to bring and where to go next.
 
 ## Getting started
 
-Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, the Farming Guild Seed Vault to refresh your supplies. Pick a run and follow the highlighted patch. Recommended items and Recommended teleports sit above the steps. Check your supplies, then choose Start Run. Both lists fold when the route starts, and you can reopen either at any patch. You can start or continue with a partial inventory.
+Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, the Farming Guild Seed Vault to refresh your supplies. Pick a run and follow the highlighted patch. Recommended items and Recommended teleports sit above the steps. Check your supplies, then choose Start Run at the top of the guide. Both lists fold when the route starts, and you can reopen either at any patch. You can start or continue with a partial inventory.
 
 ## Features
 
 - Grouped, individual and custom runs, including compost and birdhouses.
 - Crop recommendations based on your Farming level, available seeds and preferences.
 - Step-by-step instructions, patch highlights and supply checklists.
-- Farming bank and compact Seed Vault views that keep your native placeholders. Only physical stacks count toward supplies.
+- Farming bank and compact Seed Vault views that preserve native placeholders while filtering irrelevant items. Only physical stacks count toward supplies.
 - Custom crop priorities, patch selections and plants to keep.
+- Optional crop watering and tool leprechaun assistance, with character defaults and temporary run overrides.
+- Dedicated seaweed-to-birdhouse guidance, including local banking and boat travel.
 - Optional teleport recommendations and navigation with [Shortest Path](https://runelite.net/plugin-hub/show/shortest-path).
 
 All gameplay actions are manual. Quest Helper is not required.
 
 ## Credits
 
-Developed by FrederickCampbell with AI assistance.
+Developed by Freddy (FrederickCampbell) with AI assistance.
 
 Thanks to [Farming Patch Advisor](https://github.com/Seadeadmeat/farming-patch-advisor) by Seadeadmeat for farming catalogs and highlighting foundations, and [Quest Helper](https://github.com/Zoinkwiz/quest-helper) by Zoinkwiz and contributors for farming-state logic, patch targets and inspiration.
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.05
+
+- Restore compact Seed Vault filtering; hide irrelevant placeholders and empty categories without changing native item identities or actions.
+- Guide watering of eligible live, unwatered crops; recognize filled watering cans and Gricoller's can in leprechaun storage. Skip watering independently of the patch.
+- Prefer carried supplies, then leprechaun storage, then bank stock. Hide covered compost and watering-can requirements; highlight the leprechaun and patch together when local supplies are needed.
+- Add character defaults and temporary run overrides for watering and leprechaun assistance. Pin Start Run and Continue Run at the top of preparation.
+- Public author name: Freddy. Upstream credits and license notices remain intact.
+
+## v1.04
+
+- Guide the seaweed-to-birdhouse transition via the anchor rope, nearby bank chest when needed, and rowboat dialogue. Prefer sufficient carried birdhouse supplies before bank alternatives.
+
+## v1.03
+
+- Preserve fixed nearby patch pairings in mixed runs and guide local ultracompost withdrawals from tool leprechauns.
+
 ## v1.02
 
 - Recommended items and Recommended teleports appear above preparation, resupply and patch steps. Each header has its own inline help button. Both lists collapse when the route starts or resumes. Start Run and Continue Run stay within reach while you scroll.
