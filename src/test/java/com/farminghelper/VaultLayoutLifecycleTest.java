@@ -105,7 +105,7 @@ public class VaultLayoutLifecycleTest
         lifecycle.afterScript(SeedVaultViews.BUILD);lifecycle.postClientTick();
         assertFalse(h.isSelfHidden());assertEquals(128,fresh.getOriginalY());
         assertEquals(2,fresh.getIndex());assertEquals(6,fresh.getItemQuantity());
-        // When the game leaves a placeholder, keep its native item/label/menu and its compact section.
+        // An irrelevant placeholder is hidden without deleting the native widget or actions.
         lifecycle.beforeScript(SeedVaultViews.BUILD);
         int ghostId=900001;
         item(im,ghostId,"Torstol seed");
@@ -113,8 +113,10 @@ public class VaultLayoutLifecycleTest
         Widget ghost=node(SeedVaultViews.ITEMS,2,WidgetType.GRAPHIC,79,278,36,32,"",ghostId,0);
         when(ip.getChildren()).thenReturn(new Widget[]{potato,null,ghost});
         lifecycle.afterScript(SeedVaultViews.BUILD);lifecycle.postClientTick();
-        assertFalse(ghost.isSelfHidden());assertFalse(l2.isSelfHidden());assertFalse(h.isSelfHidden());
-        assertEquals(128,ghost.getOriginalY());assertEquals(160,l2.getOriginalY());
+        assertTrue(ghost.isSelfHidden());assertTrue(l2.isSelfHidden());assertTrue(h.isSelfHidden());
+        assertEquals(200,height[0]);
+        assertTrue(SeedVaultViews.placeholderRelevant(ItemID.TORSTOL_SEED,Set.of(),Set.of(ItemID.TORSTOL_SEED)));
+        assertFalse(SeedVaultViews.placeholderRelevant(ItemID.TORSTOL_SEED,Set.of(),Set.of(ItemID.GUAM_SEED)));
         assertEquals(0,ghost.getItemQuantity());assertEquals(2,ghost.getIndex());
         verify(ghost,never()).setAction(anyInt(),anyString());
         verify(ghost,never()).setItemQuantity(anyInt());

@@ -59,6 +59,14 @@ enum CompostChoice
             bag.getOrDefault(ItemID.BUCKET_ULTRACOMPOST,0)==0&&
             bag.getOrDefault(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED,0)==0;
     }
+    static int stored(net.runelite.api.Client client,int id)
+    {
+        if(id==REGULAR.item)return Math.max(0,256*client.getVarbitValue(6266)+client.getVarbitValue(1442));
+        if(id==SUPER.item)return Math.max(0,256*client.getVarbitValue(6267)+client.getVarbitValue(1443));
+        if(id==ULTRA.item)return Math.max(0,client.getVarbitValue(LEPRECHAUN_ULTRACOMPOST));
+        if(id==BOTTOMLESS.item)return client.getVarbitValue(7915)>1?1:0;
+        return 0;
+    }
     static boolean isOrdinary(int id)
     {
         return id == ItemID.BUCKET_COMPOST || id == ItemID.BUCKET_SUPERCOMPOST || id == ItemID.BUCKET_ULTRACOMPOST;

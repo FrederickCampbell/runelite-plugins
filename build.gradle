@@ -29,7 +29,7 @@ dependencies {
 }
 
 group = 'com.farminghelper'
-version = '1.04'
+version = '1.05'
 
 // Keep the sidebar version tied to the published plugin metadata.
 tasks.named('processResources') {

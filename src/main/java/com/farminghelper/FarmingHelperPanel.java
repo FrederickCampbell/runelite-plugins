@@ -28,6 +28,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final JScrollPane scroll;
     private final JPanel toolbar=new JPanel(new BorderLayout(4,0));
     private final JPanel footer=new JPanel(new BorderLayout());
+    private final JPanel preparationAction=new JPanel(new BorderLayout());
     private final SidebarNavigation navigation=new SidebarNavigation();
     private final Map<SidebarNavigation.Page,Position> positions=new EnumMap<>(SidebarNavigation.Page.class);
     private SidebarNavigation.Page mountedPage;
@@ -84,7 +85,10 @@ final class FarmingHelperPanel extends PluginPanel
         this.plugin = plugin;
         setLayout(new BorderLayout());setBackground(FarmingTheme.BACKGROUND);
         toolbar.setBackground(FarmingTheme.CARD);toolbar.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
-        footer.setBackground(FarmingTheme.BACKGROUND);add(toolbar,BorderLayout.NORTH);add(footer,BorderLayout.SOUTH);
+        footer.setBackground(FarmingTheme.BACKGROUND);
+        JPanel headerArea=transparent(new BorderLayout());headerArea.add(toolbar,BorderLayout.NORTH);
+        preparationAction.setOpaque(false);headerArea.add(preparationAction,BorderLayout.SOUTH);
+        add(headerArea,BorderLayout.NORTH);add(footer,BorderLayout.SOUTH);
         rows.setLayout(new BoxLayout(rows,BoxLayout.Y_AXIS));
         rows.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
         JPanel top = new GuideScrollContent();
@@ -346,7 +350,7 @@ final class FarmingHelperPanel extends PluginPanel
         if (screen!=MANUAL) manualPicker=null;
         if (screen!=PATCHES) patchResults=null;
         mountedPage=screen;bankShortcut=null;
-        navigation.show(screen);rows.removeAll();footer.removeAll();header(title,back,gear,end);
+        navigation.show(screen);rows.removeAll();footer.removeAll();preparationAction.removeAll();preparationAction.setVisible(false);header(title,back,gear,end);
         restorePosition(saved);
     }
     private void start(Runnable action)
@@ -730,7 +734,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || !a.notes.equals(b.notes) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || !a.notes.equals(b.notes) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)
         {
             GuideView.ItemRow old=a.items.get(i), next=b.items.get(i);
@@ -842,6 +846,12 @@ final class FarmingHelperPanel extends PluginPanel
         boolean isPreparing=!view.preparation.isEmpty();
         if(isPreparing!=lastPreparing){requiredOpen=isPreparing;teleportsOpen=false;lastPreparing=isPreparing;}
         page(GUIDE,view.title,null,this::runSettings,true);
+        if(isPreparing)
+        {
+            preparationAction.setBorder(BorderFactory.createEmptyBorder(3,8,6,8));
+            preparationAction.add(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
+            FarmingTheme.apply(preparationAction);preparationAction.setVisible(true);
+        }
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
         int remaining=GuidePresentation.remaining(view.stats,(int)pending);
@@ -867,10 +877,6 @@ final class FarmingHelperPanel extends PluginPanel
             heading(view.notes.initial?"Preparation":"Resupply",view.notes.preparationHelp.isEmpty()?GuidePresentation.PREPARATION_HELP:view.notes.preparationHelp);
             line(view.preparation,true);
             if(!view.notes.storageWarning.isEmpty())helpRow(view.notes.storageWarning,FarmingTheme.WARNING,GuidePresentation.STORAGE_HELP);
-            JPanel action=transparent(new BorderLayout());
-            action.setBorder(BorderFactory.createEmptyBorder(3,8,6,8));
-            action.add(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
-            FarmingTheme.apply(action);footer.add(action);
         }
         if(!isPreparing && view.active!=null)
         {
@@ -983,7 +989,7 @@ final class FarmingHelperPanel extends PluginPanel
         stepText.put(stop.patch.key(),detail);body.add(detail,BorderLayout.CENTER);
         if(stop.active)
         {
-            JButton skip=new JButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":"Skip patch");
+            JButton skip=new JButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":view.waterStep?"Skip watering":"Skip patch");
             skip.addActionListener(e->plugin.skip(stop.patch));
             JPanel actions=transparent(new java.awt.GridLayout(0,1,0,2));
             if(view.compostStep){
@@ -1019,6 +1025,8 @@ final class FarmingHelperPanel extends PluginPanel
         choice("Compost type",CompostChoice.values(),plugin.compostChoice(),"Bottomless bucket uses ultracompost if the bucket is unavailable.",
             v->plugin.save("directorCompostChoice",v.name()));
         preferenceCheck("Pay for crop protection","directorProtectTrees",true);
+        preferenceCheck("Water crops","directorWater",true);
+        preferenceCheck("Tool leprechaun assistance","directorLeprechaun",true);
         heading("Default tree removal");preferenceCheck("Pay gardener to remove trees","directorPayRemoval",true);
         seedlessChoice(plugin.seedlessDefault(),v->plugin.save("seedlessPolicyV1",v.name()));
         collapse("Keep planted",keepPlantsOpen,()->{keepPlantsOpen=!keepPlantsOpen;general();});
@@ -1163,6 +1171,8 @@ final class FarmingHelperPanel extends PluginPanel
         caption("This run only · Changes expire when it ends.");
         seedlessChoice(SeedlessPolicy.of(plugin.hideSeedless(),plugin.clearSeedless()),plugin::setSeedlessPolicy);
         choice("Crop care",RunPolicy.values(),plugin.runPolicy(),null,v->plugin.setRunPolicy(v,null));
+        addRow(check("Water crops",plugin.runWater(),v->plugin.setRunSupplies(v,null)));
+        addRow(check("Tool leprechaun assistance",plugin.runLeprechaun(),v->plugin.setRunSupplies(null,v)));
         if(plugin.runHasTrees())
         {
             String[] modes={"Pay to remove","Manual removal"};
