@@ -37,6 +37,47 @@ public class SeedBoxStockTest
         PhysicalStock absent=new PhysicalStock(Map.of(),Map.of(),Map.of(),Map.of(),Map.of(RANARR,7),id->"",id->id);
         assertFalse(absent.carried.containsKey(RANARR));
     }
+    @Test public void closedBoxTransfersAreConfirmedByLooseDelta()
+    {
+        SeedBoxStock box=new SeedBoxStock();
+        Map<Integer,Integer> bag=Map.of(ItemID.SEED_BOX,1,RANARR,10);
+        box.begin(true,RANARR,bag,1);
+        assertFalse(box.settle(bag,2,id->id==RANARR));
+        assertTrue(box.settle(Map.of(ItemID.SEED_BOX,1,RANARR,3),3,id->id==RANARR));
+        assertEquals(7,(int)box.carried(bag).get(RANARR));assertFalse(box.complete());
+        assertFalse(box.settle(Map.of(),4,id->true));
+        box.begin(false,RANARR,Map.of(RANARR,3),5);
+        assertTrue(box.settle(Map.of(RANARR,6),6,id->id==RANARR));
+        assertEquals(4,(int)box.carried(bag).get(RANARR));
+    }
+    @Test public void nativeSnapshotWinsAndCacheIsNotInventedStock()
+    {
+        SeedBoxStock box=new SeedBoxStock();
+        box.restore(RANARR+":20");assertEquals(20,box.cachedTotal());
+        assertTrue(box.carried(Map.of(ItemID.SEED_BOX,1)).isEmpty());
+        ItemContainer nativeBox=mock(ItemContainer.class);
+        when(nativeBox.getItems()).thenReturn(new Item[]{new Item(RANARR,7)});
+        box.begin(true,RANARR,Map.of(RANARR,10),3);
+        box.observe(nativeBox,4);
+        assertFalse(box.settle(Map.of(RANARR,3),4,id->true));
+        assertEquals(7,(int)box.carried(Map.of(ItemID.SEED_BOX,1)).get(RANARR));
+        assertFalse(box.chat("You put 7 x Ranarr seed straight into your open seed box.",4,n->RANARR));
+        box.forget();assertEquals(7,box.cachedTotal());assertFalse(box.known());
+    }
+    @Test public void confirmedPlantAndCheckReconcile()
+    {
+        SeedBoxStock box=new SeedBoxStock();
+        box.chat("The seed box contains:",1,n->RANARR);
+        box.chat("9 x Ranarr seed",1,n->RANARR);
+        assertTrue(box.finishCheck(2));assertTrue(box.complete());assertFalse(box.orderKnown());
+        Crop crop=CropCatalog.findByItemId(RANARR);
+        assertFalse(box.planted(crop,1,0,box.revision()));
+        assertTrue(box.planted(crop,0,0,box.revision()));
+        assertEquals(8,(int)box.carried(Map.of(ItemID.SEED_BOX,1)).get(RANARR));
+        assertTrue(box.chat("You put 2 x Ranarr seed straight into your open seed box.",3,n->RANARR));
+        assertEquals(10,(int)box.carried(Map.of(ItemID.SEED_BOX,1)).get(RANARR));
+        assertFalse(box.orderKnown());
+    }
     @Test public void transferUpdatesTotalWithoutDoubleCounting()
     {
         SeedBoxStock box=new SeedBoxStock();ItemContainer container=mock(ItemContainer.class);

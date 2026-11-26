@@ -84,6 +84,12 @@ public class FarmingHelperPlugin extends Plugin
     private final Set<InventoryID> sampledStorage=EnumSet.noneOf(InventoryID.class);
     private PhysicalStock quantities;
     private final SeedBoxStock seedBox=new SeedBoxStock();
+    private FarmRunPatch seedBoxPlant;
+    private Map<Integer,Integer> seedBoxPlantBag=Map.of();
+    private int seedBoxPlantTick,seedBoxPlantRevision;
+    private boolean seedBoxBank,seedBoxVault;
+    private String seedBoxSaved="";
+    private int seedBoxViewTick=-1;
     private List<?> allocationInputs=List.of();
     private Map<FarmRunPatch,Crop> allocated=Map.of();
     private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
@@ -264,7 +270,7 @@ public class FarmingHelperPlugin extends Plugin
         invalidateStock();
         bank.clear();
         vault.clear();
-        stockProfile=null;seedBox.clear();
+        stockProfile=null;seedBox.clear();seedBoxPlant=null;seedBoxSaved="";seedBoxViewTick=-1;
         bankObservedAt=0;vaultObservedAt=0;
         end();
     }
@@ -316,7 +322,7 @@ public class FarmingHelperPlugin extends Plugin
         long id=session;thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
             loadStock();invalidateStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
-            save("observedBankV1","");save("observedVaultV1","");
+            save("observedBankV1","");save("observedVaultV1","");seedBox.clear();seedBoxSaved="";save("observedSeedBoxV2","");seedBoxPlant=null;
             sampleStorage();lastView=null;update();
         });
     }
@@ -395,7 +401,7 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onGameStateChanged(GameStateChanged event)
     {
         if(event.getGameState()==GameState.LOADING || event.getGameState()==GameState.LOGIN_SCREEN) highlight.clear();
-        if(event.getGameState()==GameState.HOPPING || event.getGameState()==GameState.LOGGING_IN){seedBox.clear();invalidateStock();}
+        if(event.getGameState()==GameState.HOPPING || event.getGameState()==GameState.LOGGING_IN){seedBox.forget();seedBoxPlant=null;seedBoxViewTick=-1;invalidateStock();}
         if(event.getGameState()==GameState.LOGIN_SCREEN){reset();return;}
         if(event.getGameState()==GameState.HOPPING&&guideRequested)
         {
@@ -411,6 +417,7 @@ public class FarmingHelperPlugin extends Plugin
         if (client.getGameState() != GameState.LOGGED_IN) return;
         if(hopping){hopping=false;if(!Objects.equals(runProfile,config.getRSProfileKey()))reset();lastView=null;}
         sampleStorage();
+        updateSeedBox();
         // Re-evaluate quest, diary, Hunter and Sailing gates even when Farming is unchanged.
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;invalidateTravel();updateAccessNotes();}
         if (!run.isEmpty() && guideRequested)
@@ -441,7 +448,12 @@ public class FarmingHelperPlugin extends Plugin
             seedBox.carried(readItems(event.getItemContainer()));
         if(id==net.runelite.api.gameval.InventoryID.SEED_BOX&&client.getGameState()==GameState.LOGGED_IN)
         {
-            seedBox.observe(event.getItemContainer());quantities=null;
+            loadStock();
+            if(SeedBoxStock.boxId(readItems(client.getItemContainer(InventoryID.INVENTORY)))>0)
+            {
+                seedBox.observe(event.getItemContainer(),client.getTickCount());seedBoxPlant=null;
+                seedBoxChanged();
+            }
         }
         if(id==InventoryID.BANK.getId()||id==InventoryID.SEED_VAULT.getId())
         {
@@ -472,7 +484,168 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onWidgetClosed(WidgetClosed event)
     {if(vaultViews!=null&&event.getGroupId()==SeedVaultViews.GROUP)vaultViews.close();}
     @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
-    {if(vaultViews!=null)vaultViews.nativeMenu(event.getParam1());}
+    {
+        if(vaultViews!=null)vaultViews.nativeMenu(event.getParam1());
+        if(client.getGameState()!=GameState.LOGGED_IN||itemManager==null||event.isConsumed())return;
+        Map<Integer,Integer> bag=stock().bag;
+        if(SeedBoxStock.boxId(bag)<0)return;
+        // Settle a previous successful action before capturing the next baseline.
+        updateSeedBox();
+        seedBox.cancel();seedBoxPlant=null;
+        String option=event.getMenuOption().toLowerCase(Locale.ROOT).replace('-',' ').trim();
+        String target=net.runelite.client.util.Text.removeTags(event.getMenuTarget()).toLowerCase(Locale.ROOT);
+        int id=event.getItemId();
+        boolean box=SeedBoxStock.isBox(id)||target.equals("seed box")||target.equals("seed box (open)");
+        if(event.getMenuAction()==MenuAction.WIDGET_TARGET_ON_WIDGET)
+        {
+            var selected=client.getSelectedWidget();
+            int selectedId=inventorySeedItem(selected,bag);
+            int targetId=id>0?id:inventorySeedItem(event.getWidget(),bag);
+            int seed=SeedBoxStock.isBox(selectedId)?targetId:SeedBoxStock.isBox(targetId)?selectedId:-1;
+            if(seed>0&&seedItem(seed)){beginSeedTransfer(true,seed,bag);return;}
+        }
+        if(box||event.getParam1()>>>16==InterfaceID.HOSIDIUS_SEEDBOX)
+        {
+            if(option.equals("fill")||option.startsWith("deposit"))beginSeedTransfer(true,seedItem(id)?id:-1,bag);
+            else if(option.equals("empty")||option.equals("empty to bank")||option.startsWith("withdraw")||option.startsWith("remove"))
+                beginSeedTransfer(false,seedItem(id)?id:-1,bag);
+        }
+        if(event.getMenuAction()==MenuAction.WIDGET_TARGET_ON_GAME_OBJECT&&highlight!=null)
+        {
+            int selected=inventorySeedItem(client.getSelectedWidget(),bag);
+            if(SeedBoxStock.isBox(selected)||seedItem(selected))
+            {
+                FarmRunPatch patch=highlight.clickedPatch(patches,event.getId(),event.getParam0(),event.getParam1());
+                if(patch!=null)
+                {
+                    var observation=observe(patch);
+                    if(observation.source==QuestFarmingStateReader.Source.LIVE&&observation.state==CropState.EMPTY)
+                    {
+                        seedBoxPlant=patch;seedBoxPlantBag=bag;seedBoxPlantTick=client.getTickCount();
+                        seedBoxPlantRevision=seedBox.revision();
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean seedItem(int id)
+    {
+        if(id<=0||SeedBoxStock.isBox(id))return false;
+        String name=observedItemName(id).toLowerCase(Locale.ROOT);
+        return name.endsWith(" seed")||name.endsWith(" seeds")||name.equals("acorn")||name.equals("crystal acorn")||name.equals("seaweed spore")||name.equals("mushroom spore");
+    }
+    private int inventorySeedItem(net.runelite.api.widgets.Widget widget,Map<Integer,Integer> bag)
+    {
+        if(widget==null)return -1;
+        int group=widget.getId()>>>16,id=widget.getItemId();
+        if(group!=InterfaceID.INVENTORY&&group!=InterfaceID.INVENTORY_NOOPS&&group!=InterfaceID.BANKSIDE)return -1;
+        if(id<=0)
+        {
+            var inventory=client.getItemContainer(InventoryID.INVENTORY);
+            int slot=widget.getIndex();
+            if(inventory!=null&&slot>=0&&slot<inventory.getItems().length&&inventory.getItems()[slot]!=null)
+                id=inventory.getItems()[slot].getId();
+        }
+        return bag.getOrDefault(id,0)>0?id:-1;
+    }
+    private int seedByName(String name)
+    {
+        for(PatchType type:PatchType.values())for(Crop crop:CropCatalog.crops(type))
+            if(crop.getItemName().equalsIgnoreCase(name)&&seedItem(crop.getItemId()))return crop.getItemId();
+        for(var item:itemManager.search(name))
+            if(seedItem(item.getId())&&observedItemName(item.getId()).equalsIgnoreCase(name))return item.getId();
+        return -1;
+    }
+    private boolean visibleWidget(int id)
+    {var widget=client.getWidget(id);return widget!=null&&!widget.isHidden();}
+    private Map<Integer,Integer> looseSeeds(Map<Integer,Integer> bag)
+    {
+        Map<Integer,Integer> result=new HashMap<>(bag);
+        if(seedBoxBank)
+        {
+            var bankItems=client.getItemContainer(InventoryID.BANK);
+            if(bankItems==null)return null;
+            result=PhysicalStock.combine(result,readItems(bankItems));
+        }
+        if(seedBoxVault)
+        {
+            var vaultItems=client.getItemContainer(InventoryID.SEED_VAULT);
+            if(vaultItems==null)return null;
+            result=PhysicalStock.combine(result,readItems(vaultItems));
+        }
+        return result;
+    }
+    private void beginSeedTransfer(boolean adding,int seed,Map<Integer,Integer> bag)
+    {
+        seedBoxBank=visibleWidget(InterfaceID.Bankmain.UNIVERSE);
+        seedBoxVault=visibleWidget(InterfaceID.SeedVault.UNIVERSE);
+        Map<Integer,Integer> loose=looseSeeds(bag);
+        if(loose!=null)seedBox.begin(adding,seed,loose,client.getTickCount());
+    }
+    private void seedBoxChanged()
+    {
+        quantities=null;
+        String snapshot=seedBox.snapshot();
+        if(!snapshot.equals(seedBoxSaved)&&stockProfile!=null&&Objects.equals(stockProfile,config.getRSProfileKey()))
+        {seedBoxSaved=snapshot;save("observedSeedBoxV2",snapshot);}
+    }
+    private void updateSeedBox()
+    {
+        int tick=client.getTickCount();
+        if(visibleWidget(InterfaceID.HosidiusSeedbox.UNIVERSE))
+        {
+            if(seedBoxViewTick<0)seedBoxViewTick=tick;
+            if(tick==seedBoxViewTick+2)
+            {
+                var nativeBox=client.getItemContainer(net.runelite.api.gameval.InventoryID.SEED_BOX);
+                if(nativeBox!=null&&SeedBoxStock.boxId(stock().bag)>0)
+                {seedBox.observe(nativeBox,tick);seedBoxPlant=null;seedBoxChanged();}
+            }
+        }
+        else seedBoxViewTick=-1;
+        if(seedBox.finishCheck(tick))seedBoxChanged();
+        if(!seedBox.pending()&&seedBoxPlant==null)return;
+        Map<Integer,Integer> bag=stock().bag;
+        if(SeedBoxStock.boxId(bag)<0){seedBox.cancel();seedBoxPlant=null;return;}
+        if(seedBox.pending())
+        {
+            if(seedBoxBank&&!visibleWidget(InterfaceID.Bankmain.UNIVERSE)||seedBoxVault&&!visibleWidget(InterfaceID.SeedVault.UNIVERSE))seedBox.cancel();
+            else
+            {
+                Map<Integer,Integer> loose=looseSeeds(bag);
+                if(loose==null)seedBox.cancel();
+                else if(seedBox.settle(loose,tick,this::seedItem))seedBoxChanged();
+            }
+        }
+        if(seedBoxPlant!=null)
+        {
+            if(tick-seedBoxPlantTick>30||seedBox.revision()!=seedBoxPlantRevision){seedBoxPlant=null;return;}
+            var observation=observe(seedBoxPlant);
+            if(observation.source!=QuestFarmingStateReader.Source.LIVE){seedBoxPlant=null;return;}
+            if(observation.state==CropState.GROWING)
+            {
+                String species=QuestFarmingStateReader.livingProduceKey(seedBoxPlant.getPatchType().name(),observation);
+                for(var produce:net.runelite.client.plugins.timetracking.farming.Produce.values())
+                    if(produce.name().equals(species))
+                    {
+                        Crop crop=CropCatalog.findByName(seedBoxPlant.getPatchType(),produce.getName());
+                        if(crop!=null&&seedBox.planted(crop,seedBoxPlantBag.getOrDefault(crop.getItemId(),0),bag.getOrDefault(crop.getItemId(),0),seedBoxPlantRevision))seedBoxChanged();
+                        break;
+                    }
+                seedBoxPlant=null;
+            }
+        }
+    }
+    @Subscribe public void onChatMessage(ChatMessage event)
+    {
+        if(itemManager==null||client.getGameState()!=GameState.LOGGED_IN||
+            event.getType()!=ChatMessageType.GAMEMESSAGE&&event.getType()!=ChatMessageType.SPAM)return;
+        String message=net.runelite.client.util.Text.removeTags(event.getMessage()).trim();
+        if(!message.toLowerCase(Locale.ROOT).contains("seed box")&&!message.matches("^[\\d,]+\\s*x\\s*.+"))return;
+        if(SeedBoxStock.boxId(stock().bag)<0)return;
+        if(seedBox.chat(message,client.getTickCount(),this::seedByName))seedBoxChanged();
+    }
 
     // Null means ordinary vault browsing; an empty set is a live run with no planting supplies.
     Set<Integer> vaultRunItems()
@@ -560,6 +733,7 @@ public class FarmingHelperPlugin extends Plugin
         String profile=config.getRSProfileKey();
         if(Objects.equals(profile,stockProfile))return;
         invalidateStock();bank.clear();vault.clear();stockProfile=profile;
+        seedBoxSaved=profile==null?"":setting("observedSeedBoxV2","");seedBox.restore(seedBoxSaved);seedBoxPlant=null;seedBoxViewTick=-1;
         bankObservedAt=0;vaultObservedAt=0;
         if(profile!=null)
         {
@@ -1022,9 +1196,9 @@ public class FarmingHelperPlugin extends Plugin
                     bag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()&&supplies.seedBox.getOrDefault(activeCrop.getItemId(),0)>0)
                 {
                     localStepItems=Set.of(SeedBoxStock.boxId(bag));
-                    instruction=SeedBoxStock.direct(activeCrop,supplies.seedBox)?
+                    instruction=seedBox.orderKnown()&&SeedBoxStock.direct(activeCrop,supplies.seedBox)?
                         "Use the seed box on this patch to plant "+activeCrop.getName()+".":
-                        "Withdraw "+activeCrop.getName()+" from the seed box manually before planting; check the seed order.";
+                        "Withdraw "+activeCrop.getName()+" from the seed box manually before planting.";
                 }
                 else if(type==PatchType.BIRDHOUSE&&localStepItems.stream().anyMatch(id->supplies.seedBox.getOrDefault(id,0)>0&&bag.getOrDefault(id,0)<10))
                 {localStepItems=Set.of(SeedBoxStock.boxId(bag));instruction+=" Withdraw the required bait seeds from the seed box manually.";}
@@ -1053,9 +1227,11 @@ public class FarmingHelperPlugin extends Plugin
         String supplyNote=TreePreparation.instruction(rawSeeds,seedlings,watered);
         if(SeedBoxStock.boxId(bag)>0)
         {
-            if(!seedBox.known())supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Check your seed box once to load its contents.";
+            if(!seedBox.complete())
+                supplyNote+=(supplyNote.isEmpty()?"":"\n")+(seedBox.cachedTotal()>0&&!seedBox.known()?
+                    "Seed box: "+seedBox.cachedTotal()+" last seen; check to confirm.":"Check the box to confirm any untracked contents.");
             else if(!supplies.seedBox.isEmpty())
-                supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Seed box counts are included from the last native observation. Withdraw tree seeds and birdhouse bait manually when needed.";
+                supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Seed box counts included. Withdraw tree seeds and birdhouse bait manually when needed.";
         }
         if(rawSeeds+seedlings>0&&wateringCan<=0&&storedCan>0)supplyNote+="\nCollect the stored watering can from a tool leprechaun before watering seedlings.";
         if(compostCount>0&&compostId==ItemID.BUCKET_ULTRACOMPOST&&storedUltra>0)

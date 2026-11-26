@@ -140,6 +140,23 @@ final class PatchHighlight extends Overlay
         return !resolve(patch).isEmpty();
     }
 
+    /** Only on a player item-on-object action: bind the clicked scene object to a
+     * verified local patch, including runs that are not currently guided. */
+    FarmRunPatch clickedPatch(List<FarmRunPatch> patches,int objectId,int x,int y)
+    {
+        for(FarmRunPatch patch:patches)
+        {
+            if(patch.getPatchType().isTree()||patch.getPatchType()==PatchType.BIRDHOUSE||patch.getPatchType()==PatchType.COMPOST_BIN)continue;
+            for(GameObject object:resolve(patch))
+            {
+                var min=object.getSceneMinLocation();var max=object.getSceneMaxLocation();
+                var actual=transformed(client.getObjectDefinition(object.getId()));
+                if((object.getId()==objectId||actual!=null&&actual.getId()==objectId)&&min!=null&&max!=null&&
+                    x>=min.getX()&&x<=max.getX()&&y>=min.getY()&&y<=max.getY())return patch;
+            }
+        }
+        return null;
+    }
     private List<GameObject> resolve(FarmRunPatch patch)
     {
         if(patch==null || client.getLocalPlayer()==null)return Collections.emptyList();
