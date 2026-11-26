@@ -767,9 +767,8 @@ public class FarmingHelperPlugin extends Plugin
             Crop crop=VaultRanking.resolve(id,observedItemName(id));
             if(crop!=null&&selectedTypes.contains(crop.getPatchType()))broad.add(id);
         }
-        Set<Integer> tagged = new HashSet<>(CuratedBank.shelf(broad,shelfCandidates,this::observedItemName,client,config,
-            bird,!bird&&runHasTrees,diving,teleports(shelfCandidates).keySet()));
-        shelfItems = Set.copyOf(tagged);
+        shelfItems=CuratedBank.shelf(broad,shelfCandidates,this::observedItemName,client,config,
+            bird,!bird&&runHasTrees,diving,teleports(shelfCandidates).keySet());
         shelfInputs=inputs;
         return shelfItems;
     }
@@ -1275,7 +1274,8 @@ public class FarmingHelperPlugin extends Plugin
         boolean probeBoundary=boundary&&!preparing()&&!progress.underway()&&phase==Preparation.Phase.ACTIVE;
         boolean needsResupply=false;
         if(probeBoundary)limit=1;
-        int actualOccupied=Math.max(estimatedOccupied,occupiedInventorySlots());
+        ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
+        int actualOccupied=Math.max(estimatedOccupied,inventory==null?0:inventory.count());
         boolean autoWeed=loggedIn&&client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2;
         boolean barbarian=loggedIn&&client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3;
         boolean storedMagic=loggedIn&&runLeprechaun&&LeprechaunWithdrawal.magicStored(client);
@@ -1434,9 +1434,7 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> shelfRequirements=new HashSet<>(required.keySet());
         shelfRequirements.addAll(paymentNotes.values());
         requiredItems=Set.copyOf(shelfRequirements);
-        Set<Integer> missingRequirements=new HashSet<>(GuideView.missingItems(physicalRequired,carried));
-        paymentNotes.forEach((note,base)->{if(missingRequirements.contains(note))missingRequirements.add(base);});
-        missingStorageItems=Set.copyOf(missingRequirements);
+        missingStorageItems=GuideView.missingItems(physicalRequired,carried,paymentNotes);
         Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
         Set<Integer> missingTravel=new HashSet<>();
         teleports.forEach((id,sites)->{
@@ -1474,7 +1472,7 @@ public class FarmingHelperPlugin extends Plugin
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
             if(activeLive&&!preparing()&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
-                leprechaunWithdrawal=contextualWithdrawal(current,action,stepCompost,bag,carried,wateringCan,needsCan);
+                leprechaunWithdrawal=contextualWithdrawal(current,action,stepCompost,bag,carried,wateringCan,needsCan,estimatedOccupied);
             if(activeLive&&!preparing()&&action==StepEngine.Action.HARVEST&&Supplies.secateursUseful(type,o)&&
                 carried.getOrDefault(magicSecateurs,0)==0&&storedMagic&&leprechaunWithdrawal==null&&
                 highlight!=null&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
@@ -1484,7 +1482,7 @@ public class FarmingHelperPlugin extends Plugin
             }
             if(activeLive&&!preparing()&&runLeprechaun&&highlight!=null&&
                 (leprechaunWithdrawal!=null||visibleWidget(InterfaceID.FarmingTools.UNIVERSE)))
-                leprechaunWithdrawal=localCollection(leprechaunWithdrawal,current,wave,seeds,observations,bag,carried,plantingBag,wateringCan,stepCompost);
+                leprechaunWithdrawal=localCollection(leprechaunWithdrawal,current,wave,seeds,observations,bag,carried,plantingBag,wateringCan,stepCompost,estimatedOccupied,barbarian);
             if(leprechaunWithdrawal!=null)
                 instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
             else if(action==StepEngine.Action.WATER&&wateringCan<=0)
@@ -1706,14 +1704,13 @@ public class FarmingHelperPlugin extends Plugin
 
     private LeprechaunWithdrawal localCollection(LeprechaunWithdrawal primary,FarmRunPatch patch,List<FarmRunPatch> ready,
         Map<FarmRunPatch,Crop> seeds,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
-        Map<Integer,Integer> bag,Map<Integer,Integer> carried,Map<Integer,Integer> plantingBag,int wateringCan,int compost)
+        Map<Integer,Integer> bag,Map<Integer,Integer> carried,Map<Integer,Integer> plantingBag,int wateringCan,int compost,int occupied,boolean barbarian)
     {
         if(primary!=null&&primary.quantity==0)return primary;
-        int free=Math.max(0,28-Preparation.slots(bag,Map.of(),this::stackable)-2);
+        int free=Math.max(0,26-occupied);
         if(free<=0||!highlight.hasLocalPatch(patch))return primary;
         var npc=highlight.leprechaun(patch);
         if(npc==null)return primary;
-        boolean barbarian=client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3;
         int compostDemand=0;
         String site=RunOrder.site(patch);
         for(FarmRunPatch other:ready)
@@ -1753,10 +1750,10 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     private LeprechaunWithdrawal contextualWithdrawal(FarmRunPatch patch,StepEngine.Action action,int compost,
-        Map<Integer,Integer> bag,Map<Integer,Integer> carried,int wateringCan,boolean needsCan)
+        Map<Integer,Integer> bag,Map<Integer,Integer> carried,int wateringCan,boolean needsCan,int occupied)
     {
         if(!runLeprechaun||highlight==null||!highlight.hasLocalPatch(patch)||highlight.leprechaun(patch)==null)return null;
-        int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
+        int free=Math.max(0,28-occupied);
         LeprechaunWithdrawal immediate=LeprechaunWithdrawal.resolve(client,action,patch.getPatchType(),compost,
             client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3,bag,carried,wateringCan,free,this::observedItemName);
         return LeprechaunWithdrawal.withWater(client,immediate,action,compost,bag,wateringCan,free,needsCan,this::observedItemName);
@@ -1824,7 +1821,7 @@ public class FarmingHelperPlugin extends Plugin
         if(navigation!=null)navigation.request(location.pathStart(),approach,false);
         String instruction=CropCare.prunes(type)?"Prune the diseased crop with secateurs.":"Use plant cure on the diseased crop.";
         Map<Integer,Integer> bag=supplies.bag;
-        leprechaunWithdrawal=contextualWithdrawal(target,StepEngine.Action.CURE,-1,bag,carried,-1,false);
+        leprechaunWithdrawal=contextualWithdrawal(target,StepEngine.Action.CURE,-1,bag,carried,-1,false,Preparation.slots(bag,Map.of(),this::stackable));
         if(leprechaunWithdrawal!=null)instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
         else if(carried.getOrDefault(cure,0)==0)instruction+=CropCare.prunes(type)?" Obtain secateurs or skip this cure.":" Obtain plant cure from a nearby farmer or shop if available, or skip this cure.";
         String resume=preparing()?"Preparation / resupply":current==null?"The remaining run":current.getDisplayName();
@@ -1840,11 +1837,6 @@ public class FarmingHelperPlugin extends Plugin
     private boolean stackable(int id)
     {
         ItemComposition item=itemDefinition(id);return item!=null&&item.isStackable();
-    }
-    private int occupiedInventorySlots()
-    {
-        ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
-        return inventory==null?0:inventory.count();
     }
     private boolean storageOpen()
     {
