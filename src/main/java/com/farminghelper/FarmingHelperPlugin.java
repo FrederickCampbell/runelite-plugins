@@ -437,8 +437,8 @@ public class FarmingHelperPlugin extends Plugin
     {
         int id=event.getContainerId();
         if(id==InventoryID.INVENTORY.getId()||id==InventoryID.EQUIPMENT.getId())quantities=null;
-        if(id==InventoryID.INVENTORY.getId())
-            seedBox.carried(readItems(client.getItemContainer(InventoryID.INVENTORY)));
+        if(id==InventoryID.INVENTORY.getId()&&event.getItemContainer()!=null&&seedBox.known())
+            seedBox.carried(readItems(event.getItemContainer()));
         if(id==net.runelite.api.gameval.InventoryID.SEED_BOX&&client.getGameState()==GameState.LOGGED_IN)
         {
             seedBox.observe(event.getItemContainer());quantities=null;
