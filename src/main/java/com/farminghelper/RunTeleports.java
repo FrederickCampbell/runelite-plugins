@@ -75,5 +75,29 @@ final class RunTeleports
         }
         return result;
     }
+    /** Known permanent items are carried once. Numeric charge variants may
+     * cover multiple destinations. Unknown charges receive no reuse credit. */
+    static int quantity(int id,int visits,String name,boolean stackable)
+    {
+        if(visits<=0)return 0;
+        if(CuratedBank.transportCategory(id)==BankShelfLayout.PERMANENT)return 1;
+        return stackable?visits:chargedQuantity(visits,name);
+    }
+    static int chargedQuantity(int visits,String name)
+    {
+        if(visits<=0)return 0;
+        if(name!=null)
+        {
+            int open=name.lastIndexOf('(');
+            if(open>=0&&name.endsWith(")"))
+                try
+                {
+                    int charges=Integer.parseInt(name.substring(open+1,name.length()-1));
+                    if(charges>0)return 1+(visits-1)/charges;
+                }
+                catch(NumberFormatException ignored){}
+        }
+        return visits;
+    }
     private RunTeleports(){}
 }
