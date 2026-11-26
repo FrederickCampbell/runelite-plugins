@@ -41,8 +41,13 @@ public class SidebarKeyboardTest
 
     @Test public void rankingFocusFollowsTheCropAndSearchRetainsItsSelection() throws Exception
     {
-        if("true".equals(System.getenv("FARMING_HELPER_DISPLAY_TEST")))assertFalse(GraphicsEnvironment.isHeadless());
-        Assume.assumeFalse("Needs a desktop or virtual display",GraphicsEnvironment.isHeadless());
+        // This test needs exclusive desktop focus, not merely a non-headless JVM.
+        // CI supplies an isolated Xvfb display and explicitly enables this test.
+        // Ordinary local builds (including the Dev Manager installer) must not
+        // depend on Windows foreground-window arbitration or steal user focus.
+        Assume.assumeTrue("Requires an explicitly enabled isolated/focus-capable display",
+            "true".equalsIgnoreCase(System.getenv("FARMING_HELPER_DISPLAY_TEST")));
+        assertFalse("Display test was enabled but the JVM is headless",GraphicsEnvironment.isHeadless());
         try
         {
             onEdt(()->{
