@@ -105,7 +105,8 @@ final class PhysicalStock
     static int sum(int a,int b){return (int)Math.min(Integer.MAX_VALUE,(long)a+b);}
     static Map<Integer,Integer> combine(Map<Integer,Integer> a,Map<Integer,Integer> b)
     {
-        Map<Integer,Integer> result=new HashMap<>(a);
+        Map<Integer,Integer> result=new HashMap<>((int)Math.min(Integer.MAX_VALUE,4L*(a.size()+b.size())/3+1));
+        result.putAll(a);
         b.forEach((id,n)->result.merge(id,n,PhysicalStock::sum));
         return result;
     }
