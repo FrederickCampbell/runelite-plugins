@@ -82,6 +82,15 @@ public class FarmingHelperPlugin extends Plugin
     private volatile boolean guideRequested;
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
     private final Set<InventoryID> sampledStorage=EnumSet.noneOf(InventoryID.class);
+    private final Map<InventoryID,StorageRead> pendingStorage=new EnumMap<>(InventoryID.class);
+    private static final class StorageRead
+    {
+        final Map<Integer,Integer> items;
+        final Set<Integer> placeholders;
+        final long at;
+        StorageRead(Map<Integer,Integer> items,Set<Integer> placeholders,long at)
+        {this.items=items;this.placeholders=placeholders;this.at=at;}
+    }
     private PhysicalStock quantities;
     private final SeedBoxStock seedBox=new SeedBoxStock();
     private FarmRunPatch seedBoxPlant;
@@ -463,13 +472,20 @@ public class FarmingHelperPlugin extends Plugin
             loadStock();
             if(stockProfile!=null&&itemManager!=null&&SeedBoxStock.boxId(readItems(client.getItemContainer(InventoryID.INVENTORY)))>0&&
                 seedBox.observe(event.getItemContainer(),client.getTickCount(),this::seedItem))
-            {seedBoxPlant=null;seedBoxViewTick=-1;seedBoxChanged();}
+            {seedBoxPlant=null;seedBoxViewTick=client.getTickCount();seedBoxViewRevision=-1;seedBoxChanged();}
         }
         if(id==InventoryID.BANK.getId()||id==InventoryID.SEED_VAULT.getId())
         {
-            sampledStorage.remove(id==InventoryID.BANK.getId()?InventoryID.BANK:InventoryID.SEED_VAULT);
-            // Reconcile on the game tick, after inventory and storage packets
-            // have both arrived. Do not commit intermediate transfer totals.
+            InventoryID storageId=id==InventoryID.BANK.getId()?InventoryID.BANK:InventoryID.SEED_VAULT;
+            sampledStorage.remove(storageId);
+            // Capture the actual visible event before a fast close; publish it
+            // together with the final inventory observation on the next sample.
+            int component=storageId==InventoryID.BANK?InterfaceID.Bankmain.UNIVERSE:InterfaceID.SeedVault.UNIVERSE;
+            if(stockProfile!=null&&client.getGameState()==GameState.LOGGED_IN&&visibleWidget(component))
+            {
+                StorageRead observation=storageRead(storageId,event.getItemContainer());
+                if(observation!=null)pendingStorage.put(storageId,observation);
+            }
             if(vaultViews!=null&&id==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
         }
     }
@@ -493,13 +509,22 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onScriptPostFired(ScriptPostFired event)
     {if(vaultViews!=null)vaultViews.afterScript(event.getScriptId());}
     @Subscribe public void onWidgetClosed(WidgetClosed event)
-    {if(vaultViews!=null&&event.getGroupId()==SeedVaultViews.GROUP)vaultViews.close();}
+    {
+        if(vaultViews!=null&&event.getGroupId()==SeedVaultViews.GROUP)vaultViews.close();
+        if(event.getGroupId()==InterfaceID.BANKMAIN)
+        {
+            sampledStorage.remove(InventoryID.BANK);
+            if(runBank!=null)runBank.bankClosed();
+        }
+        if(event.getGroupId()==InterfaceID.SEED_VAULT)sampledStorage.remove(InventoryID.SEED_VAULT);
+    }
     @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
     {
         if(vaultViews!=null)vaultViews.nativeMenu(event.getParam1());
         if(client.getGameState()!=GameState.LOGGED_IN||itemManager==null||event.isConsumed())return;
         Map<Integer,Integer> bag=stock().bag;
-        if(SeedBoxStock.boxId(bag)<0)return;
+        if(SeedBoxStock.boxId(bag)<0||stockProfile==null)return;
+        if(event.getParam1()>>>16==InterfaceID.HOSIDIUS_SEEDBOX)seedBox.orderUncertain();
         // Walking, examining and ordinary menu clicks do not cancel a pending
         // transfer/plant. Reconcile only after the server's container updates.
         String option=event.getMenuOption().toLowerCase(Locale.ROOT).replace('-',' ').trim();
@@ -779,7 +804,7 @@ public class FarmingHelperPlugin extends Plugin
         if(before!=snapshot.size())save(key,StockSnapshot.encode(snapshot));
     }
 
-    private void sampleStorage()
+    void sampleStorage()
     {
         if(client.getGameState()!=GameState.LOGGED_IN)return;
         loadStock();
@@ -788,34 +813,48 @@ public class FarmingHelperPlugin extends Plugin
         observeStorage(InterfaceID.SeedVault.UNIVERSE, InventoryID.SEED_VAULT, vault,"observedVaultV1");
     }
 
-    private void observeStorage(int component, InventoryID id, Map<Integer,Integer> snapshot,String key)
+    private StorageRead storageRead(InventoryID id,ItemContainer container)
     {
-        var widget=client.getWidget(component);
-        if(widget==null||widget.isHidden()){sampledStorage.remove(id);return;}
-        if(itemManager==null||sampledStorage.contains(id))return;
-        ItemContainer container=client.getItemContainer(id);
+        if(itemManager==null)return null;
         Set<Integer> placeholders=id==InventoryID.BANK?new HashSet<>():null;
-        Map<Integer,Integer> observed=PhysicalStock.readChecked(container,itemManager::getItemComposition,placeholders);
-        if(observed==null)return; // unavailable or incomplete, retry; never erase remembered stock
-        sampledStorage.add(id);
-        if(placeholders!=null)bankPlaceholders=Set.copyOf(placeholders);
-        long now=System.currentTimeMillis();
-        if(id==InventoryID.BANK)bankObservedAt=now;
-        else if(id==InventoryID.SEED_VAULT)vaultObservedAt=now;
-        boolean changed=!observed.equals(snapshot);
-        if(changed){quantities=null;snapshot.clear();snapshot.putAll(observed);}
-        if(Objects.equals(stockProfile,config.getRSProfileKey()))
+        Map<Integer,Integer> items=PhysicalStock.readChecked(container,itemManager::getItemComposition,placeholders);
+        return items==null?null:new StorageRead(items,placeholders,System.currentTimeMillis());
+    }
+    private void observeStorage(int component,InventoryID id,Map<Integer,Integer> snapshot,String key)
+    {
+        StorageRead pending=pendingStorage.remove(id);
+        if(!visibleWidget(component))
         {
-            if(changed)save(key,StockSnapshot.encode(snapshot));
-            save(key+"At",Long.toString(now));
+            sampledStorage.remove(id);
+            if(pending!=null)publishStorage(id,snapshot,key,pending);
+            return;
         }
+        if(sampledStorage.contains(id)&&pending==null)return;
+        StorageRead observed=storageRead(id,client.getItemContainer(id));
+        if(observed!=null)
+        {
+            sampledStorage.add(id);
+            publishStorage(id,snapshot,key,observed);
+        }
+        else if(pending!=null)publishStorage(id,snapshot,key,pending);
+        // An incomplete live read leaves the last valid snapshot untouched.
+    }
+    private void publishStorage(InventoryID id,Map<Integer,Integer> snapshot,String key,StorageRead observation)
+    {
+        if(!Objects.equals(stockProfile,config.getRSProfileKey()))return;
+        if(observation.placeholders!=null)bankPlaceholders=Set.copyOf(observation.placeholders);
+        if(id==InventoryID.BANK)bankObservedAt=observation.at;
+        else if(id==InventoryID.SEED_VAULT)vaultObservedAt=observation.at;
+        boolean changed=!observation.items.equals(snapshot);
+        if(changed){quantities=null;snapshot.clear();snapshot.putAll(observation.items);save(key,StockSnapshot.encode(snapshot));}
+        save(key+"At",Long.toString(observation.at));
     }
 
     private void invalidateTravel(){eligibleTravel.clear();shelfInputs=List.of();}
 
     private void invalidateStock()
     {
-        quantities=null;bankPlaceholders=Set.of();sampledStorage.clear();invalidateTravel();
+        quantities=null;bankPlaceholders=Set.of();sampledStorage.clear();pendingStorage.clear();invalidateTravel();
     }
 
     private Map<Integer,Integer> readItems(ItemContainer container)

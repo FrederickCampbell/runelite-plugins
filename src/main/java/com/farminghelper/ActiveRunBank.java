@@ -102,6 +102,7 @@ final class ActiveRunBank
         Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);
         boolean changed=!ids.equals(filtered);ids=Set.copyOf(filtered);return changed;
     }
+    void bankClosed(){release();}
     void close(){close(bankOpen()?service():null);}
     private void close(BankTagsService api)
     {

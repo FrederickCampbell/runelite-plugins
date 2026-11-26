@@ -56,12 +56,16 @@ final class PhysicalStock
     /** Collect native placeholder base IDs for display separately from physical quantities. */
     static Map<Integer,Integer> read(ItemContainer container, IntFunction<ItemComposition> definition, Set<Integer> placeholders)
     {
-        Map<Integer,Integer> stock=readChecked(container,definition,placeholders);
+        Map<Integer,Integer> stock=read(container,definition,placeholders,false);
         return stock==null?Map.of():stock;
     }
     /** Null means unavailable/incomplete; an empty map is a verified empty container.
      * Never replace a remembered storage snapshot with a partial decode. */
     static Map<Integer,Integer> readChecked(ItemContainer container,IntFunction<ItemComposition> definition,Set<Integer> placeholders)
+    {
+        return read(container,definition,placeholders,true);
+    }
+    private static Map<Integer,Integer> read(ItemContainer container,IntFunction<ItemComposition> definition,Set<Integer> placeholders,boolean strict)
     {
         Item[] items=container==null?null:container.getItems();
         if(items==null)return null;
@@ -71,7 +75,7 @@ final class PhysicalStock
         {
             if (item == null || item.getId() <= 0) continue;
             ItemComposition def = definition.apply(item.getId());
-            if (def == null) return null;
+            if(def==null){if(strict)return null;continue;}
             if (def.getPlaceholderTemplateId() != -1)
             {
                 if (def.getPlaceholderId() > 0) ghosts.add(def.getPlaceholderId());

@@ -33,6 +33,7 @@ final class SeedBoxStock
     boolean known(){return complete||!observed.isEmpty();}
     boolean complete(){return complete;}
     boolean orderKnown(){return orderKnown;}
+    void orderUncertain(){orderKnown=false;}
     int revision(){return revision;}
     void cancel(){before=null;onlyId=-1;}
     boolean pending(){return before!=null;}
@@ -93,7 +94,12 @@ final class SeedBoxStock
             if(adding?delta<=0:delta>=0)continue;
             adjust(next,id,delta);changed=true;
         }
-        if(changed){cancel();checking=null;replace(next,complete&&next.size()<=6,false);}
+        if(changed)
+        {
+            cancel();checking=null;
+            if(next.size()>6)forget();
+            else replace(next,complete,false);
+        }
         return changed;
     }
     private static void adjust(Map<Integer,Integer> map,int id,int delta)
@@ -113,7 +119,17 @@ final class SeedBoxStock
     }
     boolean chat(String message,int tick,ToIntFunction<String> resolve)
     {
-        if(nativeTick==tick)return false;
+        if(nativeTick==tick)
+        {
+            Matcher pickup=PICKUP.matcher(message),stolen=STOLEN.matcher(message);
+            if(pickup.matches()||stolen.matches())
+            {
+                boolean p=pickup.matches();int id=resolve.applyAsInt(p?pickup.group(2):stolen.group(1));
+                int n=p?number(pickup.group(1)):1;
+                if(nativeAdditions.getOrDefault(id,0)>0)adjust(nativeAdditions,id,-n);
+            }
+            return false;
+        }
         if(message.equalsIgnoreCase("The seed box contains:"))
         {checking=new LinkedHashMap<>();checkTick=lastCheckLineTick=tick;checkValid=!pending();return false;}
         if(message.equalsIgnoreCase("The seed box is empty.")||message.equalsIgnoreCase("Your seed box is now empty."))
@@ -133,7 +149,8 @@ final class SeedBoxStock
                 }
                 checking=null;
                 Map<Integer,Integer> next=new LinkedHashMap<>(observed);adjust(next,id,n);
-                replace(next,complete&&next.size()<=6,false);return true;
+                if(next.size()>6)forget();else replace(next,complete,false);
+                return true;
             }
         }
         if(checking!=null&&tick-checkTick<=4)

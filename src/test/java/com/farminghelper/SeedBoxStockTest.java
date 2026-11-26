@@ -131,4 +131,18 @@ public class SeedBoxStockTest
         assertTrue(box.settle(Map.of(RANARR,5),2,id->true));
         assertEquals(Map.of(RANARR,3),box.carried(Map.of(ItemID.SEED_BOX,1)));
     }
+
+    @Test public void nativePickupCreditIsConsumedOnlyOnce()
+    {
+        SeedBoxStock box=new SeedBoxStock();ItemContainer c=mock(ItemContainer.class);
+        when(c.getItems()).thenReturn(new Item[]{new Item(RANARR,5)});
+        box.observe(c,1);
+        when(c.getItems()).thenReturn(new Item[]{new Item(RANARR,6)});
+        box.observe(c,2);
+        String pickup="You put 1 x Ranarr seed straight into your open seed box.";
+        assertFalse(box.chat(pickup,2,n->RANARR));
+        assertTrue(box.chat(pickup,3,n->RANARR));
+        assertEquals(7,(int)box.carried(Map.of(ItemID.SEED_BOX,1)).get(RANARR));
+        box.orderUncertain();assertFalse(box.orderKnown());assertTrue(box.complete());
+    }
 }
