@@ -749,7 +749,24 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> candidates = new HashSet<>(owned.keySet());
         candidates.addAll(bankPlaceholders);
         shelfCandidates = Set.copyOf(candidates);
-        Set<Integer> tagged = new HashSet<>(CuratedBank.shelf(runItems,shelfCandidates,this::observedItemName,client,config,
+        // Preserve the broad shelf across preparation windows.
+        Set<Integer> broad=new HashSet<>(runItems);
+        List<PatchType> selectedTypes=selectedRunTypes();
+        for(PatchType type:selectedTypes)
+            for(Crop crop:CropCatalog.crops(type))
+                for(ProtectionPayment payment:CropCatalog.protection(crop))
+                    if(shelfCandidates.contains(payment.getItemId()))broad.add(payment.getItemId());
+        if(selectedTypes.contains(PatchType.COMPOST_BIN))
+        {
+            for(int id:CompostRun.REGULAR)if(shelfCandidates.contains(id))broad.add(id);
+            for(int id:CompostRun.SUPER)if(shelfCandidates.contains(id))broad.add(id);
+        }
+        if(!bird)for(int id:shelfCandidates)
+        {
+            Crop crop=VaultRanking.resolve(id,observedItemName(id));
+            if(crop!=null&&selectedTypes.contains(crop.getPatchType()))broad.add(id);
+        }
+        Set<Integer> tagged = new HashSet<>(CuratedBank.shelf(broad,shelfCandidates,this::observedItemName,client,config,
             bird,!bird&&runHasTrees,diving,teleports(shelfCandidates).keySet()));
         // A native placeholder can survive a change to the stock-based crop recommendation.
         if (!bird && !bankPlaceholders.isEmpty())
@@ -1263,7 +1280,7 @@ public class FarmingHelperPlugin extends Plugin
             while(limit<ready.size()&&preparedWave.contains(ready.get(limit)))limit++;
             if(limit==0)limit=ready.size();
         }
-        int upper=limit, lower=0;
+        Preparation.Window window=new Preparation.Window(limit);
         boolean probeBoundary=boundary&&!preparing()&&!progress.underway()&&phase==Preparation.Phase.ACTIVE;
         boolean needsResupply=false;
         if(probeBoundary)limit=1;
@@ -1298,7 +1315,7 @@ public class FarmingHelperPlugin extends Plugin
         if(yieldTool&&carried.getOrDefault(magicSecateurs,0)>0)required.put(magicSecateurs,1);
         else if(yieldTool&&!storedMagic&&stock.getOrDefault(magicSecateurs,0)>0)required.put(magicSecateurs,1);
         Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
-        CompostRun.addSupplies(required,wave,observations,stock,binPlans);
+        CompostRun.addSupplies(required,wave,observations,stock,bag,binPlans);
         int compostCount=0,coins=0,axeId=0;boolean needsAxe=false;
         for(FarmRunPatch p:wave)
         {
@@ -1349,6 +1366,8 @@ public class FarmingHelperPlugin extends Plugin
             birdStock=BirdhouseRun.preferCarried(wave,observations,plantingBag,birdStock,required,hunter,crafting);
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(wave,observations,birdStock,required,hunter,crafting);
         ProtectionPayment.reserve(required,paymentNeeds,bag,this::itemDefinition,paymentNotes);
+        if(wave.size()==1&&wave.get(0).getPatchType()==PatchType.COMPOST_BIN)
+            CompostRun.batch(required,bag,actualOccupied,this::stackable);
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
         Map<Integer,Integer> physicalRequired=TreePreparation.physicalRequirements(required,pendingSaplings);
@@ -1360,7 +1379,8 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn&&current!=null&&location.actual!=null&&highlight!=null&&localDistance(current,location.actual,observations)<70)
             travelWave.removeIf(p->RunOrder.site(p).equals(RunOrder.site(current)));
         Map<Integer,Set<String>> teleports=loggedIn&&config!=null&&itemManager!=null
-            ?RunTeleports.select(travelWave,teleports(supplies.travel.keySet()),carried):Map.of();
+            ?RunTeleports.select(travelWave,teleports(supplies.travel.keySet()),carried,supplies.travel,
+                (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id))):Map.of();
         Map<Integer,Integer> travelCounts=new LinkedHashMap<>(),load=new LinkedHashMap<>(physicalRequired);
         teleports.forEach((id,sites)->{
             int n=RunTeleports.quantity(id,sites.size(),observedItemName(id),stackable(id));
@@ -1368,7 +1388,7 @@ public class FarmingHelperPlugin extends Plugin
         });
         int slots=Preparation.loadedSlots(bag,load,equipped,supplies.seedBox,this::stackable)
             +Math.max(0,actualOccupied-Preparation.slots(bag,Map.of(),this::stackable));
-        int reserve=workingSlots(wave,observations);
+        int reserve=Preparation.workingSlots(wave);
         boolean fits=slots<=28-reserve;
         if(probeBoundary)
         {
@@ -1376,24 +1396,21 @@ public class FarmingHelperPlugin extends Plugin
             // the run. Missing future supplies and optional yield tools do not.
             needsResupply=physicalRequired.entrySet().stream().anyMatch(e->e.getKey()!=magicSecateurs&&
                 e.getValue()>carried.getOrDefault(e.getKey(),0)&&paymentStorage.getOrDefault(e.getKey(),0)>0);
-            probeBoundary=false;limit=upper;continue;
+            probeBoundary=false;limit=window.limit();continue;
         }
         if(!fits&&limit>1)
         {
             // On an oversized Guild start use the nearby resupply point, not a
             // forced round trip. Otherwise find a feasible contiguous prefix.
-            if(lower==0&&limit==upper&&current!=null&&"Farming Guild".equals(RunOrder.site(current))&&
+            if(current!=null&&"Farming Guild".equals(RunOrder.site(current))&&
                 location.normalized!=null&&location.normalized.distanceTo2D(Preparation.GUILD)<120)
             {
                 int localLimit=0;
                 while(localLimit<limit&&"Farming Guild".equals(RunOrder.site(ready.get(localLimit))))localLimit++;
-                if(localLimit>0&&localLimit<limit){upper=localLimit;limit=upper;continue;}
+                if(window.restrict(localLimit)){limit=window.limit();continue;}
             }
-            upper=limit-1;
-            limit=Math.max(1,lower+(upper-lower+1)/2);
-            continue;
         }
-        if(fits&&limit<upper){lower=limit;limit=lower+(upper-lower+1)/2;continue;}
+        if(window.advance(fits)){limit=window.limit();continue;}
         preparedWave=Set.copyOf(wave);
         if(needsResupply&&!preparing())beginPreparation(Preparation.Phase.RESUPPLY);
         for(int id:SupplyOrder.ordered(required,this::observedItemName))
@@ -1509,9 +1526,16 @@ public class FarmingHelperPlugin extends Plugin
             {
                 int free=Math.max(0,28-Preparation.slots(bag,Map.of(),this::stackable));
                 boolean localBin=ready.stream().anyMatch(p->p.getPatchType()==PatchType.COMPOST_BIN&&RunOrder.site(p).equals(RunOrder.site(current)));
-                if(free<=2&&!localBin)
+                if(free<=2)
                 {
-                    int note=HarvestSpace.best(bag,required,current.getLocation(),itemManager::getItemComposition);
+                    Map<Integer,Integer> reserved=required;
+                    if(localBin)
+                    {
+                        reserved=new HashMap<>(required);
+                        for(int id:CompostRun.REGULAR)reserved.putIfAbsent(id,1);
+                        for(int id:CompostRun.SUPER)reserved.putIfAbsent(id,1);
+                    }
+                    int note=HarvestSpace.best(bag,reserved,current.getLocation(),itemManager::getItemComposition);
                     if(note>0)
                     {
                         instruction="Use "+observedItemName(note)+" on the tool leprechaun to note it and free space, then "+instruction;
@@ -1519,7 +1543,7 @@ public class FarmingHelperPlugin extends Plugin
                     }
                     else
                     {
-                        int buckets=HarvestSpace.depositBuckets(bag,required,client.getVarbitValue(VarbitID.FARMING_TOOLS_BUCKETS),
+                        int buckets=localBin?0:HarvestSpace.depositBuckets(bag,required,client.getVarbitValue(VarbitID.FARMING_TOOLS_BUCKETS),
                             client.getVarbitValue(VarbitID.FARMING_TOOLS_EXTRABUCKETS),client.getVarbitValue(VarbitID.FARMING_TOOLS_EXTRA2BUCKETS));
                         if(buckets>0)
                         {
@@ -1819,22 +1843,6 @@ public class FarmingHelperPlugin extends Plugin
         int count=0;
         for(Item item:inventory.getItems())if(item!=null&&item.getId()>0&&item.getQuantity()>0)count++;
         return count;
-    }
-    /** Deliberately modest buffers; variable harvests are managed by the existing
-     * live noting / deposit guidance, not predicted as guaranteed stock. */
-    private static int workingSlots(List<FarmRunPatch> wave,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations)
-    {
-        int reserve=wave.isEmpty()?0:2;
-        for(FarmRunPatch p:wave)
-        {
-            switch(p.getPatchType())
-            {
-                case ALLOTMENT:case HOPS:case SEAWEED:case GRAPEVINE:case FRUIT_TREE:reserve=Math.max(reserve,4);break;
-                case BIRDHOUSE:reserve=Math.max(reserve,5);break;
-                default:break;
-            }
-        }
-        return reserve;
     }
     private boolean storageOpen()
     {
