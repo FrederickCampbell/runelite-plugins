@@ -29,6 +29,38 @@ final class RunOrder
         }
     }
 
+    /** A verified local visit can supersede the next remote ordinary plot.
+     * Never abandon a live active plot or reorder special transport legs.
+     * Allocation and pinned itinerary remain unchanged. */
+    static void preferLocal(List<FarmRunPatch> ready,List<FarmRunPatch> visible,FarmRunPatch current,
+        boolean currentLive,java.util.function.ToIntFunction<FarmRunPatch> distance)
+    {
+        if(ready.isEmpty()||currentLive&&ready.contains(current))return;
+        FarmRunPatch first=ready.get(0);
+        if(!ordinary(first))return;
+        FarmRunPatch best=first;
+        int score=distance.applyAsInt(first);
+        for(FarmRunPatch patch:ready)
+        {
+            if(patch==first||!ordinary(patch))continue;
+            int d=distance.applyAsInt(patch);
+            // Cross-site promotion requires actual arrival, not just a loaded scene.
+            if(d>(site(first).equals(site(patch))?15:5)||d>=score)continue;
+            best=patch;score=d;
+        }
+        if(best!=first)
+        {
+            ready.remove(best);ready.add(0,best);
+            if(visible.remove(best))visible.add(0,best);
+        }
+    }
+    private static boolean ordinary(FarmRunPatch p)
+    {
+        return !terminalOrderPositive(p)&&p.getPatchType()!=PatchType.HESPORI&&p.getPatchType()!=PatchType.CORAL&&
+            p.getPatchType()!=PatchType.SEAWEED&&p.getPatchType()!=PatchType.BIRDHOUSE;
+    }
+    private static boolean terminalOrderPositive(FarmRunPatch p){return terminalOrder(site(p))>0;}
+
     private void index()
     {
         for (int i = 0; i < itinerary.size(); i++) ranks.put(itinerary.get(i), i);

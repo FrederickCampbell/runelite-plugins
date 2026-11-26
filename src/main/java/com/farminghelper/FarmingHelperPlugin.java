@@ -1207,6 +1207,13 @@ public class FarmingHelperPlugin extends Plugin
             phase=Preparation.Phase.ACTIVE;visitedStorage=false;pinned=null;
             update();return;
         }
+        if(loggedIn&&!preparing()&&highlight!=null&&location.actual!=null)
+        {
+            var activeObservation=observations.get(current);
+            boolean currentLive=current!=null&&activeObservation!=null&&activeObservation.source==QuestFarmingStateReader.Source.LIVE&&
+                localDistance(current,location.actual,observations)<=15;
+            RunOrder.preferLocal(ready,visible,current,currentLive,p->localDistance(p,location.actual,observations));
+        }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current) { clearWaterOffer();current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
         activeClearOnly=clearOnly.contains(current);
@@ -1350,6 +1357,8 @@ public class FarmingHelperPlugin extends Plugin
                 int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
                 if(free>0)leprechaunWithdrawal=LeprechaunWithdrawal.plan(magicSecateurs,false,1,free,"Magic secateurs");
             }
+            if(activeLive&&!preparing()&&leprechaunWithdrawal!=null)
+                leprechaunWithdrawal=localCollection(leprechaunWithdrawal,current,ready,seeds,observations,bag,carried,wateringCan,stepCompost);
             if(leprechaunWithdrawal!=null)
                 instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
             else if(action==StepEngine.Action.WATER&&wateringCan<=0)
@@ -1376,6 +1385,22 @@ public class FarmingHelperPlugin extends Plugin
                 }
                 else if(type==PatchType.BIRDHOUSE&&localStepItems.stream().anyMatch(id->supplies.seedBox.getOrDefault(id,0)>0&&bag.getOrDefault(id,0)<10))
                 {localStepItems=Set.of(SeedBoxStock.boxId(bag));instruction+=" Withdraw the required bait seeds from the seed box manually.";}
+            }
+            if(activeLive&&!preparing()&&runLeprechaun&&highlight!=null&&itemManager!=null&&
+                (action==StepEngine.Action.HARVEST||leprechaunWithdrawal!=null)&&type!=PatchType.HESPORI&&
+                type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
+            {
+                int free=Math.max(0,28-Preparation.slots(bag,Map.of(),this::stackable));
+                boolean localBin=ready.stream().anyMatch(p->p.getPatchType()==PatchType.COMPOST_BIN&&RunOrder.site(p).equals(RunOrder.site(current)));
+                if(free<=2&&!localBin)
+                {
+                    int note=HarvestSpace.best(bag,required,current.getLocation(),itemManager::getItemComposition);
+                    if(note>0)
+                    {
+                        instruction="Use "+observedItemName(note)+" on the tool leprechaun to note it and free space, then "+instruction;
+                        localStepItems=Set.of(note);
+                    }
+                }
             }
             if(type==PatchType.BIRDHOUSE){activeAction=StepEngine.Action.INSPECT;instruction=current.getName()+": "+instruction;}
         }
@@ -1510,6 +1535,42 @@ public class FarmingHelperPlugin extends Plugin
             new GuideView.Notes(phase==Preparation.Phase.INITIAL,storageWarning,prepHelp,details.toString()));
         normalView=view;
         publishView(view);
+    }
+
+    private LeprechaunWithdrawal localCollection(LeprechaunWithdrawal primary,FarmRunPatch patch,List<FarmRunPatch> ready,
+        Map<FarmRunPatch,Crop> seeds,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
+        Map<Integer,Integer> bag,Map<Integer,Integer> carried,int wateringCan,int compost)
+    {
+        if(primary.quantity==0)return primary;
+        int free=Math.max(0,28-Preparation.slots(bag,Map.of(),this::stackable)-2);
+        if(free<=1)return primary;
+        var npc=highlight.leprechaun(patch);
+        if(npc==null)return primary;
+        boolean barbarian=client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3;
+        for(FarmRunPatch other:ready)
+        {
+            if(!RunOrder.site(patch).equals(RunOrder.site(other))||!highlight.hasLocalPatch(other)||highlight.leprechaun(other)!=npc)continue;
+            var o=observations.get(other);
+            if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE)continue;
+            PatchType type=other.getPatchType();
+            if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||type==PatchType.HESPORI)continue;
+            Crop crop=seeds.get(other);
+            boolean replacement=crop!=null&&stock().plantingBag.getOrDefault(crop.getItemId(),0)>=crop.getQuantity();
+            StepEngine.Action next=other==patch?activeAction:StepEngine.action(type,o,preserveReplacement(other,o),replacement,false,runPayRemoval&&type.isTree()&&gardener(other)>0);
+            if(o.state==CropState.EMPTY&&reader.hasWeeds(type.name(),o.rawValue))next=StepEngine.Action.RAKE;
+            primary=LeprechaunWithdrawal.append(primary,LeprechaunWithdrawal.resolve(client,next,type,compost,barbarian,bag,carried,wateringCan,free,this::observedItemName),free);
+            if(replacement)
+                primary=LeprechaunWithdrawal.append(primary,LeprechaunWithdrawal.resolve(client,StepEngine.Action.PLANT,type,compost,barbarian,bag,carried,wateringCan,free,this::observedItemName),free);
+        }
+        return primary;
+    }
+
+    private int localDistance(FarmRunPatch patch,WorldPoint here,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations)
+    {
+        var o=observations.get(patch);
+        if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||!highlight.hasLocalPatch(patch))return Integer.MAX_VALUE;
+        WorldPoint approach=highlight.approach(patch);
+        return approach==null?Integer.MAX_VALUE:here.distanceTo(approach);
     }
 
     private LeprechaunWithdrawal contextualWithdrawal(FarmRunPatch patch,StepEngine.Action action,int compost,

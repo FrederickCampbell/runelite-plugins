@@ -1,6 +1,7 @@
 package com.farminghelper;
 
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.function.IntFunction;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.ItemID;
@@ -101,6 +102,16 @@ final class LeprechaunWithdrawal
         LeprechaunWithdrawal water=plan(can,true,1,free,names.apply(can));
         return primary==null?water:new LeprechaunWithdrawal(primary.child,primary.quantity,primary.name,water);
     }
+    /** Append a distinct exchange slot only when the whole collection fits.
+     * A zero-quantity primary must first be resolved by the player. */
+    static LeprechaunWithdrawal append(LeprechaunWithdrawal primary,LeprechaunWithdrawal extra,int free)
+    {
+        if(extra==null||extra.quantity<=0||free<=0)return primary;
+        if(primary==null)return extra;
+        if(primary.quantity<=0||primary.child==extra.child)return primary;
+        LeprechaunWithdrawal tail=append(primary.companion,extra,free-primary.quantity);
+        return tail==primary.companion?primary:new LeprechaunWithdrawal(primary.child,primary.quantity,primary.name,tail);
+    }
     static LeprechaunWithdrawal plan(int item,boolean water,int stored,int free,String name)
     {
         int child=child(item,water);
@@ -114,7 +125,11 @@ final class LeprechaunWithdrawal
     }
     String instruction()
     {
-        return quantity==0?"Make one free inventory slot and withdraw "+name+" from the tool leprechaun":
-            "Withdraw 1 × "+name+(companion==null?"":" and 1 × "+companion.name)+" from the tool leprechaun";
+        if(quantity==0)return "Make one free inventory slot and withdraw "+name+" from the tool leprechaun";
+        if(companion==null||companion.companion==null)
+            return "Withdraw 1 × "+name+(companion==null?"":" and 1 × "+companion.name)+" from the tool leprechaun";
+        StringJoiner items=new StringJoiner(", ");
+        for(LeprechaunWithdrawal p=this;p!=null;p=p.companion)items.add("1 × "+p.name);
+        return "Withdraw "+items+" from the tool leprechaun";
     }
 }

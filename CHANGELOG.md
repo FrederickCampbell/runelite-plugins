@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.09 — local farming workflow
+
+- Prefer verified nearby selected plots over remote work before a patch is underway, without changing seed allocation or the pinned itinerary.
+- Combine distinct tool withdrawals for verified plots sharing a nearby tool leprechaun, reserving two free inventory slots for optional collection.
+- Suggest noting recognized farm produce when inventory is nearly full, preserving required supplies and local compost-bin materials.
+- Retain manual interactions, special transport legs, explicit skips and existing crop preferences.
+
 ## v1.08 — runtime refactoring and compost lifecycle
 
 - Read verified native compost tiers for physical patches, preserving pretreated soil and preventing stale treatment acknowledgements after crop removal. Retain conservative historical fallback and explicit manual skips.

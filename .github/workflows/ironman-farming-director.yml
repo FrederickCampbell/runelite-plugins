@@ -1,7 +1,7 @@
 name: Farming Helper build and regression tests
 on:
   push:
-    branches: [master, farming-helper-v1.07-stabilization, farming-helper-v1.08-refactor]
+    branches: [master, farming-helper-v1.07-stabilization, farming-helper-v1.08-refactor, farming-helper-v1.09-workflow]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -51,7 +51,7 @@ jobs:
           if-no-files-found: ignore
 
   comparison:
-    if: github.ref == 'refs/heads/farming-helper-v1.08-refactor'
+    if: github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,9 @@ jobs:
           set -euo pipefail
           root="$GITHUB_WORKSPACE"
           baseline="$RUNNER_TEMP/farming-baseline"
-          git fetch --no-tags --depth=1 origin 84e8bdff3f6dff7113be38975fcb302cd91ed8d7
+          baseline_sha=84e8bdff3f6dff7113be38975fcb302cd91ed8d7
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.09-workflow ]]; then baseline_sha=27349d1781ca4be611c127f1267b5114b900fa9b; fi
+          git fetch --no-tags --depth=1 origin "$baseline_sha"
           git worktree add --detach "$baseline" FETCH_HEAD
           # Compare layout with identical display metadata, including the version shown on Home.
           fixtures="$RUNNER_TEMP/farming-fixtures"
