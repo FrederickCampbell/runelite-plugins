@@ -76,11 +76,11 @@ final class RunOrder
         for(FarmRunPatch patch:patches)
             byBlock.computeIfAbsent(block(site(patch)),k->new ArrayList<>()).add(patch);
         List<Group> ordered=new ArrayList<>();
+        // Direction is run-wide, not different for every physical group.
+        WorldPoint south=BirdhouseRun.Site.MEADOW_SOUTH.approach,north=BirdhouseRun.Site.VALLEY_NORTH.approach;
+        double northDistance=proxy(start,north);
+        boolean reverse=start!=null&&northDistance<100&&northDistance<proxy(start,south);
         byBlock.forEach((site,ps)->{
-            // Birdhouse direction follows the actual island entry point when possible.
-            // Off-island use the documented stable south-to-north catalogue direction.
-            WorldPoint south=BirdhouseRun.Site.MEADOW_SOUTH.approach,north=BirdhouseRun.Site.VALLEY_NORTH.approach;
-            boolean reverse=start!=null&&proxy(start,north)<100&&proxy(start,north)<proxy(start,south);
             // Mixed Catherby visits finish the selected farm plots before the fruit tree.
             boolean catherbyMixed="Catherby".equals(site)&&ps.stream().anyMatch(p->p.getPatchType()==PatchType.FRUIT_TREE);
             ps.sort(Comparator.comparingInt((FarmRunPatch p)->catherbyMixed?
@@ -96,9 +96,8 @@ final class RunOrder
             int m=MIXED.indexOf(g.site);return ref.size()+(m<0?MIXED.size():m);
         }).thenComparing(g->g.site));
         Group guild=ordered.stream().filter(g->"Farming Guild".equals(g.site)).findFirst().orElse(null);
-        if(guild!=null&&!guildFirst)ordered.remove(guild);
         // If Bank was chosen, prefer an actually nearby first block, not a guessed long-distance teleport.
-        if(!guildFirst&&guild!=null)ordered.add(guild);
+        if(!guildFirst&&guild!=null){ordered.remove(guild);ordered.add(guild);}
         if(!guildFirst&&start!=null)
         {
             Group near=ordered.stream().filter(g->!terminal(g)&&g.entry()!=null&&proxy(start,g.entry())<70)
@@ -133,7 +132,7 @@ final class RunOrder
         ordered.remove(a);ordered.remove(b);
         ordered.add(at,a);ordered.add(at+1,b);
     }
-    private static boolean terminal(Group g){return "Entrana".equals(g.site)||"Fossil Island".equals(g.site);}
+    private static boolean terminal(Group g){return terminalOrder(g.site)>0;}
     /** Keep the established order. Insert newly ready mainland work before the terminal islands. */
     static void appendReady(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready)
     {

@@ -49,4 +49,18 @@ public class ContractPreferenceTest
             assertSame(n==6?contract:fallback,plan.get(a));assertSame(fallback,plan.get(b));
         }
     }
+
+    @Test public void sharedPriorityReadDoesNotChangeExplicitFallbackOrStockOrder()
+    {
+        FarmRunPatch a=new FarmRunPatch("Catherby","",PatchType.HERB),b=new FarmRunPatch("Weiss","",PatchType.HERB),
+            c=new FarmRunPatch("Falador","",PatchType.HERB);
+        var priorityReads=new java.util.concurrent.atomic.AtomicInteger();
+        var overrideReads=new HashMap<FarmRunPatch,Integer>();
+        Map<FarmRunPatch,Crop> plan=SeedChoices.allocate(List.of(a,b,c),99,Map.of(RANARR.getItemId(),1),
+            t->{priorityReads.incrementAndGet();return "Ranarr";},p->{overrideReads.merge(p,1,Integer::sum);return p==c?"Snapdragon":"";},
+            Map.of(),false,p->false,null);
+        assertEquals(1,priorityReads.get());assertEquals(Map.of(a,1,b,1,c,1),overrideReads);
+        assertSame(RANARR,plan.get(a));assertSame(RANARR,plan.get(b));assertSame(SNAP,plan.get(c));
+        assertEquals(List.of(a,b,c),new ArrayList<>(plan.keySet()));
+    }
 }

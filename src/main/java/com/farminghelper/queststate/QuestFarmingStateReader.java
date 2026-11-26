@@ -186,21 +186,24 @@ public final class QuestFarmingStateReader
             observedAtMillis, protection, match.getName(), Integer.parseInt(raw.split(":",2)[0]));
     }
 
-    public static String livingProduceKey(String type,Observation o)
+    private static Produce livingProduce(String type,Observation o)
     {
         if(o==null||o.rawValue<0||o.state==null||o.state==CropState.EMPTY||o.state==CropState.DEAD||
-            o.state==CropState.STUMP||o.state==CropState.DISEASED)return "";
+            o.state==CropState.STUMP||o.state==CropState.DISEASED)return null;
         PatchImplementation impl=implementation(type);
         PatchState raw=impl==null?null:impl.forVarbitValue(o.rawValue);
-        return raw==null||raw.getProduce()==Produce.WEEDS?"":raw.getProduce().name();
+        return raw==null||raw.getProduce()==Produce.WEEDS?null:raw.getProduce();
     }
-
+    public static String livingProduceKey(String type,Observation o)
+    {
+        Produce produce=livingProduce(type,o);
+        return produce==null?"":produce.name();
+    }
     public static boolean isLivingContractCrop(String type,Observation o,int contract)
     {
-        if(contract<=0||o==null||o.rawValue<0||o.state==null||o.state==CropState.DEAD||o.state==CropState.EMPTY||o.state==CropState.DISEASED||o.state==CropState.STUMP)return false;
-        PatchImplementation impl=implementation(type);
-        PatchState state=impl==null?null:impl.forVarbitValue(o.rawValue);
-        return state!=null&&state.getProduce().getContractVarbitValue()==contract;
+        if(contract<=0)return false;
+        Produce produce=livingProduce(type,o);
+        return produce!=null&&produce.getContractVarbitValue()==contract;
     }
 
     public boolean hasWeeds(String type,int value)

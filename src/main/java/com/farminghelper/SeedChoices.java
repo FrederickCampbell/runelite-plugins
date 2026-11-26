@@ -19,6 +19,7 @@ final class SeedChoices
     {
         Map<Integer,Integer> remaining = new HashMap<>(stock);
         Map<FarmRunPatch,Crop> result = new LinkedHashMap<>();
+        Map<FarmRunPatch,String> preferredNames=new HashMap<>();
         // One contract needs one eligible Guild patch, even for two allotments.
         // Reserve its actual available stock before commitments or manual priorities.
         for(FarmRunPatch patch:patches)
@@ -32,7 +33,7 @@ final class SeedChoices
         }
         // White lilies are permanent allotment protection. Reserve stocked lilies
         // before ordinary flower XP preferences, without inventing unavailable stock.
-        for(FarmRunPatch patch:patches)if(patch.getPatchType()==PatchType.FLOWER&&!result.containsKey(patch)&&autoLily.test(patch)&&overrides.apply(patch).isBlank())
+        for(FarmRunPatch patch:patches)if(patch.getPatchType()==PatchType.FLOWER&&!result.containsKey(patch)&&autoLily.test(patch)&&preferredNames.computeIfAbsent(patch,overrides).isBlank())
         {
             Crop lily=CropCatalog.findByName(PatchType.FLOWER,"White lily");
             if(available(patch,lily,level,remaining))assign(patch,lily,remaining,result);
@@ -40,25 +41,27 @@ final class SeedChoices
         // Reserve available individual preferences before general priorities.
         for (FarmRunPatch patch : patches)
         {
-            Crop crop = CropCatalog.findByName(patch.getPatchType(), overrides.apply(patch));
-            if (!result.containsKey(patch) && available(patch,crop,level,remaining)) assign(patch,crop,remaining,result);
+            if(result.containsKey(patch))continue;
+            Crop crop=CropCatalog.findByName(patch.getPatchType(),preferredNames.computeIfAbsent(patch,overrides));
+            if(available(patch,crop,level,remaining))assign(patch,crop,remaining,result);
         }
-        for (FarmRunPatch patch : patches)
+        Map<PatchType,List<Crop>> byType=new EnumMap<>(PatchType.class);
+        for(FarmRunPatch patch:patches)
         {
-            if (result.containsKey(patch)) continue;
-            PatchType type = patch.getPatchType();
-            List<Crop> candidates = new ArrayList<>();
-            Crop preferred=CropCatalog.findByName(type,overrides.apply(patch));
-            if (preferred!=null && preferred.getLevel()<=level) candidates.add(preferred);
-            for(Crop crop:CropCatalog.preferences(type,priorities.apply(type)))
-                if(crop.getLevel()<=level&&!candidates.contains(crop))candidates.add(crop);
-            for(Crop crop:CropXp.ranked(type,level))
-                if(!candidates.contains(crop))candidates.add(crop);
-            if (candidates.isEmpty()) continue;
-            Crop choice = candidates.stream().filter(c -> remaining.getOrDefault(c.getItemId(),0) >= c.getQuantity())
-                .findFirst().orElse(stockedOnly?null:candidates.get(0));
-            if(choice==null)continue;
-            assign(patch,choice,remaining,result);
+            if(result.containsKey(patch))continue;
+            PatchType type=patch.getPatchType();
+            List<Crop> order=byType.computeIfAbsent(type,t->{
+                Set<Crop> crops=new LinkedHashSet<>();
+                for(Crop crop:CropCatalog.preferences(t,priorities.apply(t)))if(crop.getLevel()<=level)crops.add(crop);
+                crops.addAll(CropXp.ranked(t,level));return List.copyOf(crops);
+            });
+            Crop preferred=CropCatalog.findByName(type,preferredNames.get(patch));
+            // An available explicit preference was already reserved above.
+            // It remains the guide-anyway fallback even if its stock is exhausted.
+            Crop fallback=preferred!=null&&preferred.getLevel()<=level?preferred:order.isEmpty()?null:order.get(0);
+            Crop choice=order.stream().filter(c->remaining.getOrDefault(c.getItemId(),0)>=c.getQuantity())
+                .findFirst().orElse(stockedOnly?null:fallback);
+            if(choice!=null)assign(patch,choice,remaining,result);
         }
         Map<FarmRunPatch,Crop> ordered = new LinkedHashMap<>();
         for (FarmRunPatch patch : patches) if (result.containsKey(patch)) ordered.put(patch,result.get(patch));

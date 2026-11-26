@@ -196,13 +196,11 @@ public class FarmingHelperPlugin extends Plugin
     }
     void startIndividual(PatchType type)
     {
-        Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getPatchType()==type)keys.add(p.key());
-        startSelected(keys,RunPreset.individualTitle(type),"individual_"+type.name());
+        startSelected(ManualSelection.keys(patches,p->p.getPatchType()==type),RunPreset.individualTitle(type),"individual_"+type.name());
     }
     void startCombinedShortcut(FarmRunType type)
     {
-        Set<String> keys=new LinkedHashSet<>();for(FarmRunPatch p:patches)if(p.getFarmRunType()==type)keys.add(p.key());
-        startSelected(keys,type.getDisplayName(),"shortcut_"+type.name());
+        startSelected(ManualSelection.keys(patches,p->p.getFarmRunType()==type),type.getDisplayName(),"shortcut_"+type.name());
     }
     void startManual(Set<String> keys)
     {startSelected(keys,"Manual Run","manual");}
@@ -212,12 +210,6 @@ public class FarmingHelperPlugin extends Plugin
         Set<FarmRunType> types=EnumSet.noneOf(FarmRunType.class);
         for(FarmRunPatch p:patches)if(chosen.contains(p.key())&&enabled(p))types.add(p.getFarmRunType());
         if(types.isEmpty()) {FarmingHelperPanel target=panel;SwingUtilities.invokeLater(()->{if(running&&panel==target&&target!=null)target.emptySelection();});return;}
-        start(types,chosen,label,policyKey);
-    }
-
-    private void start(Set<FarmRunType> types,Set<String> keys,String label,String policyKey)
-    {
-        if (types.isEmpty()) return;
         Set<FarmRunType> selected=Set.copyOf(types);
         guideRequested = true;
         final long requested = session.incrementAndGet();
@@ -225,7 +217,7 @@ public class FarmingHelperPlugin extends Plugin
             if (!running || !runtimeReady || !guideRequested || requested != session.get()) return;
             clearRun();
             run = selected;
-            manualKeys=keys;runLabel=label;
+            manualKeys=chosen;runLabel=label;
             runPolicyKey=policyKey;
             specialtyStaged=SpecialtyStages.stageBirds(policyKey,run);
             runProfile=config.getRSProfileKey();
@@ -1127,14 +1119,13 @@ public class FarmingHelperPlugin extends Plugin
         Set<FarmRunPatch> careOnly=new LinkedHashSet<>();
         if(loggedIn&&!preparing()&&highlight!=null&&!(specialtyStaged&&specialtyBirdPhase))
         {
-            boolean mainland=SpecialtyStages.fossilLastRequired(runPolicyKey)&&ready.stream().anyMatch(p->!SpecialtyStages.fossil(p));
             for(FarmRunPatch p:local)
             {
                 PatchType type=p.getPatchType();
                 if(runProgress.is(p,RunProgress.Status.SKIPPED))continue;
                 // Do not let routine watering pull Fossil Island ahead of remaining mainland work.
                 // Verified disease interruptions remain independent and can still interrupt.
-                if(mainland&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
+                if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
                 QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
                 boolean water=selected(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,runWater)&&highlight.hasLocalPatch(p);
                 if(p==current&&activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
@@ -1229,9 +1220,9 @@ public class FarmingHelperPlugin extends Plugin
         if(coins>0) required.merge(ItemID.COINS,coins,Integer::sum);
         if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;required.put(axeId,1);}
         Map<Integer,Integer> prepSeeds=TreePreparation.preparation(seeds,stock,aliases,bag,this::observedItemName);
-        int rawSeeds=TreePreparation.count(prepSeeds,aliases,this::observedItemName,TreePreparation.Stage.SEED);
-        int seedlings=TreePreparation.count(prepSeeds,aliases,this::observedItemName,TreePreparation.Stage.SEEDLING);
-        int watered=TreePreparation.count(prepSeeds,aliases,this::observedItemName,TreePreparation.Stage.WATERED);
+        var stages=TreePreparation.counts(prepSeeds,aliases,this::observedItemName);
+        int rawSeeds=stages.getOrDefault(TreePreparation.Stage.SEED,0),seedlings=stages.getOrDefault(TreePreparation.Stage.SEEDLING,0),
+            watered=stages.getOrDefault(TreePreparation.Stage.WATERED,0);
         prepSeeds.forEach((id,n)->required.merge(id,n,Integer::sum));
         if(rawSeeds>0)
         {

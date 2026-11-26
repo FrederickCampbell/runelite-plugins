@@ -39,7 +39,7 @@ final class TreePreparation
         Map<Integer,Integer> result=new TreeMap<>();
         for(int id:stock.keySet())if(stock.get(id)>0&&CropCatalog.findByItemId(id)==null)
         {
-            Crop c=VaultRanking.resolve(id,name.apply(id));
+            Crop c=material(name.apply(id));
             if(c!=null&&c.getName().endsWith(" sapling")&&c.getItemId()!=id)result.put(id,c.getItemId());
         }
         return result;
@@ -94,11 +94,14 @@ final class TreePreparation
         return result;
     }
 
-    static int count(Map<Integer,Integer> preparation,Map<Integer,Integer> aliases,IntFunction<String> name,Stage stage)
+    static Map<Stage,Integer> counts(Map<Integer,Integer> preparation,Map<Integer,Integer> aliases,IntFunction<String> name)
     {
-        return preparation.entrySet().stream().filter(e->stage(e.getKey(),aliases.get(e.getKey()),name)==stage)
-            .mapToInt(Map.Entry::getValue).sum();
+        Map<Stage,Integer> counts=new EnumMap<>(Stage.class);
+        preparation.forEach((id,n)->counts.merge(stage(id,aliases.get(id),name),n,PhysicalStock::sum));
+        return counts;
     }
+    static int count(Map<Integer,Integer> preparation,Map<Integer,Integer> aliases,IntFunction<String> name,Stage stage)
+    {return counts(preparation,aliases,name).getOrDefault(stage,0);}
 
     static String instruction(int seeds,int seedlings,int watered)
     {

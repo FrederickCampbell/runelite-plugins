@@ -4,7 +4,7 @@
 
 - Reuse sidebar priority controls on reorder/remove/add, update patch enablement counts without rebuilding rows, and preserve same-session guide header controls. Share disclosure state, native button creation, column panels, and HTML escaping.
 - Share selection/eligibility and local crop discovery between planning, disease and watering. Reuse skill reads and existing observations. Keep independent crop decisions, explicit skips, specialty stages and seedless rules.
-- Consolidate duplicate seed-box pickup parsing and redundant run status lookups. No new dependencies or global input/focus APIs.
+- Consolidate duplicate seed-box pickup parsing, native produce verification, run selection and bank choice. Parse crop preferences once per allocation type, index native contract metadata once, and count sapling preparation stages in one pass. No new dependencies or global input/focus APIs.
 
 ## v1.07.3 — stabilization branch runtime reliability
 

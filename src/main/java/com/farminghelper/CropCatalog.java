@@ -193,22 +193,21 @@ final class CropCatalog
         return null;
     }
 
-    /** Use RuneLite's native contract metadata, not a parallel contract-ID table. */
-    static Crop contractCrop(int contract)
+    /** Index the native contract metadata once, not a parallel contract-ID table. */
+    private static final Map<Integer,Crop> contracts=contracts();
+    private static Map<Integer,Crop> contracts()
     {
-        if(contract<=0)return null;
-        for(net.runelite.client.plugins.timetracking.farming.Produce produce:
-            net.runelite.client.plugins.timetracking.farming.Produce.values())
-        {
-            if(produce.getContractVarbitValue()!=contract||produce.getPatchImplementation()==null)continue;
-            for(PatchType type:PatchType.values())
-            {
-                if(!type.name().equals(produce.getPatchImplementation().name()))continue;
-                return findByName(type,produce.getName()+(type.isTree()?" sapling":""));
-            }
-        }
-        return null;
+        Map<Integer,Crop> result=new HashMap<>();
+        for(var produce:net.runelite.client.plugins.timetracking.farming.Produce.values())
+            if(produce.getContractVarbitValue()>0&&produce.getPatchImplementation()!=null)
+                for(PatchType type:PatchType.values())if(type.name().equals(produce.getPatchImplementation().name()))
+                {
+                    Crop crop=findByName(type,produce.getName()+(type.isTree()?" sapling":""));
+                    if(crop!=null)result.putIfAbsent(produce.getContractVarbitValue(),crop);
+                }
+        return Map.copyOf(result);
     }
+    static Crop contractCrop(int contract){return contracts.get(contract);}
 
     static Crop recommend(PatchType type,int level)
     {

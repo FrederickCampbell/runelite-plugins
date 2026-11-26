@@ -16,6 +16,10 @@ final class ManualSelection
         return result;
     }
     static String encode(Set<String> keys){return String.join("\n",new TreeSet<>(keys));}
+    static Set<String> keys(List<FarmRunPatch> patches,Predicate<FarmRunPatch> allowed)
+    {
+        Set<String> result=new LinkedHashSet<>();select(result,patches,allowed,true);return result;
+    }
     static void select(Set<String> keys,List<FarmRunPatch> patches,Predicate<FarmRunPatch> allowed,boolean value)
     {
         for(FarmRunPatch p:patches)if(allowed.test(p))

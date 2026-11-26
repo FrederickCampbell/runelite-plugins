@@ -32,6 +32,7 @@ public class SupplyPolishTest
         assertEquals(0,TreePreparation.count(prep,aliases,NAMES,TreePreparation.Stage.SEED));
         assertEquals(0,TreePreparation.count(prep,aliases,NAMES,TreePreparation.Stage.SEEDLING));
         assertEquals(2,TreePreparation.count(prep,aliases,NAMES,TreePreparation.Stage.WATERED));
+        assertEquals(Map.of(TreePreparation.Stage.WATERED,2),TreePreparation.counts(prep,aliases,NAMES));
         assertEquals("Wait for 2 seedling(s) to become plantable saplings.",TreePreparation.instruction(0,0,2));
         Map<Integer,Integer> pending=TreePreparation.pending(prep,aliases);
         Map<Integer,Integer> physical=TreePreparation.physicalRequirements(Map.of(SAPLING,5,WET,2),pending);

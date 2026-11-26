@@ -75,4 +75,14 @@ public class PreparationTravel44Test
             assertEquals(patch.key(),boat,RunTeleports.select(List.of(patch),Map.of(1,destinations),Map.of()).isEmpty());
         }
     }
+
+    @Test public void sharedBankSelectionPreservesInitialAndResupplySemantics()
+    {
+        WorldPoint guild=new WorldPoint(1253,3741,1);
+        assertEquals("Farming Guild",Preparation.choose(70,guild,true,false).name);
+        assertEquals("Draynor Village",Preparation.choose(70,guild,true,true).name);
+        assertEquals("Farming Guild",Preparation.choose(70,guild,false,false).name);
+        assertNotEquals("Farming Guild",Preparation.choose(70,guild,true,false,Preparation.StartAt.BANK,false).name);
+        assertEquals("Draynor Village",Preparation.choose(40,null,false,false).name);
+    }
 }

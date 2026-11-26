@@ -26,11 +26,7 @@ final class Preparation
         new Bank("Castle Wars",new WorldPoint(2443,3083,0)));
     static Bank choose(int level,WorldPoint from,boolean initial,boolean entrana)
     {
-        if(entrana)return PUBLIC.get(0);
-        if(initial&&level>=45)return GUILD_BANK;
-        List<Bank> choices=new ArrayList<>(PUBLIC);if(level>=45)choices.add(GUILD_BANK);
-        if(from==null)return choices.get(0);
-        return choices.stream().min(Comparator.comparingInt(b->Math.max(Math.abs(b.point.getX()-from.getX()),Math.abs(b.point.getY()-from.getY())))).orElse(choices.get(0));
+        return choose(level,from,initial,entrana,StartAt.GUILD,false);
     }
     enum Phase { UNCHECKED, INITIAL, ACTIVE, RESUPPLY }
     enum StartAt { GUILD("Farming Guild"), BANK("Bank");
@@ -40,10 +36,12 @@ final class Preparation
     }
     static Bank choose(int level,WorldPoint from,boolean initial,boolean entrana,StartAt start,boolean vaultNeeded)
     {
-        if(!initial||entrana)return choose(level,from,initial,entrana);
-        if(level>=45&&(start==StartAt.GUILD||vaultNeeded))return GUILD_BANK;
+        if(entrana)return PUBLIC.get(0);
+        if(initial&&level>=45&&(start==StartAt.GUILD||vaultNeeded))return GUILD_BANK;
         if(from==null)return PUBLIC.get(0);
-        return PUBLIC.stream().min(Comparator.comparingInt(b->Math.max(Math.abs(b.point.getX()-from.getX()),Math.abs(b.point.getY()-from.getY())))).orElse(PUBLIC.get(0));
+        List<Bank> choices=new ArrayList<>(PUBLIC);
+        if(!initial&&level>=45)choices.add(GUILD_BANK);
+        return choices.stream().min(Comparator.comparingInt(b->b.point.distanceTo2D(from))).orElse(PUBLIC.get(0));
     }
     /** Prefer a planting-material source over generic tools. All decisions remain advisory. */
     static Bank chooseSupplies(int level,WorldPoint from,boolean initial,StartAt preference,boolean bird,
