@@ -939,6 +939,7 @@ public class FarmingHelperPlugin extends Plugin
                 {
                     if(changed){compostAcknowledged=false;activeCrop=null;}
                     wateredThisRun.remove(p);
+                    if(waterOfferPatch==p){waterOfferPatch=null;waterOfferOrigin=null;waterOfferTick=-1;}
                 }
                 if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
             }

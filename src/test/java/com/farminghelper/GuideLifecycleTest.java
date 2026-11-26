@@ -295,6 +295,7 @@ public class GuideLifecycleTest
         when(player.getWorldLocation()).thenReturn(new WorldPoint(2572,3102,0));
         when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
         when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(99);
+        when(client.getIntStack()).thenReturn(new int[]{2});
         when(config.getRSProfileKey()).thenReturn("profile");
         var observation=new java.util.concurrent.atomic.AtomicReference<>(liveHop(state,220));
         when(reader.observeType(eq("HOPS"),eq("Yanille"),anyString(),any())).thenAnswer(i->observation.get());
@@ -334,6 +335,7 @@ public class GuideLifecycleTest
         when(player.getWorldLocation()).thenReturn(new WorldPoint(2572,3102,0));
         when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
         when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(99);
+        when(client.getIntStack()).thenReturn(new int[]{2});
         when(config.getRSProfileKey()).thenReturn("profile");
         var observation=new java.util.concurrent.atomic.AtomicReference<>(
             liveHop(com.farminghelper.queststate.CropState.GROWING,84));

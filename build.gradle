@@ -97,3 +97,6 @@ tasks.register('auditInputApis') {
     }
 }
 tasks.named('test') { dependsOn 'auditInputApis' }
+
+// Include actionable failure details in CI and local regression logs.
+tasks.named('test') { testLogging { exceptionFormat = 'full' } }

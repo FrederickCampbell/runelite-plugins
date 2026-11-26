@@ -156,9 +156,10 @@ public final class QuestFarmingStateReader
             if (raw != null)
             {
                 CropState state = normalizedState(match.getImplementation(), value, raw);
+                long now=System.currentTimeMillis();
                 String old=recent.get(match.configKey());
-                if(old==null || !old.startsWith(value+":"))recent.put(match.configKey(),value+":"+(System.currentTimeMillis()/1000));
-                return new Observation(state, Source.LIVE, System.currentTimeMillis(),
+                if(old==null || !old.startsWith(value+":"))recent.put(match.configKey(),value+":"+(now/1000));
+                return new Observation(state, Source.LIVE, now,
                     protection, match.getName(), value);
             }
             // A local undecodable value is not evidence that the historical crop
