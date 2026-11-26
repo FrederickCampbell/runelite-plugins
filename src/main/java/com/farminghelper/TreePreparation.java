@@ -63,11 +63,10 @@ final class TreePreparation
             int sapling=entry.getKey();
             int remaining=Math.max(0,entry.getValue()-carried.getOrDefault(sapling,0));
             if(remaining==0)continue;
-            Map<Integer,Stage> candidateStages=new HashMap<>();
-            aliases.forEach((id,target)->{if(target==sapling)candidateStages.put(id,stage(id,sapling,name));});
-            List<Integer> candidates=new ArrayList<>(candidateStages.keySet());
-            candidates.sort(Comparator.<Integer,Stage>comparing(candidateStages::get).thenComparingInt(Integer::intValue));
-            for(int id:candidates)if(candidateStages.get(id)!=Stage.SEED)
+            List<Integer> candidates=new ArrayList<>();
+            aliases.forEach((id,target)->{if(target==sapling)candidates.add(id);});
+            candidates.sort(Comparator.comparing((Integer id)->stage(id,sapling,name)).thenComparingInt(Integer::intValue));
+            for(int id:candidates)if(stage(id,sapling,name)!=Stage.SEED)
             {
                 int n=Math.min(remaining,Math.min(stock.getOrDefault(id,0),carried.getOrDefault(id,0)));
                 if(n>0){result.put(id,n);remaining-=n;}
