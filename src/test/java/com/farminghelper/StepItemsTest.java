@@ -13,8 +13,15 @@ public class StepItemsTest
         assertEquals(Set.of(id),StepItems.select(StepEngine.Action.PLANT,PatchType.FRUIT_TREE,palm,ItemID.BUCKET_ULTRACOMPOST,1351,Map.of()));
         assertEquals(Set.of(ItemID.BUCKET_ULTRACOMPOST),StepItems.select(StepEngine.Action.COMPOST,PatchType.FRUIT_TREE,palm,ItemID.BUCKET_ULTRACOMPOST,1351,Map.of()));
         assertTrue(StepItems.select(StepEngine.Action.CHECK_HEALTH,PatchType.FRUIT_TREE,palm,ItemID.BUCKET_ULTRACOMPOST,1351,Map.of()).isEmpty());
-        assertTrue(StepItems.firstSlot(id,1,new net.runelite.api.Item[]{null,new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1)}));
-        assertFalse(StepItems.firstSlot(id,2,new net.runelite.api.Item[]{null,new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1)}));
+        net.runelite.api.ItemContainer inventory=org.mockito.Mockito.mock(net.runelite.api.ItemContainer.class);
+        org.mockito.Mockito.when(inventory.find(id)).thenReturn(1);
+        assertTrue(StepItems.firstSlot(id,1,inventory));
+        assertFalse(StepItems.firstSlot(id,2,inventory));
+        assertFalse(StepItems.firstSlot(id,-1,inventory));
+        assertFalse(StepItems.firstSlot(id,1,null));
+        org.mockito.Mockito.when(inventory.find(id)).thenReturn(-1);
+        assertFalse(StepItems.firstSlot(id,-1,inventory));
+        org.mockito.Mockito.verify(inventory,org.mockito.Mockito.never()).getItems();
     }
     @Test public void clearOnlyNeedsAnOccupiedActionablePatch()
     {
