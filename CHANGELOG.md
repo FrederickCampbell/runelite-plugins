@@ -2,6 +2,8 @@
 
 ## v1.06
 
+- Fix live-state recognition for underwater seaweed despite plane-zero map markers; preserve underwater region/plane checks and resolve tool leprechauns in the player's current world view. Restores shared contextual compost and withdrawal guidance.
+
 - Seed-box reliability: confirm closed-box transfers from player actions and loose-inventory/storage deltas, reconcile native contents and explicit game messages, track verified planting consumption, and keep character-local historical quantities without treating stale counts as current stock. Existing cyan inventory guidance remains shared.
 
 - Add the default-on **Prefer contracts** checkbox under Crop priorities. Reserve one available active contract crop for an eligible selected Guild patch before manual and automatic preferences; fall back normally when unavailable. Keep existing living-contract protection independent.

@@ -262,15 +262,19 @@ final class PatchHighlight extends Overlay
     /** Resolve a local NPC from the scene, never a guessed map target. */
     NPC leprechaun(FarmRunPatch patch)
     {
-        if(client.getLocalPlayer()==null||client.getTopLevelWorldView()==null)return null;
-        WorldPoint anchor=Waypoints.destination(patch),player=client.getLocalPlayer().getWorldLocation();
+        Player local=client.getLocalPlayer();
+        if(local==null||local.getWorldView()==null)return null;
+        WorldPoint anchor=Waypoints.destination(patch),player=local.getWorldLocation();
         if(anchor==null)return null;
+        WorldPoint normalizedPlayer=LocationContext.normalize(client,local.getLocalLocation(),player);
         NPC best=null;int distance=Integer.MAX_VALUE;
-        for(NPC npc:client.getTopLevelWorldView().npcs())
+        for(NPC npc:local.getWorldView().npcs())
         {
             if(!"Tool leprechaun".equalsIgnoreCase(npc.getName()))continue;
             WorldPoint point=npc.getWorldLocation();
-            if(!nearLeprechaun(point,anchor,player))continue;
+            WorldPoint normalizedNpc=LocationContext.normalize(client,npc.getLocalLocation(),point);
+            if(!nearLeprechaun(normalizedNpc,anchor,normalizedPlayer)||point==null||player==null||
+                point.getPlane()!=player.getPlane()||point.distanceTo(player)>25)continue;
             int d=point.distanceTo(player);
             if(d<distance){best=npc;distance=d;}
         }

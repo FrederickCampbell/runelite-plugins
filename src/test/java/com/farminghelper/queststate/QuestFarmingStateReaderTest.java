@@ -39,6 +39,32 @@ public class QuestFarmingStateReaderTest
     }
 
     @Test
+    public void underwaterSeaweedUsesItsLiveRegionDespitePlaneZeroMapMarker()
+    {
+        var client=org.mockito.Mockito.mock(net.runelite.api.Client.class);
+        var config=org.mockito.Mockito.mock(net.runelite.client.config.ConfigManager.class);
+        var player=org.mockito.Mockito.mock(net.runelite.api.Player.class);
+        org.mockito.Mockito.when(client.getGameState()).thenReturn(net.runelite.api.GameState.LOGGED_IN);
+        org.mockito.Mockito.when(config.getRSProfileKey()).thenReturn("test");
+        org.mockito.Mockito.when(client.getLocalPlayer()).thenReturn(player);
+        var marker=new net.runelite.api.coords.WorldPoint(3730,10271,0);
+        org.mockito.Mockito.when(player.getWorldLocation()).thenReturn(new net.runelite.api.coords.WorldPoint(3730,10271,1));
+        var reader=new QuestFarmingStateReader(client,config);
+        for(String name:new String[]{"North","South"})
+        {
+            var patch=lookupForTest(name);
+            org.mockito.Mockito.when(client.getVarbitValue(patch.getVarbit())).thenReturn(0);
+            assertEquals(QuestFarmingStateReader.Source.LIVE,reader.observeType("SEAWEED","Seaweed",name,marker).source);
+        }
+        org.mockito.Mockito.when(player.getWorldLocation()).thenReturn(marker);
+        assertNotEquals(QuestFarmingStateReader.Source.LIVE,reader.observeType("SEAWEED","Seaweed","North",marker).source);
+        org.mockito.Mockito.when(player.getWorldLocation()).thenReturn(new net.runelite.api.coords.WorldPoint(3764,3899,0));
+        assertNotEquals(QuestFarmingStateReader.Source.LIVE,reader.observeType("SEAWEED","Seaweed","South",marker).source);
+    }
+    private static FarmingPatch lookupForTest(String name)
+    {return QuestFarmingStateReader.lookup("SEAWEED","Seaweed",name);}
+
+    @Test
     public void neverTreatUnknownTimeTrackingDataAsEmpty()
     {
         assertEquals(0L, QuestFarmingStateReader.timestampMillis(null));
