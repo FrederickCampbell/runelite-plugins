@@ -29,7 +29,7 @@ dependencies {
 }
 
 group = 'com.farminghelper'
-version = '1.07.4'
+version = '1.07.5'
 
 // Keep the sidebar version tied to the published plugin metadata.
 tasks.named('processResources') {
@@ -100,3 +100,44 @@ tasks.named('test') { dependsOn 'auditInputApis' }
 
 // Include actionable failure details in CI and local regression logs.
 tasks.named('test') { testLogging { exceptionFormat = 'full' } }
+
+// Release gate: conservative source screening, not a substitute for Hub
+// bytecode/security review or live-client acceptance.
+tasks.register('auditRelease') {
+    dependsOn 'auditInputApis'
+    inputs.files(fileTree('src/main/java') { include '**/*.java' },
+        file('runelite-plugin.properties'), file('README.md'), file('CHANGELOG.md'))
+    doLast {
+        def metadata = new Properties()
+        file('runelite-plugin.properties').withInputStream { metadata.load(it) }
+        def expected = project.version.toString()
+        if (metadata.getProperty('version') != expected ||
+            !file('README.md').getText('UTF-8').contains("Version " + expected) ||
+            !file('CHANGELOG.md').getText('UTF-8').contains("## v" + expected) ||
+            metadata.getProperty('plugins') != 'com.farminghelper.FarmingHelperPlugin') {
+            throw new GradleException('Release metadata mismatch')
+        }
+        def forbidden = ~/\b(?:java\.lang\.reflect|java\.lang\.Runtime|Runtime\.getRuntime|Class\.forName|setAccessible|MethodHandles|Unsafe|ProcessBuilder|URLClassLoader|defineClass|ObjectInputStream|ObjectOutputStream|FileInputStream|FileOutputStream|RandomAccessFile|FileReader|FileWriter|java\.nio\.file|HttpURLConnection|java\.net\.http|Desktop\.(?:open|browse)|LinkBrowser\.open|Thread\.(?:sleep|interrupt)|System\.load(?:Library)?|new\s+(?:Gson|OkHttpClient)|hopToWorld|setCanSendPackets|createMenuEntry|setMenuEntries)\b/
+        def inherited = ['CropState.java','FarmingHandler.java','FarmingPatch.java','FarmingRegion.java','FarmingWorld.java','PatchImplementation.java','PatchState.java'] as Set
+        int maintained = 0, imported = 0, files = 0
+        def findings = [], sensitive = []
+        fileTree('src/main/java') { include '**/*.java' }.files.sort().each { source ->
+            files++
+            def lines = source.readLines('UTF-8')
+            if (source.parentFile.name == 'queststate' && inherited.contains(source.name)) imported += lines.size()
+            else maintained += lines.size()
+            lines.eachWithIndex { line, index ->
+                def location = source.name + ':' + (index+1) + ': ' + line.trim()
+                if (forbidden.matcher(line).find()) findings.add(location)
+                if (line =~ /\b(?:runScript|setVarcIntValue|setOnOpListener|setAction|setChildren|setRSProfileConfiguration|setConfiguration|openTag|closeBankTag)\s*\(/)
+                    sensitive.add(location)
+            }
+        }
+        println 'Release ' + expected + ': ' + files + ' production Java files, ' + maintained + ' maintained lines, ' + imported + ' inherited lines'
+        println 'Review-sensitive calls (inspect manually):'
+        sensitive.each { println it }
+        if (!findings.isEmpty()) throw new GradleException('Prohibited production API references:\n' + findings.join('\n'))
+        println 'Release metadata and production API screen passed'
+    }
+}
+tasks.named('test') { dependsOn 'auditRelease' }

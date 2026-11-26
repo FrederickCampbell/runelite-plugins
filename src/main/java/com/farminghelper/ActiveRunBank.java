@@ -25,7 +25,7 @@ final class ActiveRunBank
     private Set<Integer> ids=Collections.emptySet(), admitted=Collections.emptySet();
     private int[] lastLayout=new int[0];
     private Set<Integer> layoutEligible=Set.of(),layoutOwned=Set.of();
-    private boolean registered,opened,offered,birdPhase;
+    private boolean registered,opened,offered,birdPhase,stagePending;
     ActiveRunBank(Client client,PluginManager plugins,ItemManager items)
     {this.client=client;this.plugins=plugins;this.items=items;}
     private BankTagsPlugin service()
@@ -77,16 +77,16 @@ final class ActiveRunBank
         if(!enabled||next==null||api==null){close(api);return;}
         updateEligible(next,owned);register();
         if(!opened){opened=true;offered=false;lastLayout=new int[0];}
-        boolean stageChanged=birdPhase!=bird;birdPhase=bird;
-        if(stageChanged)lastLayout=new int[0];
+        if(birdPhase!=bird){birdPhase=bird;stagePending=true;lastLayout=new int[0];}
         if(offered&&!TAG.equals(api.getActiveTag()))return; // Respect manual browsing.
         if(!offered&&ids.isEmpty())
         {if(TAG.equals(api.getActiveTag()))api.closeBankTag();return;}
         boolean changed=!layoutEligible.equals(ids)||!layoutOwned.equals(owned);
-        if(offered&&!stageChanged&&!changed)return;
+        if(offered&&!stagePending&&!changed)return;
         int[] layout=reconcile(owned);
-        if(!offered||stageChanged||!Arrays.equals(layout,lastLayout)){offered=true;open(api,layout);}
+        if(!offered||stagePending||!Arrays.equals(layout,lastLayout)){offered=true;open(api,layout);}
         else if(changed&&search!=null)search.layoutBank();
+        stagePending=false;
     }
     String show(Set<Integer> next,Set<Integer> owned,boolean bird)
     {
@@ -97,7 +97,7 @@ final class ActiveRunBank
         if(ids.isEmpty() && (!opened || birdPhase!=bird || lastLayout.length==0))return "No matching farming items or placeholders in this bank view.";
         if(!opened||birdPhase!=bird)lastLayout=new int[0];birdPhase=bird;
         register();opened=true;offered=true;
-        open(api,reconcile(owned));
+        open(api,reconcile(owned));stagePending=false;
         return "";
     }
     private int[] reconcile(Set<Integer> owned)
@@ -124,6 +124,6 @@ final class ActiveRunBank
         if(registered&&tags!=null)tags.unregisterTag(TAG);
         // Never save or delete another plugin's configuration. Registration is
         // in-memory; no actual TagTab or permanent item tag is created.
-        registered=false;opened=false;offered=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];layoutEligible=Set.of();layoutOwned=Set.of();tags=null;search=null;
+        registered=false;opened=false;offered=false;stagePending=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];layoutEligible=Set.of();layoutOwned=Set.of();tags=null;search=null;
     }
 }

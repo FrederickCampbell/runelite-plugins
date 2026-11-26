@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.07.5 — stabilization release candidate
+
+- Fix a deferred farming-bank stage transition when the player browses a personal tab and returns with unchanged stock.
+- Add a release gate for version/class metadata, a broader production forbidden-API source screen, maintained/inherited Java line counts, and review-sensitive call inventory.
+- Preserve all v1.06.1–1.07.4 behavior; document final review scope and player-side acceptance requirements. No new gameplay features.
+
 ## v1.07.4 — stabilization branch GUI and code consolidation
 
 - Reuse sidebar priority controls on reorder/remove/add, update patch enablement counts without rebuilding rows, and preserve same-session guide header controls. Share disclosure state, native button creation, column panels, and HTML escaping.

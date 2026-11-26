@@ -127,5 +127,16 @@ public class ActiveRunBankTest
         verifyNoInteractions(items,search);
         bank.bankClosed();
         verify(tags).unregisterTag(ActiveRunBank.TAG);
+        bank.tick(Set.of(952),Set.of(952),true,false);
+        clearInvocations(api);
+        when(api.getActiveTag()).thenReturn("Personal");
+        bank.tick(Set.of(952),Set.of(952),true,true);
+        verify(api,never()).openTag(anyString(),any(net.runelite.client.plugins.banktags.tabs.Layout.class),anyInt());
+        when(api.getActiveTag()).thenReturn(ActiveRunBank.TAG);
+        bank.tick(Set.of(952),Set.of(952),true,true);
+        verify(api).openTag(eq(ActiveRunBank.TAG),any(net.runelite.client.plugins.banktags.tabs.Layout.class),anyInt());
+        clearInvocations(api);
+        bank.tick(Set.of(952),Set.of(952),true,true);
+        verify(api,never()).openTag(anyString(),any(net.runelite.client.plugins.banktags.tabs.Layout.class),anyInt());
     }
 }
