@@ -24,7 +24,7 @@ final class SpecialRoutes
     static final int ANGLER_ROWBOAT_VARBIT=18355;
     static boolean onSeaweedIsland(WorldPoint p)
     {return p!=null&&p.getPlane()==0&&p.getRegionID()==14908&&p.distanceTo(SEAWEED_ISLAND)<=8;}
-    // Only called during the seaweed-to-birdhouse handoff. Null resumes normal routing.
+    // Island supply gate is location-driven; the handoff flag is only needed off the island.
     static RouteLeg birdTransfer(WorldPoint player,boolean missing,boolean storageOpen,int level)
     {
         if(player==null)return RouteLeg.walk(null,false);

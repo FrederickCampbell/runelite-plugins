@@ -29,7 +29,29 @@ public class SeaweedBirdTransferTest
         assertTrue(PatchHighlight.matchesRowChoice("Row to the camp."));
         assertTrue(PatchHighlight.matchesRowChoice("[1] <col=ffff00>Row to the camp.</col>"));
         assertFalse(PatchHighlight.matchesRowChoice("Row to the island."));
+        assertTrue(PatchHighlight.matchesRowChoice("Row to the camp"));
+        assertTrue(PatchHighlight.matchesRowChoice("2. Row to the Museum Camp."));
         assertEquals(RouteLeg.Interaction.NONE,SpecialRoutes.birdTransfer(SpecialRoutes.SEAWEED_ISLAND,true,true,75).interaction);
+    }
+    @Test public void underwaterLeprechaunIgnoresMarkerPlaneButNotPlayerPlane()
+    {
+        WorldPoint marker=new WorldPoint(3730,10271,0),player=new WorldPoint(3739,10276,1);
+        assertTrue(PatchHighlight.nearLeprechaun(new WorldPoint(3736,10273,1),marker,player));
+        assertFalse(PatchHighlight.nearLeprechaun(new WorldPoint(3736,10273,0),marker,player));
+        assertFalse(PatchHighlight.nearLeprechaun(new WorldPoint(3800,10273,1),marker,player));
+    }
+    @Test public void islandSupplyGateNeverRequestsAPathUntilBoatIsFinished()
+    {
+        WorldPoint island=SpecialRoutes.SEAWEED_ISLAND;
+        Map<Integer,Integer> required=Map.of(1515,4,2347,1,1755,1,ItemID.POTATO_SEED,40);
+        Map<Integer,Integer> partial=Map.of(1515,4,2347,1,1755,1,ItemID.POTATO_SEED,39);
+        RouteLeg bank=SpecialRoutes.birdTransfer(island,Preparation.missing(required,partial),false,75);
+        assertEquals(RouteLeg.Interaction.BIRD_BANK,bank.interaction);assertNull(bank.point);
+        RouteLeg open=SpecialRoutes.birdTransfer(island,Preparation.missing(required,partial),true,75);
+        assertNull(open.point);assertEquals(RouteLeg.Interaction.NONE,open.interaction);
+        RouteLeg row=SpecialRoutes.birdTransfer(island,Preparation.missing(required,required),false,75);
+        assertEquals(RouteLeg.Interaction.BIRD_ROW,row.interaction);assertNull(row.point);
+        assertNull(SpecialRoutes.birdTransfer(new WorldPoint(3734,3893,0),false,false,75));
     }
     @Test public void sufficientCarriedKitBeatsBankTier()
     {

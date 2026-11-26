@@ -16,7 +16,7 @@ The player performs all game actions. The plugin reads farming observations, dis
 4. Verify Kastori flowers next to fruit trees, numbered vine patches, both compost-bin sizes, protected contracts, a newly actionable remote patch and a disease interruption. Check same-character hopping and character switching on specialty travel legs.
 
 5. In an allotment, flower or hops run, verify carried, leprechaun-stored and bank-only watering cans and compost; check the large green arrow, green leprechaun outline, cyan contextual action labels and red optional-care crosses, exchange slot and recommended quantity (including ordinary cans, Gricoller's can, full inventory, and partial storage), optional watering skips, and temporary settings reset. Verify Start/Continue stays pinned above the scrollable guide.
-6. In a mixed seaweed/birdhouse run, verify underwater exit, optional resupply, rowboat dialogue highlight and sufficient-carried-supply behavior.
+6. In a mixed seaweed/birdhouse run, verify underwater exit, mandatory island-bank guidance for missing birdhouse supplies (green chest outline and arrow; no rowboat path), rowboat dialogue highlight and sufficient-carried-supply behavior.
 
 Automated build and regression tests are tracked in GitHub Actions. Live acceptance remains a player-side check.
 
