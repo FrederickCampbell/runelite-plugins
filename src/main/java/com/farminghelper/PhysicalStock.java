@@ -1,6 +1,7 @@
 package com.farminghelper;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.function.IntUnaryOperator;
 import java.util.HashMap;
 import net.runelite.api.Item;
@@ -41,10 +42,24 @@ final class PhysicalStock
     }
     static Map<Integer,Integer> read(ItemContainer container,IntFunction<ItemComposition> definition)
     {
-        Map<Integer,Integer> stock=new HashMap<>();
-        Item[] items=container==null?null:container.getItems();
-        if(items!=null)for(Item item:items)if(item!=null&&available(item.getId(),item.getQuantity(),definition))
-            stock.merge(item.getId(),item.getQuantity(),Integer::sum);
+        return read(container,definition,null);
+    }
+    /** Collect native placeholder base IDs for display separately from physical quantities. */
+    static Map<Integer,Integer> read(ItemContainer container, IntFunction<ItemComposition> definition, Set<Integer> placeholders)
+    {
+        Map<Integer,Integer> stock = new HashMap<>();
+        Item[] items = container == null ? null : container.getItems();
+        if (items != null) for (Item item : items)
+        {
+            if (item == null || item.getId() <= 0) continue;
+            ItemComposition def = definition.apply(item.getId());
+            if (def == null) continue;
+            if (def.getPlaceholderTemplateId() != -1)
+            {
+                if (placeholders != null && def.getPlaceholderId() > 0) placeholders.add(def.getPlaceholderId());
+            }
+            else if (item.getQuantity() > 0) stock.merge(item.getId(),item.getQuantity(),Integer::sum);
+        }
         return stock;
     }
     static Map<Integer,Integer> combine(Map<Integer,Integer> a,Map<Integer,Integer> b)

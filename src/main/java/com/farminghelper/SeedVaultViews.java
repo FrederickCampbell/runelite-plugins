@@ -323,8 +323,8 @@ final class SeedVaultViews
     }
     private static final class Pair
     {
-        final Widget icon,label;final int id;final Crop crop;
-        Pair(Widget icon,Widget label,Crop crop){this.icon=icon;this.label=label;id=icon.getItemId();this.crop=crop;}
+        final Widget icon,label;final int id;final boolean placeholder;
+        Pair(Widget icon,Widget label,boolean placeholder){this.icon=icon;this.label=label;id=icon.getItemId();this.placeholder=placeholder;}
     }
     private static final class Section
     {
@@ -378,10 +378,11 @@ final class SeedVaultViews
             if(definition==null){section.safe=false;continue;}
             String actual=definition.getName();
             if(!clean(actual).equalsIgnoreCase(clean(labels[i].getText()))){section.safe=false;continue;}
-            Pair p=new Pair(icon,labels[i],VaultRanking.resolve(icon.getItemId(),actual));
+            Pair p=new Pair(icon,labels[i],definition.getPlaceholderTemplateId()!=-1);
             matched.add(p.label);section.pairs.add(p);
-            int quantity=PhysicalStock.available(p.id,icon.getItemQuantity(),id->definition)?icon.getItemQuantity():0;
-            entries.add(new VaultRanking.Entry(p.id,quantity,p.crop));
+            // Native placeholders retain their widgets, labels and Remove-Placeholder actions.
+            // Only actual stacks participate in crop rankings or satisfy a run.
+            if (!p.placeholder) entries.add(new VaultRanking.Entry(p.id,icon.getItemQuantity(),VaultRanking.resolve(p.id,actual)));
         }
         for(Widget label:labels)if(label!=null&&!label.isSelfHidden()&&!matched.contains(label))
         {Section section=sectionAt(sections,label.getOriginalY());if(section!=null)section.safe=false;}
@@ -429,7 +430,7 @@ final class SeedVaultViews
             List<VaultGrid.Slot> slots=new ArrayList<>();
             for(int i=0;i<section.pairs.size();i++)
             {
-                Pair p=section.pairs.get(i);boolean selected=keep.contains(p.id)&&p.icon.getItemQuantity()>0;
+                Pair p=section.pairs.get(i);boolean selected=p.placeholder||keep.contains(p.id);
                 if(!selected){hide(p.icon);hide(p.label);}
                 slots.add(new VaultGrid.Slot(i,p.icon.getOriginalX(),p.icon.getOriginalY(),selected,rank.getOrDefault(p.id,Integer.MAX_VALUE)));
             }
