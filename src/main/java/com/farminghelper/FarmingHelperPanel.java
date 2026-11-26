@@ -1312,6 +1312,12 @@ final class FarmingHelperPanel extends PluginPanel
     private void priorities()
     {
         page(PRIORITIES,"Crop priorities",this::preferences,null,latestGuide!=null);
+        JCheckBox contracts=check("Prefer contracts",plugin.preferContracts(),
+            on->plugin.save("preferContracts",Boolean.toString(on)));
+        contracts.setName("preferContracts");
+        contracts.setToolTipText("Prioritize the active Farming Guild contract over crop preferences when supplies are available.");
+        contracts.getAccessibleContext().setAccessibleDescription(contracts.getToolTipText());
+        addRow(contracts);
         List<PatchType> types=new ArrayList<>(Arrays.asList(PatchType.values()));types.sort(Comparator.comparing(PatchType::getDisplayName,String.CASE_INSENSITIVE_ORDER));
         for(PatchType type:types)if(type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
         {

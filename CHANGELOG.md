@@ -2,6 +2,8 @@
 
 ## v1.06
 
+- Add the default-on **Prefer contracts** checkbox under Crop priorities. Reserve one available active contract crop for an eligible selected Guild patch before manual and automatic preferences; fall back normally when unavailable. Keep existing living-contract protection independent.
+
 - Require explicit display-test opt-in for the OS-dependent Swing keyboard focus regression; CI continues to run it on an isolated virtual display. Normal installer builds retain all other tests.
 
 - Track the native seed-box container in slot order during the current session. Carried contents count toward crop allocation and supply readiness without inflating loose inventory or bank totals. Unknown contents require checking the box.

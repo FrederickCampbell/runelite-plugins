@@ -717,6 +717,11 @@ public class FarmingHelperPlugin extends Plugin
         int storedCompost=loggedIn&&runLeprechaun&&runPolicy.compost?CompostChoice.stored(client,compostId):0;
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
         int contract=loggedIn?client.getVarbitValue(VarbitID.FARMGUILD_CONTRACT_TYPE):0;
+        Crop contractCrop=preferContracts()?CropCatalog.contractCrop(contract):null;
+        boolean livingContract=contractCrop!=null&&patches.stream().anyMatch(p->
+            "Farming Guild".equals(p.getLocation())&&p.getPatchType()==contractCrop.getPatchType()&&
+            QuestFarmingStateReader.isLivingContractCrop(p.getPatchType().name(),observations.computeIfAbsent(p,this::observe),contract));
+        Crop preferredContract=livingContract?null:contractCrop;
         int spiritSlots=spiritCapacity(level);
         if(loggedIn && run.contains(FarmRunType.SPECIALTY) && level<99)
             for(FarmRunPatch p:patches) if(p.getPatchType()==PatchType.SPIRIT_TREE)
@@ -770,7 +775,9 @@ public class FarmingHelperPlugin extends Plugin
                 // The player may carry a lower-ranked seed than the initially allocated bank crop.
                 // Prefer a usable carried replacement for the active mature patch over preserving it prematurely.
                 if(CropReplacement.configurable(type)&&!preserveCrop&&CropReplacement.mature(type,o)&&!progress.planted()&&
-                    (activeCrop==null||plantingBag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()))
+                    (activeCrop==null||plantingBag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity())&&
+                    !(preferredContract!=null&&"Farming Guild".equals(p.getLocation())&&type==preferredContract.getPatchType()&&
+                        level>=preferredContract.getLevel()&&supplies.allocation.getOrDefault(preferredContract.getItemId(),0)>=preferredContract.getQuantity()))
                 {
                     Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,plantingBag,this::priority,this::override,Collections.emptyMap(),true,this::autoLily).get(p);
                     if(carriedReplacement!=null)activeCrop=carriedReplacement;
@@ -839,10 +846,10 @@ public class FarmingHelperPlugin extends Plugin
         Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current)!=null &&
             observations.get(current).source==QuestFarmingStateReader.Source.LIVE
             ? Map.of(current,activeCrop):Collections.emptyMap();
-        List<?> inputs=List.of(List.copyOf(plant),level,supplies,preferenceRevision,committed,hideSeedless,temporaryReplacement);
+        List<?> inputs=List.of(List.copyOf(plant),level,supplies,preferenceRevision,committed,hideSeedless,temporaryReplacement,contract,Optional.ofNullable(preferredContract));
         if(!inputs.equals(allocationInputs))
         {
-            allocated=SeedChoices.allocate(plant,level,supplies.allocation,this::priority,this::override,committed,hideSeedless,this::autoLily);
+            allocated=SeedChoices.allocate(plant,level,supplies.allocation,this::priority,this::override,committed,hideSeedless,this::autoLily,preferredContract);
             allocationInputs=inputs;
         }
         Map<FarmRunPatch,Crop> seeds=allocated;
@@ -1339,6 +1346,8 @@ public class FarmingHelperPlugin extends Plugin
     {
         return flag("patchEnabled_" + patch.key(),PatchLocationSelection.isEnabled(legacy,patch.getLocation()));
     }
+
+    boolean preferContracts(){return flag("preferContracts",true);}
 
     String priority(PatchType type)
     {
