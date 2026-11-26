@@ -62,6 +62,8 @@ final class CropCare
     {return verified&&o!=null&&o.source==Source.LIVE&&o.state==CropState.DISEASED;}
     static boolean prunes(PatchType type)
     {return type.isTree()||type==PatchType.BUSH||type==PatchType.CORAL;}
+    // Optional local watering never gates completion or waits indefinitely.
+    static boolean offerExpired(int ticks,int distance){return ticks>=15||ticks<0||distance>5;}
     private static boolean between(int v,int min,int max){return v>=min&&v<=max;}
     private CropCare(){}
 }

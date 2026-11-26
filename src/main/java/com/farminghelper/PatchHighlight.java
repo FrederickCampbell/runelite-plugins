@@ -39,8 +39,8 @@ final class PatchHighlight extends Overlay
                 if(slot!=null)
                 {
                     Rectangle bounds=slot.getBounds();
-                    draw(graphics,bounds,Color.RED);
-                    label(graphics,withdrawal.label(),bounds.x+bounds.width/2,bounds.y+bounds.height-4,Color.RED);
+                    draw(graphics,bounds,Color.GREEN);
+                    label(graphics,withdrawal.label(),bounds.x+bounds.width/2,bounds.y+bounds.height-4,Color.GREEN);
                     return null;
                 }
             }
@@ -280,7 +280,7 @@ final class PatchHighlight extends Overlay
             NPC npc=leprechaun(patch);
             if(npc!=null)
             {
-                draw(graphics,npc.getConvexHull(),Color.RED);
+                draw(graphics,npc.getConvexHull(),Color.GREEN);
                 net.runelite.api.Point p=npc.getCanvasTextLocation(graphics," ",npc.getLogicalHeight()+20);
                 if(p!=null)arrow(graphics,p.getX(),p.getY());
             }
@@ -299,10 +299,21 @@ final class PatchHighlight extends Overlay
         for(GameObject o:group)
         {
             Shape shape=o.getClickbox();draw(graphics,shape);
-            if(shape!=null&&action==StepEngine.Action.COMPOST&&helper.activeLive())
+            if(shape!=null&&helper.activeLive())
                 patchBounds=patchBounds==null?shape.getBounds():patchBounds.union(shape.getBounds());
         }
-        if(patchBounds!=null)compostReminder(graphics,patchBounds.x+patchBounds.width/2,patchBounds.y-6);
+        if(patchBounds!=null&&patch.getPatchType()!=PatchType.BIRDHOUSE&&patch.getPatchType()!=PatchType.COMPOST_BIN)
+        {
+            int x=patchBounds.x+patchBounds.width/2,y=patchBounds.y-6;
+            String actionLabel=StepEngine.label(action,patch.getPatchType());
+            if(action==StepEngine.Action.COMPOST&&helper.compostMissing())careReminder(graphics,"Compost",x,y);
+            else if(action==StepEngine.Action.WATER)careReminder(graphics,"Water",x,y);
+            else
+            {
+                if(!actionLabel.isEmpty())label(graphics,actionLabel,x,y,Color.CYAN);
+                if(helper.compostMissing())careReminder(graphics,"Compost",x,y-16);
+            }
+        }
         if(group.isEmpty() && QuestTargets.get(patch)!=null)
         {
             WorldPoint point=QuestTargets.get(patch).point;LocalPoint local=LocalPoint.fromWorld(client,point);
@@ -333,7 +344,7 @@ final class PatchHighlight extends Overlay
         try
         {
             g.setColor(new Color(color.getRed(),color.getGreen(),color.getBlue(),35));g.fill(shape);
-            g.setColor(color);if(Color.RED.equals(color))g.setStroke(new BasicStroke(2f));g.draw(shape);
+            g.setColor(color);if(Color.GREEN.equals(color))g.setStroke(new BasicStroke(2f));g.draw(shape);
         }
         finally{g.dispose();}
     }
@@ -344,22 +355,22 @@ final class PatchHighlight extends Overlay
         {
             Polygon arrow=new Polygon(new int[]{x-7,x+7,x+7,x+17,x,x-17,x-7},
                 new int[]{y-44,y-44,y-20,y-20,y,y-20,y-20},7);
-            g.setColor(Color.RED);g.fill(arrow);
+            g.setColor(Color.GREEN);g.fill(arrow);
             g.setColor(Color.BLACK);g.setStroke(new BasicStroke(2f));g.draw(arrow);
         }
         finally{g.dispose();}
     }
     // Draw the cross rather than relying on platform-dependent emoji fonts.
-    private static void compostReminder(Graphics2D graphics,int center,int baseline)
+    private static void careReminder(Graphics2D graphics,String text,int center,int baseline)
     {
         Graphics2D g=(Graphics2D)graphics.create();
         try
         {
             g.setFont(g.getFont().deriveFont(Font.BOLD,13f));
-            int width=g.getFontMetrics().stringWidth("Compost");
+            int width=g.getFontMetrics().stringWidth(text);
             int x=center-(width+15)/2;
-            g.setColor(Color.BLACK);g.drawString("Compost",x+1,baseline+1);
-            g.setColor(Color.CYAN);g.drawString("Compost",x,baseline);
+            g.setColor(Color.BLACK);g.drawString(text,x+1,baseline+1);
+            g.setColor(Color.CYAN);g.drawString(text,x,baseline);
             int cross=x+width+5;
             g.setStroke(new BasicStroke(3f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
             g.setColor(Color.BLACK);g.drawLine(cross+1,baseline-9,cross+9,baseline-1);g.drawLine(cross+9,baseline-9,cross+1,baseline-1);

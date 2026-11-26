@@ -71,7 +71,10 @@ public class FarmingHelperPlugin extends Plugin
     private final Map<Integer,String> itemNamesCache=new HashMap<>();
     private Crop activeCrop;
     private volatile StepEngine.Action activeAction = StepEngine.Action.INSPECT;
-    private volatile boolean activeLive;
+    private volatile boolean activeLive,compostMissing;
+    private int waterOfferTick=-1;
+    private FarmRunPatch waterOfferPatch;
+    private WorldPoint waterOfferOrigin;
     private volatile Set<Integer> requiredItems = Collections.emptySet();
     private volatile Set<Integer> missingStorageItems = Collections.emptySet();
     private volatile Set<Integer> missingTeleports = Collections.emptySet();
@@ -225,7 +228,7 @@ public class FarmingHelperPlugin extends Plugin
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;preparationOrigin=null;
         pinned=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
-        birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
+        birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;waterOfferTick=-1;waterOfferPatch=null;waterOfferOrigin=null;compostMissing=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
         specialtyStaged=false;specialtyBirdPhase=false;seaweedBirdTransfer=false;
         runProgress.reset();
@@ -688,6 +691,9 @@ public class FarmingHelperPlugin extends Plugin
         // Run this before normal planning, even during banking or birdhouses. No
         // mutations to the normal guide cursor, progress, or preparation state.
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new HashMap<>();
+        if(waterOfferPatch!=null&&CropCare.offerExpired(client.getTickCount()-waterOfferTick,
+            waterOfferOrigin==null||location.actual==null?Integer.MAX_VALUE:waterOfferOrigin.distanceTo(location.actual)))
+        {wateredThisRun.add(waterOfferPatch);waterOfferPatch=null;waterOfferOrigin=null;waterOfferTick=-1;}
         if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations))return;
         Map<Integer,Integer> storage=supplies.storage,stock=supplies.stock;
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
@@ -748,8 +754,6 @@ public class FarmingHelperPlugin extends Plugin
                     // The local scanner below re-adds this detour only while the exact target is verified.
                     continue;
                 }
-                if(o.source==QuestFarmingStateReader.Source.LIVE&&progress.planted()&&CropCare.waterNeeded(type,o,runWater)&&!wateredThisRun.contains(p))
-                {ready.add(p);visible.add(p);continue;}
                 if(hideSeedless&&clearSeedless&&activeClearOnly&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.EMPTY)
                 {runProgress.finish(p,false);visible.add(p);continue;}
                 boolean wants=protect && activeCrop!=null && type.supportsProtection() && !CropCatalog.protection(activeCrop).isEmpty();
@@ -868,6 +872,7 @@ public class FarmingHelperPlugin extends Plugin
             loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
             loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
         if(!clearOnly.isEmpty()&&seeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
+        if(loggedIn&&runLeprechaun)required.entrySet().removeIf(e->carried.getOrDefault(e.getKey(),0)==0&&LeprechaunWithdrawal.stored(client,e.getKey())>=e.getValue());
         for(FarmRunPatch p:ready)
         {
             QuestFarmingStateReader.Observation state=observations.get(p);
@@ -962,7 +967,7 @@ public class FarmingHelperPlugin extends Plugin
         GuideView.Stats summary=runProgress.stats();
         String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain.":"Run finished.";
         activeAction=StepEngine.Action.INSPECT;
-        activeLive=false;leprechaunWithdrawal=null;
+        activeLive=false;compostMissing=false;leprechaunWithdrawal=null;
         Set<Integer> localStepItems=Collections.emptySet();
         if(current!=null)
         {
@@ -973,24 +978,21 @@ public class FarmingHelperPlugin extends Plugin
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
             StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,stepCompost);
             activeAction=action;
+            if(action==StepEngine.Action.WATER&&waterOfferPatch!=current)
+            {waterOfferPatch=current;waterOfferTick=client.getTickCount();waterOfferOrigin=location.actual;}
+            if(activeLive&&type.usesCompost()&&!activeClearOnly&&(action==StepEngine.Action.COMPOST||action==StepEngine.Action.PLANT))
+                compostMissing=!reader.compostRecorded(type.name(),current.getLocation(),current.getName(),1);
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
-            int fetch=action==StepEngine.Action.WATER&&wateringCan<=0?storedCan:
-                action==StepEngine.Action.COMPOST&&bag.getOrDefault(stepCompost,0)==0&&
-                    (stepCompost==ItemID.BUCKET_ULTRACOMPOST?storedUltra>0:stepCompost==compostId&&storedCompost>0)?stepCompost:-1;
-            if(fetch>0&&runLeprechaun&&activeLive&&!preparing()&&highlight!=null&&
-                highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
-            {
-                int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
-                int stored=action==StepEngine.Action.WATER?1:CompostChoice.stored(client,fetch);
-                leprechaunWithdrawal=LeprechaunWithdrawal.plan(fetch,action==StepEngine.Action.WATER,compostCount,stored,free,observedItemName(fetch));
-                instruction=leprechaunWithdrawal.instruction()+", then "+(action==StepEngine.Action.WATER?"water":"compost")+" the patch, or skip.";
-            }
+            if(activeLive&&!preparing()&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
+                leprechaunWithdrawal=contextualWithdrawal(current,action,stepCompost,bag,carried,wateringCan);
+            if(leprechaunWithdrawal!=null)
+                instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
             else if(action==StepEngine.Action.WATER&&wateringCan<=0)
                 instruction="Obtain a filled watering can, then water this patch, or skip.";
 
             if(activeCareOnly&&action==StepEngine.Action.CURE)instruction="Nearby diseased crop — "+instruction+" Then resume the run without replanting.";
-            if(action==StepEngine.Action.CURE&&!CropCare.prunes(type)&&bag.getOrDefault(ItemID.PLANT_CURE,0)==0)instruction+=" Obtain plant cure from a nearby farmer or Farming shop, if available; skip if you cannot cure it.";
+            if(leprechaunWithdrawal==null&&action==StepEngine.Action.CURE&&!CropCare.prunes(type)&&bag.getOrDefault(ItemID.PLANT_CURE,0)==0)instruction+=" Obtain plant cure from a nearby farmer or Farming shop, if available; skip if you cannot cure it.";
             if(activeLive)
             {
                 if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
@@ -1120,6 +1122,15 @@ public class FarmingHelperPlugin extends Plugin
         publishView(view);
     }
 
+    private LeprechaunWithdrawal contextualWithdrawal(FarmRunPatch patch,StepEngine.Action action,int compost,
+        Map<Integer,Integer> bag,Map<Integer,Integer> carried,int wateringCan)
+    {
+        if(!runLeprechaun||highlight==null||!highlight.hasLocalPatch(patch)||highlight.leprechaun(patch)==null)return null;
+        int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
+        return LeprechaunWithdrawal.resolve(client,action,patch.getPatchType(),compost,
+            client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3,bag,carried,wateringCan,free,this::observedItemName);
+    }
+
     private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,
         boolean replacementCarried,int compostId)
     {
@@ -1185,7 +1196,10 @@ public class FarmingHelperPlugin extends Plugin
         diseaseTarget=target;
         if(navigation!=null)navigation.request(location.pathStart(),approach,false);
         String instruction=CropCare.prunes(type)?"Prune the diseased crop with secateurs.":"Use plant cure on the diseased crop.";
-        if(carried.getOrDefault(cure,0)==0)instruction+=CropCare.prunes(type)?" Obtain secateurs or skip this cure.":" Obtain plant cure from a nearby farmer or shop if available, or skip this cure.";
+        Map<Integer,Integer> bag=stock().bag;
+        leprechaunWithdrawal=contextualWithdrawal(target,StepEngine.Action.CURE,-1,bag,carried,-1);
+        if(leprechaunWithdrawal!=null)instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
+        else if(carried.getOrDefault(cure,0)==0)instruction+=CropCare.prunes(type)?" Obtain secateurs or skip this cure.":" Obtain plant cure from a nearby farmer or shop if available, or skip this cure.";
         String resume=preparing()?"Preparation / resupply":current==null?"The remaining run":current.getDisplayName();
         List<GuideView.ItemRow> items=new ArrayList<>();items.add(itemRow(cure,1,carried,false));
         List<GuideView.Stop> stops=new ArrayList<>();stops.add(new GuideView.Stop(target,instruction,true,false));
@@ -1268,7 +1282,8 @@ public class FarmingHelperPlugin extends Plugin
     String override(FarmRunPatch p) { return setting("directorCrop_"+p.key(),""); }
     String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
     StepEngine.Action activeAction() { return diseaseTarget!=null?StepEngine.Action.CURE:activeAction; }
-    LeprechaunWithdrawal leprechaunWithdrawal(){return guideRequested&&!preparing()&&diseaseTarget==null?leprechaunWithdrawal:null;}
+    LeprechaunWithdrawal leprechaunWithdrawal(){return guideRequested&&(diseaseTarget!=null||!preparing())?leprechaunWithdrawal:null;}
+    boolean compostMissing(){return diseaseTarget==null&&activeLive()&&compostMissing;}
     boolean activeLive() { return guideRequested && (diseaseTarget!=null||activeLive&&!preparing()); }
     int patchCount(FarmRunPatch p) { return QuestFarmingStateReader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
     Set<Integer> requiredItems() { return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:requiredItems; }

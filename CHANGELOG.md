@@ -6,7 +6,8 @@
 - Guide watering of eligible live, unwatered crops; recognize filled watering cans and Gricoller's can in leprechaun storage. Skip watering independently of the patch.
 - Prefer carried supplies, then leprechaun storage, then bank stock. Hide covered compost and watering-can requirements; highlight the leprechaun and patch together when local supplies are needed.
 - Add character defaults and temporary run overrides for watering and leprechaun assistance. Pin Start Run and Continue Run at the top of preparation.
-- Large red leprechaun arrow and red outline, cyan Compost label with a red cross for pending optional compost on the active patch, and native exchange-slot guidance with a bounded withdrawal quantity for the actual stored can or compost.
+- Large green leprechaun arrow and green outline, cyan Compost label with a red cross for pending optional compost on the active patch, and native exchange-slot guidance with a bounded withdrawal quantity for the actual stored can or compost.
+- Contextual cyan action labels; green leprechaun arrow, outline and single exchange slot; red crosses for optional care. Immediate withdrawals use one item and native storage counts. Optional watering no longer gates planting completion and automatically expires after a short local offer.
 - Public author name: Freddy. Upstream credits and license notices remain intact.
 
 ## v1.04
