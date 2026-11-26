@@ -117,6 +117,37 @@ public class SidebarInteractionTest
         component.doLayout();
         for(Component child:component.getComponents())if(child instanceof Container)layout((Container)child);
     }
+    @Test public void wrappedChecklistHeadersAndRowsFitTheirContainersAfterResize() throws Exception
+    {
+        JPanel root=new JPanel(new java.awt.BorderLayout());
+        FarmingHelperPanel[] panel=new FarmingHelperPanel[1];
+        SwingUtilities.invokeAndWait(()->{
+            net.runelite.client.ui.laf.RuneLiteLAF.setup();
+            panel[0]=new FarmingHelperPanel(new Character());
+            panel[0].guide(guide(true,1,12),1);
+            root.add(panel[0]);root.addNotify();
+        });
+        try
+        {
+            for(int width:new int[]{300,225,200,242,300})
+            {
+                SwingUtilities.invokeAndWait(()->root.setSize(width,400));
+                for(int pass=0;pass<4;pass++)SwingUtilities.invokeAndWait(()->{root.validate();layout(root);});
+                SwingUtilities.invokeAndWait(()->{
+                    for(JComponent child:List.of(named(panel[0],"Recommended items",JButton.class),
+                        named(panel[0],"Recommended teleports",JButton.class),line(panel[0],"Last seen · Seed Vault 12")))
+                    {
+                        for(Container parent=child.getParent();!(parent instanceof JViewport);parent=parent.getParent())
+                        {
+                            java.awt.Rectangle bounds=SwingUtilities.convertRectangle(child.getParent(),child.getBounds(),parent);
+                            assertTrue("Clipped row at width "+width,bounds.y>=0 && bounds.y+bounds.height<=parent.getHeight());
+                        }
+                    }
+                });
+            }
+        }
+        finally { SwingUtilities.invokeAndWait(root::removeNotify); }
+    }
     @Test public void individualSearchReusesTheSameRunButtonsAndSprites() throws Exception
     {
         Character character=new Character();

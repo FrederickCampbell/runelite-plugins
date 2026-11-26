@@ -42,11 +42,12 @@ final class FarmingTheme
         if(icon!=null)available-=icon.getIconWidth()+(button!=null?button.getIconTextGap():((JLabel)c).getIconTextGap());
         if(available<=0)return;
         View view=(View)c.getClientProperty(BasicHTML.propertyKey);
+        float previousHeight=view==null?0:view.getPreferredSpan(View.Y_AXIS);
         if(!BasicHTML.isHTMLString(text))
         {
             if(c.getFontMetrics(c.getFont()).stringWidth(text)<=available)
             {
-                if(view!=null){c.putClientProperty(BasicHTML.propertyKey,null);c.revalidate();c.repaint();}
+                if(view!=null){c.putClientProperty(BasicHTML.propertyKey,null);textHeightChanged(c);}
                 return;
             }
             if(view==null)
@@ -59,8 +60,18 @@ final class FarmingTheme
         if(view!=null && (int)view.getPreferredSpan(View.X_AXIS)!=available)
         {
             view.setSize(available,0);
-            c.revalidate();c.repaint();
+            if(previousHeight!=view.getPreferredSpan(View.Y_AXIS))textHeightChanged(c);
+            else c.repaint();
         }
+    }
+
+    private static void textHeightChanged(JComponent control)
+    {
+        // BoxLayout caches each child's size. A wrapped label can grow while its row is
+        // already invalid, so revalidate() on the label alone can leave the old row height.
+        for(Container parent=control.getParent();parent instanceof JPanel;parent=parent.getParent())
+            parent.invalidate();
+        control.revalidate();control.repaint();
     }
 
     private static void wrapText(JComponent c)
