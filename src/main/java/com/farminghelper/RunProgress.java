@@ -11,6 +11,7 @@ import com.farminghelper.queststate.QuestFarmingStateReader.Source;
 final class RunProgress
 {
     enum Status { PENDING, COMPLETED, PRESERVED, SKIPPED, DEFERRED, SEEDLESS, SKIP_ON_UNLOCK }
+    private static final int STATUS_COUNT=Status.values().length;
     private final Map<FarmRunPatch,Status> states=new LinkedHashMap<>();
     void reset(){states.clear();}
     void include(FarmRunPatch patch)
@@ -46,7 +47,7 @@ final class RunProgress
     }
     GuideView.Stats stats()
     {
-        int[] counts=new int[Status.values().length];
+        int[] counts=new int[STATUS_COUNT];
         for(Status state:states.values())counts[state.ordinal()]++;
         return new GuideView.Stats(counts[Status.COMPLETED.ordinal()],counts[Status.SKIPPED.ordinal()],
             counts[Status.DEFERRED.ordinal()],counts[Status.SEEDLESS.ordinal()],states.size()-counts[Status.SKIP_ON_UNLOCK.ordinal()],
