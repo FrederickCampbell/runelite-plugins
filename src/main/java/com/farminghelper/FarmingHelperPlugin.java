@@ -1429,9 +1429,9 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> shelfRequirements=new HashSet<>(required.keySet());
         shelfRequirements.addAll(paymentNotes.values());
         requiredItems=Set.copyOf(shelfRequirements);
-        Set<Integer> missing=new HashSet<>(GuideView.missingItems(physicalRequired,carried));
-        paymentNotes.forEach((note,base)->{if(missing.contains(note))missing.add(base);});
-        missingStorageItems=Set.copyOf(missing);
+        Set<Integer> missingRequirements=new HashSet<>(GuideView.missingItems(physicalRequired,carried));
+        paymentNotes.forEach((note,base)->{if(missingRequirements.contains(note))missingRequirements.add(base);});
+        missingStorageItems=Set.copyOf(missingRequirements);
         Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
         Set<Integer> missingTravel=new HashSet<>();
         teleports.forEach((id,sites)->{
