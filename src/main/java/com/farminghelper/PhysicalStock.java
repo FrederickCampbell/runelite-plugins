@@ -12,21 +12,29 @@ import net.runelite.api.ItemComposition;
 /** Derived quantities for one observation of inventory, worn items and storage. */
 final class PhysicalStock
 {
-    final Map<Integer,Integer> bag,equipped,carried,storage,stock,aliases,allocation,bankAndBag,travel,shelf;
+    final Map<Integer,Integer> bag,equipped,carried,storage,stock,aliases,allocation,bankAndBag,travel,shelf,seedBox,plantingBag;
 
     PhysicalStock(Map<Integer,Integer> bag,Map<Integer,Integer> equipped,Map<Integer,Integer> bank,
         Map<Integer,Integer> vault,IntFunction<String> names,IntUnaryOperator canonicalWorn)
     {
+        this(bag,equipped,bank,vault,Map.of(),names,canonicalWorn);
+    }
+
+    PhysicalStock(Map<Integer,Integer> bag,Map<Integer,Integer> equipped,Map<Integer,Integer> bank,
+        Map<Integer,Integer> vault,Map<Integer,Integer> seedBox,IntFunction<String> names,IntUnaryOperator canonicalWorn)
+    {
         this.bag=bag;
         this.equipped=equipped;
-        carried=combine(bag,equipped);
+        this.seedBox=SeedBoxStock.boxId(bag)>0?seedBox:Map.of();
+        plantingBag=combine(bag,this.seedBox);
+        carried=combine(plantingBag,equipped);
         storage=combine(bank,vault);
-        stock=combine(bag,storage);
+        stock=combine(plantingBag,storage);
         aliases=TreePreparation.aliases(stock,names);
         allocation=aliases.isEmpty()?stock:TreePreparation.allocationStock(stock,aliases);
-        bankAndBag=combine(bank,bag);
-        travel=combine(bankAndBag,equipped);
-        shelf=new HashMap<>(bankAndBag);
+        bankAndBag=combine(bank,plantingBag);
+        travel=combine(combine(bank,bag),equipped);
+        shelf=new HashMap<>(combine(bank,bag));
         equipped.forEach((id,n)->shelf.merge(canonicalWorn.applyAsInt(id),n,Integer::sum));
     }
 
@@ -65,7 +73,7 @@ final class PhysicalStock
     static Map<Integer,Integer> combine(Map<Integer,Integer> a,Map<Integer,Integer> b)
     {
         Map<Integer,Integer> result=new HashMap<>(a);
-        b.forEach((id,n)->result.merge(id,n,Integer::sum));
+        b.forEach((id,n)->result.merge(id,n,(x,y)->(int)Math.min(Integer.MAX_VALUE,(long)x+y)));
         return result;
     }
 }

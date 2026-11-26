@@ -1,6 +1,6 @@
 # Farming Helper review and live-client checks
 
-The player performs all game actions. The plugin reads farming observations, displays instructions, and changes the presentation of opt-in storage views. Shortest Path receives navigation messages. The v1.05 release adds no runtime dependencies. Development builds and original licenses are documented in [Development](docs/IMPLEMENTATION.md).
+The player performs all game actions. The plugin reads farming observations, displays instructions, and changes the presentation of opt-in storage views. Shortest Path receives navigation messages. The v1.06 release adds no runtime dependencies. Development builds and original licenses are documented in [Development](docs/IMPLEMENTATION.md).
 
 | Integration | Review surface |
 | --- | --- |
@@ -19,5 +19,7 @@ The player performs all game actions. The plugin reads farming observations, dis
 6. In a mixed seaweed/birdhouse run, verify underwater exit, mandatory island-bank guidance for missing birdhouse supplies (green chest outline and arrow; no rowboat path), rowboat dialogue highlight and sufficient-carried-supply behavior.
 
 Automated build and regression tests are tracked in GitHub Actions. Live acceptance remains a player-side check.
+
+7. Check an open and closed carried seed box, transfer seeds between it and inventory, plant directly, reorder compatible species, deposit the box, hop and change character. Verify supply counts and highlights, including birdhouse bait and raw tree seeds. Unknown contents must not satisfy requirements.
 
 [Plugin Hub development and review](https://github.com/runelite/plugin-hub) · [RuneLite feature guidance](https://github.com/runelite/runelite/wiki/Rejected-or-Rolled-Back-Features) · [Jagex third-party client guidelines](https://secure.runescape.com/m=news/third-party-client-guidelines?oldschool=1)

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.06
+
+- Track the native seed-box container in slot order during the current session. Carried contents count toward crop allocation and supply readiness without inflating loose inventory or bank totals. Unknown contents require checking the box.
+- Highlight the seed box for planting when the selected crop is stored inside; recommend direct planting only when its first compatible seed matches the plan. Otherwise recommend manual withdrawal. Birdhouse bait and tree preparation remain manual.
+
 ## v1.05
 
 - Restore compact Seed Vault filtering; hide irrelevant placeholders and empty categories without changing native item identities or actions.

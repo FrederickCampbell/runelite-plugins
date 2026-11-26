@@ -83,6 +83,7 @@ public class FarmingHelperPlugin extends Plugin
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
     private final Set<InventoryID> sampledStorage=EnumSet.noneOf(InventoryID.class);
     private PhysicalStock quantities;
+    private final SeedBoxStock seedBox=new SeedBoxStock();
     private List<?> allocationInputs=List.of();
     private Map<FarmRunPatch,Crop> allocated=Map.of();
     private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
@@ -263,7 +264,7 @@ public class FarmingHelperPlugin extends Plugin
         invalidateStock();
         bank.clear();
         vault.clear();
-        stockProfile=null;
+        stockProfile=null;seedBox.clear();
         bankObservedAt=0;vaultObservedAt=0;
         end();
     }
@@ -394,7 +395,7 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onGameStateChanged(GameStateChanged event)
     {
         if(event.getGameState()==GameState.LOADING || event.getGameState()==GameState.LOGIN_SCREEN) highlight.clear();
-        if(event.getGameState()==GameState.HOPPING || event.getGameState()==GameState.LOGGING_IN)invalidateStock();
+        if(event.getGameState()==GameState.HOPPING || event.getGameState()==GameState.LOGGING_IN){seedBox.clear();invalidateStock();}
         if(event.getGameState()==GameState.LOGIN_SCREEN){reset();return;}
         if(event.getGameState()==GameState.HOPPING&&guideRequested)
         {
@@ -436,6 +437,12 @@ public class FarmingHelperPlugin extends Plugin
     {
         int id=event.getContainerId();
         if(id==InventoryID.INVENTORY.getId()||id==InventoryID.EQUIPMENT.getId())quantities=null;
+        if(id==InventoryID.INVENTORY.getId())
+            seedBox.carried(readItems(client.getItemContainer(InventoryID.INVENTORY)));
+        if(id==net.runelite.api.gameval.InventoryID.SEED_BOX&&client.getGameState()==GameState.LOGGED_IN)
+        {
+            seedBox.observe(event.getItemContainer());quantities=null;
+        }
         if(id==InventoryID.BANK.getId()||id==InventoryID.SEED_VAULT.getId())
         {
             sampledStorage.remove(id==InventoryID.BANK.getId()?InventoryID.BANK:InventoryID.SEED_VAULT);
@@ -622,8 +629,8 @@ public class FarmingHelperPlugin extends Plugin
         if(quantities==null)
         {
             invalidateTravel();
-            quantities=new PhysicalStock(readItems(client.getItemContainer(InventoryID.INVENTORY)),
-                readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank,vault,this::observedItemName,
+            Map<Integer,Integer> bag=readItems(client.getItemContainer(InventoryID.INVENTORY));
+            quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank,vault,seedBox.carried(bag),this::observedItemName,
                 id->itemManager==null?id:itemManager.canonicalize(id));
         }
         return quantities;
@@ -688,7 +695,7 @@ public class FarmingHelperPlugin extends Plugin
         LocationContext location=LocationContext.capture(client);
         int level = client.getRealSkillLevel(Skill.FARMING);
         PhysicalStock supplies=stock();
-        Map<Integer,Integer> bag=supplies.bag,equipped=supplies.equipped,carried=supplies.carried;
+        Map<Integer,Integer> bag=supplies.bag,equipped=supplies.equipped,carried=supplies.carried,plantingBag=supplies.plantingBag;
         // Run this before normal planning, even during banking or birdhouses. No
         // mutations to the normal guide cursor, progress, or preparation state.
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new HashMap<>();
@@ -763,9 +770,9 @@ public class FarmingHelperPlugin extends Plugin
                 // The player may carry a lower-ranked seed than the initially allocated bank crop.
                 // Prefer a usable carried replacement for the active mature patch over preserving it prematurely.
                 if(CropReplacement.configurable(type)&&!preserveCrop&&CropReplacement.mature(type,o)&&!progress.planted()&&
-                    (activeCrop==null||bag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()))
+                    (activeCrop==null||plantingBag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()))
                 {
-                    Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,bag,this::priority,this::override,Collections.emptyMap(),true,this::autoLily).get(p);
+                    Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,plantingBag,this::priority,this::override,Collections.emptyMap(),true,this::autoLily).get(p);
                     if(carriedReplacement!=null)activeCrop=carriedReplacement;
                 }
                 boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
@@ -934,7 +941,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?supplies.bankAndBag:stock;
         int hunter=client.getRealSkillLevel(Skill.HUNTER),crafting=client.getRealSkillLevel(Skill.CRAFTING);
         if(specialtyStaged&&specialtyBirdPhase)
-            birdStock=BirdhouseRun.preferCarried(ready,observations,bag,birdStock,required,hunter,crafting);
+            birdStock=BirdhouseRun.preferCarried(ready,observations,plantingBag,birdStock,required,hunter,crafting);
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,hunter,crafting);
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
@@ -975,7 +982,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             PatchType type=current.getPatchType();QuestFarmingStateReader.Observation o=observations.get(current);
             activeLive=o.source==QuestFarmingStateReader.Source.LIVE;
-            boolean replacementCarried=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
+            boolean replacementCarried=activeCrop!=null&&plantingBag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
             boolean keep=preserveReplacement(current,o);
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
             StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,stepCompost);
@@ -998,9 +1005,22 @@ public class FarmingHelperPlugin extends Plugin
             if(activeLive)
             {
                 if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
-                else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,birdStock,bag,farmingRequirements,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
+                else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,birdStock,plantingBag,farmingRequirements,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
                 else if(action==StepEngine.Action.WATER&&wateringCan>0)localStepItems=Set.of(wateringCan);
                 else if(leprechaunWithdrawal==null)localStepItems=StepItems.select(action,type,activeCrop,stepCompost,axeId,bag);
+            }
+            if(leprechaunWithdrawal==null&&activeLive&&SeedBoxStock.boxId(bag)>0)
+            {
+                if(action==StepEngine.Action.PLANT&&activeCrop!=null&&
+                    bag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity()&&supplies.seedBox.getOrDefault(activeCrop.getItemId(),0)>0)
+                {
+                    localStepItems=Set.of(SeedBoxStock.boxId(bag));
+                    instruction=SeedBoxStock.direct(activeCrop,supplies.seedBox)?
+                        "Use the seed box on this patch to plant "+activeCrop.getName()+".":
+                        "Withdraw "+activeCrop.getName()+" from the seed box manually before planting; check the seed order.";
+                }
+                else if(type==PatchType.BIRDHOUSE&&localStepItems.stream().anyMatch(id->supplies.seedBox.getOrDefault(id,0)>0&&bag.getOrDefault(id,0)<10))
+                {localStepItems=Set.of(SeedBoxStock.boxId(bag));instruction+=" Withdraw the required bait seeds from the seed box manually.";}
             }
             if(type==PatchType.BIRDHOUSE){activeAction=StepEngine.Action.INSPECT;instruction=current.getName()+": "+instruction;}
         }
@@ -1024,6 +1044,12 @@ public class FarmingHelperPlugin extends Plugin
         boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
         WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
         String supplyNote=TreePreparation.instruction(rawSeeds,seedlings,watered);
+        if(SeedBoxStock.boxId(bag)>0)
+        {
+            if(!seedBox.known())supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Check your seed box once to load its contents.";
+            else if(!supplies.seedBox.isEmpty())
+                supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Seed box counts are included from the last native observation. Withdraw tree seeds and birdhouse bait manually when needed.";
+        }
         if(rawSeeds+seedlings>0&&wateringCan<=0&&storedCan>0)supplyNote+="\nCollect the stored watering can from a tool leprechaun before watering seedlings.";
         if(compostCount>0&&compostId==ItemID.BUCKET_ULTRACOMPOST&&storedUltra>0)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Ultracompost: "+storedUltra+" stored with tool leprechauns; withdraw as needed.";
@@ -1041,7 +1067,7 @@ public class FarmingHelperPlugin extends Plugin
             details.add("Birdhouse supplies: logs or houses, hammer, chisel, bait and clockworks.");
         if(loggedIn && current!=null)
         {
-            int slots=Preparation.slots(physicalRequired,equipped,this::stackable);
+            int slots=SeedBoxStock.slots(physicalRequired,equipped,supplies.seedBox,this::stackable);
             if(slots>28){supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Take a partial load and resupply as needed.";details.add("Estimated supply slots: "+slots+".");}
             if(phase==Preparation.Phase.UNCHECKED)
             {
@@ -1092,7 +1118,7 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE)&&
             (SpecialRoutes.onSeaweedIsland(player)||!preparing()&&seaweedBirdTransfer))
         {
-            boolean missing=Preparation.missing(physicalRequired,bag);
+            boolean missing=Preparation.missing(physicalRequired,plantingBag);
             RouteLeg transfer=SpecialRoutes.insideSeaweed(player)?SpecialRoutes.seaweedExit(instance):
                 aboard||instance&&!location.inHouse()?leg:SpecialRoutes.birdTransfer(player,missing,storageOpen(),level);
             if(transfer!=null)
@@ -1269,6 +1295,8 @@ public class FarmingHelperPlugin extends Plugin
         Crop crop=CropCatalog.findByItemId(id);
         String name=crop==null?Supplies.name(id):crop.getItemName();
         if(name.startsWith("Item #")){String actual=observedItemName(id);if(!actual.isEmpty())name=actual;}
+        int boxed=stock().seedBox.getOrDefault(id,0);
+        if(boxed>0&&!recommended)name+=" (box: "+boxed+")";
         return new GuideView.ItemRow(id,name,carried.getOrDefault(id,0),count,
             bank.getOrDefault(id,0),vault.getOrDefault(id,0),recommended);
     }
