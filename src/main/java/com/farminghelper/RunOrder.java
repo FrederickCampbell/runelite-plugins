@@ -45,7 +45,8 @@ final class RunOrder
             if(patch==first||!ordinary(patch))continue;
             int d=distance.applyAsInt(patch);
             // Cross-site promotion requires actual arrival, not just a loaded scene.
-            if(d>(site(first).equals(site(patch))?15:5)||d>=score)continue;
+            boolean sameVisit=site(first).equals(site(patch))||current!=null&&site(current).equals(site(patch));
+            if(d>(sameVisit?15:5)||d>=score)continue;
             best=patch;score=d;
         }
         if(best!=first)

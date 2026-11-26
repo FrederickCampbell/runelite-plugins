@@ -489,7 +489,7 @@ final class PatchHighlight extends Overlay
         if(travel!=null){draw(graphics,travel.getClickbox());return null;}
         StepEngine.Action action=helper.activeAction();
         LeprechaunWithdrawal withdrawal=helper.leprechaunWithdrawal();
-        if(withdrawal!=null&&exchangeSlot(withdrawal)==null)
+        if(helper.spaceRelief()||withdrawal!=null&&exchangeSlot(withdrawal)==null)
         {
             NPC npc=leprechaun(patch);
             if(npc!=null)
@@ -499,6 +499,7 @@ final class PatchHighlight extends Overlay
                 if(point!=null)arrow(graphics,point.getX(),point.getY());
             }
         }
+        if(helper.spaceRelief())return null;
         PatchType type=patch.getPatchType();
         if(type==PatchType.HESPORI&&action==StepEngine.Action.HARVEST)return null;
         if(action==StepEngine.Action.PAY_REMOVE||action==StepEngine.Action.PROTECT_TREE)

@@ -14,6 +14,7 @@ final class GuideProgress
 
     void reset() { sawWork=false; planted=false; changedLive=false; cured=false; previous=null; previousRaw=-1; priorProtection=null; protectionInitiallyKnown=false; }
     boolean planted() { return planted; }
+    boolean underway(){return changedLive||planted||cured;}
     boolean startsNewCycle(QuestFarmingStateReader.Observation o)
     {return o!=null&&o.source==QuestFarmingStateReader.Source.LIVE&&previous!=null&&previous!=o.state&&(o.state==CropState.EMPTY||o.state==CropState.DEAD);}
     boolean observe(QuestFarmingStateReader.Observation o)

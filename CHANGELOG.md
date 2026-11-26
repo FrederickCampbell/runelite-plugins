@@ -5,6 +5,8 @@
 - Prefer verified nearby selected plots over remote work before a patch is underway, without changing seed allocation or the pinned itinerary.
 - Combine distinct tool withdrawals for verified plots sharing a nearby tool leprechaun, reserving two free inventory slots for optional collection.
 - Suggest noting recognized farm produce when inventory is nearly full, preserving required supplies and local compost-bin materials.
+- Track verified local crop planting ahead of the active step using existing transition logic, preserving protection requirements and keeping partially completed patches active.
+- Highlight the leprechaun and safe inventory-relief item, including surplus empty buckets within verified native storage capacity.
 - Retain manual interactions, special transport legs, explicit skips and existing crop preferences.
 
 ## v1.08 — runtime refactoring and compost lifecycle

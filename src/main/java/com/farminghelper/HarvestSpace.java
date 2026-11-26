@@ -28,6 +28,15 @@ final class HarvestSpace
                 default:break;
             }
         }
+        // Native herb names and Produce's display names are not always identical.
+        Collections.addAll(GRIMY,"grimy guam leaf","grimy ranarr weed","grimy irit leaf");
+    }
+    /** Native farming_tools_getstored packs empty bucket counts into 3 varbits. */
+    static int depositBuckets(Map<Integer,Integer> bag,Map<Integer,Integer> reserved,int low,int middle,int high)
+    {
+        if(reserved.getOrDefault(CompostRun.BUCKET,0)>0)return 0;
+        int carried=bag.getOrDefault(CompostRun.BUCKET,0);
+        return Math.max(0,Math.min(carried,1000-(low+32*middle+256*high)));
     }
     static int best(Map<Integer,Integer> bag,Map<Integer,Integer> reserved,String location,IntFunction<ItemComposition> definitions)
     {

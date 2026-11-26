@@ -23,6 +23,33 @@ public class LocalWorkflowTest
         RunOrder.preferLocal(ready,visible,c,false,distances::get);
         assertSame(b,ready.get(0));
     }
+    @Test public void finishesCurrentVisitBeforeLeavingForRemotePlot()
+    {
+        var done=p("Catherby",PatchType.HERB);var local=p("Catherby",PatchType.ALLOTMENT);var remote=p("Falador",PatchType.HERB);
+        var ready=new ArrayList<>(List.of(remote,local));
+        RunOrder.preferLocal(ready,new ArrayList<>(ready),done,false,x->x==local?12:100);
+        assertSame(local,ready.get(0));
+    }
+    @Test public void outOfOrderPlantingRequiresLiveEvidenceAndStillRequiresProtection()
+    {
+        var tracker=new GuideProgress();
+        var empty=new com.farminghelper.queststate.QuestFarmingStateReader.Observation(
+            com.farminghelper.queststate.CropState.EMPTY,com.farminghelper.queststate.QuestFarmingStateReader.Source.LIVE,1,false,"",3);
+        var grown=new com.farminghelper.queststate.QuestFarmingStateReader.Observation(
+            com.farminghelper.queststate.CropState.GROWING,com.farminghelper.queststate.QuestFarmingStateReader.Source.LIVE,2,false,"",4);
+        tracker.observe(empty);assertFalse(tracker.underway());
+        tracker.observe(grown);assertTrue(tracker.planted());assertTrue(tracker.underway());
+        assertTrue(tracker.finished(PatchType.ALLOTMENT,grown,false,false));
+        assertFalse(tracker.finished(PatchType.ALLOTMENT,grown,true,true));
+        tracker.reset();tracker.observe(grown);assertFalse(tracker.planted());
+    }
+    @Test public void bucketsAreOnlyDepositedWhenSpareAndStorageHasSpace()
+    {
+        int bucket=CompostRun.BUCKET;
+        assertEquals(5,HarvestSpace.depositBuckets(Map.of(bucket,5),Map.of(),0,0,0));
+        assertEquals(0,HarvestSpace.depositBuckets(Map.of(bucket,5),Map.of(bucket,1),0,0,0));
+        assertEquals(1,HarvestSpace.depositBuckets(Map.of(bucket,5),Map.of(),7,7,3));
+    }
     @Test public void terminalAndSpecialRoutesAreNotPromoted()
     {
         var a=p("Catherby",PatchType.HERB);var b=p("Seaweed",PatchType.SEAWEED);

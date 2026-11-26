@@ -60,7 +60,9 @@ public class FarmingHelperPlugin extends Plugin
 
     private final List<FarmRunPatch> patches = new CopyOnWriteArrayList<>();
     private final RunProgress runProgress=new RunProgress();
-    private final GuideProgress progress = new GuideProgress();
+    private GuideProgress progress = new GuideProgress();
+    // Use the same transition tracker for selected plots worked ahead of the cursor.
+    private final Map<FarmRunPatch,GuideProgress> aheadProgress=new HashMap<>();
     private final Set<FarmRunPatch> birdhouseTouched=new HashSet<>();
     private final Set<FarmRunPatch> wateredThisRun=new HashSet<>();
     private boolean activeCareOnly;
@@ -126,6 +128,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile boolean hideSeedless,clearSeedless;
     private boolean activeClearOnly, compostAcknowledged;
     private volatile Set<Integer> stepItems=Collections.emptySet();
+    private volatile int spaceItem=-1;
     private boolean visitedStorage;
     private WorldPoint preparationOrigin;
     private RunOrder pinned;
@@ -248,7 +251,7 @@ public class FarmingHelperPlugin extends Plugin
         specialtyStaged=false;specialtyBirdPhase=false;seaweedBirdTransfer=false;
         runProgress.reset();
         temporaryCare=null;temporaryPay=null;temporaryWater=null;temporaryLeprechaun=null;temporarySeedless=null;temporaryReplacement=Collections.emptyMap();hopping=false;runProfile=null;
-        progress.reset();
+        progress.reset();aheadProgress.clear();spaceItem=-1;
         activeCrop = null;
         activeAction = StepEngine.Action.INSPECT;
         activeLive=false;
@@ -454,7 +457,7 @@ public class FarmingHelperPlugin extends Plugin
         if(event.getGameState()==GameState.HOPPING&&guideRequested)
         {
             // Preserve same-character run decisions, but release scene-local routes/widgets.
-            hopping=true;clearWaterOffer();leprechaunWithdrawal=null;highlight.clear();if(navigation!=null)navigation.stop();
+            hopping=true;clearWaterOffer();leprechaunWithdrawal=null;aheadProgress.clear();spaceItem=-1;highlight.clear();if(navigation!=null)navigation.stop();
             if(runBank!=null)runBank.close();if(vaultViews!=null)vaultViews.close();
             activeLive=false;stepItems=Collections.emptySet();lastAccessLevel=-1;
         }
@@ -1009,6 +1012,8 @@ public class FarmingHelperPlugin extends Plugin
         // mutations to the normal guide cursor, progress, or preparation state.
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new HashMap<>();
         List<FarmRunPatch> local=loggedIn&&highlight!=null?localCrops(location):List.of();
+        if(preparing())aheadProgress.clear();
+        else aheadProgress.keySet().retainAll(local);
         List<FarmRunPatch> localWater=new ArrayList<>();
         // Observe all selected, verified local plots, even if the player waters
         // ahead of the guide. Only live evidence can settle or reset a crop.
@@ -1090,6 +1095,13 @@ public class FarmingHelperPlugin extends Plugin
                 {compostAcknowledged=false;activeCrop=null;}
             }
             if(reopened){wateredThisRun.remove(p);if(waterOfferPatch==p)clearWaterOffer();}
+            GuideProgress ahead=null;
+            if(p!=current)
+            {
+                if(!preparing()&&o.source==QuestFarmingStateReader.Source.LIVE&&local.contains(p)&&highlight.hasLocalPatch(p)&&!runProgress.finished(p))
+                {ahead=aheadProgress.computeIfAbsent(p,k->new GuideProgress());ahead.observe(o);}
+                else aheadProgress.remove(p);
+            }
             KeepCrop species=KeepCrop.observed(type,o);
             boolean preserveCrop=resolveReplacement(p,species);
             // Preserve selected flower species without picking them; newly planted flowers may finish care.
@@ -1097,6 +1109,15 @@ public class FarmingHelperPlugin extends Plugin
                 ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
             {runProgress.finish(p,true);continue;}
             if(runProgress.finished(p)) { visible.add(p); continue; }
+            if(ahead!=null&&ahead.planted()&&o.state==CropState.GROWING)
+            {
+                Crop planted=observedCrop(type,o);
+                boolean payment=protect&&type.supportsProtection()&&planted!=null&&!CropCatalog.protection(planted).isEmpty()&&
+                    CropCatalog.protection(planted).stream().allMatch(cost->bag.getOrDefault(cost.getItemId(),0)>=cost.getQuantity());
+                if(!ahead.finished(type,o,payment,payment))
+                {ready.add(p);visible.add(p);continue;}
+                runProgress.finish(p,false);visible.add(p);aheadProgress.remove(p);continue;
+            }
             if(p==current&&!preparing())
             {
                 if(activeCareOnly)
@@ -1210,12 +1231,24 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn&&!preparing()&&highlight!=null&&location.actual!=null)
         {
             var activeObservation=observations.get(current);
-            boolean currentLive=current!=null&&activeObservation!=null&&activeObservation.source==QuestFarmingStateReader.Source.LIVE&&
-                localDistance(current,location.actual,observations)<=15;
+            boolean currentLive=current!=null&&(progress.underway()||compostAcknowledged||
+                activeObservation!=null&&activeObservation.source==QuestFarmingStateReader.Source.LIVE&&
+                localDistance(current,location.actual,observations)<=2);
             RunOrder.preferLocal(ready,visible,current,currentLive,p->localDistance(p,location.actual,observations));
         }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
-        if(next!=current) { clearWaterOffer();current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
+        if(next!=current)
+        {
+            clearWaterOffer();current=next;progress=aheadProgress.remove(next);
+            if(progress==null)progress=new GuideProgress();
+            compostAcknowledged=false;activeCrop=null;
+            if(current!=null)
+            {
+                var o=observations.get(current);
+                progress.observe(o);
+                if(progress.planted())activeCrop=observedCrop(current.getPatchType(),o);
+            }
+        }
         activeClearOnly=clearOnly.contains(current);
         activeCareOnly=careOnly.contains(current);
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
@@ -1324,7 +1357,7 @@ public class FarmingHelperPlugin extends Plugin
         GuideView.Stats summary=runProgress.stats();
         String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain.":"Run finished.";
         activeAction=StepEngine.Action.INSPECT;
-        activeLive=false;compostMissing=false;leprechaunWithdrawal=null;
+        activeLive=false;compostMissing=false;leprechaunWithdrawal=null;spaceItem=-1;
         Set<Integer> localStepItems=Collections.emptySet();
         if(current!=null)
         {
@@ -1398,7 +1431,18 @@ public class FarmingHelperPlugin extends Plugin
                     if(note>0)
                     {
                         instruction="Use "+observedItemName(note)+" on the tool leprechaun to note it and free space, then "+instruction;
-                        localStepItems=Set.of(note);
+                        spaceItem=note;localStepItems=Set.of(note);
+                    }
+                    else
+                    {
+                        int buckets=HarvestSpace.depositBuckets(bag,required,client.getVarbitValue(VarbitID.FARMING_TOOLS_BUCKETS),
+                            client.getVarbitValue(VarbitID.FARMING_TOOLS_EXTRABUCKETS),client.getVarbitValue(VarbitID.FARMING_TOOLS_EXTRA2BUCKETS));
+                        if(buckets>0)
+                        {
+                            instruction="Store "+buckets+" empty bucket(s) with the tool leprechaun to free space, then "+instruction;
+                            spaceItem=CompostRun.BUCKET;localStepItems=Set.of(spaceItem);
+                        }
+                        else if(free==0&&leprechaunWithdrawal==null)instruction="Inventory full — free a slot before harvesting. "+instruction;
                     }
                 }
             }
@@ -1516,7 +1560,7 @@ public class FarmingHelperPlugin extends Plugin
         activeLeg=leg;
         WorldPoint actionPoint=localApproach!=null?localApproach:current==null?null:Waypoints.destination(current);
         boolean atAction=player!=null&&actionPoint!=null&&player.getPlane()==actionPoint.getPlane()&&player.distanceTo(actionPoint)<=5;
-        stepItems=!preparing()&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&atAction?localStepItems:Collections.emptySet();
+        stepItems=!preparing()&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&(atAction||spaceItem>0)?localStepItems:Collections.emptySet();
         if(navigation!=null)navigation.request(loggedIn?location.pathStart():null,leg.point,leg.probe);
         if(location.inHouse()&&(navigation==null||!navigation.enabled())&&current!=null&&!preparing())
             instruction="Use an available house teleport toward the next patch, or leave your house.\n"+instruction;
@@ -1536,6 +1580,13 @@ public class FarmingHelperPlugin extends Plugin
         normalView=view;
         publishView(view);
     }
+
+    private static Crop observedCrop(PatchType type,QuestFarmingStateReader.Observation o)
+    {
+        var produce=QuestFarmingStateReader.livingProduce(type.name(),o);
+        return produce==null?null:CropCatalog.findByName(type,produce.getName()+(type.isTree()?" sapling":""));
+    }
+    boolean spaceRelief(){return guideRequested&&!preparing()&&diseaseTarget==null&&spaceItem>0;}
 
     private LeprechaunWithdrawal localCollection(LeprechaunWithdrawal primary,FarmRunPatch patch,List<FarmRunPatch> ready,
         Map<FarmRunPatch,Crop> seeds,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
@@ -1737,7 +1788,7 @@ public class FarmingHelperPlugin extends Plugin
     String override(FarmRunPatch p) { return setting("directorCrop_"+p.key(),""); }
     String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
     StepEngine.Action activeAction() { return diseaseTarget!=null?StepEngine.Action.CURE:activeAction; }
-    LeprechaunWithdrawal leprechaunWithdrawal(){return guideRequested&&(diseaseTarget!=null||!preparing())?leprechaunWithdrawal:null;}
+    LeprechaunWithdrawal leprechaunWithdrawal(){return guideRequested&&(diseaseTarget!=null||!preparing()&&!spaceRelief())?leprechaunWithdrawal:null;}
     boolean compostMissing(){return diseaseTarget==null&&activeLive()&&compostMissing;}
     boolean activeLive() { return guideRequested && (diseaseTarget!=null||activeLive&&!preparing()); }
     int patchCount(FarmRunPatch p) { return QuestFarmingStateReader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
