@@ -5,6 +5,8 @@ import java.awt.*;
 import java.util.*;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import net.runelite.api.gameval.InterfaceID;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import net.runelite.api.*;
@@ -20,6 +22,13 @@ import net.runelite.client.util.Text;
  * The anchor is the actual object, not the tile on which to stand. */
 final class PatchHighlight extends Overlay
 {
+    private static final Pattern ROW_NUMBER = Pattern.compile("^\\s*(?:\\[\\d+\\]|\\d+[.)])\\s*");
+    private static final Color CYAN_FILL = new Color(0,255,255,35), GREEN_FILL = new Color(0,255,0,35);
+    private static final Stroke OUTLINE = new BasicStroke(2f);
+    private static final Stroke CROSS = new BasicStroke(2f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND);
+    private static final Stroke CROSS_SHADOW = new BasicStroke(3f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND);
+    private static final Polygon ARROW = new Polygon(new int[]{-7,7,7,17,0,-17,-7},new int[]{-44,-44,-20,-20,0,-20,-20},7);
+
     private final Client client;
     private final Provider<FarmingHelperPlugin> plugin;
     private final Set<GameObject> objects=new HashSet<>();
@@ -73,21 +82,21 @@ final class PatchHighlight extends Overlay
     Overlay dialogue(){return dialogue;}
     private Widget exchangeSlot(LeprechaunWithdrawal withdrawal)
     {
-        Widget root=client.getWidget(125,0);
+        Widget root=client.getWidget(InterfaceID.FarmingTools.UNIVERSE);
         if(root==null||root.isHidden())return null;
-        Widget slot=client.getWidget(125,withdrawal.child);
+        Widget slot=client.getWidget(InterfaceID.FARMING_TOOLS,withdrawal.child);
         return slot==null||slot.isHidden()?null:slot;
     }
     static boolean matchesRowChoice(String text)
     {
         if(text==null)return false;
-        String choice=Text.removeTags(text).replaceFirst("^\\s*(?:\\[\\d+\\]|\\d+[.)])\\s*","").trim()
-            .replaceFirst("[.!]$","").trim();
+        String choice=ROW_NUMBER.matcher(Text.removeTags(text)).replaceFirst("").trim();
+        if (choice.endsWith(".") || choice.endsWith("!")) choice=choice.substring(0,choice.length()-1).trim();
         return "Row to the camp".equalsIgnoreCase(choice)||"Row to the museum camp".equalsIgnoreCase(choice);
     }
     private Widget rowChoice()
     {
-        Widget options=client.getWidget(219,1);
+        Widget options=client.getWidget(InterfaceID.Chatmenu.OPTIONS);
         if(options==null||options.isHidden())return null;
         return findRowChoice(options);
     }
@@ -95,11 +104,16 @@ final class PatchHighlight extends Overlay
     {
         if(widget==null||widget.isHidden())return null;
         if(matchesRowChoice(widget.getText()))return widget;
-        for(Widget[] children:new Widget[][]{widget.getChildren(),widget.getStaticChildren()})
-            if(children!=null)for(Widget child:children)
-            {
-                Widget found=findRowChoice(child);if(found!=null)return found;
-            }
+        Widget choice = findRowChoice(widget.getChildren());
+        return choice != null ? choice : findRowChoice(widget.getStaticChildren());
+    }
+    private static Widget findRowChoice(Widget[] children)
+    {
+        if (children != null) for (Widget child : children)
+        {
+            Widget found = findRowChoice(child);
+            if (found != null) return found;
+        }
         return null;
     }
     Iterable<GameObject> objects(){return objects;}
@@ -120,7 +134,7 @@ final class PatchHighlight extends Overlay
         ObjectComposition c=client.getObjectDefinition(id);
         if(c==null)return null;
         if(isTransition(c)||isVine(c)||verificationObject(c))return true;
-        if(c!=null&&c.getImpostorIds()!=null)
+        if(c.getImpostorIds()!=null)
             for(int variant:c.getImpostorIds())if(knownObject(variant)||verificationObject(client.getObjectDefinition(variant)))return true;
         return false;
     }
@@ -307,18 +321,21 @@ final class PatchHighlight extends Overlay
         CollisionData[] maps=view.getCollisionMaps();
         if(maps==null||plane<0||plane>=maps.length||maps[plane]==null)return null;
         int[][] flags=maps[plane].getFlags();if(flags==null)return null;
-        WorldPoint reference=Waypoints.destination(patch),best=null;int score=Integer.MAX_VALUE;
-        if(reference==null||reference.getPlane()!=plane)
-            reference=new WorldPoint(view.getBaseX()+area.center.getSceneX(),view.getBaseY()+area.center.getSceneY(),plane);
+        int baseX=view.getBaseX(), baseY=view.getBaseY();
+        WorldPoint reference=Waypoints.destination(patch);
+        boolean useMarker=reference!=null && reference.getPlane()==plane;
+        int targetX=useMarker?reference.getX()-baseX:area.center.getSceneX();
+        int targetY=useMarker?reference.getY()-baseY:area.center.getSceneY();
+        int bestX=0, bestY=0, score=Integer.MAX_VALUE;
         for(int x=area.minX-1;x<=area.maxX+1;x++)for(int y=area.minY-1;y<=area.maxY+1;y++)
         {
             if(x>=area.minX&&x<=area.maxX&&y>=area.minY&&y<=area.maxY)continue;
             if((x<area.minX||x>area.maxX)&&(y<area.minY||y>area.maxY))continue;
             if(x<0||x>=flags.length||y<0||y>=flags[x].length||(flags[x][y]&CollisionDataFlag.BLOCK_MOVEMENT_FULL)!=0)continue;
-            WorldPoint point=new WorldPoint(view.getBaseX()+x,view.getBaseY()+y,plane);int d=reference.distanceTo(point);
-            if(d<score){best=point;score=d;}
+            int d=Math.max(Math.abs(targetX-x),Math.abs(targetY-y));
+            if(d<score){bestX=x;bestY=y;score=d;}
         }
-        return best;
+        return score==Integer.MAX_VALUE?null:new WorldPoint(baseX+bestX,baseY+bestY,plane);
     }
     private GameObject nearest(WorldPoint anchor,int radius,Predicate<GameObject> match)
     {
@@ -526,8 +543,8 @@ final class PatchHighlight extends Overlay
         Graphics2D g=(Graphics2D)graphics.create();
         try
         {
-            g.setColor(new Color(color.getRed(),color.getGreen(),color.getBlue(),35));g.fill(shape);
-            g.setColor(color);if(Color.GREEN.equals(color))g.setStroke(new BasicStroke(2f));g.draw(shape);
+            g.setColor(Color.GREEN.equals(color)?GREEN_FILL:CYAN_FILL);g.fill(shape);
+            g.setColor(color);if(Color.GREEN.equals(color))g.setStroke(OUTLINE);g.draw(shape);
         }
         finally{g.dispose();}
     }
@@ -536,10 +553,9 @@ final class PatchHighlight extends Overlay
         Graphics2D g=(Graphics2D)graphics.create();
         try
         {
-            Polygon arrow=new Polygon(new int[]{x-7,x+7,x+7,x+17,x,x-17,x-7},
-                new int[]{y-44,y-44,y-20,y-20,y,y-20,y-20},7);
-            g.setColor(Color.GREEN);g.fill(arrow);
-            g.setColor(Color.BLACK);g.setStroke(new BasicStroke(2f));g.draw(arrow);
+            g.translate(x,y);
+            g.setColor(Color.GREEN);g.fill(ARROW);
+            g.setColor(Color.BLACK);g.setStroke(OUTLINE);g.draw(ARROW);
         }
         finally{g.dispose();}
     }
@@ -555,9 +571,9 @@ final class PatchHighlight extends Overlay
             g.setColor(Color.BLACK);g.drawString(text,x+1,baseline+1);
             g.setColor(Color.CYAN);g.drawString(text,x,baseline);
             int cross=x+width+5;
-            g.setStroke(new BasicStroke(3f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+            g.setStroke(CROSS_SHADOW);
             g.setColor(Color.BLACK);g.drawLine(cross+1,baseline-9,cross+9,baseline-1);g.drawLine(cross+9,baseline-9,cross+1,baseline-1);
-            g.setStroke(new BasicStroke(2f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+            g.setStroke(CROSS);
             g.setColor(Color.RED);g.drawLine(cross,baseline-10,cross+8,baseline-2);g.drawLine(cross+8,baseline-10,cross,baseline-2);
         }
         finally{g.dispose();}

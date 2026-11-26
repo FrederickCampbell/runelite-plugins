@@ -161,8 +161,9 @@ final class SeedVaultViews
 
     void flushScrollbar()
     {
+        if (!scrollbarDirty) return;
         Widget viewport=client.getWidget(VIEWPORT);
-        if(scrollbarDirty&&client.getGameState()==GameState.LOGGED_IN&&viewport!=null&&!viewport.isHidden()&&client.getWidget(SCROLLBAR)!=null)
+        if(client.getGameState()==GameState.LOGGED_IN&&viewport!=null&&!viewport.isHidden()&&client.getWidget(SCROLLBAR)!=null)
         {
             scrollbarDirty=false;
             // Generic RuneLite scrollbar script, outside the native build/on-op callback.
@@ -310,15 +311,7 @@ final class SeedVaultViews
         }
         changed.clear();
         if(scrollParent!=null&&client.getWidget(VIEWPORT)==scrollParent&&appliedHeight==scrollParent.getScrollHeight())
-        {
-            if(scrollParent.getScrollHeight()!=nativeHeight||scrollParent.getScrollY()!=nativeScroll)
-            {
-                scrollParent.setScrollHeight(nativeHeight);scrollParent.setScrollY(nativeScroll);scrollParent.revalidateScroll();
-                scrollbarDirty=true;
-            }
-            if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=nativeVarScroll)
-                client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,nativeVarScroll);
-        }
+            scroll(scrollParent,nativeHeight,nativeScroll,nativeVarScroll);
         scrollParent=null;projectedHeaders=null;projectedIcons=null;projectedLabels=null;projectedLines=null;appliedHeight=-1;
         if(exit)customScroll=0;
     }
@@ -335,7 +328,12 @@ final class SeedVaultViews
         Section(Widget header,int y){this.header=header;this.y=y;}
     }
     private static boolean absolute(Widget w){return w.getXPositionMode()==0&&w.getYPositionMode()==0;}
-    private static Widget[] children(Widget w){return w==null||w.getChildren()==null?new Widget[0]:w.getChildren();}
+    private static final Widget[] NO_CHILDREN = new Widget[0];
+    private static Widget[] children(Widget w)
+    {
+        Widget[] children = w == null ? null : w.getChildren();
+        return children == null ? NO_CHILDREN : children;
+    }
     private static int yOffset(Widget from,Widget to)
     {
         Point a=from.getCanvasLocation(),b=to.getCanvasLocation();
@@ -460,15 +458,19 @@ final class SeedVaultViews
             nativeVarScroll=client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS);
             appliedHeight=Math.max(viewport.getHeight(),nativeExtent-(full?shift:0));
             int scroll=Math.max(0,Math.min(customScroll,appliedHeight-viewport.getHeight()));
-            if(viewport.getScrollHeight()!=appliedHeight||viewport.getScrollY()!=scroll)
-            {
-                viewport.setScrollHeight(appliedHeight);viewport.setScrollY(scroll);viewport.revalidateScroll();
-                scrollbarDirty=true;
-            }
-            if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=scroll)
-                client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,scroll);
+            scroll(viewport,appliedHeight,scroll,scroll);
         }
         return true;
+    }
+    private void scroll(Widget viewport,int height,int offset,int varc)
+    {
+        if(viewport.getScrollHeight()!=height || viewport.getScrollY()!=offset)
+        {
+            viewport.setScrollHeight(height);viewport.setScrollY(offset);viewport.revalidateScroll();
+            scrollbarDirty=true;
+        }
+        if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=varc)
+            client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,varc);
     }
     static boolean placeholderRelevant(int base,Set<Integer> keep,Set<Integer> run)
     {return keep.contains(base)||run!=null&&run.contains(base);}

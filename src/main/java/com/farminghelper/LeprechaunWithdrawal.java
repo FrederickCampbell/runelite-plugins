@@ -4,6 +4,9 @@ import java.util.Map;
 import java.util.function.IntFunction;
 import net.runelite.api.Client;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.InterfaceID.FarmingTools;
+import static net.runelite.api.gameval.VarbitID.*;
+import static net.runelite.api.widgets.WidgetUtil.componentToId;
 
 /** Read-only withdrawal guidance for one immediate patch interaction. Native
  * storage counts follow farming_tools_getstored (script 1063). */
@@ -11,28 +14,25 @@ final class LeprechaunWithdrawal
 {
     final int child,quantity;
     final String name;
-    private final boolean single;
     final LeprechaunWithdrawal companion;
-    private LeprechaunWithdrawal(int child,int quantity,String name,boolean single)
-    {this(child,quantity,name,single,null);}
-    private LeprechaunWithdrawal(int child,int quantity,String name,boolean single,LeprechaunWithdrawal companion)
-    {this.child=child;this.quantity=quantity;this.name=name;this.single=single;this.companion=companion;}
+    private LeprechaunWithdrawal(int child,int quantity,String name,LeprechaunWithdrawal companion)
+    {this.child=child;this.quantity=quantity;this.name=name;this.companion=companion;}
 
     static int child(int item,boolean water)
     {
-        if(water)return 12;
+        if(water)return componentToId(FarmingTools.WATERINGCAN);
         switch(item)
         {
-            case ItemID.RAKE:return 8;
-            case ItemID.DIBBER:return 9;
-            case ItemID.SPADE:return 10;
-            case ItemID.SECATEURS:case ItemID.FAIRY_ENCHANTED_SECATEURS:return 11;
-            case Supplies.GARDENING_TROWEL:return 13;
-            case ItemID.PLANT_CURE:return 14;
-            case ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED:return 15;
-            case ItemID.BUCKET_COMPOST:return 17;
-            case ItemID.BUCKET_SUPERCOMPOST:return 18;
-            case ItemID.BUCKET_ULTRACOMPOST:return 19;
+            case ItemID.RAKE:return componentToId(FarmingTools.RAKE);
+            case ItemID.DIBBER:return componentToId(FarmingTools.DIBBER);
+            case ItemID.SPADE:return componentToId(FarmingTools.SPADE);
+            case ItemID.SECATEURS:case ItemID.FAIRY_ENCHANTED_SECATEURS:return componentToId(FarmingTools.SECATEURS);
+            case Supplies.GARDENING_TROWEL:return componentToId(FarmingTools.TROWEL);
+            case ItemID.PLANT_CURE:return componentToId(FarmingTools.PLANTCURE);
+            case ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED:return componentToId(FarmingTools.BOTTOMLESS_BUCKET);
+            case ItemID.BUCKET_COMPOST:return componentToId(FarmingTools.COMPOST);
+            case ItemID.BUCKET_SUPERCOMPOST:return componentToId(FarmingTools.SUPERCOMPOST);
+            case ItemID.BUCKET_ULTRACOMPOST:return componentToId(FarmingTools.ULTRACOMPOST);
             default:return -1;
         }
     }
@@ -40,13 +40,13 @@ final class LeprechaunWithdrawal
     {
         switch(item)
         {
-            case ItemID.RAKE:return 2*c.getVarbitValue(8357)+c.getVarbitValue(1435);
-            case ItemID.DIBBER:return 2*c.getVarbitValue(8358)+c.getVarbitValue(1436);
-            case ItemID.SPADE:return 2*c.getVarbitValue(8361)+c.getVarbitValue(1437);
+            case ItemID.RAKE:return 2*c.getVarbitValue(FARMING_TOOLS_EXTRARAKES)+c.getVarbitValue(FARMING_TOOLS_RAKE);
+            case ItemID.DIBBER:return 2*c.getVarbitValue(FARMING_TOOLS_EXTRADIBBERS)+c.getVarbitValue(FARMING_TOOLS_DIBBER);
+            case ItemID.SPADE:return 2*c.getVarbitValue(FARMING_TOOLS_EXTRASPADES)+c.getVarbitValue(FARMING_TOOLS_SPADE);
             case ItemID.SECATEURS:case ItemID.FAIRY_ENCHANTED_SECATEURS:
-                return 2*c.getVarbitValue(8359)+c.getVarbitValue(1438);
-            case Supplies.GARDENING_TROWEL:return 2*c.getVarbitValue(8360)+c.getVarbitValue(1440);
-            case ItemID.PLANT_CURE:return c.getVarbitValue(6268);
+                return 2*c.getVarbitValue(FARMING_TOOLS_EXTRASECATEURS)+c.getVarbitValue(FARMING_TOOLS_SECATEURS);
+            case Supplies.GARDENING_TROWEL:return 2*c.getVarbitValue(FARMING_TOOLS_EXTRATROWELS)+c.getVarbitValue(FARMING_TOOLS_TROWEL);
+            case ItemID.PLANT_CURE:return c.getVarbitValue(FARMING_TOOLS_PLANTCURE);
             default:return CompostChoice.stored(c,item);
         }
     }
@@ -80,13 +80,13 @@ final class LeprechaunWithdrawal
         if(item<0)return null;
         boolean water=action==StepEngine.Action.WATER;
         if(water)item=CropCare.storedCan(c,names);
-        else if(item==ItemID.SECATEURS&&c.getVarbitValue(1848)==1)item=ItemID.FAIRY_ENCHANTED_SECATEURS;
+        else if(item==ItemID.SECATEURS&&c.getVarbitValue(FARMING_TOOLS_FAIRYSECATEURS)==1)item=ItemID.FAIRY_ENCHANTED_SECATEURS;
         int stock=water?(item>0?1:0):stored(c,item);
         if(item<=0||stock<=0)return null;
         return plan(item,water,stock,free,names.apply(item));
     }
     static boolean magicStored(Client c)
-    {return c.getVarbitValue(1848)==1&&stored(c,ItemID.FAIRY_ENCHANTED_SECATEURS)>0;}
+    {return c.getVarbitValue(FARMING_TOOLS_FAIRYSECATEURS)==1&&stored(c,ItemID.FAIRY_ENCHANTED_SECATEURS)>0;}
 
     /** The current compost step remains authoritative. Only offer the future
      * watering can when it fits alongside the immediate withdrawal. */
@@ -99,18 +99,18 @@ final class LeprechaunWithdrawal
         int can=CropCare.storedCan(c,names);
         if(can<=0)return primary;
         LeprechaunWithdrawal water=plan(can,true,1,free,names.apply(can));
-        return primary==null?water:new LeprechaunWithdrawal(primary.child,primary.quantity,primary.name,primary.single,water);
+        return primary==null?water:new LeprechaunWithdrawal(primary.child,primary.quantity,primary.name,water);
     }
     static LeprechaunWithdrawal plan(int item,boolean water,int stored,int free,String name)
     {
         int child=child(item,water);
         if(child<0||stored<=0)return null;
-        return new LeprechaunWithdrawal(child,free>0?1:0,name,child==12||child==15);
+        return new LeprechaunWithdrawal(child,free>0?1:0,name,null);
     }
     String label()
     {
         if(quantity==0)return "Free a slot";
-        return single?"Remove 1":"Remove-1";
+        return child==componentToId(FarmingTools.WATERINGCAN)||child==componentToId(FarmingTools.BOTTOMLESS_BUCKET)?"Remove 1":"Remove-1";
     }
     String instruction()
     {

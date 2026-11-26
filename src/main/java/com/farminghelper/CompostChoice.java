@@ -1,6 +1,7 @@
 package com.farminghelper;
 
 import java.util.Map;
+import static net.runelite.api.gameval.VarbitID.*;
 import net.runelite.api.gameval.ItemID;
 
 /** Explicit compost preference; a filled bottomless bucket's contents cannot
@@ -24,7 +25,7 @@ enum CompostChoice
         catch (IllegalArgumentException | NullPointerException e) { return oldEnabled ? BOTTOMLESS : NONE; }
     }
     // Shared Tool leprechaun storage, read by the game's farming-tools exchange.
-    static final int LEPRECHAUN_ULTRACOMPOST=5732;
+    static final int LEPRECHAUN_ULTRACOMPOST=FARMING_TOOLS_ULTRACOMPOST;
     // Keep explicit regular/super/none settings. Ultra and bottomless share
     // the same supply alternatives; the item ID cannot prove bucket contents.
     int plan(Map<Integer,Integer> bag,Map<Integer,Integer> stock,int storedUltra)
@@ -61,10 +62,10 @@ enum CompostChoice
     }
     static int stored(net.runelite.api.Client client,int id)
     {
-        if(id==REGULAR.item)return Math.max(0,256*client.getVarbitValue(6266)+client.getVarbitValue(1442));
-        if(id==SUPER.item)return Math.max(0,256*client.getVarbitValue(6267)+client.getVarbitValue(1443));
+        if(id==REGULAR.item)return Math.max(0,256*client.getVarbitValue(FARMING_TOOLS_EXTRACOMPOST)+client.getVarbitValue(FARMING_TOOLS_COMPOST));
+        if(id==SUPER.item)return Math.max(0,256*client.getVarbitValue(FARMING_TOOLS_EXTRASUPERCOMPOST)+client.getVarbitValue(FARMING_TOOLS_SUPERCOMPOST));
         if(id==ULTRA.item)return Math.max(0,client.getVarbitValue(LEPRECHAUN_ULTRACOMPOST));
-        if(id==BOTTOMLESS.item)return client.getVarbitValue(7915)>1?1:0;
+        if(id==BOTTOMLESS.item)return client.getVarbitValue(FARMING_TOOLS_BOTTOMLESS_BUCKET_TYPE)>1?1:0;
         return 0;
     }
     static boolean isOrdinary(int id)
