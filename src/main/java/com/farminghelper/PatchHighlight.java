@@ -67,14 +67,27 @@ final class PatchHighlight extends Overlay
         return slot==null||slot.isHidden()?null:slot;
     }
     static boolean matchesRowChoice(String text)
-    {return text!=null&&"Row to the camp.".equals(Text.removeTags(text).replaceFirst("^\\[\\d+\\]\\s*","").trim());}
+    {
+        if(text==null)return false;
+        String choice=Text.removeTags(text).replaceFirst("^\\s*(?:\\[\\d+\\]|\\d+[.)])\\s*","").trim()
+            .replaceFirst("[.!]$","").trim();
+        return "Row to the camp".equalsIgnoreCase(choice)||"Row to the museum camp".equalsIgnoreCase(choice);
+    }
     private Widget rowChoice()
     {
         Widget options=client.getWidget(219,1);
         if(options==null||options.isHidden())return null;
-        for(Widget[] group:new Widget[][]{options.getChildren(),options.getNestedChildren()})
-            if(group!=null)for(Widget choice:group)
-                if(choice!=null&&!choice.isHidden()&&matchesRowChoice(choice.getText()))return choice;
+        return findRowChoice(options);
+    }
+    private static Widget findRowChoice(Widget widget)
+    {
+        if(widget==null||widget.isHidden())return null;
+        if(matchesRowChoice(widget.getText()))return widget;
+        for(Widget[] children:new Widget[][]{widget.getChildren(),widget.getStaticChildren()})
+            if(children!=null)for(Widget child:children)
+            {
+                Widget found=findRowChoice(child);if(found!=null)return found;
+            }
         return null;
     }
     Iterable<GameObject> objects(){return objects;}
@@ -240,11 +253,18 @@ final class PatchHighlight extends Overlay
         {
             if(!"Tool leprechaun".equalsIgnoreCase(npc.getName()))continue;
             WorldPoint point=npc.getWorldLocation();
-            if(point==null||point.distanceTo(anchor)>25||point.distanceTo(player)>25)continue;
+            if(!nearLeprechaun(point,anchor,player))continue;
             int d=point.distanceTo(player);
             if(d<distance){best=npc;distance=d;}
         }
         return best;
+    }
+    // Area markers may use plane 0, including the underwater seaweed and coral markers.
+    // The verified local patch and same-plane player/NPC keep this a local interaction.
+    static boolean nearLeprechaun(WorldPoint point,WorldPoint anchor,WorldPoint player)
+    {
+        return point!=null&&anchor!=null&&player!=null&&point.getPlane()==player.getPlane()&&
+            point.distanceTo2D(anchor)<=25&&point.distanceTo(player)<=25;
     }
     @Override public Dimension render(Graphics2D graphics)
     {
@@ -257,7 +277,21 @@ final class PatchHighlight extends Overlay
             WorldPoint anchor=leg.point==null?client.getLocalPlayer().getWorldLocation():leg.point;
             for(GameObject o:objects)if(sameView(o) && transitionMatches(leg.interaction,o))
             {int d=o.getWorldLocation().distanceTo(anchor);if(d<distance && d<=18){selected=o;distance=d;}}
-            if(selected!=null)draw(graphics,selected.getClickbox());return null;
+            if(selected!=null)
+            {
+                Shape shape=selected.getClickbox();
+                if(leg.interaction==RouteLeg.Interaction.BIRD_BANK)
+                {
+                    draw(graphics,shape,Color.GREEN);
+                    if(shape!=null)
+                    {
+                        Rectangle b=shape.getBounds();
+                        arrow(graphics,b.x+b.width/2,b.y-4);
+                    }
+                }
+                else draw(graphics,shape);
+            }
+            return null;
         }
         TransportHint transport=helper.currentTransport();
         if(transport!=null)

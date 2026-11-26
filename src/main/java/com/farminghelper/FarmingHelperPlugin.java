@@ -414,8 +414,9 @@ public class FarmingHelperPlugin extends Plugin
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;invalidateTravel();updateAccessNotes();}
         if (!run.isEmpty() && guideRequested)
         {
-            if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(LocationContext.capture(client).pathStart());
+            // Re-evaluate supplies and local transfer legs before a pending route can refresh.
             update();
+            if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(LocationContext.capture(client).pathStart());
         }
         if(vaultViews!=null)vaultViews.tick();
         updateRunBank(false);
@@ -524,7 +525,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     TransportHint currentTransport()
     {
-        if(!guideRequested||diseaseTarget!=null||preparing()||current==null||navigation==null||client.getLocalPlayer()==null)return null;
+        if(!guideRequested||diseaseTarget!=null||preparing()||current==null||navigation==null||client.getLocalPlayer()==null||activeLeg!=null&&activeLeg.interaction!=RouteLeg.Interaction.NONE)return null;
         return navigation.nearbyTransport(LocationContext.capture(client).pathStart());
     }
     long preferenceRevision(){return preferenceRevision;}
@@ -858,7 +859,8 @@ public class FarmingHelperPlugin extends Plugin
         // A fresh pinned order is necessary because birdhouses were deliberately absent.
         if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&ready.isEmpty()&&run.contains(FarmRunType.BIRDHOUSE))
         {
-            seaweedBirdTransfer=patches.stream().anyMatch(p->p.getPatchType()==PatchType.SEAWEED&&runProgress.is(p,RunProgress.Status.COMPLETED));
+            seaweedBirdTransfer=SpecialRoutes.insideSeaweed(location.normalized)||SpecialRoutes.onSeaweedIsland(location.normalized)||
+                patches.stream().anyMatch(p->p.getPatchType()==PatchType.SEAWEED&&runProgress.is(p,RunProgress.Status.COMPLETED));
             specialtyBirdPhase=true;current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
             phase=Preparation.Phase.ACTIVE;visitedStorage=false;pinned=null;
             update();return;
@@ -1087,12 +1089,17 @@ public class FarmingHelperPlugin extends Plugin
                     &&!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
             }
         }
-        if(loggedIn&&!preparing()&&seaweedBirdTransfer&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE))
+        if(loggedIn&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE)&&
+            (SpecialRoutes.onSeaweedIsland(player)||!preparing()&&seaweedBirdTransfer))
         {
             boolean missing=Preparation.missing(physicalRequired,bag);
             RouteLeg transfer=SpecialRoutes.insideSeaweed(player)?SpecialRoutes.seaweedExit(instance):
                 aboard||instance&&!location.inHouse()?leg:SpecialRoutes.birdTransfer(player,missing,storageOpen(),level);
-            if(transfer!=null)leg=transfer;
+            if(transfer!=null)
+            {
+                leg=transfer;
+                if(preparing())prepMessage=transfer.instruction;
+            }
             else seaweedBirdTransfer=false;
         }
         if(!preparing()&&current!=null&&current.getPatchType()==PatchType.CORAL)
