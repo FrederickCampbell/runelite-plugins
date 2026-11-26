@@ -60,21 +60,25 @@ final class RunTeleports
     static Map<Integer,Set<String>> select(Collection<FarmRunPatch> ready,Map<Integer,List<String>> eligible,
         Map<Integer,Integer> carried,Map<Integer,Integer> available,java.util.function.IntBinaryOperator quantity)
     {
+        if(ready.isEmpty()||eligible.isEmpty())return Map.of();
         Set<String> sites=new LinkedHashSet<>();for(FarmRunPatch p:ready)sites.add(RunOrder.site(p));
         Map<Integer,Set<String>> result=new LinkedHashMap<>();
         for(String site:sites)
         {
-            List<String> refs=REFERENCES.getOrDefault(site,List.of());
+            List<String> refs=REFERENCES.get(site);
+            if(refs==null)continue;
             int best=-1,bestScore=Integer.MAX_VALUE;
             for(var entry:eligible.entrySet())
             {
-                int rank=Integer.MAX_VALUE;
-                for(String dest:entry.getValue()){int n=refs.indexOf(dest);if(n>=0)rank=Math.min(rank,n);}
-                if(rank==Integer.MAX_VALUE)continue;
-                int id=entry.getKey(),visits=result.containsKey(id)?result.get(id).size()+1:1;
-                if(available!=null&&quantity.applyAsInt(id,visits)>available.getOrDefault(id,0))continue;
-                int score=(carried.getOrDefault(entry.getKey(),0)>0?0:result.containsKey(entry.getKey())?100:200)+rank;
-                if(score<bestScore||score==bestScore&&entry.getKey()<best){best=entry.getKey();bestScore=score;}
+                int id=entry.getKey();
+                Set<String> chosen=result.get(id);
+                int rank=0;
+                while(rank<refs.size()&&!entry.getValue().contains(refs.get(rank)))rank++;
+                if(rank==refs.size())continue;
+                int score=(carried.getOrDefault(id,0)>0?0:chosen!=null?100:200)+rank;
+                if(score>bestScore||score==bestScore&&id>=best)continue;
+                if(available!=null&&quantity.applyAsInt(id,chosen==null?1:chosen.size()+1)>available.getOrDefault(id,0))continue;
+                best=id;bestScore=score;
             }
             if(best>=0)result.computeIfAbsent(best,id->new LinkedHashSet<>()).add(site);
         }
