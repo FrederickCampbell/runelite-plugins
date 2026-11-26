@@ -842,6 +842,7 @@ final class FarmingHelperPanel extends PluginPanel
         boolean isPreparing=!view.preparation.isEmpty();
         if(isPreparing!=lastPreparing){requiredOpen=isPreparing;teleportsOpen=false;lastPreparing=isPreparing;}
         page(GUIDE,view.title,null,this::runSettings,true);
+        if(isPreparing)addRow(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
         int remaining=GuidePresentation.remaining(view.stats,(int)pending);
@@ -867,10 +868,6 @@ final class FarmingHelperPanel extends PluginPanel
             heading(view.notes.initial?"Preparation":"Resupply",view.notes.preparationHelp.isEmpty()?GuidePresentation.PREPARATION_HELP:view.notes.preparationHelp);
             line(view.preparation,true);
             if(!view.notes.storageWarning.isEmpty())helpRow(view.notes.storageWarning,FarmingTheme.WARNING,GuidePresentation.STORAGE_HELP);
-            JPanel action=transparent(new BorderLayout());
-            action.setBorder(BorderFactory.createEmptyBorder(3,8,6,8));
-            action.add(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
-            FarmingTheme.apply(action);footer.add(action);
         }
         if(!isPreparing && view.active!=null)
         {
@@ -1019,6 +1016,8 @@ final class FarmingHelperPanel extends PluginPanel
         choice("Compost type",CompostChoice.values(),plugin.compostChoice(),"Bottomless bucket uses ultracompost if the bucket is unavailable.",
             v->plugin.save("directorCompostChoice",v.name()));
         preferenceCheck("Pay for crop protection","directorProtectTrees",true);
+        preferenceCheck("Water crops","directorWater",true);
+        preferenceCheck("Tool leprechaun assistance","directorLeprechaun",true);
         heading("Default tree removal");preferenceCheck("Pay gardener to remove trees","directorPayRemoval",true);
         seedlessChoice(plugin.seedlessDefault(),v->plugin.save("seedlessPolicyV1",v.name()));
         collapse("Keep planted",keepPlantsOpen,()->{keepPlantsOpen=!keepPlantsOpen;general();});
@@ -1163,6 +1162,8 @@ final class FarmingHelperPanel extends PluginPanel
         caption("This run only · Changes expire when it ends.");
         seedlessChoice(SeedlessPolicy.of(plugin.hideSeedless(),plugin.clearSeedless()),plugin::setSeedlessPolicy);
         choice("Crop care",RunPolicy.values(),plugin.runPolicy(),null,v->plugin.setRunPolicy(v,null));
+        addRow(check("Water crops",plugin.runWater(),v->plugin.setRunSupplies(v,null)));
+        addRow(check("Tool leprechaun assistance",plugin.runLeprechaun(),v->plugin.setRunSupplies(null,v)));
         if(plugin.runHasTrees())
         {
             String[] modes={"Pay to remove","Manual removal"};

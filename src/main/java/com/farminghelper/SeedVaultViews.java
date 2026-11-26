@@ -323,8 +323,8 @@ final class SeedVaultViews
     }
     private static final class Pair
     {
-        final Widget icon,label;final int id;final boolean placeholder;
-        Pair(Widget icon,Widget label,boolean placeholder){this.icon=icon;this.label=label;id=icon.getItemId();this.placeholder=placeholder;}
+        final Widget icon,label;final int id,base;final boolean placeholder;
+        Pair(Widget icon,Widget label,int base,boolean placeholder){this.icon=icon;this.label=label;id=icon.getItemId();this.base=base;this.placeholder=placeholder;}
     }
     private static final class Section
     {
@@ -378,7 +378,8 @@ final class SeedVaultViews
             if(definition==null){section.safe=false;continue;}
             String actual=definition.getName();
             if(!clean(actual).equalsIgnoreCase(clean(labels[i].getText()))){section.safe=false;continue;}
-            Pair p=new Pair(icon,labels[i],definition.getPlaceholderTemplateId()!=-1);
+            boolean placeholder=definition.getPlaceholderTemplateId()!=-1;
+            Pair p=new Pair(icon,labels[i],placeholder?definition.getPlaceholderId():icon.getItemId(),placeholder);
             matched.add(p.label);section.pairs.add(p);
             // Native placeholders retain their widgets, labels and Remove-Placeholder actions.
             // Only actual stacks participate in crop rankings or satisfy a run.
@@ -430,9 +431,9 @@ final class SeedVaultViews
             List<VaultGrid.Slot> slots=new ArrayList<>();
             for(int i=0;i<section.pairs.size();i++)
             {
-                Pair p=section.pairs.get(i);boolean selected=p.placeholder||keep.contains(p.id);
+                Pair p=section.pairs.get(i);boolean selected=p.placeholder?placeholderRelevant(p.base,keep,active==VaultRanking.View.RUN?runItems:null):keep.contains(p.id);
                 if(!selected){hide(p.icon);hide(p.label);}
-                slots.add(new VaultGrid.Slot(i,p.icon.getOriginalX(),p.icon.getOriginalY(),selected,rank.getOrDefault(p.id,Integer.MAX_VALUE)));
+                slots.add(new VaultGrid.Slot(i,p.icon.getOriginalX(),p.icon.getOriginalY(),selected,rank.getOrDefault(p.base,Integer.MAX_VALUE)));
             }
             if(!section.safe)continue;
             VaultGrid.Layout layout=VaultGrid.layout(new VaultGrid.Section(section.y,bottom,slots),full,shift);
@@ -465,6 +466,8 @@ final class SeedVaultViews
         }
         return true;
     }
+    static boolean placeholderRelevant(int base,Set<Integer> keep,Set<Integer> run)
+    {return keep.contains(base)||run!=null&&run.contains(base);}
     static boolean pair(Widget icon,Widget label)
     {
         return label!=null&&!label.isSelfHidden()&&label.getIndex()==icon.getIndex()&&label.getType()==WidgetType.TEXT

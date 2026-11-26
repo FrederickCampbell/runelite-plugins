@@ -10,17 +10,25 @@ public class CropCareTest
     private static Observation observation(CropState state,Source source,int raw){return new Observation(state,source,1,null,"",raw);}
     @Test public void waterOnlyDryLiveSupportedCrops()
     {
-        assertTrue(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),5333));
-        assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,101),5333));
+        assertTrue(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),true));
+        assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,101),true));
         assertTrue(CropCare.watered(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,101)));
         assertFalse(CropCare.watered(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37)));
-        assertTrue(CropCare.waterNeeded(PatchType.HOPS,observation(CropState.GROWING,Source.LIVE,104),5333));
-        assertFalse(CropCare.waterNeeded(PatchType.HOPS,observation(CropState.GROWING,Source.LIVE,232),5333));
-        assertTrue(CropCare.waterNeeded(PatchType.ALLOTMENT,observation(CropState.GROWING,Source.LIVE,63),5333));
-        assertFalse(CropCare.waterNeeded(PatchType.ALLOTMENT,observation(CropState.GROWING,Source.LIVE,128),5333));
-        assertFalse(CropCare.waterNeeded(PatchType.HERB,observation(CropState.GROWING,Source.LIVE,6),5333));
-        assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.TIME_TRACKING,37),5333));
-        assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),-1));
+        assertTrue(CropCare.waterNeeded(PatchType.HOPS,observation(CropState.GROWING,Source.LIVE,104),true));
+        assertFalse(CropCare.waterNeeded(PatchType.HOPS,observation(CropState.GROWING,Source.LIVE,232),true));
+        assertTrue(CropCare.waterNeeded(PatchType.ALLOTMENT,observation(CropState.GROWING,Source.LIVE,63),true));
+        assertFalse(CropCare.waterNeeded(PatchType.ALLOTMENT,observation(CropState.GROWING,Source.LIVE,128),true));
+        assertFalse(CropCare.waterNeeded(PatchType.HERB,observation(CropState.GROWING,Source.LIVE,6),true));
+        assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.TIME_TRACKING,37),true));
+        assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),false));
+    }
+    @Test public void storedCanBeforeBankAndWateringIndependentOfTool()
+    {
+        assertEquals(5333,CropCare.preferredCan(5333,13353,5340));
+        assertEquals(13353,CropCare.preferredCan(-1,13353,5340));
+        assertEquals(5340,CropCare.preferredCan(-1,-1,5340));
+        assertTrue(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),true));
+        assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),false));
     }
     @Test public void diseaseRequiresLiveVerifiedObject()
     {

@@ -254,11 +254,15 @@ final class PatchHighlight extends Overlay
         }
         FarmRunPatch patch=helper.activePatch();if(patch==null)return null;
         StepEngine.Action action=helper.activeAction();
-        if(helper.fetchingUltra())
+        if(helper.fetchingLeprechaun())
         {
             NPC npc=leprechaun(patch);
-            if(npc!=null)draw(graphics,npc.getConvexHull());
-            return null;
+            if(npc!=null)
+            {
+                draw(graphics,npc.getConvexHull());
+                net.runelite.api.Point p=npc.getCanvasTextLocation(graphics,"▼",npc.getLogicalHeight()+30);
+                if(p!=null){graphics.setColor(Color.CYAN);graphics.drawString("▼",p.getX(),p.getY());}
+            }
         }
         if(patch.getPatchType()==PatchType.HESPORI && action==StepEngine.Action.HARVEST)return null;
         if(action==StepEngine.Action.PAY_REMOVE || action==StepEngine.Action.PROTECT_TREE)

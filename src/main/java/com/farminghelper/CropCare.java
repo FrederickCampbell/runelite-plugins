@@ -8,6 +8,18 @@ import com.farminghelper.queststate.QuestFarmingStateReader.Source;
 
 final class CropCare
 {
+    // Native farming_tools_getstored uses varbit 1439 and enum 136.
+    static int storedCan(net.runelite.api.Client client,IntFunction<String> name)
+    {
+        int key=client.getVarbitValue(1439);
+        if(key<=0)return -1;
+        var variants=client.getEnum(136);
+        if(variants==null)return -1;
+        int id=variants.getIntValue(key);
+        return id>0?wateringCan(Map.of(id,1),name):-1;
+    }
+    static int preferredCan(int carried,int stored,int bank)
+    {return carried>0?carried:stored>0?stored:bank>0?bank:5333;}
     static int wateringCan(Map<Integer,Integer> bag,IntFunction<String> name)
     {
         int best=-1,charges=0;
@@ -22,9 +34,9 @@ final class CropCare
         }
         return best;
     }
-    static boolean waterNeeded(PatchType type,Observation o,int can)
+    static boolean waterNeeded(PatchType type,Observation o,boolean enabled)
     {
-        if(can<=0||!type.canBeWatered()||o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;
+        if(!enabled||!type.canBeWatered()||o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;
         int r=o.rawValue;
         switch(type)
         {
