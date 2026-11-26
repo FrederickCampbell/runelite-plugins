@@ -8,10 +8,12 @@ For RuneLite Dev Manager, install the source directory under `Plugins/Farming-He
 
 - The inherited farming registry identifies named plots and their decoder varbits. Exact object IDs or verified object groups identify the local target. Kastori flowers and compost bins additionally require a matching live transform and object footprint. Time Tracking and saved observations support remote planning.
 - The run retains its ordered itinerary and tracks completion evidence separately from pending, deferred, skipped and preserved outcomes. Player settings belong to the RuneScape profile. Run overrides expire on ending the run or changing character.
-- RuneLite container events invalidate inventory and equipment totals. The helper records the bank and Seed Vault while their native interfaces are open. Physical requirements, preparatory tree materials, worn-item bank display aliases and optional teleports have distinct quantities.
+- RuneLite container events invalidate inventory, equipment and seed-box totals. The last native seed-box observation is kept in session only while the box is carried; its slot order is used for direct planting guidance. The helper records the bank and Seed Vault while their native interfaces are open. Physical requirements, preparatory tree materials, worn-item bank display aliases and optional teleports have distinct quantities.
 - Shortest Path owns pathfinding. Farming Helper requests a single current leg through plugin messages. Bank Tags provides the optional farming shelf. The settings screen lists available integrations. See [review and live-client checks](../PLUGIN_HUB_REVIEW.md).
 
 ## Attribution
+
+Seed-box container tracking was researched against the [Seed Box plugin](https://github.com/fgillet4/osrs-seedbox-plugin) (native container ID and item variants); Farming Helper uses its own ordered snapshot and existing stock model.
 
 | Upstream | Use and provenance |
 | --- | --- |

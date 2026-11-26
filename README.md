@@ -2,7 +2,7 @@
 
 <img src="icon.png" alt="Farming Helper icon" align="right" width="48">
 
-**Quest Helper for your farm runs!** · Version 1.05
+**Quest Helper for your farm runs!** · Version 1.06
 
 Pick a run, grab your supplies and follow the guide. Farming Helper helps you decide what to plant, what to bring and where to go next.
 
@@ -13,7 +13,7 @@ Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, t
 ## Features
 
 - Grouped, individual and custom runs, including compost and birdhouses.
-- Crop recommendations based on your Farming level, available seeds and preferences.
+- Crop recommendations based on your Farming level, available seeds and preferences, including observed carried seed-box contents.
 - Step-by-step instructions, patch highlights and supply checklists.
 - Farming bank and compact Seed Vault views that preserve native placeholders while filtering irrelevant items. Only physical stacks count toward supplies.
 - Custom crop priorities, patch selections and plants to keep.
