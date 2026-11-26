@@ -37,8 +37,7 @@ final class GuideItemHighlight extends WidgetItemOverlay
         {
             if(!helper.activeStepItems().contains(id))return;
             ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
-            if(inventory==null)return;
-            if(!StepItems.firstSlot(id,itemWidget.getIndex(),inventory.getItems()))return;
+            if(!StepItems.firstSlot(id,itemWidget.getIndex(),inventory))return;
             color=Color.CYAN;
         }
         else if(group==InterfaceID.SEED_VAULT)
