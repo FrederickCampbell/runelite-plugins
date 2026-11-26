@@ -7,6 +7,8 @@ import java.awt.*;
 import net.runelite.client.util.ImageUtil;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import net.runelite.api.*;
@@ -56,7 +58,7 @@ public class FarmingHelperPlugin extends Plugin
     @Inject private EventBus bus;
     @Inject private QuestFarmingStateReader reader;
 
-    private final List<FarmRunPatch> patches = new ArrayList<>();
+    private final List<FarmRunPatch> patches = new CopyOnWriteArrayList<>();
     private final RunProgress runProgress=new RunProgress();
     private final GuideProgress progress = new GuideProgress();
     private final Set<FarmRunPatch> birdhouseTouched=new HashSet<>();
@@ -78,7 +80,9 @@ public class FarmingHelperPlugin extends Plugin
     private volatile Set<Integer> requiredItems = Collections.emptySet();
     private volatile Set<Integer> missingStorageItems = Collections.emptySet();
     private volatile Set<Integer> missingTeleports = Collections.emptySet();
-    private volatile long session;
+    private final AtomicLong session=new AtomicLong();
+    private volatile long lifecycle;
+    private volatile boolean runtimeReady;
     private volatile boolean guideRequested;
     private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
     private final Set<InventoryID> sampledStorage=EnumSet.noneOf(InventoryID.class);
@@ -107,8 +111,8 @@ public class FarmingHelperPlugin extends Plugin
     private String stockProfile;
     private long bankObservedAt,vaultObservedAt;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
-    private Set<FarmRunType> run = Collections.emptySet();
-    private Set<String> manualKeys; // physical selections, never persisted as a session
+    private volatile Set<FarmRunType> run = Collections.emptySet();
+    private volatile Set<String> manualKeys; // physical selections, never persisted as a session
     private String runLabel;
     private String runPolicyKey;
     private volatile RunPolicy runPolicy=RunPolicy.BOTH;
@@ -128,11 +132,10 @@ public class FarmingHelperPlugin extends Plugin
     private WorldPoint preparationOrigin;
     private List<FarmRunPatch> pinned;
     private volatile LeprechaunWithdrawal leprechaunWithdrawal;
-    private boolean shortestPathAvailable;
-    private FarmingHelperPanel panel;
+        private volatile FarmingHelperPanel panel;
     private NavigationButton nav;
     private volatile FarmRunPatch current;
-    private GuideView lastView;
+    private volatile GuideView lastView;
     private volatile Map<String,String> accessNotes = Collections.emptyMap();
     private int lastAccessLevel=-1,accessTicks;
     // Quest.getState runs a clientscript; only compute this cache outside script callbacks.
@@ -147,14 +150,18 @@ public class FarmingHelperPlugin extends Plugin
 
     @Override protected void startUp()
     {
-        running = true;
-        reader.useSceneObjects(highlight.objects());
-        navigation=new NavigationBridge(bus::post);
-        if(itemManager!=null)vaultViews=new SeedVaultViews(client,itemManager,this);
-        if(itemManager!=null)runBank=new ActiveRunBank(client,plugins,itemManager);
-        shortestPathAvailable=plugins.getPlugins().stream().anyMatch(p ->
-            "Shortest Path".equals(p.getName()) && plugins.isPluginActive(p));
-        navigation.enabled(shortestPathAvailable);
+        running=true;runtimeReady=false;
+        long epoch=++lifecycle;
+        // RuneLite starts/stops plugins on the EDT and replays scene events
+        // on the client thread. Queue initialization before that replay.
+        thread.invokeLater(()->{
+            if(!running||epoch!=lifecycle)return;
+            reader.useSceneObjects(highlight.objects());
+            navigation=new NavigationBridge(bus::post);
+            navigation.enabled(integrationActive("Shortest Path"));
+            if(itemManager!=null){vaultViews=new SeedVaultViews(client,itemManager,this);runBank=new ActiveRunBank(client,plugins,itemManager);}
+            runtimeReady=true;
+        });
         patches.addAll(FarmRunCatalog.patches());
         patches.addAll(BirdhouseRun.patches());
         panel = new FarmingHelperPanel(this);
@@ -163,20 +170,24 @@ public class FarmingHelperPlugin extends Plugin
         toolbar.addNavigation(nav);
         overlays.add(highlight);overlays.add(highlight.dialogue());
         if (itemHighlight != null) overlays.add(itemHighlight);
-        SwingUtilities.invokeLater(panel::home);
+        panel.home();
     }
 
     @Override protected void shutDown()
     {
-        running = false;
-        if(runBank!=null){ActiveRunBank old=runBank;runBank=null;thread.invokeLater(old::close);}
-        if(vaultViews!=null){SeedVaultViews view=vaultViews;vaultViews=null;thread.invokeLater(() -> {view.close();view.flushScrollbar();});}
-        reset();
+        running=false;runtimeReady=false;guideRequested=false;++lifecycle;session.incrementAndGet();
         toolbar.removeNavigation(nav);
         overlays.remove(highlight);overlays.remove(highlight.dialogue());
-        if (itemHighlight != null) overlays.remove(itemHighlight);
-        patches.clear();
-        highlight.clear();
+        if(itemHighlight!=null)overlays.remove(itemHighlight);
+        patches.clear();panel=null;nav=null;
+        // FIFO client-thread teardown precedes any subsequent enable. No
+        // delayed cleanup can close a newly installed vault or bank view.
+        thread.invokeLater(()->{
+            resetClientState();
+            if(vaultViews!=null)vaultViews.flushScrollbar();
+            vaultViews=null;runBank=null;navigation=null;
+            highlight.clear();itemNamesCache.clear();icons=Map.of();
+        });
     }
 
     void startPreset(RunPreset preset)
@@ -200,18 +211,18 @@ public class FarmingHelperPlugin extends Plugin
         Set<String> chosen=Set.copyOf(keys);
         Set<FarmRunType> types=EnumSet.noneOf(FarmRunType.class);
         for(FarmRunPatch p:patches)if(chosen.contains(p.key())&&enabled(p))types.add(p.getFarmRunType());
-        if(types.isEmpty()) {SwingUtilities.invokeLater(()->panel.emptySelection());return;}
+        if(types.isEmpty()) {FarmingHelperPanel target=panel;SwingUtilities.invokeLater(()->{if(running&&panel==target&&target!=null)target.emptySelection();});return;}
         start(types,chosen,label,policyKey);
     }
 
     private void start(Set<FarmRunType> types,Set<String> keys,String label,String policyKey)
     {
         if (types.isEmpty()) return;
-        Set<FarmRunType> selected=EnumSet.copyOf(types);
+        Set<FarmRunType> selected=Set.copyOf(types);
         guideRequested = true;
-        final long requested = ++session;
+        final long requested = session.incrementAndGet();
         thread.invokeLater(() -> {
-            if (!running || !guideRequested || requested != session) return;
+            if (!running || !runtimeReady || !guideRequested || requested != session.get()) return;
             clearRun();
             run = selected;
             manualKeys=keys;runLabel=label;
@@ -223,7 +234,6 @@ public class FarmingHelperPlugin extends Plugin
             runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&p.getPatchType().isTree());
             loadStock();
             sampleStorage();
-            navigation.begin();
             update();
         });
     }
@@ -231,8 +241,8 @@ public class FarmingHelperPlugin extends Plugin
     void stop()
     {
         guideRequested = false;
-        final long requested = ++session;
-        thread.invokeLater(() -> { if (requested == session) end(); });
+        final long requested = session.incrementAndGet();
+        thread.invokeLater(() -> { if (requested == session.get()) end(); });
     }
 
     private void clearRun()
@@ -261,18 +271,22 @@ public class FarmingHelperPlugin extends Plugin
         if(navigation!=null)navigation.stop();
     }
 
-    private void end()
+    private void end(){clearRun();showHome();}
+    private void showHome()
     {
-        clearRun();
-        final long ended = session;
-        if (running) SwingUtilities.invokeLater(() -> { if (ended == session && !guideRequested) panel.home(); });
+        long ended=session.get();FarmingHelperPanel target=panel;
+        if(running&&target!=null)SwingUtilities.invokeLater(()->{
+            if(running&&panel==target&&ended==session.get()&&!guideRequested)target.home();
+        });
     }
-
     private void reset()
     {
-        guideRequested = false;
+        guideRequested=false;session.incrementAndGet();
+        resetClientState();showHome();
+    }
+    private void resetClientState()
+    {
         if(vaultViews!=null)vaultViews.close();
-        ++session;
         lastAccessLevel=-1;
         vaultAccessible=Collections.emptySet();vaultAccessRevision++;
         accessNotes=Collections.emptyMap();
@@ -281,7 +295,8 @@ public class FarmingHelperPlugin extends Plugin
         vault.clear();
         stockProfile=null;seedBox.clear();seedBoxPlant=null;seedBoxSaved="";seedBoxViewTick=-1;
         bankObservedAt=0;vaultObservedAt=0;
-        end();
+        seedBoxPlantBag=Map.of();shelfItems=Set.of();shelfCandidates=Set.of();
+        clearRun();
     }
 
     CompostChoice compostChoice(){return CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));}
@@ -304,8 +319,8 @@ public class FarmingHelperPlugin extends Plugin
     boolean runLeprechaun(){return runLeprechaun;}
     void setRunSupplies(Boolean water,Boolean leprechaun)
     {
-        long id=session;thread.invokeLater(()->{
-            if(id!=session||!guideRequested)return;
+        long id=session.get();thread.invokeLater(()->{
+            if(id!=session.get()||!guideRequested)return;
             if(water!=null)temporaryWater=water;
             if(leprechaun!=null)temporaryLeprechaun=leprechaun;
             refreshRunPreferences();lastView=null;update();
@@ -313,8 +328,8 @@ public class FarmingHelperPlugin extends Plugin
     }
     void setRunPolicy(RunPolicy policy,Boolean pay)
     {
-        long id=session;thread.invokeLater(()->{
-            if(id!=session||!guideRequested||runPolicyKey==null)return;
+        long id=session.get();thread.invokeLater(()->{
+            if(id!=session.get()||!guideRequested||runPolicyKey==null)return;
             if(policy!=null)temporaryCare=policy;
             if(pay!=null)temporaryPay=pay;
             refreshRunPreferences();
@@ -328,8 +343,8 @@ public class FarmingHelperPlugin extends Plugin
     Set<Integer> activeStepItems(){return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:!preparing()?stepItems:Collections.emptySet();}
     void resetObservedStock()
     {
-        long id=session;thread.invokeLater(()->{
-            if(id!=session||!guideRequested||run.isEmpty())return;
+        long id=session.get();thread.invokeLater(()->{
+            if(id!=session.get()||!guideRequested||run.isEmpty())return;
             loadStock();invalidateStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
             save("observedBankV1","");save("observedVaultV1","");save("observedBankV1At","");save("observedVaultV1At","");
             seedBox.clear();seedBoxSaved="";save("observedSeedBoxV2","");seedBoxPlant=null;seedBoxViewTick=-1;
@@ -338,20 +353,20 @@ public class FarmingHelperPlugin extends Plugin
     }
     void acknowledgeCompost(FarmRunPatch patch)
     {
-        long id=session;thread.invokeLater(()->{
-            if(id!=session||!guideRequested||current!=patch||activeAction!=StepEngine.Action.COMPOST)return;
+        long id=session.get();thread.invokeLater(()->{
+            if(id!=session.get()||!guideRequested||current!=patch||activeAction!=StepEngine.Action.COMPOST)return;
             compostAcknowledged=true;lastView=null;update();
         });
     }
     void setSeedlessPolicy(SeedlessPolicy policy)
     {
-        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||run.isEmpty())return;temporarySeedless=policy;refreshRunPreferences();sampleStorage();lastView=null;update();});
+        long id=session.get();thread.invokeLater(()->{if(id!=session.get()||!guideRequested||run.isEmpty())return;temporarySeedless=policy;refreshRunPreferences();sampleStorage();lastView=null;update();});
     }
     String runReplacement(PatchType type){return temporaryReplacement.getOrDefault(type,"");}
     void setRunReplacement(PatchType type,String mode)
     {
-        long id=session;thread.invokeLater(()->{
-            if(id!=session||!guideRequested||run.isEmpty())return;
+        long id=session.get();thread.invokeLater(()->{
+            if(id!=session.get()||!guideRequested||run.isEmpty())return;
             Map<PatchType,String> next=new EnumMap<>(PatchType.class);next.putAll(temporaryReplacement);
             if(KeepCrop.explicit(mode))next.put(type,mode);else next.remove(type);
             temporaryReplacement=Map.copyOf(next);lastView=null;update();
@@ -359,8 +374,8 @@ public class FarmingHelperPlugin extends Plugin
     }
     void skipRemainingType(PatchType type)
     {
-        long id=session;thread.invokeLater(()->{
-            if(id!=session||!guideRequested)return;
+        long id=session.get();thread.invokeLater(()->{
+            if(id!=session.get()||!guideRequested)return;
             for(FarmRunPatch p:patches)if(p.getPatchType()==type&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!runProgress.finished(p))runProgress.skip(p);
             lastView=null;update();
         });
@@ -373,8 +388,8 @@ public class FarmingHelperPlugin extends Plugin
     }
     void skip(FarmRunPatch displayed)
     {
-        long id=session;thread.invokeLater(() -> {
-            if(id!=session||!guideRequested)return;
+        long id=session.get();thread.invokeLater(() -> {
+            if(id!=session.get()||!guideRequested)return;
             if(diseaseTarget!=null)
             {
                 if(displayed==diseaseTarget){diseasePriority.skip(displayed);diseaseTarget=null;lastView=null;}
@@ -388,25 +403,29 @@ public class FarmingHelperPlugin extends Plugin
         });
     }
 
+    /** Profile/config/plugin events may originate on the EDT or another worker. */
+    private void onClient(Runnable action)
+    {
+        long epoch=lifecycle;
+        Runnable guarded=()->{if(running&&runtimeReady&&epoch==lifecycle)action.run();};
+        if(client.isClientThread())guarded.run();else thread.invokeLater(guarded);
+    }
     @Subscribe public void onPluginChanged(PluginChanged event)
     {
-        if (!"Shortest Path".equals(event.getPlugin().getName())) return;
-        thread.invokeLater(() -> {
-            if (!running) return;
-            shortestPathAvailable=event.isLoaded();
-            navigation.enabled(shortestPathAvailable);
-            if (!run.isEmpty()) update();
-        });
+        if(!"Shortest Path".equals(event.getPlugin().getName()))return;
+        onClient(()->{navigation.enabled(event.isLoaded());if(!run.isEmpty())update();});
     }
 
     @Subscribe public void onPluginMessage(PluginMessage event)
     {
-        if(navigation!=null)navigation.message(event);
-        if(highlight!=null&&"shortestpath".equals(event.getNamespace()))highlight.transportChanged();
+        if(!"shortestpath".equals(event.getNamespace())||
+            !("result".equals(event.getName())||"currentTarget".equals(event.getName())))return;
+        onClient(()->{if(navigation.message(event))highlight.transportChanged();});
     }
 
-    @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
-    @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { if(!guideRequested||!Objects.equals(runProfile,config.getRSProfileKey()))reset(); }
+    @Subscribe public void onProfileChanged(ProfileChanged event){onClient(this::reset);}
+    @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event)
+    {onClient(()->{if(!guideRequested||!Objects.equals(runProfile,config.getRSProfileKey()))reset();});}
     @Subscribe public void onGameObjectSpawned(GameObjectSpawned event) { highlight.spawned(event.getGameObject()); }
     @Subscribe public void onGameObjectDespawned(GameObjectDespawned event) { highlight.despawned(event.getGameObject()); }
     @Subscribe public void onNpcSpawned(NpcSpawned event) { highlight.npcChanged(); }
@@ -427,7 +446,7 @@ public class FarmingHelperPlugin extends Plugin
 
     @Subscribe public void onGameTick(GameTick event)
     {
-        if (client.getGameState() != GameState.LOGGED_IN) return;
+        if(!running||!runtimeReady||client.getGameState()!=GameState.LOGGED_IN)return;
         if(hopping){hopping=false;if(!Objects.equals(runProfile,config.getRSProfileKey()))reset();lastView=null;}
         sampleStorage();
         updateSeedBox();
@@ -437,8 +456,8 @@ public class FarmingHelperPlugin extends Plugin
         {
             // Re-evaluate supplies and local transfer legs before a pending route can refresh.
             update();
-            if(navigation!=null && client.getLocalPlayer()!=null)navigation.tick(LocationContext.capture(client).pathStart());
         }
+        if(navigation!=null)navigation.tick(client.getLocalPlayer()==null?null:LocationContext.capture(client).pathStart());
         if(vaultViews!=null)vaultViews.tick();
         updateRunBank(false);
 
@@ -449,7 +468,8 @@ public class FarmingHelperPlugin extends Plugin
         if (event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.SEED_VAULT)
         {
             sampledStorage.remove(event.getGroupId()==InterfaceID.BANKMAIN?InventoryID.BANK:InventoryID.SEED_VAULT);
-            thread.invokeLater(() -> { if (running) sampleStorage(); });
+            // The next game tick owns storage sampling. Opening a widget is
+            // not proof that its item packet has arrived yet.
         }
     }
 
@@ -497,7 +517,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     @Subscribe public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
     {
-        if("shortestpath".equals(event.getGroup()))thread.invokeLater(this::invalidateTravel);
+        if("shortestpath".equals(event.getGroup()))onClient(this::invalidateTravel);
         if("farming-helper".equals(event.getGroup())&&!event.getKey().startsWith("observed"))preferenceRevision++;
     }
 
@@ -715,7 +735,7 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> runItems=vaultRunItems();
         if(runItems==null)return null;
         boolean bird=birdBankPhase();
-        List<?> inputs=List.of(session,quantities,bankPlaceholders,runItems,bird,preferenceRevision,vaultAccessRevision);
+        List<?> inputs=List.of(session.get(),quantities,bankPlaceholders,runItems,bird,preferenceRevision,vaultAccessRevision);
         if(inputs.equals(shelfInputs))return shelfItems;
         boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
         Set<Integer> candidates = new HashSet<>(owned.keySet());
@@ -750,12 +770,12 @@ public class FarmingHelperPlugin extends Plugin
     }
     void showActiveRunBank(java.util.function.Consumer<String> feedback)
     {
-        long id=session;
+        long id=session.get();
         thread.invokeLater(()->{
-            if(id!=session||!guideRequested||!flag("activeRunBank",true))return;
+            if(id!=session.get()||!guideRequested||!flag("activeRunBank",true))return;
             sampleStorage();update();
             String message=updateRunBank(true);
-            if(!message.isEmpty())SwingUtilities.invokeLater(()->{if(id==session&&guideRequested)feedback.accept(message);});
+            if(!message.isEmpty())SwingUtilities.invokeLater(()->{if(id==session.get()&&guideRequested)feedback.accept(message);});
         });
     }
     TransportHint currentTransport()
@@ -922,7 +942,8 @@ public class FarmingHelperPlugin extends Plugin
         if(!vaultAccessible.equals(accessible)){vaultAccessible=Set.copyOf(accessible);vaultAccessRevision++;}
         Map<String,String> old=accessNotes;
         accessNotes = Collections.unmodifiableMap(notes);
-        if(!old.equals(notes)&&panel!=null)SwingUtilities.invokeLater(()->{if(running&&panel!=null)panel.accessChanged();});
+        FarmingHelperPanel target=panel;
+        if(!old.equals(notes)&&target!=null)SwingUtilities.invokeLater(()->{if(running&&panel==target)target.accessChanged();});
     }
 
     private QuestFarmingStateReader.Observation observe(FarmRunPatch p)
@@ -1407,7 +1428,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean atAction=player!=null&&actionPoint!=null&&player.getPlane()==actionPoint.getPlane()&&player.distanceTo(actionPoint)<=5;
         stepItems=!preparing()&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&atAction?localStepItems:Collections.emptySet();
         if(navigation!=null)navigation.request(loggedIn?location.pathStart():null,leg.point,leg.probe);
-        if(location.inHouse()&&!shortestPathAvailable&&current!=null&&!preparing())
+        if(location.inHouse()&&(navigation==null||!navigation.enabled())&&current!=null&&!preparing())
             instruction="Use an available house teleport toward the next patch, or leave your house.\n"+instruction;
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
         TransportHint transport=currentTransport();
@@ -1459,8 +1480,10 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(!view.equals(lastView))
         {
-            lastView=view;final long id=session;
-            SwingUtilities.invokeLater(()->{ if(running && guideRequested && id==session) panel.guide(view,id); });
+            lastView=view;long id=session.get();FarmingHelperPanel target=panel;
+            // If multiple game ticks outrun Swing, render only the newest
+            // immutable view for this panel/session, never a stale backlog.
+            SwingUtilities.invokeLater(()->{if(running&&guideRequested&&id==session.get()&&panel==target&&target!=null&&lastView==view)target.guide(view,id);});
         }
     }
 
@@ -1531,21 +1554,27 @@ public class FarmingHelperPlugin extends Plugin
     }
     void continueRun()
     {
-        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested)return;
+        long id=session.get();thread.invokeLater(()->{if(id!=session.get()||!guideRequested)return;
             if(phase==Preparation.Phase.INITIAL){pinned=null;current=null;activeCrop=null;progress.reset();}
             phase=Preparation.Phase.ACTIVE;update();});
     }
     void resupply()
     {
-        long id=session;thread.invokeLater(()->{if(id!=session||!guideRequested||diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(Preparation.Phase.RESUPPLY);update();});
+        long id=session.get();thread.invokeLater(()->{if(id!=session.get()||!guideRequested||diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(Preparation.Phase.RESUPPLY);update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
     {
-        if(itemManager==null||rows.stream().allMatch(row->icons.containsKey(row.id)))return;
-        Map<Integer,ImageIcon> next=new HashMap<>(icons);
-        for(GuideView.ItemRow row:rows) if(!next.containsKey(row.id))
-            next.put(row.id,new ImageIcon(itemManager.getImage(row.id)));
+        if(itemManager==null)return;
+        Set<Integer> ids=new HashSet<>();for(GuideView.ItemRow row:rows)ids.add(row.id);
+        if(icons.keySet().equals(ids))return;
+        Map<Integer,ImageIcon> next=new HashMap<>();
+        for(int id:ids)
+        {
+            ImageIcon icon=icons.get(id);
+            if(icon==null){var image=itemManager.getImage(id);if(image!=null)icon=new ImageIcon(image);}
+            if(icon!=null)next.put(id,icon);
+        }
         icons=Map.copyOf(next);
     }
     ImageIcon icon(int itemId) { return icons.get(itemId); }

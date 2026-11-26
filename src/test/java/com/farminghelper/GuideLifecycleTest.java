@@ -190,7 +190,10 @@ public class GuideLifecycleTest
         });
         assertNull(plugin.activePatch());
         plugin.onGameTick(null);
-        verify(bus,atLeastOnce()).post(new PluginMessage("shortestpath","clear"));
+        // Legacy Shortest Path has not answered an ownership check: never
+        // clear a route globally without confirmation.
+        verify(bus,never()).post(new PluginMessage("shortestpath","clear"));
+        verify(bus,atLeastOnce()).post(argThat(e->e instanceof PluginMessage&&"getTarget".equals(((PluginMessage)e).getName())));
         plugin.startIndividual(PatchType.HERB);
         assertEquals("Farming Guild",plugin.activePatch().getLocation());
         plugin.stop();

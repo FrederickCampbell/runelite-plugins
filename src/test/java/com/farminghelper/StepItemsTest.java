@@ -13,8 +13,8 @@ public class StepItemsTest
         assertEquals(Set.of(id),StepItems.select(StepEngine.Action.PLANT,PatchType.FRUIT_TREE,palm,ItemID.BUCKET_ULTRACOMPOST,1351,Map.of()));
         assertEquals(Set.of(ItemID.BUCKET_ULTRACOMPOST),StepItems.select(StepEngine.Action.COMPOST,PatchType.FRUIT_TREE,palm,ItemID.BUCKET_ULTRACOMPOST,1351,Map.of()));
         assertTrue(StepItems.select(StepEngine.Action.CHECK_HEALTH,PatchType.FRUIT_TREE,palm,ItemID.BUCKET_ULTRACOMPOST,1351,Map.of()).isEmpty());
-        assertTrue(StepItems.firstSlot(id,1,new int[]{-1,id,id,id}));
-        assertFalse(StepItems.firstSlot(id,2,new int[]{-1,id,id,id}));
+        assertTrue(StepItems.firstSlot(id,1,new net.runelite.api.Item[]{null,new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1)}));
+        assertFalse(StepItems.firstSlot(id,2,new net.runelite.api.Item[]{null,new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1),new net.runelite.api.Item(id,1)}));
     }
     @Test public void clearOnlyNeedsAnOccupiedActionablePatch()
     {

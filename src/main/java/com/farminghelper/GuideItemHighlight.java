@@ -8,7 +8,6 @@ import javax.inject.Inject;
 import javax.inject.Provider;
 import net.runelite.api.Client;
 import net.runelite.api.InventoryID;
-import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.InterfaceID;
@@ -39,9 +38,7 @@ final class GuideItemHighlight extends WidgetItemOverlay
             if(!helper.activeStepItems().contains(id))return;
             ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
             if(inventory==null)return;
-            Item[] entries=inventory.getItems();int[] ids=new int[entries.length];
-            for(int i=0;i<entries.length;i++)ids[i]=entries[i]==null?-1:entries[i].getId();
-            if(!StepItems.firstSlot(id,itemWidget.getIndex(),ids))return;
+            if(!StepItems.firstSlot(id,itemWidget.getIndex(),inventory.getItems()))return;
             color=Color.CYAN;
         }
         else if(group==InterfaceID.SEED_VAULT)

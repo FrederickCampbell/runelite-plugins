@@ -56,4 +56,42 @@ public class Integration39Test
         assertEquals(1,hints.size());assertEquals(12345,hints.get(0).objectId);
         assertEquals("Enter portal — Weiss",hints.get(0).instruction());
     }
+
+    @Test public void legacySilenceNeverClearsAndLateOwnershipReplyExpires()
+    {
+        List<PluginMessage> sent=new ArrayList<>();
+        NavigationBridge bridge=new NavigationBridge(sent::add);bridge.enabled(true);
+        WorldPoint start=new WorldPoint(3100,3200,0),target=new WorldPoint(2848,3934,0);
+        bridge.request(start,target,false);bridge.stop();
+        PluginMessage check=sent.get(sent.size()-1);
+        assertEquals("getTarget",check.getName());
+        for(int i=0;i<5;i++)bridge.tick(start);
+        assertFalse(bridge.message(new PluginMessage("shortestpath","currentTarget",Map.of("id",check.getData().get("id"),"set",true,"target",target))));
+        assertFalse(sent.stream().anyMatch(e->"clear".equals(e.getName())));
+    }
+    @Test public void identicalDestinationWithExternalConfigIsNotOwnedAndIdsNeverRepeat()
+    {
+        List<PluginMessage> sent=new ArrayList<>();
+        WorldPoint start=new WorldPoint(3100,3200,0),target=new WorldPoint(2848,3934,0);
+        NavigationBridge first=new NavigationBridge(sent::add);first.enabled(true);first.request(start,target,false);first.stop();
+        Object oldId=sent.get(sent.size()-1).getData().get("id");
+        NavigationBridge second=new NavigationBridge(sent::add);second.enabled(true);second.request(start,target,false);second.stop();
+        Object newId=sent.get(sent.size()-1).getData().get("id");
+        assertNotEquals(oldId,newId);
+        assertFalse(second.message(new PluginMessage("shortestpath","currentTarget",Map.of("id",oldId,"set",true,"target",target))));
+        assertTrue(second.message(new PluginMessage("shortestpath","currentTarget",Map.of("id",newId,"set",true,"target",List.of(target),"config",Map.of("external",true)))));
+        assertFalse(sent.stream().anyMatch(e->"clear".equals(e.getName())));
+        assertFalse(NavigationBridge.matchesTarget(target,List.of(List.of(target))));
+    }
+    @Test public void aNewDisplayInvalidatesPendingRelease()
+    {
+        List<PluginMessage> sent=new ArrayList<>();
+        NavigationBridge bridge=new NavigationBridge(sent::add);bridge.enabled(true);
+        WorldPoint start=new WorldPoint(3100,3200,0),a=new WorldPoint(2848,3934,0),b=new WorldPoint(3000,3000,0);
+        bridge.request(start,a,false);bridge.stop();
+        Object id=sent.get(sent.size()-1).getData().get("id");
+        bridge.request(start,b,false);
+        assertFalse(bridge.message(new PluginMessage("shortestpath","currentTarget",Map.of("id",id,"set",true,"target",a))));
+        assertFalse(sent.stream().anyMatch(e->"clear".equals(e.getName())));
+    }
 }

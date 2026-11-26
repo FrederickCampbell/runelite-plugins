@@ -2,6 +2,7 @@ package com.farminghelper;
 
 import java.util.*;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.Item;
 
 /** Inventory guidance is deliberately separate from the full run shopping list. */
 final class StepItems
@@ -30,10 +31,10 @@ final class StepItems
         return Set.copyOf(result);
     }
     /** Pick one matching slot, in inventory order, irrespective of render traversal. */
-    static boolean firstSlot(int id,int index,int[] inventory)
+    static boolean firstSlot(int id,int index,Item[] inventory)
     {
-        if(index<0||index>=inventory.length||inventory[index]!=id)return false;
-        for(int i=0;i<index;i++)if(inventory[i]==id)return false;
+        if(inventory==null||index<0||index>=inventory.length||inventory[index]==null||inventory[index].getId()!=id)return false;
+        for(int i=0;i<index;i++)if(inventory[i]!=null&&inventory[i].getId()==id)return false;
         return true;
     }
     private StepItems(){}

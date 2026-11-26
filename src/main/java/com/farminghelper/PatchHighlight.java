@@ -102,14 +102,26 @@ final class PatchHighlight extends Overlay
     void spawned(GameObject object)
     {
         if(object==null)return;
-        ObjectComposition c=client.getObjectDefinition(object.getId());
-        if(object.getId()==SpecialRoutes.SEAWEED_BANK_ID || object.getId()==SpecialRoutes.SEAWEED_BOAT_ID || object.getId()==SpecialRoutes.SEAWEED_ROPE_ID || BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || verificationObject(c))
-        {if(objects.add(object))invalidateSceneTargets();return;}
-        if(c!=null && c.getImpostorIds()!=null)
-            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || verificationObject(client.getObjectDefinition(id))){if(objects.add(object))invalidateSceneTargets();return;}
+        int id=object.getId();
+        if(knownObject(id)||classified.computeIfAbsent(id,this::classify))
+            if(objects.add(object))invalidateSceneTargets();
+    }
+    private final Map<Integer,Boolean> classified=new HashMap<>();
+    private static boolean knownObject(int id)
+    {
+        return id==SpecialRoutes.SEAWEED_BANK_ID||id==SpecialRoutes.SEAWEED_BOAT_ID||id==SpecialRoutes.SEAWEED_ROPE_ID||
+            BirdhouseRun.isObject(id)||PatchObjects.known(id)||QuestTargets.known(id);
+    }
+    private boolean classify(int id)
+    {
+        ObjectComposition c=client.getObjectDefinition(id);
+        if(isTransition(c)||isVine(c)||verificationObject(c))return true;
+        if(c!=null&&c.getImpostorIds()!=null)
+            for(int variant:c.getImpostorIds())if(knownObject(variant)||verificationObject(client.getObjectDefinition(variant)))return true;
+        return false;
     }
     void despawned(GameObject o){if(objects.remove(o))invalidateSceneTargets();}
-    void clear(){objects.clear();invalidateSceneTargets();resolvedView=null;resolvedTick=-1;resolvedPlane=-1;}
+    void clear(){objects.clear();classified.clear();invalidateSceneTargets();resolvedView=null;resolvedTick=-1;resolvedPlane=-1;}
     void transformed(){invalidateSceneTargets();}
     void npcChanged(){leprechauns.clear();gardeners.clear();}
     void transportChanged(){transportResolved=false;transportPatch=null;transportLeg=null;transportTarget=null;}

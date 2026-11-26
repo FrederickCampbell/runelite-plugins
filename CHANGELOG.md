@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.07.3 — stabilization branch runtime reliability
+
+- Move game-state initialization and teardown to the client thread; guard deferred profile, config, plugin-message and Swing publications against old lifecycle/session identities. Coalesce obsolete guide views and release run/scene/icon state on disable.
+- Shortest Path clears only after an exact, current, unmodified destination response; legacy silence never permits a global clear. Bound release checks and use unique request IDs across bridge restarts.
+- Avoid allocating inventory ID arrays in item overlays; classify repeated scene object definitions once per scene. Remove duplicate navigation state and widget-open polling; use the existing game-tick storage sampler.
+
 ## v1.07.2 — stabilization branch storage reliability
 
 - Treat incomplete native storage reads as unavailable rather than empty; commit bank/vault container changes after packet reconciliation. Persist per-character last successful observation timestamps, including confirmed empty storage. Keep placeholders separate from quantities.
