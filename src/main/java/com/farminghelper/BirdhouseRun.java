@@ -65,6 +65,14 @@ final class BirdhouseRun
     private static final int[] HUNTER={5,14,24,34,44,49,59,74,89};
     private static final int[] CRAFT={5,15,25,35,45,50,60,75,90};
     private static final int[] BAIT={ItemID.POTATO_SEED,ItemID.ONION_SEED,ItemID.CABBAGE_SEED,ItemID.BARLEY_SEED,ItemID.HAMMERSTONE_HOP_SEED,ItemID.ASGARNIAN_HOP_SEED,ItemID.JUTE_SEED,ItemID.YANILLIAN_HOP_SEED,ItemID.KRANDORIAN_HOP_SEED,ItemID.TOMATO_SEED,ItemID.SWEETCORN_SEED,ItemID.STRAWBERRY_SEED};
+    // A complete carried kit wins over a higher-tier kit observed in the bank.
+    static Map<Integer,Integer> preferCarried(List<FarmRunPatch> ready,Map<FarmRunPatch,Observation> states,
+        Map<Integer,Integer> bag,Map<Integer,Integer> stock,Map<Integer,Integer> required,int hunter,int crafting)
+    {
+        Map<Integer,Integer> plan=new HashMap<>(required);
+        supplies(ready,states,bag,plan,hunter,crafting);
+        return Preparation.missing(plan,bag)?stock:bag;
+    }
     static Map<FarmRunPatch,String> supplies(List<FarmRunPatch> ready,Map<FarmRunPatch,Observation> states,
         Map<Integer,Integer> stock,Map<Integer,Integer> required,int hunter,int crafting)
     {
