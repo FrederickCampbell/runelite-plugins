@@ -1311,7 +1311,7 @@ public class FarmingHelperPlugin extends Plugin
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
             if(activeLive&&!preparing()&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
-                leprechaunWithdrawal=contextualWithdrawal(current,action,stepCompost,bag,carried,wateringCan);
+                leprechaunWithdrawal=contextualWithdrawal(current,action,stepCompost,bag,carried,wateringCan,needsCan);
             if(activeLive&&!preparing()&&action==StepEngine.Action.HARVEST&&Supplies.secateursUseful(type,o)&&
                 carried.getOrDefault(magicSecateurs,0)==0&&storedMagic&&leprechaunWithdrawal==null&&
                 highlight!=null&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
@@ -1484,14 +1484,13 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     private LeprechaunWithdrawal contextualWithdrawal(FarmRunPatch patch,StepEngine.Action action,int compost,
-        Map<Integer,Integer> bag,Map<Integer,Integer> carried,int wateringCan)
+        Map<Integer,Integer> bag,Map<Integer,Integer> carried,int wateringCan,boolean needsCan)
     {
         if(!runLeprechaun||highlight==null||!highlight.hasLocalPatch(patch)||highlight.leprechaun(patch)==null)return null;
         int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
         LeprechaunWithdrawal immediate=LeprechaunWithdrawal.resolve(client,action,patch.getPatchType(),compost,
             client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3,bag,carried,wateringCan,free,this::observedItemName);
-        return LeprechaunWithdrawal.withWater(client,immediate,action,patch.getPatchType(),compost,bag,wateringCan,free,
-            runWater&&!activeClearOnly&&activeCrop!=null,this::observedItemName);
+        return LeprechaunWithdrawal.withWater(client,immediate,action,compost,bag,wateringCan,free,needsCan,this::observedItemName);
     }
 
     private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,
@@ -1560,7 +1559,7 @@ public class FarmingHelperPlugin extends Plugin
         if(navigation!=null)navigation.request(location.pathStart(),approach,false);
         String instruction=CropCare.prunes(type)?"Prune the diseased crop with secateurs.":"Use plant cure on the diseased crop.";
         Map<Integer,Integer> bag=stock().bag;
-        leprechaunWithdrawal=contextualWithdrawal(target,StepEngine.Action.CURE,-1,bag,carried,-1);
+        leprechaunWithdrawal=contextualWithdrawal(target,StepEngine.Action.CURE,-1,bag,carried,-1,false);
         if(leprechaunWithdrawal!=null)instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
         else if(carried.getOrDefault(cure,0)==0)instruction+=CropCare.prunes(type)?" Obtain secateurs or skip this cure.":" Obtain plant cure from a nearby farmer or shop if available, or skip this cure.";
         String resume=preparing()?"Preparation / resupply":current==null?"The remaining run":current.getDisplayName();

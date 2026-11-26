@@ -91,9 +91,9 @@ final class LeprechaunWithdrawal
     /** The current compost step remains authoritative. Only offer the future
      * watering can when it fits alongside the immediate withdrawal. */
     static LeprechaunWithdrawal withWater(Client c,LeprechaunWithdrawal primary,StepEngine.Action action,
-        PatchType type,int compost,Map<Integer,Integer> bag,int wateringCan,int free,boolean waterEnabled,IntFunction<String> names)
+        int compost,Map<Integer,Integer> bag,int wateringCan,int free,boolean needsCan,IntFunction<String> names)
     {
-        if(action!=StepEngine.Action.COMPOST||!waterEnabled||!type.canBeWatered()||wateringCan>0||compost<0)return primary;
+        if(action!=StepEngine.Action.COMPOST||!needsCan||wateringCan>0||compost<0)return primary;
         if(primary==null&&bag.getOrDefault(compost,0)==0)return null;
         if(free<(primary==null?1:2))return primary;
         int can=CropCare.storedCan(c,names);
