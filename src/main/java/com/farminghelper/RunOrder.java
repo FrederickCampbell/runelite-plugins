@@ -47,7 +47,7 @@ final class RunOrder
     // Shared route selection: preset identity never changes the itinerary.
     // Physical site identities are retained; only known same-visit blocks are merged.
     private static final List<String> MIXED=List.of("Farming Guild","Gnome Stronghold","Tree Gnome Village",
-        "Lumbridge Castle","Varrock","Champions' Guild","Al Kharid","Draynor Manor","South Falador",
+        "Lumbridge Castle","Varrock","Champions' Guild","Al Kharid","South Falador","Draynor Manor",
         "Falador Park","Taverley","Rimmington","Port Sarim","North Ardougne","Ardougne Monastery",
         "Yanille","Seers' Village","Catherby","Brimhaven","Tai Bwo Wannai","Canifis mushroom","Morytania",
         "Harmony Island","Lletya","Prifddinas","Troll Stronghold","Weiss","Etceteria","Hosidius",
@@ -81,7 +81,11 @@ final class RunOrder
             // Off-island use the documented stable south-to-north catalogue direction.
             WorldPoint south=BirdhouseRun.Site.MEADOW_SOUTH.approach,north=BirdhouseRun.Site.VALLEY_NORTH.approach;
             boolean reverse=start!=null&&proxy(start,north)<100&&proxy(start,north)<proxy(start,south);
-            ps.sort(Comparator.comparingInt(RunOrder::localOrder)
+            // Mixed Catherby visits finish the selected farm plots before the fruit tree.
+            boolean catherbyMixed="Catherby".equals(site)&&ps.stream().anyMatch(p->p.getPatchType()==PatchType.FRUIT_TREE);
+            ps.sort(Comparator.comparingInt((FarmRunPatch p)->catherbyMixed?
+                    p.getPatchType()==PatchType.HERB?-2:
+                    p.getPatchType()==PatchType.ALLOTMENT||p.getPatchType()==PatchType.FLOWER||p.getPatchType()==PatchType.COMPOST_BIN?-1:localOrder(p):localOrder(p))
                 .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?(reverse?-BirdhouseRun.order(p):BirdhouseRun.order(p)):0));
             ordered.add(new Group(site,ps));
         });
@@ -117,45 +121,6 @@ final class RunOrder
         ordered.sort(Comparator.comparingInt(g->terminalOrder(g.site)));
         return ordered;
     }
-    /** Move only ready members of a nearby selected block. Keep the rest of the
-     * itinerary stable and preserve the existing terminal-island ordering.
-     * This is a bounded geographic preference, not a path cost estimate. */
-    static Map<WorldPoint,FarmRunPatch> nearbyTargets(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,WorldPoint here)
-    {
-        Map<WorldPoint,FarmRunPatch> targets=new LinkedHashMap<>();
-        if(here==null||ready.isEmpty())return targets;
-        Set<FarmRunPatch> allowed=new HashSet<>(ready);
-        Map<String,List<FarmRunPatch>> groups=new LinkedHashMap<>();
-        for(FarmRunPatch p:itinerary)
-            if(allowed.contains(p)&&terminalOrder(site(p))==0)
-                groups.computeIfAbsent(block(site(p)),k->new ArrayList<>()).add(p);
-        List<FarmRunPatch> entries=new ArrayList<>();
-        for(List<FarmRunPatch> group:groups.values())
-        {
-            group.sort(Comparator.comparingInt(RunOrder::localOrder));
-            FarmRunPatch p=group.get(0);WorldPoint entry=surface(p);
-            if(entry!=null&&entry.getPlane()==here.getPlane()&&proxy(here,entry)<70)entries.add(p);
-        }
-        entries.sort(Comparator.comparingDouble(p->proxy(here,surface(p))));
-        for(FarmRunPatch p:entries)targets.putIfAbsent(surface(p),p);
-        return targets;
-    }
-    static void promoteNearby(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,WorldPoint here)
-    {
-        Map<WorldPoint,FarmRunPatch> targets=nearbyTargets(itinerary,ready,here);
-        if(!targets.isEmpty())promoteBlock(itinerary,ready,targets.values().iterator().next());
-    }
-    static void promoteBlock(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,FarmRunPatch entry)
-    {
-        if(entry==null||!ready.contains(entry)||terminalOrder(site(entry))!=0)return;
-        String selected=block(site(entry));List<FarmRunPatch> group=new ArrayList<>();
-        for(FarmRunPatch p:itinerary)if(ready.contains(p)&&selected.equals(block(site(p))))group.add(p);
-        group.sort(Comparator.comparingInt(RunOrder::localOrder));
-        itinerary.removeAll(group);itinerary.addAll(0,group);
-        ready.removeAll(group);ready.addAll(0,group);
-    }
-    static boolean arrival(WorldPoint before,WorldPoint after)
-    {return before!=null&&after!=null&&before.distanceTo2D(after)>12;}
     private static boolean terminal(Group g){return "Entrana".equals(g.site)||"Fossil Island".equals(g.site);}
     /** Keep the established order. Insert newly ready mainland work before the terminal islands. */
     static void appendReady(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready)
