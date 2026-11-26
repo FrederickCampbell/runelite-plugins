@@ -19,8 +19,12 @@ final class GuideView
     /** Shared quantity semantics; overlays do not change native storage layouts. */
     static Set<Integer> missingItems(Map<Integer,Integer> required,Map<Integer,Integer> carried)
     {
+        return missingItems(required,carried,Map.of());
+    }
+    static Set<Integer> missingItems(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> noteSources)
+    {
         Set<Integer> missing=new HashSet<>();
-        required.forEach((id,n)->{if(carried.getOrDefault(id,0)<n)missing.add(id);});
+        required.forEach((id,n)->{if(carried.getOrDefault(id,0)<n){missing.add(id);Integer base=noteSources.get(id);if(base!=null)missing.add(base);}});
         return Set.copyOf(missing);
     }
 
