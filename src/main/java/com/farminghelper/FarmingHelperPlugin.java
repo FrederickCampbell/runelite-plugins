@@ -67,7 +67,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile RouteLeg diseaseLeg;
     private volatile Set<Integer> diseaseItems=Collections.emptySet();
     private GuideView normalView;
-    private boolean specialtyStaged,specialtyBirdPhase;
+    private boolean specialtyStaged,specialtyBirdPhase,seaweedBirdTransfer;
     private final Map<Integer,String> itemNamesCache=new HashMap<>();
     private Crop activeCrop;
     private volatile StepEngine.Action activeAction = StepEngine.Action.INSPECT;
@@ -226,7 +226,7 @@ public class FarmingHelperPlugin extends Plugin
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
-        specialtyStaged=false;specialtyBirdPhase=false;
+        specialtyStaged=false;specialtyBirdPhase=false;seaweedBirdTransfer=false;
         runProgress.reset();
         temporaryCare=null;temporaryPay=null;temporarySeedless=null;temporaryReplacement=Collections.emptyMap();hopping=false;runProfile=null;
         progress.reset();
@@ -832,6 +832,7 @@ public class FarmingHelperPlugin extends Plugin
         // A fresh pinned order is necessary because birdhouses were deliberately absent.
         if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&ready.isEmpty()&&run.contains(FarmRunType.BIRDHOUSE))
         {
+            seaweedBirdTransfer=patches.stream().anyMatch(p->p.getPatchType()==PatchType.SEAWEED&&runProgress.is(p,RunProgress.Status.COMPLETED));
             specialtyBirdPhase=true;current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
             phase=Preparation.Phase.ACTIVE;visitedStorage=false;pinned=null;
             update();return;
@@ -1050,6 +1051,13 @@ public class FarmingHelperPlugin extends Plugin
                 if(routeToStorage&&(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
                     &&!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
             }
+        }
+        if(loggedIn&&!preparing()&&seaweedBirdTransfer&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE))
+        {
+            boolean missing=Preparation.missing(physicalRequired,bag);
+            RouteLeg transfer=SpecialRoutes.birdTransfer(player,missing,storageOpen(),level);
+            if(transfer!=null)leg=transfer;
+            else seaweedBirdTransfer=false;
         }
         if(!preparing()&&current!=null&&current.getPatchType()==PatchType.CORAL)
             instruction="Wear the Medallion of the deep OR fishbowl helmet and diving apparatus before entering.\n"+instruction;

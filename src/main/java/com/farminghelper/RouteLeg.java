@@ -5,7 +5,7 @@ import net.runelite.api.coords.WorldPoint;
 /** A conditional approach, interaction or exit. No teleport or pathfinding logic. */
 final class RouteLeg
 {
-    enum Interaction { NONE, HESPORI_ENTER, HESPORI_EXIT, DIVE, SURFACE, CORAL_ENTER, CORAL_EXIT, BOARD, MOOR }
+    enum Interaction { NONE, HESPORI_ENTER, HESPORI_EXIT, DIVE, SURFACE, CORAL_ENTER, CORAL_EXIT, BOARD, MOOR, BIRD_BANK, BIRD_ROW }
     final WorldPoint point;
     final String instruction;
     final Interaction interaction;

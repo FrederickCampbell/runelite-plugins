@@ -15,6 +15,22 @@ final class SpecialRoutes
     static final WorldPoint CORSAIR_MOORING=new WorldPoint(2579,2843,0);
     static final WorldPoint ANGLER_MOORING=new WorldPoint(2467,2721,0);
     static final int ANGLER_ROWBOAT_VARBIT=18355;
+    static boolean onSeaweedIsland(WorldPoint p)
+    {return p!=null&&p.getPlane()==0&&p.distanceTo(SEAWEED_ISLAND)<=8;}
+    // Only called during the seaweed-to-birdhouse handoff. Null resumes normal routing.
+    static RouteLeg birdTransfer(WorldPoint player,boolean missing,boolean storageOpen,int level)
+    {
+        if(player==null)return RouteLeg.walk(null,false);
+        if(insideSeaweed(player))return RouteLeg.manual("Use the underwater exit to resurface, or teleport to resupply.",SURFACE);
+        if(onSeaweedIsland(player))
+            return missing?RouteLeg.manual("Collect the remaining birdhouse supplies from the bank chest.",BIRD_BANK):
+                storageOpen?RouteLeg.manual("Close the bank to continue to the rowboat.",NONE):
+                RouteLeg.manual("Use the rowboat and choose Row to the camp.",BIRD_ROW);
+        if(!missing)return null;
+        if(storageOpen)return RouteLeg.manual("Collect the remaining birdhouse supplies.",NONE);
+        Preparation.Bank bank=Preparation.choose(level,player,false,false);
+        return RouteLeg.approach(bank.point,"Travel to "+bank.name+" or another accessible bank for birdhouse supplies.",NONE);
+    }
     static boolean insideHespori(WorldPoint p){return p!=null && p.getRegionID()==5021;}
     static boolean insideSeaweed(WorldPoint p){return p!=null && p.getRegionID()==15008;}
     static boolean insideCoral(WorldPoint p){return p!=null && p.getRegionID()==13194;}
