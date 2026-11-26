@@ -107,8 +107,17 @@ final class ActiveRunBank
     }
     private void updateEligible(Set<Integer> next,Set<Integer> owned)
     {
-        Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);
-        if(!ids.equals(filtered))ids=Set.copyOf(filtered);
+        // Stable layouts are common. Check the intersection without copying the bank.
+        int count=0;
+        Set<Integer> smaller=owned.size()<next.size()?owned:next, larger=smaller==owned?next:owned;
+        for(int id:smaller)if(larger.contains(id))
+        {
+            if(!ids.contains(id)){count=-1;break;}
+            count++;
+        }
+        if(count==ids.size())return;
+        Set<Integer> filtered=new HashSet<>(smaller);filtered.retainAll(larger);
+        ids=Set.copyOf(filtered);
     }
     void bankClosed(){release();}
     void close(){close(bankOpen()?service():null);}
