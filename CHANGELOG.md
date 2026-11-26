@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.11 — consolidation and performance
+
+- Reuse one inventory occupancy estimate and native filled-slot count per planning update. Move prefix-invariant reads out of the prefix loop, avoid copying storage without noted payments, and reuse unchanged preparation commitments.
+- Skip unnecessary tree material preparation, classify aliases once per candidate, and remove redundant stock and transport work.
+- Preserve the native bank layout when the eligible intersection is unchanged; retain existing manual interactions and lifecycle safeguards.
+- Extend comparative CI with preparation, transport, stock and allocation probes, retaining sidebar pixel parity. No new features or dependencies.
+
 ## v1.10 — intelligent preparation
 
 - Scope preparation to inventory-constrained contiguous portions of the existing itinerary, with conservative working-space buffers and optional Guild staging.
