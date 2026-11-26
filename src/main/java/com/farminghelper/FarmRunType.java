@@ -26,8 +26,4 @@ enum FarmRunType
 		return displayName;
 	}
 
-	static FarmRunType forPatchType(PatchType patchType)
-	{
-		return patchType.getRunType();
-	}
 }
