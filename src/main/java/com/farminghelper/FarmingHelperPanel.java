@@ -981,7 +981,8 @@ final class FarmingHelperPanel extends PluginPanel
         stepText.put(stop.patch.key(),detail);body.add(detail,BorderLayout.CENTER);
         if(stop.active)
         {
-            JButton skip=actionButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":view.waterStep?"Skip watering":"Skip patch",()->plugin.skip(stop.patch));
+            boolean disease="Disease priority".equals(view.message);
+            JButton skip=actionButton(disease?"Skip cure / resume run":view.waterStep?"Skip watering":"Skip patch",()->plugin.skip(stop.patch,view.waterStep,disease));
             JPanel actions=transparent(new java.awt.GridLayout(0,1,0,2));
             if(view.compostStep){
                 actions.add(actionButton("Compost applied / skip",()->plugin.acknowledgeCompost(stop.patch)));

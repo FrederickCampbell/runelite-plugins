@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.07.7 — watering lifecycle correction
+
+- Record verified wet observations for every selected local waterable patch, including crops watered ahead of the guide. Reset suppression on verified empty/dead state; do not offer repeat watering merely because growth advances.
+- Centralize watering offer settlement and clear obsolete offers on cursor changes, interruptions, preparation and world hops. Bind sidebar skip intent to the displayed action so delayed watering skips cannot skip an unrelated action.
+- Preserve manual interactions and existing optional watering policy; no new polling or dependencies.
+
 ## v1.07.6 — final supply convenience
 
 - Recommend magic secateurs for yield-bearing harvests, recognizing inventory and equipment; unknown or locally stored tools remain advisory.

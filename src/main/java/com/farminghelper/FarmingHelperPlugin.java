@@ -245,7 +245,7 @@ public class FarmingHelperPlugin extends Plugin
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;preparationOrigin=null;
         pinned=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
-        birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;waterOfferTick=-1;waterOfferPatch=null;waterOfferOrigin=null;compostMissing=false;
+        birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;clearWaterOffer();compostMissing=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
         specialtyStaged=false;specialtyBirdPhase=false;seaweedBirdTransfer=false;
         runProgress.reset();
@@ -383,19 +383,36 @@ public class FarmingHelperPlugin extends Plugin
         return new ArrayList<>(result);
     }
     void skip(FarmRunPatch displayed)
+    {skip(displayed,activeAction()==StepEngine.Action.WATER,diseaseInterruptActive());}
+    void skip(FarmRunPatch displayed,boolean water,boolean disease)
     {
         inRun(()->{
-            if(diseaseTarget!=null)
+            if(disease)
             {
                 if(displayed==diseaseTarget){diseasePriority.skip(displayed);diseaseTarget=null;lastView=null;}
             }
-            else if (current != null && current == displayed)
+            else if(diseaseTarget==null&&current!=null&&current==displayed&&water==(activeAction==StepEngine.Action.WATER))
             {
-                if(activeAction==StepEngine.Action.WATER)wateredThisRun.add(current);
+                if(water)settleWater(current);
                 else runProgress.skip(current);
             }
             update();
         });
+    }
+
+    private void clearWaterOffer()
+    {waterOfferPatch=null;waterOfferOrigin=null;waterOfferTick=-1;}
+    private void settleWater(FarmRunPatch patch)
+    {wateredThisRun.add(patch);if(waterOfferPatch==patch)clearWaterOffer();}
+    private void observeWater(FarmRunPatch patch,QuestFarmingStateReader.Observation o)
+    {
+        if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE)return;
+        if(o.state==CropState.EMPTY||o.state==CropState.DEAD)
+        {
+            wateredThisRun.remove(patch);
+            if(waterOfferPatch==patch)clearWaterOffer();
+        }
+        else if(CropCare.watered(patch.getPatchType(),o))settleWater(patch);
     }
 
     /** Profile/config/plugin events may originate on the EDT or another worker. */
@@ -435,7 +452,7 @@ public class FarmingHelperPlugin extends Plugin
         if(event.getGameState()==GameState.HOPPING&&guideRequested)
         {
             // Preserve same-character run decisions, but release scene-local routes/widgets.
-            hopping=true;leprechaunWithdrawal=null;highlight.clear();if(navigation!=null)navigation.stop();
+            hopping=true;clearWaterOffer();leprechaunWithdrawal=null;highlight.clear();if(navigation!=null)navigation.stop();
             if(runBank!=null)runBank.close();if(vaultViews!=null)vaultViews.close();
             activeLive=false;stepItems=Collections.emptySet();lastAccessLevel=-1;
         }
@@ -978,11 +995,25 @@ public class FarmingHelperPlugin extends Plugin
         // Run this before normal planning, even during banking or birdhouses. No
         // mutations to the normal guide cursor, progress, or preparation state.
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new HashMap<>();
-        if(waterOfferPatch!=null&&CropCare.offerExpired(client.getTickCount()-waterOfferTick,
-            waterOfferOrigin==null||location.actual==null?Integer.MAX_VALUE:waterOfferOrigin.distanceTo(location.actual)))
-        {wateredThisRun.add(waterOfferPatch);waterOfferPatch=null;waterOfferOrigin=null;waterOfferTick=-1;}
         List<FarmRunPatch> local=loggedIn&&highlight!=null?localCrops(location):List.of();
-        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations,local))return;
+        List<FarmRunPatch> localWater=new ArrayList<>();
+        // Observe all selected, verified local plots, even if the player waters
+        // ahead of the guide. Only live evidence can settle or reset a crop.
+        for(FarmRunPatch p:local)
+        {
+            if(!p.getPatchType().canBeWatered()||!selected(p)||runProgress.is(p,RunProgress.Status.SKIPPED))continue;
+            if(!highlight.hasLocalPatch(p))continue;
+            observeWater(p,observations.computeIfAbsent(p,this::observe));
+            localWater.add(p);
+        }
+        if(waterOfferPatch!=null)
+        {
+            if(waterOfferPatch!=current||preparing()||!runWater)clearWaterOffer();
+            else if(CropCare.offerExpired(client.getTickCount()-waterOfferTick,
+                waterOfferOrigin==null||location.actual==null?Integer.MAX_VALUE:waterOfferOrigin.distanceTo(location.actual)))
+                settleWater(waterOfferPatch);
+        }
+        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations,local)){clearWaterOffer();return;}
         List<FarmRunPatch> eligible=new ArrayList<>();
         if(loggedIn)for(FarmRunPatch patch:patches)if(eligible(patch))eligible.add(patch);
         Map<Integer,Integer> storage=supplies.storage,stock=supplies.stock;
@@ -1042,12 +1073,9 @@ public class FarmingHelperPlugin extends Plugin
                 if(o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.DEAD)
                 {
                     if(changed){compostAcknowledged=false;activeCrop=null;}
-                    wateredThisRun.remove(p);
-                    if(waterOfferPatch==p){waterOfferPatch=null;waterOfferOrigin=null;waterOfferTick=-1;}
                 }
-                if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
             }
-            if(reopened)wateredThisRun.remove(p);
+            if(reopened){wateredThisRun.remove(p);if(waterOfferPatch==p)clearWaterOffer();}
             boolean preserveCrop=preserveReplacement(p,o);
             // Preserve selected flower species without picking them; newly planted flowers may finish care.
             if((type==PatchType.FLOWER && KeepCrop.observed(type,o)!=null && preserveCrop && !(p==current&&progress.planted())) ||
@@ -1119,17 +1147,14 @@ public class FarmingHelperPlugin extends Plugin
         Set<FarmRunPatch> careOnly=new LinkedHashSet<>();
         if(loggedIn&&!preparing()&&highlight!=null&&!(specialtyStaged&&specialtyBirdPhase))
         {
-            for(FarmRunPatch p:local)
+            for(FarmRunPatch p:localWater)
             {
                 PatchType type=p.getPatchType();
-                if(runProgress.is(p,RunProgress.Status.SKIPPED))continue;
                 // Do not let routine watering pull Fossil Island ahead of remaining mainland work.
                 // Verified disease interruptions remain independent and can still interrupt.
                 if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
                 QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
-                boolean water=selected(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,runWater)&&highlight.hasLocalPatch(p);
-                if(p==current&&activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
-                if(!water||wateredThisRun.contains(p))continue;
+                if(wateredThisRun.contains(p)||!CropCare.waterNeeded(type,o,runWater))continue;
                 if(ready.contains(p)&&!(p==current&&activeCareOnly))continue;
                 plant.remove(p);ready.remove(p);visible.remove(p);
                 careOnly.add(p);
@@ -1172,12 +1197,12 @@ public class FarmingHelperPlugin extends Plugin
         {
             seaweedBirdTransfer=SpecialRoutes.insideSeaweed(location.normalized)||SpecialRoutes.onSeaweedIsland(location.normalized)||
                 patches.stream().anyMatch(p->p.getPatchType()==PatchType.SEAWEED&&runProgress.is(p,RunProgress.Status.COMPLETED));
-            specialtyBirdPhase=true;current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
+            specialtyBirdPhase=true;clearWaterOffer();current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
             phase=Preparation.Phase.ACTIVE;visitedStorage=false;pinned=null;
             update();return;
         }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
-        if(next!=current) { current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
+        if(next!=current) { clearWaterOffer();current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
         activeClearOnly=clearOnly.contains(current);
         activeCareOnly=careOnly.contains(current);
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
@@ -1238,7 +1263,7 @@ public class FarmingHelperPlugin extends Plugin
             required.merge(Supplies.GARDENING_TROWEL,1,Math::max);
         }
         boolean needsCan=rawSeeds+seedlings>0||runWater&&ready.stream().anyMatch(p->p.getPatchType().canBeWatered()&&
-            (seeds.containsKey(p)||CropCare.waterNeeded(p.getPatchType(),observations.get(p),true)));
+            (seeds.containsKey(p)||!wateredThisRun.contains(p)&&CropCare.waterNeeded(p.getPatchType(),observations.get(p),true)));
         if(needsCan&&wateringCan<=0&&storedCan<=0)
             required.put(CropCare.preferredCan(wateringCan,storedCan,CropCare.wateringCan(stock,this::observedItemName)),1);
         int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
@@ -1304,7 +1329,8 @@ public class FarmingHelperPlugin extends Plugin
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
             StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,stepCompost);
             activeAction=action;
-            if(action==StepEngine.Action.WATER&&waterOfferPatch!=current)
+            if(action!=StepEngine.Action.WATER||preparing())clearWaterOffer();
+            else if(waterOfferPatch!=current)
             {waterOfferPatch=current;waterOfferTick=client.getTickCount();waterOfferOrigin=location.actual;}
             if(activeLive&&type.usesCompost()&&!activeClearOnly&&(action==StepEngine.Action.COMPOST||action==StepEngine.Action.PLANT))
                 compostMissing=!reader.compostRecorded(type.name(),current.getLocation(),current.getName(),1);
@@ -1584,7 +1610,7 @@ public class FarmingHelperPlugin extends Plugin
     private boolean preparing(){return phase==Preparation.Phase.INITIAL||phase==Preparation.Phase.RESUPPLY;}
     private void beginPreparation(Preparation.Phase next)
     {
-        preparationOrigin=LocationContext.capture(client).normalized;
+        clearWaterOffer();preparationOrigin=LocationContext.capture(client).normalized;
         phase=next;visitedStorage=false;
     }
     void continueRun()

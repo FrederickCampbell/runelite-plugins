@@ -389,4 +389,47 @@ public class GuideLifecycleTest
         assertNull(plugin.activePatch());
         SwingUtilities.invokeAndWait(()->{});
     }
+
+    @Test public void wateringAheadAndSkippedWaterDoNotReturnWhenGrowthAdvances()
+    {
+        Player player=mock(Player.class);
+        when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(new WorldPoint(2809,3463,0));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(99);
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(config.getRSProfileKey()).thenReturn("profile");
+        var growing=com.farminghelper.queststate.CropState.GROWING;
+        var states=new java.util.HashMap<String,QuestFarmingStateReader.Observation>();
+        states.put("North",liveHop(growing,6));states.put("South",liveHop(growing,6));
+        when(reader.observeType(eq("ALLOTMENT"),eq("Catherby"),anyString(),any())).thenAnswer(i->states.get(i.getArgument(2)));
+        when(reader.inPatchRegion(eq("ALLOTMENT"),eq("Catherby"),anyString(),any())).thenReturn(true);
+        when(highlight.hasLocalPatch(argThat(p->p!=null&&p.getPatchType()==PatchType.ALLOTMENT&&p.getLocation().equals("Catherby")))).thenReturn(true);
+        doAnswer(i->{((Runnable)i.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        plugin.startUp();
+        try
+        {
+            plugin.startManual(Set.of("Catherby~ALLOTMENT~North","Catherby~ALLOTMENT~South"));
+            FarmRunPatch first=plugin.activePatch();assertNotNull(first);assertEquals(StepEngine.Action.WATER,plugin.activeAction());
+            String other=first.getName().equals("North")?"South":"North";
+            states.put(other,liveHop(growing,70));plugin.onGameTick(null);
+            assertSame(first,plugin.activePatch());
+            plugin.skip(first,true,false);assertNull(plugin.activePatch());
+            states.put(other,liveHop(growing,7));plugin.onGameTick(null);
+            assertNull("Verified watered neighbor stays settled through growth",plugin.activePatch());
+            states.put(other,liveHop(com.farminghelper.queststate.CropState.DEAD,138));plugin.onGameTick(null);
+            assertNotNull(plugin.activePatch());assertEquals(StepEngine.Action.CLEAR_DEAD,plugin.activeAction());
+            FarmRunPatch next=plugin.activePatch();
+            plugin.skip(next,true,false);
+            assertSame("Stale watering click cannot skip a clearing action",next,plugin.activePatch());
+            plugin.setRunPolicy(RunPolicy.NONE,false);
+            states.put(other,liveHop(com.farminghelper.queststate.CropState.EMPTY,3));plugin.onGameTick(null);
+            states.put(other,liveHop(growing,6));plugin.onGameTick(null);
+            assertNotNull("New crop can be watered",plugin.activePatch());assertEquals(StepEngine.Action.WATER,plugin.activeAction());
+            states.put(other,liveHop(growing,70));plugin.onGameTick(null);
+            assertNull(plugin.activePatch());
+            states.put(other,liveHop(growing,7));plugin.onGameTick(null);assertNull(plugin.activePatch());
+        }
+        finally {plugin.shutDown();}
+    }
 }
