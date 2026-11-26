@@ -142,8 +142,9 @@ public final class QuestFarmingStateReader
         boolean near = player != null && inRegion(match,player) &&
             (worldPoint == null
                 ? player.getRegionID() == match.getRegion().getRegionID()
-                : (implementation==PatchImplementation.CORAL ? player.distanceTo2D(worldPoint)<=LIVE_TILE_RADIUS :
-                    player.getPlane() == worldPoint.getPlane() && player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS));
+                : (implementation==PatchImplementation.CORAL || implementation==PatchImplementation.SEAWEED
+                    ? player.distanceTo2D(worldPoint)<=LIVE_TILE_RADIUS
+                    : player.getPlane() == worldPoint.getPlane() && player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS));
         boolean kastoriFlower = implementation==PatchImplementation.FLOWER && "Kastori".equals(location);
         boolean bin = implementation==PatchImplementation.COMPOST || implementation==PatchImplementation.BIG_COMPOST;
         if (near && (kastoriFlower || bin) && !confirmedObject(match,worldPoint,kastoriFlower))
@@ -271,6 +272,7 @@ public final class QuestFarmingStateReader
     {
         PatchImplementation impl=patch.getImplementation();
         if(impl==PatchImplementation.CORAL && point.getRegionID()!=13194)return false;
+        if(impl==PatchImplementation.SEAWEED && (point.getRegionID()!=15008||point.getPlane()!=1))return false;
         if(impl==PatchImplementation.HESPORI && point.getRegionID()!=5021)return false;
         return world.getRegionsForLocation(point).contains(patch.getRegion());
     }
