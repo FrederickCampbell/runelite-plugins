@@ -87,6 +87,19 @@ public class PatchHighlightPerformanceTest
             assertNotSame(area,overlay.footprint(patch));
             PatchHighlight.Footprint next=overlay.footprint(patch);
             overlay.despawned(crops.get(0));assertNotSame(next,overlay.footprint(patch));
+            // The active view's plane, not a top-level client plane, controls scene identity.
+            when(view.getPlane()).thenReturn(1);
+            assertNull(overlay.footprint(patch));
+            when(view.getPlane()).thenReturn(0);
+            assertNotNull(overlay.footprint(patch));
+            // Temporary loss of the player invalidates cached geometry without losing spawn events.
+            when(client.getLocalPlayer()).thenReturn(null);
+            assertNull(overlay.footprint(patch));
+            when(client.getLocalPlayer()).thenReturn(player);
+            assertNotNull(overlay.footprint(patch));
+            WorldView other=mock(WorldView.class);
+            when(player.getWorldView()).thenReturn(other);
+            assertNull(overlay.footprint(patch));
             overlay.clear();assertNull(overlay.footprint(patch));
         }
         finally {graphics.dispose();}

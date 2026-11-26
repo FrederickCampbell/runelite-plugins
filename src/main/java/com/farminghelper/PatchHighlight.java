@@ -121,14 +121,18 @@ final class PatchHighlight extends Overlay
     private boolean refreshScene()
     {
         Player local=client.getLocalPlayer();
-        if(local==null){if(resolvedView!=null)clear();return false;}
-        WorldView view=local.getWorldView();
-        int tick=client.getTickCount(),plane=client.getPlane();
+        WorldView view=local==null?null:local.getWorldView();
+        if(view==null)
+        {
+            if(resolvedView!=null){invalidateSceneTargets();resolvedView=null;resolvedTick=-1;resolvedPlane=-1;}
+            return false;
+        }
+        int tick=client.getTickCount(),plane=view.getPlane();
         if(tick!=resolvedTick||view!=resolvedView||plane!=resolvedPlane)
         {
             invalidateSceneTargets();resolvedTick=tick;resolvedView=view;resolvedPlane=plane;
         }
-        return view!=null;
+        return true;
     }
     private static String name(ObjectComposition c){return c==null || c.getName()==null?"":c.getName().toLowerCase(Locale.ROOT);}
     private static boolean isBin(ObjectComposition c){return name(c).contains("compost bin");}
