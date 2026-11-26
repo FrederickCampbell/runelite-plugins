@@ -22,6 +22,15 @@ public class TreeCompletionRegressionTest
         assertTrue(p.finished(PatchType.FRUIT_TREE,planted,false,false));
         assertFalse(p.finished(PatchType.FRUIT_TREE,new Observation(CropState.GROWING,Source.TIME_TRACKING,1,null,"",200),false,false));
     }
+    @Test public void plantingWithoutOptionalCompostCompletesHerbPatch()
+    {
+        GuideProgress p=new GuideProgress();
+        p.observe(live(CropState.EMPTY,3));
+        Observation planted=live(CropState.GROWING,4);
+        p.observe(planted);
+        assertTrue(p.planted());
+        assertTrue(p.finished(PatchType.HERB,planted,false,false));
+    }
     @Test public void permanentBushHealthCheckDoesNotRequireReplacement()
     {
         GuideProgress p=new GuideProgress();p.observe(live(CropState.UNCHECKED,250));
