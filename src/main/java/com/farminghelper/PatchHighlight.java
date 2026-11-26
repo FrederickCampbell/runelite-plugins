@@ -224,6 +224,23 @@ final class PatchHighlight extends Overlay
         }
         return null;
     }
+    /** Reuse the verified local object group; never infer a compost varbit from
+     * a crop model, reused growth varbit or an unverified nearby patch. */
+    int liveCompostTier(FarmRunPatch patch)
+    {
+        int found=-1, growth=plugin.get().patchVarbit(patch);
+        QuestTargets.Definition exact=QuestTargets.get(patch);
+        for(GameObject object:resolve(patch))
+        {
+            int id=object.getId(), compost=CompostChoice.liveVarbit(id);
+            if(compost<0)continue;
+            ObjectComposition base=client.getObjectDefinition(id);
+            if(!(exact!=null&&exact.objectId==id)&&(growth<=0||base==null||base.getVarbitId()!=growth))continue;
+            if(found>=0&&found!=compost)return -1;
+            found=compost;
+        }
+        return CompostChoice.liveTier(client,found);
+    }
     private List<GameObject> resolve(FarmRunPatch patch)
     {
         if(patch==null || !refreshScene())return Collections.emptyList();

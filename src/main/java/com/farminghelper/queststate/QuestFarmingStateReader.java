@@ -61,6 +61,7 @@ public final class QuestFarmingStateReader
 
     private final FarmingHandler handler;
     private final Map<String,String> recent=new HashMap<>();
+    private final java.util.Set<String> staleCompost=new java.util.HashSet<>();
     private String recentProfile;
 
     @Inject
@@ -125,7 +126,7 @@ public final class QuestFarmingStateReader
         }
 
         String profile=config.getRSProfileKey();
-        if(!java.util.Objects.equals(profile,recentProfile)){recent.clear();recentProfile=profile;}
+        if(!java.util.Objects.equals(profile,recentProfile)){recent.clear();staleCompost.clear();recentProfile=profile;}
         FarmingPatch match = lookup(patchType,location,patchName);
         if (match == null)
         {
@@ -157,8 +158,20 @@ public final class QuestFarmingStateReader
             {
                 CropState state = normalizedState(match.getImplementation(), value, raw);
                 long now=System.currentTimeMillis();
-                String old=recent.get(match.configKey());
-                if(old==null || !old.startsWith(value+":"))recent.put(match.configKey(),value+":"+(now/1000));
+                String key=match.configKey(),old=recent.get(key);
+                if(old==null || !old.startsWith(value+":"))
+                {
+                    if(old!=null&&(state==CropState.EMPTY||state==CropState.DEAD))
+                    {
+                        int prior=Integer.parseInt(old,0,old.indexOf(':'),10);
+                        CropState previous=normalizedState(implementation,prior,implementation.forVarbitValue(prior));
+                        if(previous!=null&&previous!=state)staleCompost.add(key);
+                    }
+                    recent.put(key,value+":"+(now/1000));
+                }
+                // An observed tracker reset permits a subsequent treatment record.
+                if(staleCompost.contains(key)&&config.getRSProfileConfiguration(TIME_TRACKING,key+".compost")==null)
+                    staleCompost.remove(key);
                 return new Observation(state, Source.LIVE, now,
                     protection, match.getName(), value);
             }
@@ -244,22 +257,25 @@ public final class QuestFarmingStateReader
         return new BinContents(state,kind,count,capacity,closed);
     }
 
-    /** Native Time Tracking is optional. Its per-patch compost observation is
-     * advisory; absence of data never means treated. */
-    public boolean compostRecorded(String type,String location,String name,int minimum)
+    /** Historical fallback only. A live crop removal invalidates a previous
+     * treatment until the upstream tracker has been observed to reset. */
+    public int compostTier(String type,String location,String name)
     {
         FarmingPatch patch=lookup(type,location,name);
-        if(patch==null)return false;
-        String value=config.getRSProfileConfiguration(TIME_TRACKING,patch.configKey()+".compost");
-        if(value==null)return false;
+        if(patch==null)return 0;
+        String key=patch.configKey(),value=config.getRSProfileConfiguration(TIME_TRACKING,key+".compost");
+        if(value==null){staleCompost.remove(key);return 0;}
+        if(staleCompost.contains(key))return 0;
         switch(value.toUpperCase(Locale.ROOT))
         {
-            case "ULTRACOMPOST":return minimum<=3;
-            case "SUPERCOMPOST":return minimum<=2;
-            case "COMPOST":return minimum<=1;
-            default:return false;
+            case "ULTRACOMPOST":return 3;
+            case "SUPERCOMPOST":return 2;
+            case "COMPOST":return 1;
+            default:return 0;
         }
     }
+    public boolean compostRecorded(String type,String location,String name,int minimum)
+    {return compostTier(type,location,name)>=minimum;}
 
     /** Existing Quest Helper registry supplies the actual gardener NPC ID. */
     public int gardenerId(String patchType, String location, String patchName)

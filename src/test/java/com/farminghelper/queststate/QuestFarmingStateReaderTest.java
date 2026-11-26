@@ -65,6 +65,35 @@ public class QuestFarmingStateReaderTest
     {return QuestFarmingStateReader.lookup("SEAWEED","Seaweed",name);}
 
     @Test
+    public void historicalCompostCannotSurviveAnObservedCropRemoval()
+    {
+        var client=org.mockito.Mockito.mock(net.runelite.api.Client.class);
+        var config=org.mockito.Mockito.mock(net.runelite.client.config.ConfigManager.class);
+        var player=org.mockito.Mockito.mock(net.runelite.api.Player.class);
+        org.mockito.Mockito.when(client.getGameState()).thenReturn(net.runelite.api.GameState.LOGGED_IN);
+        org.mockito.Mockito.when(config.getRSProfileKey()).thenReturn("test");
+        org.mockito.Mockito.when(client.getLocalPlayer()).thenReturn(player);
+        var marker=new net.runelite.api.coords.WorldPoint(3229,3459,0);
+        org.mockito.Mockito.when(player.getWorldLocation()).thenReturn(marker);
+        var patch=QuestFarmingStateReader.lookup("TREE","Varrock","");
+        var reader=new QuestFarmingStateReader(client,config);
+        String key=patch.configKey()+".compost",group=net.runelite.client.plugins.timetracking.TimeTrackingConfig.CONFIG_GROUP;
+        org.mockito.Mockito.when(config.getRSProfileConfiguration(group,key)).thenReturn("ULTRACOMPOST");
+        org.mockito.Mockito.when(client.getVarbitValue(patch.getVarbit())).thenReturn(12);
+        assertEquals(CropState.UNCHECKED,reader.observeType("TREE","Varrock","",marker).state);
+        assertEquals(3,reader.compostTier("TREE","Varrock",""));
+        org.mockito.Mockito.when(client.getVarbitValue(patch.getVarbit())).thenReturn(3);
+        assertEquals(CropState.EMPTY,reader.observeType("TREE","Varrock","",marker).state);
+        assertEquals(0,reader.compostTier("TREE","Varrock",""));
+        org.mockito.Mockito.when(config.getRSProfileConfiguration(group,key)).thenReturn((String)null);
+        assertEquals(0,reader.compostTier("TREE","Varrock",""));
+        org.mockito.Mockito.when(config.getRSProfileConfiguration(group,key)).thenReturn("ULTRACOMPOST");
+        assertEquals(3,reader.compostTier("TREE","Varrock",""));
+        reader.observeType("TREE","Varrock","",marker);
+        assertEquals(3,reader.compostTier("TREE","Varrock",""));
+    }
+
+    @Test
     public void neverTreatUnknownTimeTrackingDataAsEmpty()
     {
         assertEquals(0L, QuestFarmingStateReader.timestampMillis(null));

@@ -8,6 +8,17 @@ import static org.junit.Assert.*;
 public class TreeCompletionRegressionTest
 {
     private static Observation live(CropState s,int raw){return new Observation(s,Source.LIVE,1,null,"",raw);}
+    @Test public void compostOverrideInvalidatesOnlyOnVerifiedNewCycle()
+    {
+        GuideProgress p=new GuideProgress();
+        p.observe(live(CropState.HARVESTABLE,13));
+        assertFalse(p.startsNewCycle(new Observation(CropState.EMPTY,Source.TIME_TRACKING,1,null,"",3)));
+        assertTrue(p.startsNewCycle(live(CropState.EMPTY,3))); // NPC or manual removal
+        p.observe(live(CropState.EMPTY,3));
+        assertFalse(p.startsNewCycle(live(CropState.EMPTY,2))); // raking does not erase treatment
+        p.observe(live(CropState.GROWING,4));
+        assertTrue(p.startsNewCycle(live(CropState.DEAD,8)));
+    }
     @Test public void fruitTreeRequiresActualReplacement()
     {
         GuideProgress p=new GuideProgress();

@@ -1083,11 +1083,11 @@ public class FarmingHelperPlugin extends Plugin
             // Verified loss supersedes historical completion/preservation, not an explicit skip.
             boolean reopened=runProgress.reopenForLiveLoss(p,o);
             if(reopened&&p==current){progress.reset();activeCrop=null;compostAcknowledged=false;}
-            if (p == current && !preparing() && progress.observe(o) &&
-                o.source == QuestFarmingStateReader.Source.LIVE && o.state == CropState.DEAD)
+            if (p == current && !preparing())
             {
-                compostAcknowledged = false;
-                activeCrop = null;
+                if(progress.startsNewCycle(o))compostAcknowledged=false;
+                if(progress.observe(o)&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.DEAD)
+                {compostAcknowledged=false;activeCrop=null;}
             }
             if(reopened){wateredThisRun.remove(p);if(waterOfferPatch==p)clearWaterOffer();}
             KeepCrop species=KeepCrop.observed(type,o);
@@ -1326,13 +1326,19 @@ public class FarmingHelperPlugin extends Plugin
             boolean replacementCarried=activeCrop!=null&&plantingBag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
             boolean keep=preserveReplacement(current,o);
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
-            StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,stepCompost);
+            int compostTier=0;
+            if(activeLive&&type.usesCompost()&&!activeClearOnly&&o.state==CropState.EMPTY)
+            {
+                int liveTier=highlight==null?-1:highlight.liveCompostTier(current);
+                compostTier=liveTier>=0?liveTier:reader.compostTier(type.name(),current.getLocation(),current.getName());
+            }
+            StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,stepCompost,compostTier);
             activeAction=action;
             if(action!=StepEngine.Action.WATER||preparing())clearWaterOffer();
             else if(waterOfferPatch!=current)
             {waterOfferPatch=current;waterOfferTick=client.getTickCount();waterOfferOrigin=location.actual;}
             if(activeLive&&type.usesCompost()&&!activeClearOnly&&(action==StepEngine.Action.COMPOST||action==StepEngine.Action.PLANT))
-                compostMissing=!reader.compostRecorded(type.name(),current.getLocation(),current.getName(),1);
+                compostMissing=compostTier==0;
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
             if(activeLive&&!preparing()&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
@@ -1517,7 +1523,7 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,
-        boolean replacementCarried,int compostId)
+        boolean replacementCarried,int compostId,int compostTier)
     {
         if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,runWater))
             return StepEngine.Action.WATER;
@@ -1525,12 +1531,8 @@ public class FarmingHelperPlugin extends Plugin
         if(o.state==CropState.EMPTY)
         {
             if(activeLive&&reader.hasWeeds(type.name(),o.rawValue))return StepEngine.Action.RAKE;
-            if(activeCrop!=null&&activeLive&&compostId>=0&&type.usesCompost()&&!activeClearOnly&&!compostAcknowledged)
-            {
-                int minimum=compostId==ItemID.BUCKET_ULTRACOMPOST?3:compostId==ItemID.BUCKET_SUPERCOMPOST?2:1;
-                compostAcknowledged=reader.compostRecorded(type.name(),current.getLocation(),current.getName(),minimum);
-                if(!compostAcknowledged)return StepEngine.Action.COMPOST;
-            }
+            if(activeCrop!=null&&activeLive&&compostId>=0&&type.usesCompost()&&!activeClearOnly&&
+                !compostAcknowledged&&compostTier<CompostChoice.minimumTier(compostId))return StepEngine.Action.COMPOST;
             if(activeCrop!=null&&type.isTree()&&!replacementCarried)return StepEngine.Action.NEED_REPLACEMENT;
         }
         return StepEngine.action(type,o,keep,replacementCarried,activeClearOnly,runPayRemoval&&type.isTree()&&gardener(current)>0);

@@ -105,6 +105,30 @@ public class PatchHighlightPerformanceTest
         finally {graphics.dispose();}
     }
 
+    @Test public void nativeCompostUsesOnlyTheVerifiedPhysicalPatchAndDoesNotLatch()
+    {
+        Client client=mock(Client.class);Player player=mock(Player.class);WorldView view=mock(WorldView.class);
+        FarmingHelperPlugin helper=mock(FarmingHelperPlugin.class);
+        FarmRunPatch patch=new FarmRunPatch("Varrock","",PatchType.TREE);
+        when(client.getLocalPlayer()).thenReturn(player);when(player.getWorldView()).thenReturn(view);
+        when(view.getId()).thenReturn(WorldView.TOPLEVEL);
+        // Match the exact Quest Helper location in the current scene.
+        when(view.getBaseX()).thenReturn(3200);when(view.getBaseY()).thenReturn(3400);
+        GameObject tree=object(view,0,29,59,3,3);
+        when(tree.getId()).thenReturn(net.runelite.api.gameval.ObjectID.FARMING_TREE_PATCH_3);
+        when(tree.getWorldLocation()).thenReturn(new WorldPoint(3229,3459,0));
+        ObjectComposition definition=mock(ObjectComposition.class);
+        when(client.getObjectDefinition(tree.getId())).thenReturn(definition);
+        int varbit=net.runelite.api.gameval.VarbitID.FARMING_COMPOST_VARBIT_TREE_3_TRANSMIT;
+        when(client.getVarbitValue(varbit)).thenReturn(3,0,3);
+        PatchHighlight overlay=new PatchHighlight(client,()->helper);overlay.spawned(tree);
+        assertEquals(3,overlay.liveCompostTier(patch));
+        assertEquals(0,overlay.liveCompostTier(patch));
+        assertEquals(3,overlay.liveCompostTier(patch));
+        overlay.despawned(tree);
+        assertEquals(-1,overlay.liveCompostTier(patch));
+    }
+
     @Test public void transitionTargetIsResolvedOncePerTickAndClearedOnDespawn()
     {
         Client client=mock(Client.class);Player player=mock(Player.class);WorldView view=mock(WorldView.class);
