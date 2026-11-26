@@ -324,8 +324,11 @@ final class FarmingHelperPanel extends PluginPanel
         if (screen!=PATCHES) patchResults=null;
         boolean keepHeader=screen==GUIDE&&mountedPage==GUIDE&&title.equals(mountedTitle);
         mountedPage=screen;mountedTitle=title;bankShortcut=null;
-        navigation.show(screen);rows.removeAll();footer.removeAll();preparationAction.removeAll();preparationAction.setVisible(false);
-        if(!keepHeader)header(title,back,gear,end);
+        navigation.show(screen);rows.removeAll();footer.removeAll();
+        if(!keepHeader)
+        {
+            preparationAction.removeAll();preparationAction.setVisible(false);header(title,back,gear,end);
+        }
         restorePosition(saved);
     }
     private void start(Runnable action)
@@ -533,9 +536,7 @@ final class FarmingHelperPanel extends PluginPanel
         Map<String,List<FarmRunPatch>> groups;
         final JLabel selected = new JLabel("",SwingConstants.CENTER);
         final JButton go = runButton("Start Manual Run",()->start(()->{
-            Set<String> keys=new LinkedHashSet<>();
-            for(FarmRunPatch patch:plugin.patches())if(selectable(patch)&&manual.contains(patch.key()))keys.add(patch.key());
-            plugin.startManual(keys);
+            plugin.startManual(ManualSelection.keys(plugin.patches(),patch->selectable(patch)&&manual.contains(patch.key())));
         }));
 
         ManualPicker()
@@ -546,9 +547,7 @@ final class FarmingHelperPanel extends PluginPanel
             for(RunPreset preset:RunPreset.values())templates.put(preset.title,preset.select(plugin.patches(),plugin::flag));
             for(PatchType type:PatchType.values())
             {
-                Set<String> keys=new LinkedHashSet<>();
-                for(FarmRunPatch p:plugin.patches())if(p.getPatchType()==type)keys.add(p.key());
-                templates.put(RunPreset.individualTitle(type),keys);
+                templates.put(RunPreset.individualTitle(type),ManualSelection.keys(plugin.patches(),p->p.getPatchType()==type));
             }
             templates.keySet().forEach(template::addItem);
             template.getAccessibleContext().setAccessibleName("Manual run preset");
@@ -692,7 +691,6 @@ final class FarmingHelperPanel extends PluginPanel
             add(name, BorderLayout.CENTER);
             add(badge, BorderLayout.EAST);
             add(source, BorderLayout.SOUTH);
-            update(item);
         }
         void update(GuideView.ItemRow item)
         {
@@ -790,8 +788,8 @@ final class FarmingHelperPanel extends PluginPanel
         body.setBorder(BorderFactory.createEmptyBorder(2,5,4,5));
         for(GuideView.ItemRow item:view.items)if(item.recommended==optional)
         {
-            SupplyRow row=new SupplyRow(item);
-            supplyRows.put(rowKey(item),row);body.add(row);
+            SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));
+            row.update(item);body.add(row);
         }
         if(body.getComponentCount()==0)body.add(text(optional?"No teleports recommended for the remaining patches.":"No items needed for this run.",FarmingTheme.MUTED));
         FarmingTheme.apply(body);
@@ -803,7 +801,7 @@ final class FarmingHelperPanel extends PluginPanel
         // A new backend session must open the guide even if it was started via
         // the plugin API rather than by a sidebar button. Same-session ticks
         // must never change the user's selected screen.
-        if(guideSession!=session){positions.clear();mountedPage=null;guideSession=session;guideRendered=false;previousGuide=null;lastActive=null;expanded.clear();requiredOpen=!view.preparation.isEmpty();lastPreparing=!view.preparation.isEmpty();completedOpen=false;teleportsOpen=false;navigation.starting();}
+        if(guideSession!=session){positions.clear();mountedPage=null;guideSession=session;guideRendered=false;previousGuide=null;lastActive=null;expanded.clear();supplyRows.clear();requiredOpen=!view.preparation.isEmpty();lastPreparing=!view.preparation.isEmpty();completedOpen=false;teleportsOpen=false;navigation.starting();}
         latestGuide=view;
         if(navigation.acceptGuide())renderGuide(view);
     }
@@ -812,7 +810,7 @@ final class FarmingHelperPanel extends PluginPanel
     private void renderGuide(GuideView view)
     {
         if(sameStructure(previousGuide,view)){refreshRows(previousGuide,view);previousGuide=view;return;}
-        supplyRows.clear();stepText.clear();
+        stepText.clear();
         boolean sameActive=guideRendered && lastActive==view.active;
         guideRendered=true;
         previousGuide=view;
@@ -824,13 +822,12 @@ final class FarmingHelperPanel extends PluginPanel
         }
         boolean isPreparing=!view.preparation.isEmpty();
         if(isPreparing!=lastPreparing){requiredOpen=isPreparing;teleportsOpen=false;lastPreparing=isPreparing;}
+        Set<String> visibleItems=new HashSet<>();
+        for(GuideView.ItemRow item:view.items)
+            if(item.recommended?teleportsOpen:requiredOpen)visibleItems.add(rowKey(item));
+        supplyRows.keySet().retainAll(visibleItems);
         page(GUIDE,view.title,null,this::runSettings,true);
-        if(isPreparing)
-        {
-            preparationAction.setBorder(BorderFactory.createEmptyBorder(3,8,6,8));
-            preparationAction.add(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
-            FarmingTheme.apply(preparationAction);preparationAction.setVisible(true);
-        }
+        preparationButton(isPreparing,view.notes.initial);
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
         int remaining=GuidePresentation.remaining(view.stats,(int)pending);
@@ -924,6 +921,23 @@ final class FarmingHelperPanel extends PluginPanel
         }
         finish();
         if (!sameActive) restorePosition(null);
+    }
+
+    private void preparationButton(boolean preparing,boolean initial)
+    {
+        if(!preparing){preparationAction.removeAll();preparationAction.setVisible(false);return;}
+        String title=initial?"Start Run":"Continue Run";
+        JButton button=preparationAction.getComponentCount()==0?null:(JButton)preparationAction.getComponent(0);
+        if(button==null)
+        {
+            preparationAction.setBorder(BorderFactory.createEmptyBorder(3,8,6,8));
+            button=runButton(title,plugin::continueRun);preparationAction.add(button);
+        }
+        else if(!title.equals(button.getText()))
+        {
+            button.setText(title);button.setToolTipText(title);button.getAccessibleContext().setAccessibleName(title);
+        }
+        preparationAction.setVisible(true);preparationAction.revalidate();preparationAction.repaint();
     }
 
     private void renderStop(GuideView view,GuideView.Stop stop)
@@ -1362,12 +1376,12 @@ final class FarmingHelperPanel extends PluginPanel
     private final class PriorityRow
     {
         final JPanel row;
-        final JLabel label=new JLabel();
+        final JLabel label;
         final JButton up,down;
         final String name;
         PriorityRow(PatchType type,String name,List<String> names,Runnable save)
         {
-            this.name=name;
+            this.name=name;label=new JLabel(name);
             Crop crop=CropCatalog.findByName(type,name);
             if(crop!=null)plugin.decorateSprite(label,crop.getItemId());
             up=FarmingIcons.button(UP,"Move "+name+" up",FarmingTheme.MUTED,()->move(names,-1,save));

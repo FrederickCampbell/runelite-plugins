@@ -25,9 +25,7 @@ enum RunPreset
     {return types.contains(type)&&flag.test(key(type),defaultEnabled(type))&&!flag.test("skipType_"+type.name(),false);}
     Set<String> select(List<FarmRunPatch> patches,BiPredicate<String,Boolean> flag)
     {
-        Set<String> keys=new LinkedHashSet<>();
-        for(FarmRunPatch p:patches)if(included(p.getPatchType(),flag))keys.add(p.key());
-        return keys;
+        return ManualSelection.keys(patches,p->included(p.getPatchType(),flag));
     }
     static String individualTitle(PatchType type)
     {String n=type.getDisplayName();return Character.toUpperCase(n.charAt(0))+n.substring(1)+" Run";}

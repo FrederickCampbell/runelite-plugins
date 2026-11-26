@@ -258,4 +258,23 @@ public class SidebarInteractionTest
             assertNotSame(end,button(panel,"End farming run"));
         });
     }
+
+    @Test public void structuralPreparationRefreshReusesSupplyRowsAndPinnedAction() throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            FarmingHelperPanel panel=new FarmingHelperPanel(new Character());
+            GuideView first=guide(true,1,12);panel.guide(first,8);
+            JTextArea seed=line(panel,"Ranarr seed");JButton start=button(panel,"Start Run");
+            GuideView next=new GuideView(first.title,first.message,List.of(
+                new GuideView.ItemRow(1,"Ranarr seed",2,3,0,11,false),
+                new GuideView.ItemRow(3,"Spade",1,1,0,0,false)),first.stops,null,
+                "Collect remaining supplies.","Changed supply note.",false,false,false,first.stats,
+                new GuideView.Notes(false,"","",""));
+            panel.guide(next,8);
+            assertSame(seed,line(panel,"Ranarr seed"));assertSame(start,button(panel,"Continue Run"));
+            assertNotNull(line(panel,"Spade"));assertNull(line(panel,"Last seen · Seed Vault 12"));
+            panel.guide(next,9);
+            assertNotSame(seed,line(panel,"Ranarr seed"));assertNotSame(start,button(panel,"Continue Run"));
+        });
+    }
 }
