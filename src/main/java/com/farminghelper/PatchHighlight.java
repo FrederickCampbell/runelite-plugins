@@ -302,7 +302,7 @@ final class PatchHighlight extends Overlay
             if(shape!=null&&action==StepEngine.Action.COMPOST&&helper.activeLive())
                 patchBounds=patchBounds==null?shape.getBounds():patchBounds.union(shape.getBounds());
         }
-        if(patchBounds!=null)label(graphics,"Compost",patchBounds.x+patchBounds.width/2,patchBounds.y-6,Color.CYAN);
+        if(patchBounds!=null)compostReminder(graphics,patchBounds.x+patchBounds.width/2,patchBounds.y-6);
         if(group.isEmpty() && QuestTargets.get(patch)!=null)
         {
             WorldPoint point=QuestTargets.get(patch).point;LocalPoint local=LocalPoint.fromWorld(client,point);
@@ -346,6 +346,25 @@ final class PatchHighlight extends Overlay
                 new int[]{y-44,y-44,y-20,y-20,y,y-20,y-20},7);
             g.setColor(Color.RED);g.fill(arrow);
             g.setColor(Color.BLACK);g.setStroke(new BasicStroke(2f));g.draw(arrow);
+        }
+        finally{g.dispose();}
+    }
+    // Draw the cross rather than relying on platform-dependent emoji fonts.
+    private static void compostReminder(Graphics2D graphics,int center,int baseline)
+    {
+        Graphics2D g=(Graphics2D)graphics.create();
+        try
+        {
+            g.setFont(g.getFont().deriveFont(Font.BOLD,13f));
+            int width=g.getFontMetrics().stringWidth("Compost");
+            int x=center-(width+15)/2;
+            g.setColor(Color.BLACK);g.drawString("Compost",x+1,baseline+1);
+            g.setColor(Color.CYAN);g.drawString("Compost",x,baseline);
+            int cross=x+width+5;
+            g.setStroke(new BasicStroke(3f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+            g.setColor(Color.BLACK);g.drawLine(cross+1,baseline-9,cross+9,baseline-1);g.drawLine(cross+9,baseline-9,cross+1,baseline-1);
+            g.setStroke(new BasicStroke(2f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+            g.setColor(Color.RED);g.drawLine(cross,baseline-10,cross+8,baseline-2);g.drawLine(cross+8,baseline-10,cross,baseline-2);
         }
         finally{g.dispose();}
     }
