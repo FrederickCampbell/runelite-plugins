@@ -94,4 +94,12 @@ public class AdaptivePreparationTest
         assertEquals(50,(int)collect.get(CompostRun.ASH));
         assertEquals(28,Preparation.loadedSlots(Map.of(999,2),collect,Map.of(),Map.of(),id->id==CompostRun.ASH));
     }
+
+    @Test public void compostBatchLeavesRoomForUncarriedTransportButNotWornItems()
+    {
+        Map<Integer,Integer> req=new HashMap<>(Map.of(CompostRun.PINEAPPLE,30,500,1,501,1));
+        CompostRun.batch(req,Map.of(999,2),Map.of(501,1),Map.of(),2,STACK);
+        assertEquals(25,(int)req.get(CompostRun.PINEAPPLE));
+        assertEquals(28,Preparation.loadedSlots(Map.of(999,2),req,Map.of(501,1),Map.of(),STACK));
+    }
 }
