@@ -28,6 +28,7 @@ final class FarmingHelperPanel extends PluginPanel
     private final JScrollPane scroll;
     private final JPanel toolbar=new JPanel(new BorderLayout(4,0));
     private final JPanel footer=new JPanel(new BorderLayout());
+    private final JPanel preparationAction=new JPanel(new BorderLayout());
     private final SidebarNavigation navigation=new SidebarNavigation();
     private final Map<SidebarNavigation.Page,Position> positions=new EnumMap<>(SidebarNavigation.Page.class);
     private SidebarNavigation.Page mountedPage;
@@ -84,7 +85,10 @@ final class FarmingHelperPanel extends PluginPanel
         this.plugin = plugin;
         setLayout(new BorderLayout());setBackground(FarmingTheme.BACKGROUND);
         toolbar.setBackground(FarmingTheme.CARD);toolbar.setBorder(BorderFactory.createEmptyBorder(5,5,5,5));
-        footer.setBackground(FarmingTheme.BACKGROUND);add(toolbar,BorderLayout.NORTH);add(footer,BorderLayout.SOUTH);
+        footer.setBackground(FarmingTheme.BACKGROUND);
+        JPanel headerArea=transparent(new BorderLayout());headerArea.add(toolbar,BorderLayout.NORTH);
+        preparationAction.setOpaque(false);headerArea.add(preparationAction,BorderLayout.SOUTH);
+        add(headerArea,BorderLayout.NORTH);add(footer,BorderLayout.SOUTH);
         rows.setLayout(new BoxLayout(rows,BoxLayout.Y_AXIS));
         rows.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
         JPanel top = new GuideScrollContent();
@@ -346,7 +350,7 @@ final class FarmingHelperPanel extends PluginPanel
         if (screen!=MANUAL) manualPicker=null;
         if (screen!=PATCHES) patchResults=null;
         mountedPage=screen;bankShortcut=null;
-        navigation.show(screen);rows.removeAll();footer.removeAll();header(title,back,gear,end);
+        navigation.show(screen);rows.removeAll();footer.removeAll();preparationAction.removeAll();preparationAction.setVisible(false);header(title,back,gear,end);
         restorePosition(saved);
     }
     private void start(Runnable action)
@@ -842,7 +846,12 @@ final class FarmingHelperPanel extends PluginPanel
         boolean isPreparing=!view.preparation.isEmpty();
         if(isPreparing!=lastPreparing){requiredOpen=isPreparing;teleportsOpen=false;lastPreparing=isPreparing;}
         page(GUIDE,view.title,null,this::runSettings,true);
-        if(isPreparing)addRow(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
+        if(isPreparing)
+        {
+            preparationAction.setBorder(BorderFactory.createEmptyBorder(3,8,6,8));
+            preparationAction.add(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
+            FarmingTheme.apply(preparationAction);preparationAction.setVisible(true);
+        }
         long done=view.stops.stream().filter(stop->stop.done).count();
         long pending=view.stops.size()-done;
         int remaining=GuidePresentation.remaining(view.stats,(int)pending);

@@ -70,6 +70,7 @@ public class SidebarInteractionTest
             List<JComponent> preparation=descendants(panel);
             assertTrue(preparation.indexOf(travel)<preparation.indexOf(line(panel,"Collect supplies.")));
             assertNull(SwingUtilities.getAncestorOfClass(JScrollPane.class,button(panel,"Start Run")));
+            assertTrue(preparation.indexOf(button(panel,"Start Run"))<preparation.indexOf(items));
             JTextArea seed=line(panel,"Ranarr seed");assertNotNull(seed);
             assertNotNull(line(panel,"Last seen · Seed Vault 12"));
             panel.guide(guide(true,2,0),2);
