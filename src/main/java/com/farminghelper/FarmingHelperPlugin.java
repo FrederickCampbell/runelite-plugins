@@ -1054,6 +1054,7 @@ public class FarmingHelperPlugin extends Plugin
         List<FarmRunPatch> eligible=new ArrayList<>();
         if(loggedIn)for(FarmRunPatch patch:patches)if(eligible(patch))eligible.add(patch);
         Map<Integer,Integer> storage=supplies.storage,stock=supplies.stock;
+        int estimatedOccupied=Preparation.slots(bag,Map.of(),this::stackable);
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
         int storedCan=loggedIn&&runLeprechaun?CropCare.storedCan(client,this::observedItemName):-1;
         boolean protect=runPolicy.protection, pay=runPayRemoval;
@@ -1185,7 +1186,7 @@ public class FarmingHelperPlugin extends Plugin
             for(FarmRunPatch p:plant)if(p.getPatchType().isTree()&&p.getPatchType()!=PatchType.SPIRIT_TREE&&
                 CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->c.getLevel()<=level&&bag.getOrDefault(c.getItemId(),0)>=c.getQuantity()))
                 carriedSaplings.add(p.getPatchType());
-            int usedSlots=Preparation.slots(bag,Collections.emptyMap(),this::stackable);
+            int usedSlots=estimatedOccupied;
             // Shortest Path navigates the active leg; the shared planner alone orders patches.
             pinned=new RunOrder(RunOrder.shared(ready,start,guildFirst,usedSlots>=25?carriedSaplings:Collections.emptySet()));
         }
@@ -1285,16 +1286,29 @@ public class FarmingHelperPlugin extends Plugin
         boolean probeBoundary=boundary&&!preparing()&&!progress.underway()&&phase==Preparation.Phase.ACTIVE;
         boolean needsResupply=false;
         if(probeBoundary)limit=1;
-        int actualOccupied=occupiedInventorySlots();
+        int actualOccupied=Math.max(estimatedOccupied,occupiedInventorySlots());
+        boolean autoWeed=loggedIn&&client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2;
+        boolean barbarian=loggedIn&&client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3;
+        boolean storedMagic=loggedIn&&runLeprechaun&&LeprechaunWithdrawal.magicStored(client);
+        int hunter=client.getRealSkillLevel(Skill.HUNTER),crafting=client.getRealSkillLevel(Skill.CRAFTING);
+        String localSite=loggedIn&&current!=null&&location.actual!=null&&highlight!=null&&localDistance(current,location.actual,observations)<70?RunOrder.site(current):null;
+        Map<Integer,List<String>> travelOptions=loggedIn&&config!=null&&itemManager!=null&&!ready.isEmpty()?teleports(supplies.travel.keySet()):Map.of();
         for(;;)
         {
         final List<FarmRunPatch> wave=ready.subList(0,limit);
         Map<FarmRunPatch,Crop> waveSeeds=new LinkedHashMap<>();
-        for(FarmRunPatch p:wave)if(seeds.containsKey(p))waveSeeds.put(p,seeds.get(p));
+        boolean yieldTool=false,needsWater=false,diving=false;
+        int vines=0;
+        for(FarmRunPatch p:wave)
+        {
+            Crop crop=seeds.get(p);PatchType type=p.getPatchType();
+            if(crop!=null){waveSeeds.put(p,crop);if(type==PatchType.GRAPEVINE)vines++;}
+            yieldTool|=!careOnly.contains(p)&&Supplies.secateursUseful(type,observations.get(p));
+            needsWater|=runWater&&type.canBeWatered()&&(crop!=null||!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,observations.get(p),true));
+            diving|=type==PatchType.CORAL;
+        }
         Map<Integer,Integer> paymentNeeds=new LinkedHashMap<>(),paymentNotes=new HashMap<>();
-        Map<Integer,Integer> required=Supplies.guideKit(wave,careOnly,
-            loggedIn && client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2,
-            loggedIn && client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3);
+        Map<Integer,Integer> required=Supplies.guideKit(wave,careOnly,autoWeed,barbarian);
         if(!clearOnly.isEmpty()&&waveSeeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
         if(loggedIn&&runLeprechaun)required.entrySet().removeIf(e->carried.getOrDefault(e.getKey(),0)==0&&LeprechaunWithdrawal.stored(client,e.getKey())>=e.getValue());
         for(FarmRunPatch p:wave)
@@ -1308,13 +1322,10 @@ public class FarmingHelperPlugin extends Plugin
             }
         }
         int magicSecateurs=ItemID.FAIRY_ENCHANTED_SECATEURS;
-        boolean yieldTool=wave.stream().anyMatch(p->!careOnly.contains(p)&&Supplies.secateursUseful(p.getPatchType(),observations.get(p)));
-        boolean storedMagic=loggedIn&&runLeprechaun&&LeprechaunWithdrawal.magicStored(client);
         // A yield bonus is advisory, not a prerequisite for planting or harvesting.
         // Known bank stock is shown in the normal checklist; unknown or leprechaun
         // stock must not create a mandatory banking route.
-        if(yieldTool&&carried.getOrDefault(magicSecateurs,0)>0)required.put(magicSecateurs,1);
-        else if(yieldTool&&!storedMagic&&stock.getOrDefault(magicSecateurs,0)>0)required.put(magicSecateurs,1);
+        if(yieldTool&&(carried.getOrDefault(magicSecateurs,0)>0||!storedMagic&&stock.getOrDefault(magicSecateurs,0)>0))required.put(magicSecateurs,1);
         Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
         CompostRun.addSupplies(required,wave,observations,stock,bag,binPlans);
         int compostCount=0,coins=0,axeId=0;boolean needsAxe=false;
@@ -1348,38 +1359,29 @@ public class FarmingHelperPlugin extends Plugin
             required.put(TreePreparation.FILLED_POT,rawSeeds);
             required.merge(Supplies.GARDENING_TROWEL,1,Math::max);
         }
-        boolean needsCan=rawSeeds+seedlings>0||runWater&&wave.stream().anyMatch(p->p.getPatchType().canBeWatered()&&
-            (waveSeeds.containsKey(p)||!wateredThisRun.contains(p)&&CropCare.waterNeeded(p.getPatchType(),observations.get(p),true)));
+        boolean needsCan=rawSeeds+seedlings>0||needsWater;
         if(needsCan&&wateringCan<=0&&storedCan<=0)
             required.put(CropCare.preferredCan(wateringCan,storedCan,CropCare.wateringCan(stock,this::observedItemName)),1);
-        int vines=(int)wave.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&waveSeeds.containsKey(p)).count();
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
         if(compostId!=ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED||storedBucket==0)
             CompostChoice.addRequired(required,compostId,compostId==ItemID.BUCKET_ULTRACOMPOST?compostCount:Math.max(0,compostCount-storedCompost),storedUltra,stock,bag);
-        if(wave.stream().anyMatch(p->p.getPatchType()==PatchType.CORAL))
-        {
-            DivingKit.require(required,supplies.travel,carried);
-        }
+        if(diving)DivingKit.require(required,supplies.travel,carried);
         Map<Integer,Integer> farmingRequirements=SpecialRoutes.isType(current,PatchType.BIRDHOUSE)?new LinkedHashMap<>(required):Map.of();
         Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?supplies.bankAndBag:stock;
-        int hunter=client.getRealSkillLevel(Skill.HUNTER),crafting=client.getRealSkillLevel(Skill.CRAFTING);
         if(specialtyStaged&&specialtyBirdPhase)
             birdStock=BirdhouseRun.preferCarried(wave,observations,plantingBag,birdStock,required,hunter,crafting);
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(wave,observations,birdStock,required,hunter,crafting);
         ProtectionPayment.reserve(required,paymentNeeds,bag,this::itemDefinition,paymentNotes);
-        List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
-        Map<Integer,Integer> physicalRequired=TreePreparation.physicalRequirements(required,pendingSaplings);
-        Map<Integer,Integer> paymentStorage=new HashMap<>(storage);
+        Map<Integer,Integer> physicalRequired=pendingSaplings.isEmpty()?required:TreePreparation.physicalRequirements(required,pendingSaplings);
+        Map<Integer,Integer> paymentStorage=paymentNotes.isEmpty()?storage:new HashMap<>(storage);
         paymentNotes.forEach((note,base)->paymentStorage.merge(note,
             Math.max(0,bank.items.getOrDefault(base,0)-Math.max(0,physicalRequired.getOrDefault(base,0)-bag.getOrDefault(base,0))),PhysicalStock::sum));
         // Travel remains advisory; do not force a bank trip solely for optional teleports.
-        List<FarmRunPatch> travelWave=new ArrayList<>(wave);
-        if(loggedIn&&current!=null&&location.actual!=null&&highlight!=null&&localDistance(current,location.actual,observations)<70)
-            travelWave.removeIf(p->RunOrder.site(p).equals(RunOrder.site(current)));
-        Map<Integer,Set<String>> teleports=loggedIn&&config!=null&&itemManager!=null
-            ?RunTeleports.select(travelWave,teleports(supplies.travel.keySet()),carried,supplies.travel,
-                (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id))):Map.of();
+        List<FarmRunPatch> travelWave=wave;
+        if(localSite!=null){travelWave=new ArrayList<>(wave);travelWave.removeIf(p->localSite.equals(RunOrder.site(p)));}
+        Map<Integer,Set<String>> teleports=RunTeleports.select(travelWave,travelOptions,carried,supplies.travel,
+                (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id)));
         Map<Integer,Integer> travelCounts=new LinkedHashMap<>(),load=new LinkedHashMap<>(physicalRequired);
         teleports.forEach((id,sites)->{
             int n=RunTeleports.quantity(id,sites.size(),observedItemName(id),stackable(id));
@@ -1390,11 +1392,13 @@ public class FarmingHelperPlugin extends Plugin
             CompostRun.batch(load,bag,equipped,supplies.seedBox,actualOccupied,this::stackable);
             required.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
             required.values().removeIf(n->n<=0);
-            physicalRequired.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
-            physicalRequired.values().removeIf(n->n<=0);
+            if(physicalRequired!=required)
+            {
+                physicalRequired.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
+                physicalRequired.values().removeIf(n->n<=0);
+            }
         }
-        int slots=Preparation.loadedSlots(bag,load,equipped,supplies.seedBox,this::stackable)
-            +Math.max(0,actualOccupied-Preparation.slots(bag,Map.of(),this::stackable));
+        int slots=Preparation.loadedSlots(actualOccupied,bag,load,equipped,supplies.seedBox,this::stackable);
         int reserve=Preparation.workingSlots(wave);
         boolean fits=slots<=28-reserve;
         if(probeBoundary)
@@ -1421,8 +1425,10 @@ public class FarmingHelperPlugin extends Plugin
             }
         }
         if(window.advance(fits)){limit=window.limit();continue;}
-        preparedWave=Set.copyOf(wave);preparedStock=supplies;
+        if(preparedWave.size()!=wave.size()||!preparedWave.containsAll(wave))preparedWave=Set.copyOf(wave);
+        preparedStock=supplies;
         if(needsResupply&&!preparing())beginPreparation(Preparation.Phase.RESUPPLY);
+        List<GuideView.ItemRow> items=new ArrayList<>(required.size()+teleports.size());
         for(int id:SupplyOrder.ordered(required,this::observedItemName))
         {
             int n=required.get(id);
@@ -1484,7 +1490,7 @@ public class FarmingHelperPlugin extends Plugin
                 carried.getOrDefault(magicSecateurs,0)==0&&storedMagic&&leprechaunWithdrawal==null&&
                 highlight!=null&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
             {
-                int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
+                int free=Math.max(0,28-estimatedOccupied);
                 if(free>0)leprechaunWithdrawal=LeprechaunWithdrawal.plan(magicSecateurs,false,1,free,"Magic secateurs");
             }
             if(activeLive&&!preparing()&&runLeprechaun&&highlight!=null&&
@@ -1534,7 +1540,7 @@ public class FarmingHelperPlugin extends Plugin
                 (action==StepEngine.Action.HARVEST||leprechaunWithdrawal!=null)&&type!=PatchType.HESPORI&&
                 type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
             {
-                int free=Math.max(0,28-Preparation.slots(bag,Map.of(),this::stackable));
+                int free=Math.max(0,28-estimatedOccupied);
                 boolean localBin=ready.stream().anyMatch(p->p.getPatchType()==PatchType.COMPOST_BIN&&RunOrder.site(p).equals(RunOrder.site(current)));
                 if(free<=2)
                 {
@@ -1849,10 +1855,7 @@ public class FarmingHelperPlugin extends Plugin
     private int occupiedInventorySlots()
     {
         ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
-        if(inventory==null||inventory.getItems()==null)return 0;
-        int count=0;
-        for(Item item:inventory.getItems())if(item!=null&&item.getId()>0&&item.getQuantity()>0)count++;
-        return count;
+        return inventory==null?0:inventory.count();
     }
     private boolean storageOpen()
     {
