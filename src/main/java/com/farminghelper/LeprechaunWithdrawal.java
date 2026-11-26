@@ -12,8 +12,11 @@ final class LeprechaunWithdrawal
     final int child,quantity;
     final String name;
     private final boolean single;
+    final LeprechaunWithdrawal companion;
     private LeprechaunWithdrawal(int child,int quantity,String name,boolean single)
-    {this.child=child;this.quantity=quantity;this.name=name;this.single=single;}
+    {this(child,quantity,name,single,null);}
+    private LeprechaunWithdrawal(int child,int quantity,String name,boolean single,LeprechaunWithdrawal companion)
+    {this.child=child;this.quantity=quantity;this.name=name;this.single=single;this.companion=companion;}
 
     static int child(int item,boolean water)
     {
@@ -82,6 +85,22 @@ final class LeprechaunWithdrawal
         if(item<=0||stock<=0)return null;
         return plan(item,water,stock,free,names.apply(item));
     }
+    static boolean magicStored(Client c)
+    {return c.getVarbitValue(1848)==1&&stored(c,ItemID.FAIRY_ENCHANTED_SECATEURS)>0;}
+
+    /** The current compost step remains authoritative. Only offer the future
+     * watering can when it fits alongside the immediate withdrawal. */
+    static LeprechaunWithdrawal withWater(Client c,LeprechaunWithdrawal primary,StepEngine.Action action,
+        PatchType type,int compost,Map<Integer,Integer> bag,int wateringCan,int free,boolean waterEnabled,IntFunction<String> names)
+    {
+        if(action!=StepEngine.Action.COMPOST||!waterEnabled||!type.canBeWatered()||wateringCan>0||compost<0)return primary;
+        if(primary==null&&bag.getOrDefault(compost,0)==0)return null;
+        if(free<(primary==null?1:2))return primary;
+        int can=CropCare.storedCan(c,names);
+        if(can<=0)return primary;
+        LeprechaunWithdrawal water=plan(can,true,1,free,names.apply(can));
+        return primary==null?water:new LeprechaunWithdrawal(primary.child,primary.quantity,primary.name,primary.single,water);
+    }
     static LeprechaunWithdrawal plan(int item,boolean water,int stored,int free,String name)
     {
         int child=child(item,water);
@@ -96,6 +115,6 @@ final class LeprechaunWithdrawal
     String instruction()
     {
         return quantity==0?"Make one free inventory slot and withdraw "+name+" from the tool leprechaun":
-            "Withdraw 1 × "+name+" from the tool leprechaun";
+            "Withdraw 1 × "+name+(companion==null?"":" and 1 × "+companion.name)+" from the tool leprechaun";
     }
 }

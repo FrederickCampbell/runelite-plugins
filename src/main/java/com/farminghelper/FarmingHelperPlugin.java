@@ -1196,6 +1196,14 @@ public class FarmingHelperPlugin extends Plugin
                 else required.merge(ItemID.PLANT_CURE,1,Integer::sum);
             }
         }
+        int magicSecateurs=ItemID.FAIRY_ENCHANTED_SECATEURS;
+        boolean yieldTool=ready.stream().anyMatch(p->!careOnly.contains(p)&&Supplies.secateursUseful(p.getPatchType(),observations.get(p)));
+        boolean storedMagic=loggedIn&&runLeprechaun&&LeprechaunWithdrawal.magicStored(client);
+        // A yield bonus is advisory, not a prerequisite for planting or harvesting.
+        // Known bank stock is shown in the normal checklist; unknown or leprechaun
+        // stock must not create a mandatory banking route.
+        if(yieldTool&&carried.getOrDefault(magicSecateurs,0)>0)required.put(magicSecateurs,1);
+        else if(yieldTool&&!storedMagic&&stock.getOrDefault(magicSecateurs,0)>0)required.put(magicSecateurs,1);
         Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
         CompostRun.addSupplies(required,ready,observations,stock,binPlans);
         int compostCount=0,coins=0,axeId=0;boolean needsAxe=false;
@@ -1259,6 +1267,11 @@ public class FarmingHelperPlugin extends Plugin
             if(pending>0)row=new GuideView.ItemRow(row.id,row.name+" ("+pending+" to prepare)",row.owned,row.needed,row.bank,row.vault,row.recommended);
             items.add(row);
         }
+        if(yieldTool&&!required.containsKey(magicSecateurs))
+        {
+            GuideView.ItemRow row=itemRow(magicSecateurs,1,carried,false);
+            items.add(new GuideView.ItemRow(row.id,row.name+" (optional yield boost)",row.owned,row.needed,row.bank,row.vault,false));
+        }
         requiredItems=Set.copyOf(required.keySet());
         missingStorageItems=GuideView.missingItems(physicalRequired,carried);
         Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
@@ -1299,6 +1312,13 @@ public class FarmingHelperPlugin extends Plugin
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
             if(activeLive&&!preparing()&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
                 leprechaunWithdrawal=contextualWithdrawal(current,action,stepCompost,bag,carried,wateringCan);
+            if(activeLive&&!preparing()&&action==StepEngine.Action.HARVEST&&Supplies.secateursUseful(type,o)&&
+                carried.getOrDefault(magicSecateurs,0)==0&&storedMagic&&leprechaunWithdrawal==null&&
+                highlight!=null&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
+            {
+                int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
+                if(free>0)leprechaunWithdrawal=LeprechaunWithdrawal.plan(magicSecateurs,false,1,free,"Magic secateurs");
+            }
             if(leprechaunWithdrawal!=null)
                 instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
             else if(action==StepEngine.Action.WATER&&wateringCan<=0)
@@ -1356,6 +1376,8 @@ public class FarmingHelperPlugin extends Plugin
             else if(!supplies.seedBox.isEmpty())
                 supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Seed box counts included. Withdraw tree seeds and birdhouse bait manually when needed.";
         }
+        if(yieldTool&&storedMagic&&carried.getOrDefault(magicSecateurs,0)==0)
+            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Magic secateurs stored with tool leprechauns; carry or equip for the optional harvest bonus.";
         if(rawSeeds+seedlings>0&&wateringCan<=0&&storedCan>0)supplyNote+="\nCollect the stored watering can from a tool leprechaun before watering seedlings.";
         if(compostCount>0&&compostId==ItemID.BUCKET_ULTRACOMPOST&&storedUltra>0)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Ultracompost: "+storedUltra+" stored with tool leprechauns; withdraw as needed.";
@@ -1466,8 +1488,10 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(!runLeprechaun||highlight==null||!highlight.hasLocalPatch(patch)||highlight.leprechaun(patch)==null)return null;
         int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
-        return LeprechaunWithdrawal.resolve(client,action,patch.getPatchType(),compost,
+        LeprechaunWithdrawal immediate=LeprechaunWithdrawal.resolve(client,action,patch.getPatchType(),compost,
             client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3,bag,carried,wateringCan,free,this::observedItemName);
+        return LeprechaunWithdrawal.withWater(client,immediate,action,patch.getPatchType(),compost,bag,wateringCan,free,
+            runWater&&!activeClearOnly&&activeCrop!=null,this::observedItemName);
     }
 
     private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,

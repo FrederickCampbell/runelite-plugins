@@ -59,4 +59,18 @@ public class CropCareTest
         assertFalse(KeepCrop.WHITE_LILY==KeepCrop.observed(PatchType.FLOWER,observation(CropState.HARVESTABLE,Source.LIVE,32)));
         assertFalse(KeepCrop.WHITE_LILY==KeepCrop.observed(PatchType.FLOWER,observation(CropState.DISEASED,Source.LIVE,166)));
     }
+
+    @Test public void magicSecateursOnlyRecommendedForYieldBearingHarvests()
+    {
+        var ripe=observation(CropState.HARVESTABLE,Source.LIVE,32);
+        for(PatchType type:List.of(PatchType.HERB,PatchType.ALLOTMENT,PatchType.HOPS,PatchType.BUSH,PatchType.GRAPEVINE,PatchType.CELASTRUS,PatchType.CORAL))
+        {
+            assertTrue(type.name(),Supplies.secateursUseful(type,ripe));
+            assertFalse(type.name(),Supplies.secateursUseful(type,observation(CropState.DEAD,Source.LIVE,1)));
+        }
+        assertTrue(Supplies.secateursUseful(PatchType.FLOWER,ripe));
+        assertFalse(Supplies.secateursUseful(PatchType.FLOWER,observation(CropState.HARVESTABLE,Source.LIVE,41)));
+        for(PatchType type:List.of(PatchType.SEAWEED,PatchType.CACTUS,PatchType.MUSHROOM,PatchType.BELLADONNA,PatchType.FRUIT_TREE,PatchType.CALQUAT,PatchType.CRYSTAL_TREE,PatchType.BIRDHOUSE))
+            assertFalse(type.name(),Supplies.secateursUseful(type,ripe));
+    }
 }

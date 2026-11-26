@@ -44,14 +44,17 @@ final class PatchHighlight extends Overlay
             LeprechaunWithdrawal withdrawal=helper.leprechaunWithdrawal();
             if(withdrawal!=null)
             {
-                Widget slot=exchangeSlot(withdrawal);
-                if(slot!=null)
+                boolean shown=false;
+                for(LeprechaunWithdrawal plan=withdrawal;plan!=null;plan=plan.companion)
                 {
+                    Widget slot=exchangeSlot(plan);
+                    if(slot==null)continue;
                     Rectangle bounds=slot.getBounds();
                     draw(graphics,bounds,Color.GREEN);
-                    label(graphics,withdrawal.label(),bounds.x+bounds.width/2,bounds.y+bounds.height-4,Color.GREEN);
-                    return null;
+                    label(graphics,plan.label(),bounds.x+bounds.width/2,bounds.y+bounds.height-4,Color.GREEN);
+                    shown=true;
                 }
+                if(shown)return null;
             }
             RouteLeg leg=helper.activeLeg();
             if(leg!=null&&leg.interaction==RouteLeg.Interaction.BIRD_ROW)

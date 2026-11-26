@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.07.6 — final supply convenience
+
+- Recommend magic secateurs for yield-bearing harvests, recognizing inventory and equipment; unknown or locally stored tools remain advisory.
+- Guide one compost and one filled watering can withdrawal in the same leprechaun visit when both are needed and fit. Highlight both native slots, retain the remaining instruction after the first withdrawal, and preserve compost priority when space is limited.
+
 ## v1.07.5 — stabilization release candidate
 
 - Fix a deferred farming-bank stage transition when the player browses a personal tab and returns with unchanged stock.

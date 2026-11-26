@@ -57,4 +57,29 @@ public class LeprechaunWithdrawalTest
         assertEquals("Prune",StepEngine.label(StepEngine.Action.CURE,PatchType.TREE));
         assertEquals("Cure",StepEngine.label(StepEngine.Action.CURE,PatchType.HERB));
     }
+
+    @Test public void compostAndWaterShareOneVisitOnlyWithEnoughRoomAndEnabledWatering()
+    {
+        Client c=mock(Client.class);
+        var variants=mock(net.runelite.api.EnumComposition.class);
+        when(c.getVarbitValue(1439)).thenReturn(9);
+        when(c.getEnum(136)).thenReturn(variants);
+        when(variants.getIntValue(9)).thenReturn(13353);
+        int ultra=ItemID.BUCKET_ULTRACOMPOST;
+        var names=(java.util.function.IntFunction<String>)(id->id==13353?"Gricoller's can":"Ultracompost");
+        var primary=LeprechaunWithdrawal.plan(ultra,false,10,2,"Ultracompost");
+        var both=LeprechaunWithdrawal.withWater(c,primary,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(),-1,2,true,names);
+        assertEquals(19,both.child);assertEquals(12,both.companion.child);
+        assertTrue(both.instruction().contains("and 1 × Gricoller's can"));
+        assertSame(primary,LeprechaunWithdrawal.withWater(c,primary,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(),-1,1,true,names));
+        assertSame(primary,LeprechaunWithdrawal.withWater(c,primary,StepEngine.Action.COMPOST,PatchType.HERB,ultra,Map.of(),-1,2,true,names));
+        assertSame(primary,LeprechaunWithdrawal.withWater(c,primary,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(),-1,2,false,names));
+        assertSame(primary,LeprechaunWithdrawal.withWater(c,primary,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(),13353,2,true,names));
+        assertNull(LeprechaunWithdrawal.withWater(c,null,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(),-1,2,true,names));
+        var remaining=LeprechaunWithdrawal.withWater(c,null,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(ultra,1),-1,1,true,names);
+        assertEquals(12,remaining.child);assertNull(remaining.companion);
+        assertNull(LeprechaunWithdrawal.withWater(c,null,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(ultra,1),-1,0,true,names));
+        when(c.getVarbitValue(1439)).thenReturn(0);
+        assertSame(primary,LeprechaunWithdrawal.withWater(c,primary,StepEngine.Action.COMPOST,PatchType.HOPS,ultra,Map.of(),-1,2,true,names));
+    }
 }

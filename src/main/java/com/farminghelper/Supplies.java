@@ -22,6 +22,19 @@ final class Supplies
         return items;
     }
 
+    /** Inventory or equipment grants the yield benefit; only limpwurt flowers qualify. */
+    static boolean secateursUseful(PatchType type,com.farminghelper.queststate.QuestFarmingStateReader.Observation o)
+    {
+        if(o!=null&&o.state!=null&&o.state!=com.farminghelper.queststate.CropState.HARVESTABLE&&
+            o.state!=com.farminghelper.queststate.CropState.UNCHECKED)return false;
+        switch(type)
+        {
+            case HERB:case ALLOTMENT:case HOPS:case BUSH:case GRAPEVINE:case CELASTRUS:case CORAL:return true;
+            case FLOWER:return "LIMPWURT".equals(com.farminghelper.queststate.QuestFarmingStateReader.livingProduceKey(type.name(),o));
+            default:return false;
+        }
+    }
+
     static void addCompost(Map<Integer,Integer> required,int item,int count)
     {
         if(item>=0 && count>0)required.merge(item,item==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED?1:count,Integer::sum);
