@@ -17,6 +17,7 @@ final class SeedChoices
         Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,
         boolean stockedOnly,java.util.function.Predicate<FarmRunPatch> autoLily,Crop contract)
     {
+        if(patches.isEmpty())return new LinkedHashMap<>();
         Map<Integer,Integer> remaining = new HashMap<>(stock);
         Map<FarmRunPatch,Crop> result = new LinkedHashMap<>();
         Map<FarmRunPatch,String> preferredNames=new HashMap<>();
@@ -59,8 +60,8 @@ final class SeedChoices
             // An available explicit preference was already reserved above.
             // It remains the guide-anyway fallback even if its stock is exhausted.
             Crop fallback=preferred!=null&&preferred.getLevel()<=level?preferred:order.isEmpty()?null:order.get(0);
-            Crop choice=order.stream().filter(c->remaining.getOrDefault(c.getItemId(),0)>=c.getQuantity())
-                .findFirst().orElse(stockedOnly?null:fallback);
+            Crop choice=stockedOnly?null:fallback;
+            for(Crop c:order)if(remaining.getOrDefault(c.getItemId(),0)>=c.getQuantity()){choice=c;break;}
             if(choice!=null)assign(patch,choice,remaining,result);
         }
         Map<FarmRunPatch,Crop> ordered = new LinkedHashMap<>();
