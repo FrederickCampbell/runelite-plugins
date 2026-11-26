@@ -539,7 +539,15 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(widget==null)return -1;
         int group=widget.getId()>>>16,id=widget.getItemId();
-        return (group==InterfaceID.INVENTORY||group==InterfaceID.INVENTORY_NOOPS||group==InterfaceID.BANKSIDE)&&bag.getOrDefault(id,0)>0?id:-1;
+        if(group!=InterfaceID.INVENTORY&&group!=InterfaceID.INVENTORY_NOOPS&&group!=InterfaceID.BANKSIDE)return -1;
+        if(id<=0)
+        {
+            var inventory=client.getItemContainer(InventoryID.INVENTORY);
+            int slot=widget.getIndex();
+            if(inventory!=null&&slot>=0&&slot<inventory.getItems().length&&inventory.getItems()[slot]!=null)
+                id=inventory.getItems()[slot].getId();
+        }
+        return bag.getOrDefault(id,0)>0?id:-1;
     }
     private int seedByName(String name)
     {
@@ -554,15 +562,26 @@ public class FarmingHelperPlugin extends Plugin
     private Map<Integer,Integer> looseSeeds(Map<Integer,Integer> bag)
     {
         Map<Integer,Integer> result=new HashMap<>(bag);
-        if(seedBoxBank)result=PhysicalStock.combine(result,readItems(client.getItemContainer(InventoryID.BANK)));
-        if(seedBoxVault)result=PhysicalStock.combine(result,readItems(client.getItemContainer(InventoryID.SEED_VAULT)));
+        if(seedBoxBank)
+        {
+            var bankItems=client.getItemContainer(InventoryID.BANK);
+            if(bankItems==null)return null;
+            result=PhysicalStock.combine(result,readItems(bankItems));
+        }
+        if(seedBoxVault)
+        {
+            var vaultItems=client.getItemContainer(InventoryID.SEED_VAULT);
+            if(vaultItems==null)return null;
+            result=PhysicalStock.combine(result,readItems(vaultItems));
+        }
         return result;
     }
     private void beginSeedTransfer(boolean adding,int seed,Map<Integer,Integer> bag)
     {
         seedBoxBank=visibleWidget(InterfaceID.Bankmain.UNIVERSE);
         seedBoxVault=visibleWidget(InterfaceID.SeedVault.UNIVERSE);
-        seedBox.begin(adding,seed,looseSeeds(bag),client.getTickCount());
+        Map<Integer,Integer> loose=looseSeeds(bag);
+        if(loose!=null)seedBox.begin(adding,seed,loose,client.getTickCount());
     }
     private void seedBoxChanged()
     {
@@ -592,7 +611,12 @@ public class FarmingHelperPlugin extends Plugin
         if(seedBox.pending())
         {
             if(seedBoxBank&&!visibleWidget(InterfaceID.Bankmain.UNIVERSE)||seedBoxVault&&!visibleWidget(InterfaceID.SeedVault.UNIVERSE))seedBox.cancel();
-            else if(seedBox.settle(looseSeeds(bag),tick,this::seedItem))seedBoxChanged();
+            else
+            {
+                Map<Integer,Integer> loose=looseSeeds(bag);
+                if(loose==null)seedBox.cancel();
+                else if(seedBox.settle(loose,tick,this::seedItem))seedBoxChanged();
+            }
         }
         if(seedBoxPlant!=null)
         {
@@ -617,7 +641,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(itemManager==null||client.getGameState()!=GameState.LOGGED_IN||
             event.getType()!=ChatMessageType.GAMEMESSAGE&&event.getType()!=ChatMessageType.SPAM)return;
-        String message=net.runelite.client.util.Text.removeTags(event.getMessage());
+        String message=net.runelite.client.util.Text.removeTags(event.getMessage()).trim();
         if(!message.toLowerCase(Locale.ROOT).contains("seed box")&&!message.matches("^[\\d,]+\\s*x\\s*.+"))return;
         if(SeedBoxStock.boxId(stock().bag)<0)return;
         if(seedBox.chat(message,client.getTickCount(),this::seedByName))seedBoxChanged();

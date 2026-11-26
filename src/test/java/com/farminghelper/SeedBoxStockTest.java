@@ -69,7 +69,7 @@ public class SeedBoxStockTest
         SeedBoxStock box=new SeedBoxStock();
         box.chat("The seed box contains:",1,n->RANARR);
         box.chat("9 x Ranarr seed",1,n->RANARR);
-        assertTrue(box.finishCheck(2));assertTrue(box.complete());
+        assertTrue(box.finishCheck(2));assertTrue(box.complete());assertFalse(box.orderKnown());
         Crop crop=CropCatalog.findByItemId(RANARR);
         assertFalse(box.planted(crop,1,0,box.revision()));
         assertTrue(box.planted(crop,0,0,box.revision()));

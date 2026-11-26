@@ -133,7 +133,7 @@ final class SeedBoxStock
         if(checking==null||tick<=checkTick)return false;
         Map<Integer,Integer> next=checking;checking=null;
         if(!checkValid||next.isEmpty()||tick-checkTick>3)return false;
-        replace(next,true,true);cancel();return true;
+        replace(next,true,false);cancel();return true;
     }
     static boolean direct(Crop target,Map<Integer,Integer> contents)
     {
