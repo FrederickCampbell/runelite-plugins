@@ -1,0 +1,10 @@
+allprojects {
+    plugins.withId('java') {
+        tasks.register('refactorClasspath') {
+            dependsOn 'testClasses'
+            doLast {
+                layout.buildDirectory.file('refactor-classpath.txt').get().asFile.text = sourceSets.test.runtimeClasspath.asPath
+            }
+        }
+    }
+}
