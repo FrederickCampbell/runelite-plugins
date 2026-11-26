@@ -72,9 +72,9 @@ final class RunTeleports
             {
                 int id=entry.getKey();
                 Set<String> chosen=result.get(id);
-                int rank=0;
-                while(rank<refs.size()&&!entry.getValue().contains(refs.get(rank)))rank++;
-                if(rank==refs.size())continue;
+                int rank=Integer.MAX_VALUE;
+                for(String dest:entry.getValue()){int n=refs.indexOf(dest);if(n>=0)rank=Math.min(rank,n);}
+                if(rank==Integer.MAX_VALUE)continue;
                 int score=(carried.getOrDefault(id,0)>0?0:chosen!=null?100:200)+rank;
                 if(score>bestScore||score==bestScore&&id>=best)continue;
                 if(available!=null&&quantity.applyAsInt(id,chosen==null?1:chosen.size()+1)>available.getOrDefault(id,0))continue;
