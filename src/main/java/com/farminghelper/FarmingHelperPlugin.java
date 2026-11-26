@@ -84,9 +84,9 @@ public class FarmingHelperPlugin extends Plugin
     private volatile long lifecycle;
     private volatile boolean runtimeReady;
     private volatile boolean guideRequested;
-    private final Map<Integer,Integer> bank = new HashMap<>(), vault = new HashMap<>();
-    private final Set<InventoryID> sampledStorage=EnumSet.noneOf(InventoryID.class);
-    private final Map<InventoryID,StorageRead> pendingStorage=new EnumMap<>(InventoryID.class);
+    private final Store bank = new Store(InventoryID.BANK, InterfaceID.Bankmain.UNIVERSE, "observedBankV1");
+    private final Store vault = new Store(InventoryID.SEED_VAULT, InterfaceID.SeedVault.UNIVERSE, "observedVaultV1");
+    private final List<Store> stores = List.of(bank, vault);
     private static final class StorageRead
     {
         final Map<Integer,Integer> items;
@@ -100,7 +100,6 @@ public class FarmingHelperPlugin extends Plugin
     private FarmRunPatch seedBoxPlant;
     private Map<Integer,Integer> seedBoxPlantBag=Map.of();
     private int seedBoxPlantTick,seedBoxPlantRevision;
-    private boolean seedBoxBank,seedBoxVault;
     private String seedBoxSaved="";
     private int seedBoxViewTick=-1,seedBoxViewRevision;
     private List<?> allocationInputs=List.of();
@@ -109,7 +108,6 @@ public class FarmingHelperPlugin extends Plugin
     private List<?> shelfInputs=List.of();
     private Set<Integer> shelfItems=Set.of(), shelfCandidates=Set.of(), bankPlaceholders=Set.of();
     private String stockProfile;
-    private long bankObservedAt,vaultObservedAt;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
     private volatile Set<FarmRunType> run = Collections.emptySet();
     private volatile Set<String> manualKeys; // physical selections, never persisted as a session
@@ -283,10 +281,8 @@ public class FarmingHelperPlugin extends Plugin
         vaultAccessible=Collections.emptySet();vaultAccessRevision++;
         accessNotes=Collections.emptyMap();
         invalidateStock();
-        bank.clear();
-        vault.clear();
+        stores.forEach(Store::clear);
         stockProfile=null;seedBox.clear();seedBoxPlant=null;seedBoxSaved="";seedBoxViewTick=-1;
-        bankObservedAt=0;vaultObservedAt=0;
         seedBoxPlantBag=Map.of();shelfItems=Set.of();shelfCandidates=Set.of();
         clearRun();
     }
@@ -342,8 +338,14 @@ public class FarmingHelperPlugin extends Plugin
     void resetObservedStock()
     {
         inRun(()->{
-            loadStock();invalidateStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
-            save("observedBankV1","");save("observedVaultV1","");save("observedBankV1At","");save("observedVaultV1At","");
+            loadStock();
+            invalidateStock();
+            for (Store store : stores)
+            {
+                store.clear();
+                save(store.key, "");
+                save(store.key + "At", "");
+            }
             seedBox.clear();seedBoxSaved="";save("observedSeedBoxV2","");seedBoxPlant=null;seedBoxViewTick=-1;
             sampleStorage();lastView=null;update();
         });
@@ -482,7 +484,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         if (event.getGroupId() == InterfaceID.BANKMAIN || event.getGroupId() == InterfaceID.SEED_VAULT)
         {
-            sampledStorage.remove(event.getGroupId()==InterfaceID.BANKMAIN?InventoryID.BANK:InventoryID.SEED_VAULT);
+            (event.getGroupId()==InterfaceID.BANKMAIN?bank:vault).sampled=false;
             // The next game tick owns storage sampling. Opening a widget is
             // not proof that its item packet has arrived yet.
         }
@@ -511,15 +513,13 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(id==InventoryID.BANK.getId()||id==InventoryID.SEED_VAULT.getId())
         {
-            InventoryID storageId=id==InventoryID.BANK.getId()?InventoryID.BANK:InventoryID.SEED_VAULT;
-            sampledStorage.remove(storageId);
-            // Capture the actual visible event before a fast close; publish it
-            // together with the final inventory observation on the next sample.
-            int component=storageId==InventoryID.BANK?InterfaceID.Bankmain.UNIVERSE:InterfaceID.SeedVault.UNIVERSE;
-            if(stockProfile!=null&&client.getGameState()==GameState.LOGGED_IN&&visibleWidget(component))
+            Store store = id == bank.id.getId() ? bank : vault;
+            store.sampled = false;
+            // Keep a valid visible packet if the widget closes before the next game tick.
+            if (stockProfile != null && client.getGameState() == GameState.LOGGED_IN && visibleWidget(store.widget))
             {
-                StorageRead observation=storageRead(storageId,event.getItemContainer());
-                if(observation!=null)pendingStorage.put(storageId,observation);
+                StorageRead observation = store.read(event.getItemContainer());
+                if (observation != null) store.pending = observation;
             }
             if(vaultViews!=null&&id==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
         }
@@ -548,10 +548,10 @@ public class FarmingHelperPlugin extends Plugin
         if(vaultViews!=null&&event.getGroupId()==SeedVaultViews.GROUP)vaultViews.close();
         if(event.getGroupId()==InterfaceID.BANKMAIN)
         {
-            sampledStorage.remove(InventoryID.BANK);
+            bank.sampled=false;
             if(runBank!=null)runBank.bankClosed();
         }
-        if(event.getGroupId()==InterfaceID.SEED_VAULT)sampledStorage.remove(InventoryID.SEED_VAULT);
+        if(event.getGroupId()==InterfaceID.SEED_VAULT)vault.sampled=false;
     }
     @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
     {
@@ -639,29 +639,19 @@ public class FarmingHelperPlugin extends Plugin
     {var widget=client.getWidget(id);return widget!=null&&!widget.isHidden();}
     private Map<Integer,Integer> looseSeeds(Map<Integer,Integer> bag)
     {
-        Map<Integer,Integer> result=new HashMap<>(bag);
-        if(seedBoxBank)
+        Map<Integer,Integer> result = bag;
+        for (Store store : stores)
         {
-            var bankItems=client.getItemContainer(InventoryID.BANK);
-            if(bankItems==null)return null;
-            Map<Integer,Integer> observed=PhysicalStock.readChecked(bankItems,itemManager::getItemComposition,null);
-            if(observed==null)return null;
-            result=PhysicalStock.combine(result,observed);
-        }
-        if(seedBoxVault)
-        {
-            var vaultItems=client.getItemContainer(InventoryID.SEED_VAULT);
-            if(vaultItems==null)return null;
-            Map<Integer,Integer> observed=PhysicalStock.readChecked(vaultItems,itemManager::getItemComposition,null);
-            if(observed==null)return null;
-            result=PhysicalStock.combine(result,observed);
+            if (!store.inTransfer) continue;
+            Map<Integer,Integer> observed = PhysicalStock.readChecked(client.getItemContainer(store.id), itemManager::getItemComposition, null);
+            if (observed == null) return null;
+            result = PhysicalStock.combine(result, observed);
         }
         return result;
     }
     private void beginSeedTransfer(boolean adding,int seed,Map<Integer,Integer> bag)
     {
-        seedBoxBank=visibleWidget(InterfaceID.Bankmain.UNIVERSE);
-        seedBoxVault=visibleWidget(InterfaceID.SeedVault.UNIVERSE);
+        for (Store store : stores) store.inTransfer = visibleWidget(store.widget);
         Map<Integer,Integer> loose=looseSeeds(bag);
         if(seedBox.pending()||seedBoxPlant!=null){seedBox.forget();seedBoxPlant=null;seedBoxChanged();}
         if(loose!=null)seedBox.begin(adding,seed,loose,client.getTickCount());
@@ -695,7 +685,7 @@ public class FarmingHelperPlugin extends Plugin
         if(SeedBoxStock.boxId(bag)<0){seedBox.carried(bag);seedBoxPlant=null;return;}
         if(seedBox.pending())
         {
-            if(seedBoxBank&&!visibleWidget(InterfaceID.Bankmain.UNIVERSE)||seedBoxVault&&!visibleWidget(InterfaceID.SeedVault.UNIVERSE))
+            if(bank.transferClosed() || vault.transferClosed())
             {seedBox.forget();seedBoxChanged();}
             else
             {
@@ -715,14 +705,13 @@ public class FarmingHelperPlugin extends Plugin
             if(observation.source!=QuestFarmingStateReader.Source.LIVE)return;
             if(observation.state==CropState.GROWING)
             {
-                String species=QuestFarmingStateReader.livingProduceKey(seedBoxPlant.getPatchType().name(),observation);
-                for(var produce:net.runelite.client.plugins.timetracking.farming.Produce.values())
-                    if(produce.name().equals(species))
-                    {
-                        Crop crop=CropCatalog.findByName(seedBoxPlant.getPatchType(),produce.getName());
-                        if(crop!=null&&seedBox.planted(crop,seedBoxPlantBag.getOrDefault(crop.getItemId(),0),bag.getOrDefault(crop.getItemId(),0),seedBoxPlantRevision))seedBoxChanged();
-                        break;
-                    }
+                var produce = QuestFarmingStateReader.livingProduce(seedBoxPlant.getPatchType().name(), observation);
+                if (produce != null)
+                {
+                    Crop crop = CropCatalog.findByName(seedBoxPlant.getPatchType(), produce.getName());
+                    if (crop != null && seedBox.planted(crop, seedBoxPlantBag.getOrDefault(crop.getItemId(), 0),
+                        bag.getOrDefault(crop.getItemId(), 0), seedBoxPlantRevision)) seedBoxChanged();
+                }
                 seedBoxPlant=null;
             }
         }
@@ -822,83 +811,107 @@ public class FarmingHelperPlugin extends Plugin
     {
         String profile=config.getRSProfileKey();
         if(Objects.equals(profile,stockProfile))return;
-        invalidateStock();bank.clear();vault.clear();stockProfile=profile;
+        invalidateStock();
+        stockProfile = profile;
         seedBoxSaved=profile==null?"":setting("observedSeedBoxV2","");seedBox.restore(seedBoxSaved);seedBoxPlant=null;seedBoxViewTick=-1;
-        bankObservedAt=0;vaultObservedAt=0;
-        if(profile!=null)
+        long now = System.currentTimeMillis();
+        for (Store store : stores)
         {
-            bank.putAll(StockSnapshot.decode(setting("observedBankV1","")));
-            vault.putAll(StockSnapshot.decode(setting("observedVaultV1","")));
-            long now=System.currentTimeMillis();
-            bankObservedAt=StockSnapshot.time(setting("observedBankV1At",""),now);
-            vaultObservedAt=StockSnapshot.time(setting("observedVaultV1At",""),now);
-            // Migrate older cached observations without discarding genuine stock.
-            if(itemManager!=null)
-            {
-                sanitizeSnapshot(bank,"observedBankV1");
-                sanitizeSnapshot(vault,"observedVaultV1");
-            }
+            store.clear();
+            if (profile != null) store.restore(now);
         }
-    }
-
-    private void sanitizeSnapshot(Map<Integer,Integer> snapshot,String key)
-    {
-        int before=snapshot.size();
-        PhysicalStock.sanitize(snapshot,itemManager::getItemComposition);
-        if(before!=snapshot.size())save(key,StockSnapshot.encode(snapshot));
     }
 
     void sampleStorage()
     {
-        if(client.getGameState()!=GameState.LOGGED_IN)return;
+        if (client.getGameState() != GameState.LOGGED_IN) return;
         loadStock();
-        if(stockProfile==null)return;
-        observeStorage(InterfaceID.Bankmain.UNIVERSE, InventoryID.BANK, bank,"observedBankV1");
-        observeStorage(InterfaceID.SeedVault.UNIVERSE, InventoryID.SEED_VAULT, vault,"observedVaultV1");
+        if (stockProfile != null) stores.forEach(Store::sample);
     }
 
-    private StorageRead storageRead(InventoryID id,ItemContainer container)
+    private final class Store
     {
-        if(itemManager==null)return null;
-        Set<Integer> placeholders=id==InventoryID.BANK?new HashSet<>():null;
-        Map<Integer,Integer> items=PhysicalStock.readChecked(container,itemManager::getItemComposition,placeholders);
-        return items==null?null:new StorageRead(items,placeholders,System.currentTimeMillis());
-    }
-    private void observeStorage(int component,InventoryID id,Map<Integer,Integer> snapshot,String key)
-    {
-        StorageRead pending=pendingStorage.remove(id);
-        if(!visibleWidget(component))
+        final InventoryID id;
+        final int widget;
+        final String key;
+        Map<Integer,Integer> items = Map.of();
+        long at;
+        boolean sampled, inTransfer;
+        StorageRead pending;
+
+        Store(InventoryID id, int widget, String key)
         {
-            sampledStorage.remove(id);
-            if(pending!=null)publishStorage(id,snapshot,key,pending);
-            return;
+            this.id = id;
+            this.widget = widget;
+            this.key = key;
         }
-        if(sampledStorage.contains(id)&&pending==null)return;
-        StorageRead observed=storageRead(id,client.getItemContainer(id));
-        if(observed!=null)
+
+        void clear()
         {
-            sampledStorage.add(id);
-            publishStorage(id,snapshot,key,observed);
+            items = Map.of();
+            at = 0;
         }
-        else if(pending!=null)publishStorage(id,snapshot,key,pending);
-        // An incomplete live read leaves the last valid snapshot untouched.
-    }
-    private void publishStorage(InventoryID id,Map<Integer,Integer> snapshot,String key,StorageRead observation)
-    {
-        if(!Objects.equals(stockProfile,config.getRSProfileKey()))return;
-        if(observation.placeholders!=null)bankPlaceholders=Set.copyOf(observation.placeholders);
-        if(id==InventoryID.BANK)bankObservedAt=observation.at;
-        else if(id==InventoryID.SEED_VAULT)vaultObservedAt=observation.at;
-        boolean changed=!observation.items.equals(snapshot);
-        if(changed){quantities=null;snapshot.clear();snapshot.putAll(observation.items);save(key,StockSnapshot.encode(snapshot));}
-        save(key+"At",Long.toString(observation.at));
+
+        void restore(long now)
+        {
+            items = StockSnapshot.decode(setting(key, ""));
+            at = StockSnapshot.time(setting(key + "At", ""), now);
+            if (itemManager == null) return;
+            int before = items.size();
+            PhysicalStock.sanitize(items, itemManager::getItemComposition);
+            if (items.size() != before) save(key, StockSnapshot.encode(items));
+        }
+
+        boolean transferClosed()
+        {
+            return inTransfer && !visibleWidget(widget);
+        }
+
+        StorageRead read(ItemContainer container)
+        {
+            if (itemManager == null) return null;
+            Set<Integer> placeholders = id == InventoryID.BANK ? new HashSet<>() : null;
+            Map<Integer,Integer> stock = PhysicalStock.readChecked(container, itemManager::getItemComposition, placeholders);
+            return stock == null ? null : new StorageRead(stock, placeholders, System.currentTimeMillis());
+        }
+
+        void sample()
+        {
+            StorageRead latest = pending;
+            pending = null;
+            if (!visibleWidget(widget)) sampled = false;
+            else if (!sampled || latest != null)
+            {
+                StorageRead live = read(client.getItemContainer(id));
+                if (live != null)
+                {
+                    sampled = true;
+                    latest = live;
+                }
+            }
+            if (latest == null || !Objects.equals(stockProfile, config.getRSProfileKey())) return;
+            if (latest.placeholders != null) bankPlaceholders = Set.copyOf(latest.placeholders);
+            if (!items.equals(latest.items))
+            {
+                quantities = null;
+                items = latest.items;
+                save(key, StockSnapshot.encode(items));
+            }
+            at = latest.at;
+            save(key + "At", Long.toString(at));
+        }
     }
 
     private void invalidateTravel(){eligibleTravel.clear();shelfInputs=List.of();}
 
     private void invalidateStock()
     {
-        quantities=null;bankPlaceholders=Set.of();sampledStorage.clear();pendingStorage.clear();invalidateTravel();
+        quantities=null;bankPlaceholders=Set.of();invalidateTravel();
+        for (Store store : stores)
+        {
+            store.sampled = false;
+            store.pending = null;
+        }
     }
 
     private Map<Integer,Integer> readItems(ItemContainer container)
@@ -911,7 +924,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             invalidateTravel();
             Map<Integer,Integer> bag=readItems(client.getItemContainer(InventoryID.INVENTORY));
-            quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank,vault,seedBox.carried(bag),this::observedItemName,
+            quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank.items,vault.items,seedBox.carried(bag),this::observedItemName,
                 id->itemManager==null?id:itemManager.canonicalize(id));
         }
         return quantities;
@@ -1411,8 +1424,8 @@ public class FarmingHelperPlugin extends Plugin
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Check the bottomless bucket's compost type and charges.";
         StringJoiner details=new StringJoiner("\n");
         long now=System.currentTimeMillis();
-        boolean bankStale=GuidePresentation.stale(bankObservedAt,now);
-        boolean vaultStale=GuidePresentation.stale(vaultObservedAt,now);
+        boolean bankStale=GuidePresentation.stale(bank.at,now);
+        boolean vaultStale=GuidePresentation.stale(vault.at,now);
         String storageWarning=loggedIn?GuidePresentation.storageWarning(bankStale,level>=45&&!birdBankPhase()&&vaultStale):"";
         String prepHelp=GuidePresentation.PREPARATION_HELP;
         if(specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
@@ -1442,15 +1455,15 @@ public class FarmingHelperPlugin extends Plugin
         if(preparing() && loggedIn)
         {
             Preparation.Bank preparationBank=Preparation.chooseSupplies(level,preparationOrigin,phase==Preparation.Phase.INITIAL,
-                startAt(),birdBankPhase(),plantingRequired,carried,bank,vault);
+                startAt(),birdBankPhase(),plantingRequired,carried,bank.items,vault.items);
             boolean atStorage=storageOpen();visitedStorage|=atStorage;
-            boolean vaultOutstanding=level>=45&&Preparation.vaultNeeded(plantingRequired,carried,bank,vault);
+            boolean vaultOutstanding=level>=45&&Preparation.vaultNeeded(plantingRequired,carried,bank.items,vault.items);
             boolean vaultTarget=preparationBank==Preparation.SEED_VAULT;
             // A known vault shortage may still remain after visiting a regular
             // bank. Only the explicit preparation session can suggest it.
             boolean routeToStorage=!missingStorageItems.isEmpty() && (!visitedStorage||vaultTarget&&vaultOutstanding&&!atStorage);
             prepMessage=GuidePresentation.preparation(routeToStorage,preparationBank.name,missingStorageItems.isEmpty());
-            String sources=Preparation.sourceNote(plantingRequired,carried,bank,vault,!bankStale,!vaultStale);
+            String sources=Preparation.sourceNote(plantingRequired,carried,bank.items,vault.items,!bankStale,!vaultStale);
             if(!sources.isEmpty())prepHelp+="\n"+sources;
             if(vaultOutstanding)prepHelp+="\nThe Seed Vault is west of the Guild bank chest.";
             if(physicalRequired.entrySet().stream().anyMatch(e->e.getValue()>carried.getOrDefault(e.getKey(),0)&&SupplyOrder.tool(observedItemName(e.getKey()))))
@@ -1659,7 +1672,7 @@ public class FarmingHelperPlugin extends Plugin
         int boxed=stock().seedBox.getOrDefault(id,0);
         if(boxed>0&&!recommended)name+=" (box: "+boxed+")";
         return new GuideView.ItemRow(id,name,carried.getOrDefault(id,0),count,
-            bank.getOrDefault(id,0),vault.getOrDefault(id,0),recommended);
+            bank.items.getOrDefault(id,0),vault.items.getOrDefault(id,0),recommended);
     }
 
     boolean keepSpecies(KeepCrop c)
