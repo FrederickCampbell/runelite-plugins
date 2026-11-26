@@ -392,12 +392,15 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onPluginMessage(PluginMessage event)
     {
         if(navigation!=null)navigation.message(event);
+        if(highlight!=null&&"shortestpath".equals(event.getNamespace()))highlight.transportChanged();
     }
 
     @Subscribe public void onProfileChanged(ProfileChanged event) { reset(); }
     @Subscribe public void onRuneScapeProfileChanged(RuneScapeProfileChanged event) { if(!guideRequested||!Objects.equals(runProfile,config.getRSProfileKey()))reset(); }
     @Subscribe public void onGameObjectSpawned(GameObjectSpawned event) { highlight.spawned(event.getGameObject()); }
     @Subscribe public void onGameObjectDespawned(GameObjectDespawned event) { highlight.despawned(event.getGameObject()); }
+    @Subscribe public void onNpcSpawned(NpcSpawned event) { highlight.npcChanged(); }
+    @Subscribe public void onNpcDespawned(NpcDespawned event) { highlight.npcChanged(); }
     @Subscribe public void onGameStateChanged(GameStateChanged event)
     {
         if(event.getGameState()==GameState.LOADING || event.getGameState()==GameState.LOGIN_SCREEN) highlight.clear();

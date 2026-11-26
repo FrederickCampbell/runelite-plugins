@@ -4,6 +4,7 @@ import com.farminghelper.queststate.QuestFarmingStateReader;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
+import java.util.function.Predicate;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import net.runelite.api.*;
@@ -14,7 +15,6 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.util.Text;
-import net.runelite.client.ui.overlay.OverlayUtil;
 
 /** Quest Helper object targets and Advisor-style grouping, with region + varbit identity.
  * The anchor is the actual object, not the tile on which to stand. */
@@ -26,6 +26,14 @@ final class PatchHighlight extends Overlay
     private final Map<FarmRunPatch,List<GameObject>> resolved=new HashMap<>();
     private int resolvedTick=-1,resolvedPlane=-1;
     private WorldView resolvedView;
+    private final Map<FarmRunPatch,Footprint> footprints=new HashMap<>();
+    private final Map<FarmRunPatch,NPC> leprechauns=new HashMap<>(),gardeners=new HashMap<>();
+    private RouteLeg.Interaction transitionKind;
+    private WorldPoint transitionAnchor;
+    private GameObject transitionTarget,transportTarget;
+    private FarmRunPatch transportPatch;
+    private RouteLeg transportLeg;
+    private boolean transportResolved;
     // Keep scene outlines below the interface; highlight native exchange and dialogue widgets above it.
     private final Overlay dialogue=new Overlay()
     {
@@ -96,13 +104,32 @@ final class PatchHighlight extends Overlay
         if(object==null)return;
         ObjectComposition c=client.getObjectDefinition(object.getId());
         if(object.getId()==SpecialRoutes.SEAWEED_BANK_ID || object.getId()==SpecialRoutes.SEAWEED_BOAT_ID || object.getId()==SpecialRoutes.SEAWEED_ROPE_ID || BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || verificationObject(c))
-        {if(objects.add(object))resolved.clear();return;}
+        {if(objects.add(object))invalidateSceneTargets();return;}
         if(c!=null && c.getImpostorIds()!=null)
-            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || verificationObject(client.getObjectDefinition(id))){if(objects.add(object))resolved.clear();return;}
+            for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || verificationObject(client.getObjectDefinition(id))){if(objects.add(object))invalidateSceneTargets();return;}
     }
-    void despawned(GameObject o){if(objects.remove(o))resolved.clear();}
-    void clear(){objects.clear();resolved.clear();resolvedView=null;}
-    void transformed(){resolved.clear();}
+    void despawned(GameObject o){if(objects.remove(o))invalidateSceneTargets();}
+    void clear(){objects.clear();invalidateSceneTargets();resolvedView=null;resolvedTick=-1;resolvedPlane=-1;}
+    void transformed(){invalidateSceneTargets();}
+    void npcChanged(){leprechauns.clear();gardeners.clear();}
+    void transportChanged(){transportResolved=false;transportPatch=null;transportLeg=null;transportTarget=null;}
+    private void invalidateSceneTargets()
+    {
+        resolved.clear();footprints.clear();npcChanged();transportChanged();
+        transitionKind=null;transitionAnchor=null;transitionTarget=null;
+    }
+    private boolean refreshScene()
+    {
+        Player local=client.getLocalPlayer();
+        if(local==null){if(resolvedView!=null)clear();return false;}
+        WorldView view=local.getWorldView();
+        int tick=client.getTickCount(),plane=client.getPlane();
+        if(tick!=resolvedTick||view!=resolvedView||plane!=resolvedPlane)
+        {
+            invalidateSceneTargets();resolvedTick=tick;resolvedView=view;resolvedPlane=plane;
+        }
+        return view!=null;
+    }
     private static String name(ObjectComposition c){return c==null || c.getName()==null?"":c.getName().toLowerCase(Locale.ROOT);}
     private static boolean isBin(ObjectComposition c){return name(c).contains("compost bin");}
     private static boolean verificationObject(ObjectComposition c)
@@ -119,7 +146,7 @@ final class PatchHighlight extends Overlay
     private ObjectComposition transformed(ObjectComposition c)
     {return c==null || c.getImpostorIds()==null?c:c.getImpostor();}
     private boolean sameView(GameObject o)
-    {return client.getLocalPlayer()!=null && o.getWorldView()==client.getLocalPlayer().getWorldView() && o.getPlane()==client.getPlane();}
+    {return resolvedView!=null && o.getWorldView()==resolvedView && o.getPlane()==resolvedPlane;}
     private WorldPoint template(GameObject o)
     {return LocationContext.normalize(client,o.getLocalLocation(),o.getWorldLocation());}
     boolean hasVerifiedDisease(FarmRunPatch patch)
@@ -159,11 +186,7 @@ final class PatchHighlight extends Overlay
     }
     private List<GameObject> resolve(FarmRunPatch patch)
     {
-        if(patch==null || client.getLocalPlayer()==null)return Collections.emptyList();
-        WorldView view=client.getLocalPlayer().getWorldView();
-        int tick=client.getTickCount(),plane=client.getPlane();
-        if(tick!=resolvedTick||view!=resolvedView||plane!=resolvedPlane)
-        {resolved.clear();resolvedTick=tick;resolvedView=view;resolvedPlane=plane;}
+        if(patch==null || !refreshScene())return Collections.emptyList();
         return resolved.computeIfAbsent(patch,this::match);
     }
 
@@ -212,33 +235,100 @@ final class PatchHighlight extends Overlay
         int chosen=select(patch.getName(),positions,helper.patchCount(patch));
         return chosen<0?Collections.emptyList():groups.get(chosen);
     }
-    /** Find a nearby walkable perimeter tile. Do not return a guessed tile if collision data is absent. */
+    /** One scene-space rectangle per verified patch. No model or clickbox geometry. */
+    static final class Footprint
+    {
+        final WorldView view;
+        final int plane,minX,minY,maxX,maxY;
+        final LocalPoint center;
+        Footprint(WorldView view,int plane,int minX,int minY,int maxX,int maxY)
+        {
+            this.view=view;this.plane=plane;this.minX=minX;this.minY=minY;this.maxX=maxX;this.maxY=maxY;
+            center=new LocalPoint((minX+maxX+1)*Perspective.LOCAL_TILE_SIZE/2,
+                (minY+maxY+1)*Perspective.LOCAL_TILE_SIZE/2,view);
+        }
+        int width(){return maxX-minX+1;}
+        int height(){return maxY-minY+1;}
+        Polygon project(Client client)
+        {return Perspective.getCanvasTileAreaPoly(client,center,width(),height(),plane,0);}
+        static Footprint of(List<GameObject> group,WorldView view,int plane)
+        {
+            if(view==null)return null;
+            int minX=Integer.MAX_VALUE,minY=Integer.MAX_VALUE,maxX=Integer.MIN_VALUE,maxY=Integer.MIN_VALUE;
+            for(GameObject o:group)
+            {
+                if(o.getWorldView()!=view||o.getPlane()!=plane)continue;
+                net.runelite.api.Point min=o.getSceneMinLocation(),max=o.getSceneMaxLocation();
+                if(min==null||max==null||min.getX()>max.getX()||min.getY()>max.getY())continue;
+                minX=Math.min(minX,min.getX());minY=Math.min(minY,min.getY());
+                maxX=Math.max(maxX,max.getX());maxY=Math.max(maxY,max.getY());
+            }
+            return minX==Integer.MAX_VALUE?null:new Footprint(view,plane,minX,minY,maxX,maxY);
+        }
+    }
+    Footprint footprint(FarmRunPatch patch)
+    {
+        if(patch==null||!refreshScene())return null;
+        if(!footprints.containsKey(patch))footprints.put(patch,Footprint.of(resolve(patch),resolvedView,resolvedPlane));
+        return footprints.get(patch);
+    }
+    /** Reuse the same verified footprint for a nearby walkable perimeter tile. */
     WorldPoint approach(FarmRunPatch patch)
     {
-        List<GameObject> group=resolve(patch);
-        if(group.isEmpty() || client.getLocalPlayer()==null)return null;
-        WorldView view=group.get(0).getWorldView();
-        if(view==null || view.isInstance() || !view.isTopLevel())return null;
-        CollisionData[] maps=view.getCollisionMaps();int plane=group.get(0).getPlane();
-        if(maps==null || plane<0 || plane>=maps.length || maps[plane]==null)return null;
+        Footprint area=footprint(patch);
+        if(area==null||area.view.isInstance()||!area.view.isTopLevel())return null;
+        WorldView view=area.view;int plane=area.plane;
+        CollisionData[] maps=view.getCollisionMaps();
+        if(maps==null||plane<0||plane>=maps.length||maps[plane]==null)return null;
         int[][] flags=maps[plane].getFlags();if(flags==null)return null;
-        int minX=Integer.MAX_VALUE,minY=Integer.MAX_VALUE,maxX=Integer.MIN_VALUE,maxY=Integer.MIN_VALUE;
-        for(GameObject o:group)
-        {WorldPoint p=o.getWorldLocation();int x=p.getX()-(o.sizeX()-1)/2,y=p.getY()-(o.sizeY()-1)/2;
-            minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x+Math.max(1,o.sizeX())-1);maxY=Math.max(maxY,y+Math.max(1,o.sizeY())-1);}
         WorldPoint reference=Waypoints.destination(patch),best=null;int score=Integer.MAX_VALUE;
-        if(reference==null || reference.getPlane()!=plane)reference=group.get(0).getWorldLocation();
-        for(int x=minX-1;x<=maxX+1;x++)for(int y=minY-1;y<=maxY+1;y++)
+        if(reference==null||reference.getPlane()!=plane)
+            reference=new WorldPoint(view.getBaseX()+area.center.getSceneX(),view.getBaseY()+area.center.getSceneY(),plane);
+        for(int x=area.minX-1;x<=area.maxX+1;x++)for(int y=area.minY-1;y<=area.maxY+1;y++)
         {
-            if(x>=minX && x<=maxX && y>=minY && y<=maxY)continue;
-            // Cardinal perimeter tiles are proper interaction approaches.
-            if((x<minX || x>maxX) && (y<minY || y>maxY))continue;
-            int sx=x-view.getBaseX(),sy=y-view.getBaseY();
-            if(sx<0 || sx>=flags.length || sy<0 || sy>=flags[sx].length || (flags[sx][sy]&CollisionDataFlag.BLOCK_MOVEMENT_FULL)!=0)continue;
-            WorldPoint p=new WorldPoint(x,y,plane);int d=reference.distanceTo(p);
-            if(d<score){best=p;score=d;}
+            if(x>=area.minX&&x<=area.maxX&&y>=area.minY&&y<=area.maxY)continue;
+            if((x<area.minX||x>area.maxX)&&(y<area.minY||y>area.maxY))continue;
+            if(x<0||x>=flags.length||y<0||y>=flags[x].length||(flags[x][y]&CollisionDataFlag.BLOCK_MOVEMENT_FULL)!=0)continue;
+            WorldPoint point=new WorldPoint(view.getBaseX()+x,view.getBaseY()+y,plane);int d=reference.distanceTo(point);
+            if(d<score){best=point;score=d;}
         }
         return best;
+    }
+    private GameObject nearest(WorldPoint anchor,int radius,Predicate<GameObject> match)
+    {
+        if(anchor==null)return null;
+        GameObject best=null;int distance=Integer.MAX_VALUE;
+        for(GameObject o:objects)if(sameView(o))
+        {
+            WorldPoint point=o.getWorldLocation();if(point==null)continue;
+            int d=point.distanceTo(anchor);
+            if(d<distance&&d<=radius&&match.test(o)){best=o;distance=d;}
+        }
+        return best;
+    }
+    private GameObject transition(RouteLeg leg)
+    {
+        WorldPoint anchor=leg.point==null?client.getLocalPlayer().getWorldLocation():leg.point;
+        if(transitionKind!=leg.interaction||!Objects.equals(transitionAnchor,anchor))
+        {
+            transitionKind=leg.interaction;transitionAnchor=anchor;
+            transitionTarget=nearest(anchor,18,o->transitionMatches(leg.interaction,o));
+        }
+        return transitionTarget;
+    }
+    private GameObject transport(FarmingHelperPlugin helper,FarmRunPatch patch,RouteLeg leg)
+    {
+        if(!transportResolved||transportPatch!=patch||transportLeg!=leg)
+        {
+            transportResolved=true;transportPatch=patch;transportLeg=leg;
+            TransportHint hint=helper.currentTransport();
+            transportTarget=hint==null?null:nearest(hint.origin,6,o->{
+                if(o.getId()==hint.objectId)return true;
+                ObjectComposition actual=transformed(client.getObjectDefinition(o.getId()));
+                return actual!=null&&actual.getId()==hint.objectId;
+            });
+        }
+        return transportTarget;
     }
     private boolean transitionMatches(RouteLeg.Interaction interaction,GameObject object)
     {
@@ -261,6 +351,12 @@ final class PatchHighlight extends Overlay
     }
     /** Resolve a local NPC from the scene, never a guessed map target. */
     NPC leprechaun(FarmRunPatch patch)
+    {
+        if(patch==null||!refreshScene())return null;
+        if(!leprechauns.containsKey(patch))leprechauns.put(patch,findLeprechaun(patch));
+        return leprechauns.get(patch);
+    }
+    private NPC findLeprechaun(FarmRunPatch patch)
     {
         Player local=client.getLocalPlayer();
         if(local==null||local.getWorldView()==null)return null;
@@ -287,17 +383,31 @@ final class PatchHighlight extends Overlay
         return point!=null&&anchor!=null&&player!=null&&point.getPlane()==player.getPlane()&&
             point.distanceTo2D(anchor)<=25&&point.distanceTo(player)<=25;
     }
+    private NPC gardener(FarmRunPatch patch,FarmingHelperPlugin helper)
+    {
+        if(!gardeners.containsKey(patch))
+        {
+            int id=helper.gardener(patch);NPC best=null;int distance=Integer.MAX_VALUE;
+            WorldPoint player=client.getLocalPlayer().getWorldLocation();
+            if(id>0&&player!=null)for(NPC npc:resolvedView.npcs())
+            {
+                if(npc.getId()!=id||npc.getWorldLocation()==null)continue;
+                int d=npc.getWorldLocation().distanceTo(player);
+                if(d<=25&&d<distance){best=npc;distance=d;}
+            }
+            gardeners.put(patch,best);
+        }
+        return gardeners.get(patch);
+    }
     @Override public Dimension render(Graphics2D graphics)
     {
-        FarmingHelperPlugin helper=plugin.get();if(client.getLocalPlayer()==null)return null;
+        if(!refreshScene())return null;
+        FarmingHelperPlugin helper=plugin.get();
         RouteLeg leg=helper.activeLeg();
-        if(leg!=null && leg.interaction!=RouteLeg.Interaction.NONE)
+        if(leg!=null&&leg.interaction!=RouteLeg.Interaction.NONE)
         {
             if(leg.interaction==RouteLeg.Interaction.BIRD_ROW&&rowChoice()!=null)return null;
-            GameObject selected=null;int distance=Integer.MAX_VALUE;
-            WorldPoint anchor=leg.point==null?client.getLocalPlayer().getWorldLocation():leg.point;
-            for(GameObject o:objects)if(sameView(o) && transitionMatches(leg.interaction,o))
-            {int d=o.getWorldLocation().distanceTo(anchor);if(d<distance && d<=18){selected=o;distance=d;}}
+            GameObject selected=transition(leg);
             if(selected!=null)
             {
                 Shape shape=selected.getClickbox();
@@ -314,20 +424,9 @@ final class PatchHighlight extends Overlay
             }
             return null;
         }
-        TransportHint transport=helper.currentTransport();
-        if(transport!=null)
-        {
-            GameObject best=null;int distance=Integer.MAX_VALUE;
-            for(GameObject o:objects)if(sameView(o))
-            {
-                ObjectComposition actual=transformed(client.getObjectDefinition(o.getId()));
-                if(o.getId()!=transport.objectId&&(actual==null||actual.getId()!=transport.objectId))continue;
-                int d=o.getWorldLocation().distanceTo(transport.origin);
-                if(d<distance&&d<=6){distance=d;best=o;}
-            }
-            if(best!=null){draw(graphics,best.getClickbox());return null;}
-        }
         FarmRunPatch patch=helper.activePatch();if(patch==null)return null;
+        GameObject travel=transport(helper,patch,leg);
+        if(travel!=null){draw(graphics,travel.getClickbox());return null;}
         StepEngine.Action action=helper.activeAction();
         LeprechaunWithdrawal withdrawal=helper.leprechaunWithdrawal();
         if(withdrawal!=null&&exchangeSlot(withdrawal)==null)
@@ -336,31 +435,39 @@ final class PatchHighlight extends Overlay
             if(npc!=null)
             {
                 draw(graphics,npc.getConvexHull(),Color.GREEN);
-                net.runelite.api.Point p=npc.getCanvasTextLocation(graphics," ",npc.getLogicalHeight()+20);
-                if(p!=null)arrow(graphics,p.getX(),p.getY());
+                net.runelite.api.Point point=npc.getCanvasTextLocation(graphics," ",npc.getLogicalHeight()+20);
+                if(point!=null)arrow(graphics,point.getX(),point.getY());
             }
         }
-        if(patch.getPatchType()==PatchType.HESPORI && action==StepEngine.Action.HARVEST)return null;
-        if(action==StepEngine.Action.PAY_REMOVE || action==StepEngine.Action.PROTECT_TREE)
+        PatchType type=patch.getPatchType();
+        if(type==PatchType.HESPORI&&action==StepEngine.Action.HARVEST)return null;
+        if(action==StepEngine.Action.PAY_REMOVE||action==StepEngine.Action.PROTECT_TREE)
         {
-            int gardener=helper.gardener(patch);
-            if(gardener>0 && helper.activeLive() && client.getTopLevelWorldView()!=null)
-                for(NPC npc:client.getTopLevelWorldView().npcs())if(npc.getId()==gardener && npc.getWorldLocation().distanceTo(client.getLocalPlayer().getWorldLocation())<=25)
-                {draw(graphics,npc.getConvexHull());return null;}
+            NPC npc=helper.activeLive()?gardener(patch,helper):null;
+            if(npc!=null)draw(graphics,npc.getConvexHull());
             return null;
         }
-        List<GameObject> group=resolve(patch);
-        Rectangle patchBounds=null;
-        for(GameObject o:group)
+        // Single interaction objects retain their native clickbox, never a loop of crop models.
+        if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN)
         {
-            Shape shape=o.getClickbox();draw(graphics,shape);
-            if(shape!=null&&helper.activeLive())
-                patchBounds=patchBounds==null?shape.getBounds():patchBounds.union(shape.getBounds());
+            List<GameObject> group=resolve(patch);
+            if(!group.isEmpty())draw(graphics,group.get(0).getClickbox());
+            return null;
         }
-        if(patchBounds!=null&&patch.getPatchType()!=PatchType.BIRDHOUSE&&patch.getPatchType()!=PatchType.COMPOST_BIN)
+        Footprint area=footprint(patch);
+        Polygon polygon=area==null?null:area.project(client);
+        if(area==null&&resolve(patch).isEmpty()&&QuestTargets.get(patch)!=null&&!resolvedView.isInstance())
         {
-            int x=patchBounds.x+patchBounds.width/2,y=patchBounds.y-6;
-            String actionLabel=StepEngine.label(action,patch.getPatchType());
+            WorldPoint point=QuestTargets.get(patch).point;
+            LocalPoint local=LocalPoint.fromWorld(resolvedView,point);
+            if(local!=null)polygon=Perspective.getCanvasTileAreaPoly(client,local,1,1,resolvedPlane,0);
+        }
+        draw(graphics,polygon);
+        if(area!=null&&polygon!=null&&helper.activeLive())
+        {
+            Rectangle bounds=polygon.getBounds();
+            int x=bounds.x+bounds.width/2,y=bounds.y-6;
+            String actionLabel=StepEngine.label(action,type);
             if(action==StepEngine.Action.COMPOST&&helper.compostMissing())careReminder(graphics,"Compost",x,y);
             else if(action==StepEngine.Action.WATER)careReminder(graphics,"Water",x,y);
             else
@@ -368,11 +475,6 @@ final class PatchHighlight extends Overlay
                 if(!actionLabel.isEmpty())label(graphics,actionLabel,x,y,Color.CYAN);
                 if(helper.compostMissing())careReminder(graphics,"Compost",x,y-16);
             }
-        }
-        if(group.isEmpty() && QuestTargets.get(patch)!=null)
-        {
-            WorldPoint point=QuestTargets.get(patch).point;LocalPoint local=LocalPoint.fromWorld(client,point);
-            if(local!=null){Polygon tile=Perspective.getCanvasTilePoly(client,local);if(tile!=null)OverlayUtil.renderPolygon(graphics,tile,Color.CYAN);}
         }
         return null;
     }

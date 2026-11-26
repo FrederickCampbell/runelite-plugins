@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.07.0 — stabilization branch overlay performance
+
+- Highlight every verified crop plot with one ground-level rectangle, derived from actual scene tile bounds. No crop model clickboxes are calculated, even for dense hops and allotments. Keep camera projection live, including the actual world view and plane.
+- Reuse cached patch footprints for navigation approaches. Cache local leprechaun, gardener, transport and specialty object lookups, including absent targets, until a scene/tick or relevant event changes them. Preserve single-object bank, boat, compost-bin and birdhouse outlines, cyan labels, green arrows and optional-care indicators.
+- Add regression coverage for dense patches, even-sized footprints, scene isolation, cache invalidation and repeated-frame projection. Correct the previous hardcoded release-version assertion.
+
 ## v1.06.1 — stabilization branch compliance hotfix
 
 - Remove global desktop focus inspection and explicit focus requests from sidebar code and tests. Keep scroll anchoring and native Swing keyboard traversal; retain the existing search field during filtering and access refreshes.
