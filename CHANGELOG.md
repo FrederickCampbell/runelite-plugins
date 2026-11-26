@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.02
+
+- Recommended items and Recommended teleports appear above preparation, resupply and patch steps. Each header has its own inline help button. Both lists collapse when the route starts or resumes. Start Run and Continue Run stay within reach while you scroll.
+- The farming bank layout and compact Seed Vault keep native placeholders through withdrawals and deposits. A placeholder contributes zero to stock, crop choices and teleport recommendations.
+- Supply rows show carried quantities and positive amounts last seen in storage. The missing-items count covers required supplies. Show farming bank explains when it needs an open bank or the Bank Tags plugin.
+- The sidebar preserves position and keyboard focus as you edit. Manual and grouped selections update in place, and Individual Run search reuses its buttons. Long labels wrap at the available width.
+- Character preferences and temporary run overrides are labeled. Locked patches show their reason and remain editable. Skip and stock reset dialogs name the action and default to Cancel.
+
 ## v1.01
 
 - Custom Seed Vault views reapply their compact layout after deposits, withdrawals and depleted stacks. Native item slots and actions stay attached to the original widgets.

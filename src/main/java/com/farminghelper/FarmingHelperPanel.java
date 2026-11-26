@@ -441,7 +441,7 @@ final class FarmingHelperPanel extends PluginPanel
     {
         List<Crop> crops=CropCatalog.crops(type);if(!crops.isEmpty())return crops.get(0).getItemId();
         if(type==PatchType.COMPOST_BIN)return ItemID.BUCKET_ULTRACOMPOST;
-        if(type==PatchType.BIRDHOUSE)return 21512; // regular bird house
+        if(type==PatchType.BIRDHOUSE)return ItemID.BIRDHOUSE_NORMAL;
         return -1;
     }
     private JButton navRow(String title,String subtitle,FarmingIcons.Kind graphic,int sprite,FarmingIcons.Kind actionKind,Runnable action)
