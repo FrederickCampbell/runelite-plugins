@@ -1,6 +1,6 @@
 # Farming Helper review and live-client checks
 
-The player performs all game actions. The plugin reads farming observations, displays instructions, and changes the presentation of opt-in storage views. Shortest Path receives navigation messages. The v1.06 release adds no runtime dependencies. Development builds and original licenses are documented in [Development](docs/IMPLEMENTATION.md).
+The player performs all game actions. The plugin reads farming observations, displays instructions, and changes the presentation of opt-in storage views. Shortest Path receives navigation messages. The v1.06.1 stabilization hotfix adds no runtime dependencies and removes desktop focus inspection and explicit focus requests. The Gradle test task checks production and test Java for prohibited input APIs. Native Swing controls retain normal keyboard behavior; no game input is generated. Development builds and original licenses are documented in [Development](docs/IMPLEMENTATION.md).
 
 | Integration | Review surface |
 | --- | --- |
@@ -23,3 +23,5 @@ Automated build and regression tests are tracked in GitHub Actions. Live accepta
 7. Check an open and closed carried seed box, transfer seeds between it and inventory, plant directly, reorder compatible species, deposit the box, hop and change character. Verify supply counts and highlights, including birdhouse bait and raw tree seeds. Unknown contents must not satisfy requirements.
 
 [Plugin Hub development and review](https://github.com/runelite/plugin-hub) · [RuneLite feature guidance](https://github.com/runelite/runelite/wiki/Rejected-or-Rolled-Back-Features) · [Jagex third-party client guidelines](https://secure.runescape.com/m=news/third-party-client-guidelines?oldschool=1)
+
+8. On the stabilization build, manually tab through the sidebar, reorder and remove crop priorities, use help and confirmation popups, filter patches and trigger an access refresh. Verify the search text and selection remain intact and scroll restoration works. Controls rebuilt after a ranking change rely on normal Swing focus traversal, not forced focus restoration.

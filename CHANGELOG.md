@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.06.1 — stabilization branch compliance hotfix
+
+- Remove global desktop focus inspection and explicit focus requests from sidebar code and tests. Keep scroll anchoring and native Swing keyboard traversal; retain the existing search field during filtering and access refreshes.
+- Replace the desktop-focus regression with isolated component-action, ranking and search-selection assertions. No display-focus opt-in is required for this test.
+- Add a source-level input API guard to the Gradle test task and enable CI for the stabilization branch. No gameplay actions, crop guidance, storage views or navigation behavior changed.
+
 ## v1.06
 
 - Fix live-state recognition for underwater seaweed despite plane-zero map markers; preserve underwater region/plane checks and resolve tool leprechauns in the player's current world view. Restores shared contextual compost and withdrawal guidance.

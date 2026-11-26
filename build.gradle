@@ -29,7 +29,7 @@ dependencies {
 }
 
 group = 'com.farminghelper'
-version = '1.06'
+version = '1.06.1'
 
 // Keep the sidebar version tied to the published plugin metadata.
 tasks.named('processResources') {
@@ -76,3 +76,24 @@ tasks.register('shadowJar', Jar) {
 	archiveClassifier.set('shadow')
 	archiveFileName.set("${rootProject.name}-${project.version}-all.jar")
 }
+
+// Guard both production and test Java sources against desktop/game input injection.
+// Ordinary component actions in isolated Swing tests are not OS input.
+tasks.register('auditInputApis') {
+    inputs.files(fileTree('src') { include '**/*.java' })
+    doLast {
+        def forbidden = ~/\b(?:Robot|KeyboardFocusManager|DefaultKeyboardFocusManager|MouseInfo|AWTEventListener|requestFocus(?:InWindow)?|dispatchEvent|postEvent|invokeMenuAction|menuAction|mousePress|mouseRelease|mouseMove|keyPress|keyRelease)\b/
+        def findings = []
+        inputs.files.files.each { source ->
+            source.readLines('UTF-8').eachWithIndex { line, index ->
+                if (forbidden.matcher(line).find()) {
+                    findings.add("${source}: ${index + 1}: ${line.trim()}")
+                }
+            }
+        }
+        if (!findings.isEmpty()) {
+            throw new GradleException('Prohibited input API references:\n' + findings.join('\n'))
+        }
+    }
+}
+tasks.named('test') { dependsOn 'auditInputApis' }

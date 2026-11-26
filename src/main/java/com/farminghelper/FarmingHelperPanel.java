@@ -7,7 +7,6 @@ import java.awt.Font;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Container;
-import java.awt.KeyboardFocusManager;
 import java.util.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -113,9 +112,8 @@ final class FarmingHelperPanel extends PluginPanel
     /** A control identity and its offset survive rebuilding a list or returning from a child page. */
     private static final class Position
     {
-        int scrollY, offset, dot, mark;
-        String focus, anchor, fallback;
-        boolean search;
+        int scrollY, offset;
+        String anchor;
     }
 
     private static String key(Component control)
@@ -141,17 +139,6 @@ final class FarmingHelperPanel extends PluginPanel
     {
         Position saved = new Position();
         saved.scrollY = scroll.getVerticalScrollBar().getValue();
-        Component focus = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
-        if (focus != null && SwingUtilities.isDescendingFrom(focus,this))
-        {
-            saved.focus=key(focus);
-            if (focus instanceof JComponent) saved.fallback=(String)((JComponent)focus).getClientProperty("farming.focusFallback");
-            if (focus instanceof JTextField)
-            {
-                JTextField field=(JTextField)focus;
-                saved.search=true; saved.dot=field.getCaret().getDot(); saved.mark=field.getCaret().getMark();
-            }
-        }
         if (saved.scrollY > 0)
         {
             List<JComponent> candidates = new ArrayList<>();
@@ -161,10 +148,9 @@ final class FarmingHelperPanel extends PluginPanel
             {
                 int offset=SwingUtilities.convertPoint(c,0,0,scroll.getViewport()).y;
                 if (offset+c.getHeight()<=0 || offset>=scroll.getViewport().getHeight()) continue;
-                if (c==focus || Math.abs(offset)<nearest)
+                if (Math.abs(offset)<nearest)
                 {
                     saved.anchor=key(c); saved.offset=offset; nearest=Math.abs(offset);
-                    if (c==focus) break;
                 }
             }
         }
@@ -178,29 +164,16 @@ final class FarmingHelperPanel extends PluginPanel
             if (generation!=renderGeneration || session!=guideSession) return;
             if (saved==null) { scroll.getVerticalScrollBar().setValue(0); return; }
             int target=saved.scrollY;
-            if (saved.focus!=null || saved.anchor!=null)
+            if (saved.anchor!=null)
             {
                 List<JComponent> candidates = new ArrayList<>();
-                controls(this,candidates);
-                JComponent focus=null, fallback=null;
+                controls(rows,candidates);
                 for (JComponent c : candidates)
                 {
-                    String k=key(c);
-                    if (k.equals(saved.anchor) && SwingUtilities.isDescendingFrom(c,rows))
-                        target=SwingUtilities.convertPoint(c,0,0,scroll.getViewport().getView()).y-saved.offset;
-                    if (c.isEnabled() && k.equals(saved.focus)) focus=c;
-                    if (c.isEnabled() && k.equals(saved.fallback)) fallback=c;
-                }
-                if (focus==null) focus=fallback;
-                Component current=KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
-                if (focus!=null && current!=focus && (current==null || !current.isShowing() || SwingUtilities.isDescendingFrom(current,this)))
-                {
-                    focus.requestFocusInWindow();
-                    if (saved.search && focus instanceof JTextField)
+                    if (saved.anchor.equals(key(c)))
                     {
-                        JTextField field=(JTextField)focus;
-                        int n=field.getDocument().getLength();
-                        field.setCaretPosition(Math.min(saved.mark,n));field.moveCaretPosition(Math.min(saved.dot,n));
+                        target=SwingUtilities.convertPoint(c,0,0,scroll.getViewport().getView()).y-saved.offset;
+                        break;
                     }
                 }
             }
@@ -271,11 +244,6 @@ final class FarmingHelperPanel extends PluginPanel
         content.setSize(width,Short.MAX_VALUE);
         content.setPreferredSize(new Dimension(width,content.getPreferredSize().height));
         JPopupMenu popup=new JPopupMenu();popup.add(content);
-        popup.addPopupMenuListener(new javax.swing.event.PopupMenuListener(){
-            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent event) { }
-            public void popupMenuCanceled(javax.swing.event.PopupMenuEvent event) { }
-            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent event) { button.requestFocusInWindow(); }
-        });
         java.awt.Point origin=button.getLocationOnScreen();
         Dimension size=popup.getPreferredSize();
         int x=Math.max(bounds.x,Math.min(origin.x+button.getWidth()-size.width,bounds.x+bounds.width-size.width));
@@ -610,7 +578,7 @@ final class FarmingHelperPanel extends PluginPanel
             groups.forEach((key,patches)->{
                 JPanel group=new JPanel(new BorderLayout(2,0));group.setBackground(FarmingTheme.CARD);
                 JCheckBox parent=new JCheckBox();parent.setName("manual-group/"+key);
-                parent.putClientProperty("farming.focusFallback","Select all");
+                
                 parent.addActionListener(e->{
                     boolean all=patches.stream().allMatch(p->manual.contains(p.key()));
                     for(FarmRunPatch p:patches)if(all)manual.remove(p.key());else manual.add(p.key());
@@ -620,7 +588,7 @@ final class FarmingHelperPanel extends PluginPanel
                 boolean open=manualGroups.contains(key);
                 JButton fold=FarmingIcons.button(open?COLLAPSE:EXPAND,(open?"Collapse patches · ":"Expand patches · ")+key,
                     FarmingTheme.MUTED,()->{if(!manualGroups.add(key))manualGroups.remove(key);rebuild();});
-                fold.setName("manual-fold/"+key);fold.putClientProperty("farming.focusFallback","Select all");group.add(fold,BorderLayout.EAST);resultRow(list,group);
+                fold.setName("manual-fold/"+key);group.add(fold,BorderLayout.EAST);resultRow(list,group);
                 if(open)for(FarmRunPatch p:patches)
                 {
                     JCheckBox child=check(patchLabel(p,manualByLocation),manual.contains(p.key()),on->{
@@ -628,7 +596,7 @@ final class FarmingHelperPanel extends PluginPanel
                         save();
                     });
                     child.setName("manual/"+p.key());
-                    child.putClientProperty("farming.focusFallback","Select all");
+                    
                     child.setMargin(new java.awt.Insets(3,12,3,0));
                     children.put(p.key(),child);resultRow(list,child);
                 }
@@ -1046,7 +1014,7 @@ final class FarmingHelperPanel extends PluginPanel
                 JPanel row=keepRow(crop);
                 row.add(new JLabel(crop.label),BorderLayout.CENTER);
                 JButton remove=FarmingIcons.button(END,"Stop keeping "+crop.label,FarmingTheme.DANGER,()->{plugin.save(crop.key(),"REPLANT");general();});
-                remove.putClientProperty("farming.focusFallback","Add a plant");row.add(remove,BorderLayout.EAST);
+                row.add(remove,BorderLayout.EAST);
                 addRow(row);
             }
             JComboBox<Object> alsoKeep=new JComboBox<>();alsoKeep.getAccessibleContext().setAccessibleName("Add a plant");alsoKeep.addItem("Add a plant…");
@@ -1239,7 +1207,7 @@ final class FarmingHelperPanel extends PluginPanel
             {
                 JButton fold=disclosure(count,open);
                 fold.addActionListener(e->{if(!patchExpanded.add(key))patchExpanded.remove(key);fillPatches(results);});
-                fold.setName("patch-group/"+key);fold.putClientProperty("farming.focusFallback","Search patches…");resultRow(results,fold);
+                fold.setName("patch-group/"+key);resultRow(results,fold);
             }
             else resultRow(results,text(count,FarmingTheme.MUTED));
             if(open)for(FarmRunPatch p:list)
@@ -1247,7 +1215,7 @@ final class FarmingHelperPanel extends PluginPanel
                 JPanel row=transparent(new BorderLayout(2,0));row.setBorder(BorderFactory.createEmptyBorder(2,8,2,0));
                 JCheckBox enabled=check(patchLabel(p,patchByLocation),plugin.enabled(p),
                     on->{plugin.save("patchEnabled_"+p.key(),Boolean.toString(on));fillPatches(results);});
-                enabled.setName("enabled/"+p.key());enabled.putClientProperty("farming.focusFallback","Search patches…");
+                enabled.setName("enabled/"+p.key());
                 String issue=plugin.accessNote(p);enabled.setToolTipText(issue.isEmpty()?p.getDisplayName():issue);
                 enabled.getAccessibleContext().setAccessibleDescription(enabled.getToolTipText());
                 if(!issue.isEmpty()){
@@ -1262,7 +1230,7 @@ final class FarmingHelperPanel extends PluginPanel
                     String behavior="PRESERVE".equals(saved)?"Keep planted":"REPLANT".equals(saved)?"Harvest & replant":"Use preferences";
                     String description="Edit "+p.getDisplayName()+" · "+(old.isEmpty()?"Automatic":old)+" · "+behavior;
                     JButton edit=FarmingIcons.button(MORE,description,old.isEmpty()&&!KeepCrop.explicit(saved)?FarmingTheme.MUTED:FarmingTheme.SUCCESS);
-                    edit.setName("edit/"+p.key());edit.putClientProperty("farming.focusFallback","Search patches…");
+                    edit.setName("edit/"+p.key());
                     edit.addActionListener(e->editPatch(p,edit,results,old,saved));
                     row.add(edit,BorderLayout.EAST);
                 }
@@ -1279,7 +1247,6 @@ final class FarmingHelperPanel extends PluginPanel
         int result=JOptionPane.showOptionDialog(source,message,title,JOptionPane.DEFAULT_OPTION,JOptionPane.QUESTION_MESSAGE,
             null,options,destructive?"Cancel":action);
         if(!SwingUtilities.isDescendingFrom(source,this))return false;
-        source.requestFocusInWindow();
         return result==0;
     }
     private void editPatch(FarmRunPatch patch,JButton edit,JPanel results,String old,String saved)
@@ -1361,9 +1328,7 @@ final class FarmingHelperPanel extends PluginPanel
             JButton down=FarmingIcons.button(DOWN,"Move "+cropName+" down",FarmingTheme.MUTED,()->{Collections.swap(names,n,n+1);save.run();});
             JButton remove=FarmingIcons.button(END,"Remove "+cropName,FarmingTheme.DANGER,()->{names.remove(n);save.run();});
             up.setEnabled(i>0);down.setEnabled(i+1<names.size());
-            up.putClientProperty("farming.focusFallback",key(down));down.putClientProperty("farming.focusFallback",key(up));
-            String neighbor=i+1<names.size()?names.get(i+1):i>0?names.get(i-1):null;
-            remove.putClientProperty("farming.focusFallback",neighbor==null?addKey:"Remove "+neighbor);
+            
             JPanel buttons=transparent(new FlowLayout(FlowLayout.RIGHT,0,0));
             buttons.add(up);buttons.add(down);buttons.add(remove);
             resultRow(editor,rankingRow(label,buttons));
@@ -1380,7 +1345,7 @@ final class FarmingHelperPanel extends PluginPanel
         resultRow(editor,add);
         if(!names.isEmpty())
         {
-            JButton reset=new JButton("Reset to automatic");reset.putClientProperty("farming.focusFallback",addKey);
+            JButton reset=new JButton("Reset to automatic");
             reset.addActionListener(e->{names.clear();save.run();});resultRow(editor,reset);
         }
     }

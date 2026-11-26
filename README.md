@@ -2,7 +2,7 @@
 
 <img src="icon.png" alt="Farming Helper icon" align="right" width="48">
 
-**Quest Helper for your farm runs!** · Version 1.06
+**Quest Helper for your farm runs!** · Version 1.06.1
 
 Pick a run, grab your supplies and follow the guide. Farming Helper helps you decide what to plant, what to bring and where to go next.
 
