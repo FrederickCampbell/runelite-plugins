@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.10 — intelligent preparation
+
+- Scope preparation to inventory-constrained contiguous portions of the existing itinerary, with conservative working-space buffers and optional Guild staging.
+- Recognize noted gardener protection payments without treating notes as usable planting or compost materials.
+- Count carried inventory, verified seed-box contents, equipment and observed transport stock. Budget numeric charge variants and consumable teleports; keep navigation advisory.
+- Prepare again at a supply boundary only when the next patch has a known stored shortage; retain the broad farming shelf and highlight missing current supplies.
+- Coordinate compatible local compost harvests and stage large compost-bin loads without assuming future yields.
+- Keep all gameplay interactions manual. Live-client acceptance remains separate.
+
 ## v1.09 — local farming workflow
 
 - Prefer verified nearby selected plots over remote work before a patch is underway, without changing seed allocation or the pinned itinerary.
