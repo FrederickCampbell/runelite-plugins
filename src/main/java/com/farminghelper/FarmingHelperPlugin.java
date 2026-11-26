@@ -541,9 +541,16 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(box||event.getParam1()>>>16==InterfaceID.HOSIDIUS_SEEDBOX)
         {
-            if(option.equals("fill")||option.startsWith("deposit"))beginSeedTransfer(true,seedItem(id)?id:-1,bag);
+            if(option.equals("fill")||option.startsWith("deposit")){beginSeedTransfer(true,seedItem(id)?id:-1,bag);return;}
             else if(option.equals("empty")||option.equals("empty to bank")||option.startsWith("withdraw")||option.startsWith("remove"))
-                beginSeedTransfer(false,seedItem(id)?id:-1,bag);
+            {beginSeedTransfer(false,seedItem(id)?id:-1,bag);return;}
+        }
+        if((seedBox.pending()||seedBoxPlant!=null)&&SeedBoxStock.conflictingLooseAction(option)&&
+            (seedItem(id)||option.equals("take")&&seedItem(event.getId())))
+        {
+            // Another seed-moving action can explain the loose quantity delta.
+            // We cannot attribute it to the box; keep only historical hints.
+            seedBox.forget();seedBoxPlant=null;seedBoxChanged();
         }
         if(event.getMenuAction()==MenuAction.WIDGET_TARGET_ON_GAME_OBJECT&&highlight!=null)
         {
@@ -664,7 +671,9 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(seedBoxPlant!=null)
         {
-            if(seedBox.revision()!=seedBoxPlantRevision){seedBoxPlant=null;return;}
+            // Native container observations already clear seedBoxPlant. A
+            // different inferred mutation makes the old planting baseline unsafe.
+            if(seedBox.revision()!=seedBoxPlantRevision){seedBoxPlant=null;seedBox.forget();seedBoxChanged();return;}
             if(tick<=seedBoxPlantTick)return;
             if(tick-seedBoxPlantTick>30){seedBoxPlant=null;return;}
             var observation=observe(seedBoxPlant);

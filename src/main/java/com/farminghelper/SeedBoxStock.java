@@ -16,7 +16,7 @@ final class SeedBoxStock
     private static final Pattern STOLEN=Pattern.compile("You put the stolen (.+?) into your seed box\\.",Pattern.CASE_INSENSITIVE);
     private static final Pattern LINE=Pattern.compile("([\\d,]+)\\s*x\\s*(.+?)\\.?$",Pattern.CASE_INSENSITIVE);
     private Map<Integer,Integer> observed=Map.of(),cached=Map.of(),before,checking;
-    private boolean complete,orderKnown,adding,checkValid;
+    private boolean complete,orderKnown,adding,checkValid,nativeBaselineKnown;
     private int transferTick,checkTick,lastCheckLineTick,nativeTick=-1,revision,onlyId=-1;
     private Map<Integer,Integer> nativeAdditions=Map.of();
     static boolean isBox(int id){return id==ItemID.SEED_BOX||id==ItemID.SEED_BOX_OPEN;}
@@ -26,7 +26,7 @@ final class SeedBoxStock
         return bag.getOrDefault(ItemID.SEED_BOX,0)>0?ItemID.SEED_BOX:-1;
     }
     void clear(){cached=Map.of();forget();}
-    void forget(){observed=Map.of();complete=false;orderKnown=false;nativeTick=-1;nativeAdditions=Map.of();cancel();checking=null;revision++;}
+    void forget(){observed=Map.of();complete=false;orderKnown=false;nativeTick=-1;nativeBaselineKnown=false;nativeAdditions=Map.of();cancel();checking=null;revision++;}
     void restore(String snapshot){clear();cached=Map.copyOf(StockSnapshot.decode(snapshot));}
     int cachedTotal(){return (int)Math.min(Integer.MAX_VALUE,cached.values().stream().mapToLong(Integer::longValue).sum());}
     String snapshot(){return StockSnapshot.encode(cached);}
@@ -37,6 +37,12 @@ final class SeedBoxStock
     int revision(){return revision;}
     void cancel(){before=null;onlyId=-1;}
     boolean pending(){return before!=null;}
+    static boolean conflictingLooseAction(String option)
+    {
+        return option.equals("take")||option.equals("drop")||option.equals("destroy")||
+            option.startsWith("deposit")||option.startsWith("withdraw")||option.startsWith("store")||
+            option.startsWith("sell")||option.startsWith("offer")||option.startsWith("remove");
+    }
     void observe(ItemContainer container){observe(container,-1);}
     void observe(ItemContainer container,int tick){observe(container,tick,id->true);}
     boolean observe(ItemContainer container,int tick,IntPredicate accepts)
@@ -51,9 +57,11 @@ final class SeedBoxStock
             ordered.put(item.getId(),item.getQuantity());
         }
         if(ordered.size()>6)return false;
-        Map<Integer,Integer> additions=new HashMap<>();
+        // More than one container update can precede chat in a single tick.
+        Map<Integer,Integer> additions=tick>=0&&tick==nativeTick?new HashMap<>(nativeAdditions):new HashMap<>();
+        nativeBaselineKnown=complete&&(tick!=nativeTick||nativeBaselineKnown);
         if(complete&&tick>=0)ordered.forEach((id,n)->{
-            int delta=n-observed.getOrDefault(id,0);if(delta>0)additions.put(id,delta);
+            int delta=n-observed.getOrDefault(id,0);if(delta>0)additions.merge(id,delta,PhysicalStock::sum);
         });
         nativeAdditions=additions;replace(ordered,true,true);nativeTick=tick;cancel();checking=null;
         return true;
@@ -126,7 +134,8 @@ final class SeedBoxStock
             {
                 boolean p=pickup.matches();int id=resolve.applyAsInt(p?pickup.group(2):stolen.group(1));
                 int n=p?number(pickup.group(1)):1;
-                if(nativeAdditions.getOrDefault(id,0)>0)adjust(nativeAdditions,id,-n);
+                if(nativeAdditions.getOrDefault(id,0)>=n&&n>0)adjust(nativeAdditions,id,-n);
+                else if(id>0&&n>0&&!nativeBaselineKnown){complete=false;orderKnown=false;}
             }
             return false;
         }
@@ -143,9 +152,13 @@ final class SeedBoxStock
             {
                 // A native increment immediately before its matching chat
                 // message is the same observation, not a second pickup.
-                if(nativeTick>=0&&tick-nativeTick==1&&nativeAdditions.getOrDefault(id,0)>=n)
+                if(nativeTick>=0&&tick-nativeTick==1)
                 {
-                    adjust(nativeAdditions,id,-n);return false;
+                    if(nativeAdditions.getOrDefault(id,0)>=n)
+                    {adjust(nativeAdditions,id,-n);return false;}
+                    // A first-ever snapshot can already include the pickup.
+                    // Preserve its observed lower bound; never invent a second stack.
+                    if(!nativeBaselineKnown){complete=false;orderKnown=false;checking=null;return false;}
                 }
                 checking=null;
                 Map<Integer,Integer> next=new LinkedHashMap<>(observed);adjust(next,id,n);

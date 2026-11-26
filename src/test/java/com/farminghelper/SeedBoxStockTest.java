@@ -145,4 +145,34 @@ public class SeedBoxStockTest
         assertEquals(7,(int)box.carried(Map.of(ItemID.SEED_BOX,1)).get(RANARR));
         box.orderUncertain();assertFalse(box.orderKnown());assertTrue(box.complete());
     }
+
+    @Test public void firstNativeObservationCannotBeDoubleCountedByDelayedChat()
+    {
+        SeedBoxStock box=new SeedBoxStock();ItemContainer c=mock(ItemContainer.class);
+        when(c.getItems()).thenReturn(new Item[]{new Item(RANARR,7)});
+        assertTrue(box.observe(c,10,id->true));
+        assertFalse(box.chat("You put 7 x Ranarr seed straight into your open seed box.",11,n->RANARR));
+        assertEquals(7,(int)box.carried(Map.of(ItemID.SEED_BOX,1)).get(RANARR));
+        assertFalse(box.complete());assertFalse(box.orderKnown());
+        assertTrue(box.chat("You put 1 x Ranarr seed straight into your open seed box.",13,n->RANARR));
+        assertEquals(8,(int)box.carried(Map.of(ItemID.SEED_BOX,1)).get(RANARR));
+    }
+    @Test public void multipleNativeIncrementsAndDelayedMessagesReconcileOnlyOnce()
+    {
+        SeedBoxStock box=new SeedBoxStock();ItemContainer c=mock(ItemContainer.class);
+        when(c.getItems()).thenReturn(new Item[]{new Item(RANARR,5)});
+        box.observe(c,1);
+        when(c.getItems()).thenReturn(new Item[]{new Item(RANARR,6)});
+        box.observe(c,2);
+        when(c.getItems()).thenReturn(new Item[]{new Item(RANARR,6),new Item(SNAP,1)});
+        box.observe(c,2);
+        assertFalse(box.chat("You put 1 x Ranarr seed straight into your open seed box.",3,n->RANARR));
+        assertFalse(box.chat("You put 1 x Snapdragon seed straight into your open seed box.",3,n->SNAP));
+        assertEquals(Map.of(RANARR,6,SNAP,1),box.carried(Map.of(ItemID.SEED_BOX,1)));
+        assertFalse(SeedBoxStock.conflictingLooseAction("walk here"));
+        assertFalse(SeedBoxStock.conflictingLooseAction("examine"));
+        assertFalse(SeedBoxStock.conflictingLooseAction("use"));
+        for(String option:List.of("take","drop","withdraw all","deposit 1","destroy"))
+            assertTrue(option,SeedBoxStock.conflictingLooseAction(option));
+    }
 }
