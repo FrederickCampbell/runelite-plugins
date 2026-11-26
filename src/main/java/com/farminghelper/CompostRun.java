@@ -134,21 +134,26 @@ final class CompostRun
             var o=observations.get(p);
             if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.HARVESTABLE)continue;
             var produce=QuestFarmingStateReader.livingProduce(p.getPatchType().name(),o);
-            if(produce!=null&&contains(superOnly?SUPER:REGULAR,produce.getItemID()))return true;
+            if(produce!=null&&(contains(superOnly?SUPER:REGULAR,produce.getItemID())||b.state==CropState.EMPTY&&material(produce.getItemID())))return true;
         }
         return false;
     }
     private static boolean contains(int[] ids,int id){for(int candidate:ids)if(candidate==id)return true;return false;}
+    static boolean material(int id){return contains(SUPER,id)||contains(REGULAR,id);}
+    static boolean batchItem(int id){return id==BUCKET||material(id);}
     /** Single bins can require 30 items. Request a feasible batch instead of
      * treating all 30 items as a single withdrawal. Keep non-batch supplies. */
     static void batch(Map<Integer,Integer> required,Map<Integer,Integer> bag,int occupied,java.util.function.IntPredicate stackable)
+    {batch(required,bag,Map.of(),Map.of(),occupied,stackable);}
+    static void batch(Map<Integer,Integer> required,Map<Integer,Integer> bag,Map<Integer,Integer> equipped,
+        Map<Integer,Integer> box,int occupied,java.util.function.IntPredicate stackable)
     {
         Map<Integer,Integer> batches=new TreeMap<>();
         required.entrySet().removeIf(e->{
-            int id=e.getKey();if(id!=BUCKET&&!contains(SUPER,id)&&!contains(REGULAR,id))return false;
+            int id=e.getKey();if(!batchItem(id))return false;
             batches.put(id,e.getValue());return true;
         });
-        int free=Math.max(0,28-Preparation.loadedSlots(bag,required,Map.of(),Map.of(),stackable)
+        int free=Math.max(0,28-Preparation.loadedSlots(bag,required,equipped,box,stackable)
             -Math.max(0,occupied-Preparation.slots(bag,Map.of(),stackable)));
         boolean selected=false;
         for(var e:batches.entrySet())
