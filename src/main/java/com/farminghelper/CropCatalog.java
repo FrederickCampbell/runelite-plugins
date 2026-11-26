@@ -193,6 +193,23 @@ final class CropCatalog
         return null;
     }
 
+    /** Use RuneLite's native contract metadata, not a parallel contract-ID table. */
+    static Crop contractCrop(int contract)
+    {
+        if(contract<=0)return null;
+        for(net.runelite.client.plugins.timetracking.farming.Produce produce:
+            net.runelite.client.plugins.timetracking.farming.Produce.values())
+        {
+            if(produce.getContractVarbitValue()!=contract||produce.getPatchImplementation()==null)continue;
+            for(PatchType type:PatchType.values())
+            {
+                if(!type.name().equals(produce.getPatchImplementation().name()))continue;
+                return findByName(type,produce.getName()+(type.isTree()?" sapling":""));
+            }
+        }
+        return null;
+    }
+
     static Crop recommend(PatchType type,int level)
     {
         List<Crop> ranked=CropXp.ranked(type,level);

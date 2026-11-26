@@ -10,13 +10,25 @@ final class SeedChoices
         Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,
         boolean stockedOnly,java.util.function.Predicate<FarmRunPatch> autoLily)
     {
+        return allocate(patches,level,stock,priorities,overrides,committed,stockedOnly,autoLily,null);
+    }
+
+    static Map<FarmRunPatch,Crop> allocate(List<FarmRunPatch> patches,int level,Map<Integer,Integer> stock,
+        Function<PatchType,String> priorities,Function<FarmRunPatch,String> overrides,Map<FarmRunPatch,Crop> committed,
+        boolean stockedOnly,java.util.function.Predicate<FarmRunPatch> autoLily,Crop contract)
+    {
         Map<Integer,Integer> remaining = new HashMap<>(stock);
         Map<FarmRunPatch,Crop> result = new LinkedHashMap<>();
-        // Reserve a live, already-selected crop first, but never force an exhausted crop.
+        // One contract needs one eligible Guild patch, even for two allotments.
+        // Reserve its actual available stock before commitments or manual priorities.
+        for(FarmRunPatch patch:patches)
+            if("Farming Guild".equals(patch.getLocation())&&available(patch,contract,level,remaining))
+            {assign(patch,contract,remaining,result);break;}
+        // Reserve a live, already-selected crop next, but never force an exhausted crop.
         for (FarmRunPatch patch : patches)
         {
             Crop crop=committed.get(patch);
-            if (available(patch,crop,level,remaining)) assign(patch,crop,remaining,result);
+            if (!result.containsKey(patch)&&available(patch,crop,level,remaining)) assign(patch,crop,remaining,result);
         }
         // White lilies are permanent allotment protection. Reserve stocked lilies
         // before ordinary flower XP preferences, without inventing unavailable stock.

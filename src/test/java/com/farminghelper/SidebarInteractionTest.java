@@ -193,6 +193,21 @@ public class SidebarInteractionTest
             assertFalse(ManualSelection.decode(character.prefs.get("manualPatchChoicesV1"),character.patches()).contains(CATHERBY.key()));
         });
     }
+    @Test public void contractPreferenceDefaultsOnAndPersists() throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            Character character=new Character();
+            FarmingHelperPanel panel=new FarmingHelperPanel(character);
+            panel.home();button(panel,"Settings").doClick(0);button(panel,"Crop priorities").doClick(0);
+            JCheckBox contracts=named(panel,"preferContracts",JCheckBox.class);
+            assertEquals("Prefer contracts",contracts.getText());assertTrue(contracts.isSelected());
+            assertNotNull(contracts.getToolTipText());
+            contracts.doClick(0);assertFalse(character.preferContracts());
+            button(panel,"Back").doClick(0);button(panel,"Crop priorities").doClick(0);
+            assertFalse(named(panel,"preferContracts",JCheckBox.class).isSelected());
+            named(panel,"preferContracts",JCheckBox.class).doClick(0);assertTrue(character.preferContracts());
+        });
+    }
     @Test public void patchFilteringAndAccessRefreshRetainTheSearchField() throws Exception
     {
         Character character=new Character();
