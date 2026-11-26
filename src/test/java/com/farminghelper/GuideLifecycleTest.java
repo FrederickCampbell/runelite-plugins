@@ -283,4 +283,73 @@ public class GuideLifecycleTest
         verifyNoInteractions(bus);
         plugin.shutDown();
     }
+
+    private static QuestFarmingStateReader.Observation liveHop(com.farminghelper.queststate.CropState state,int raw)
+    {return new QuestFarmingStateReader.Observation(state,QuestFarmingStateReader.Source.LIVE,1,null,"",raw);}
+
+    @Test public void deadHopsFollowSeedlessPolicyAndReopenAfterVerifiedLoss()
+    {
+        var state=com.farminghelper.queststate.CropState.DEAD;
+        Player player=mock(Player.class);
+        when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(new WorldPoint(2572,3102,0));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(99);
+        when(config.getRSProfileKey()).thenReturn("profile");
+        var observation=new java.util.concurrent.atomic.AtomicReference<>(liveHop(state,220));
+        when(reader.observeType(eq("HOPS"),eq("Yanille"),anyString(),any())).thenAnswer(i->observation.get());
+        doAnswer(i->{((Runnable)i.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        plugin.startUp();
+        try
+        {
+            plugin.startManual(Set.of("Yanille~HOPS~"));
+            plugin.setRunPolicy(RunPolicy.NONE,false);plugin.setRunSupplies(false,false);
+            assertNotNull(plugin.activePatch());assertEquals(StepEngine.Action.CLEAR_DEAD,plugin.activeAction());
+            plugin.setSeedlessPolicy(SeedlessPolicy.SKIP);
+            assertNull(plugin.activePatch());
+            plugin.setSeedlessPolicy(SeedlessPolicy.CLEAR);
+            assertNotNull(plugin.activePatch());assertEquals(StepEngine.Action.CLEAR_DEAD,plugin.activeAction());
+            observation.set(liveHop(com.farminghelper.queststate.CropState.EMPTY,3));plugin.onGameTick(null);
+            assertNull("Clear-only completes when verified empty",plugin.activePatch());
+            plugin.setSeedlessPolicy(SeedlessPolicy.GUIDE);
+            observation.set(liveHop(state,221));plugin.onGameTick(null);
+            assertNotNull(plugin.activePatch());assertEquals(StepEngine.Action.CLEAR_DEAD,plugin.activeAction());
+            observation.set(liveHop(com.farminghelper.queststate.CropState.EMPTY,3));plugin.onGameTick(null);
+            assertEquals(StepEngine.Action.PLANT,plugin.activeAction());
+            observation.set(liveHop(com.farminghelper.queststate.CropState.GROWING,84));plugin.onGameTick(null);
+            assertNull("Confirmed planting completes the plot",plugin.activePatch());
+            observation.set(liveHop(state,222));plugin.onGameTick(null);
+            assertEquals(StepEngine.Action.CLEAR_DEAD,plugin.activeAction());
+            assertNotNull(plugin.activePatch());
+            plugin.skip(plugin.activePatch());plugin.onGameTick(null);
+            assertNull("Explicit skip remains authoritative",plugin.activePatch());
+        }
+        finally {plugin.shutDown();}
+    }
+
+    @Test public void deadHopsDuringWateringDetourReturnToNormalClearing()
+    {
+        Player player=mock(Player.class);
+        when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(new WorldPoint(2572,3102,0));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(99);
+        when(config.getRSProfileKey()).thenReturn("profile");
+        var observation=new java.util.concurrent.atomic.AtomicReference<>(
+            liveHop(com.farminghelper.queststate.CropState.GROWING,84));
+        when(reader.observeType(eq("HOPS"),eq("Yanille"),anyString(),any())).thenAnswer(i->observation.get());
+        when(reader.inPatchRegion(eq("HOPS"),eq("Yanille"),anyString(),any())).thenReturn(true);
+        when(highlight.hasLocalPatch(argThat(p->p!=null&&p.getPatchType()==PatchType.HOPS&&p.getLocation().equals("Yanille")))).thenReturn(true);
+        doAnswer(i->{((Runnable)i.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        plugin.startUp();
+        try
+        {
+            plugin.startManual(Set.of("Yanille~HOPS~"));
+            assertNotNull(plugin.activePatch());assertEquals(StepEngine.Action.WATER,plugin.activeAction());
+            observation.set(liveHop(com.farminghelper.queststate.CropState.DEAD,220));
+            plugin.onGameTick(null);
+            assertNotNull(plugin.activePatch());assertEquals(StepEngine.Action.CLEAR_DEAD,plugin.activeAction());
+        }
+        finally {plugin.shutDown();}
+    }
 }

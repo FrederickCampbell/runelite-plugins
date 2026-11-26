@@ -52,4 +52,22 @@ public class RunProgressTest
         assertEquals(SeedlessPolicy.SKIP,SeedlessPolicy.of(true,false));
         assertEquals(SeedlessPolicy.GUIDE,SeedlessPolicy.load("invalid"));
     }
+
+    @Test public void onlyVerifiedLossReopensFinishedPlotsAndNeverExplicitSkips()
+    {
+        var p=new FarmRunPatch("Yanille","",PatchType.HOPS);
+        RunProgress progress=new RunProgress();progress.include(p);progress.finish(p,false);
+        var dead=new com.farminghelper.queststate.QuestFarmingStateReader.Observation(
+            com.farminghelper.queststate.CropState.DEAD,com.farminghelper.queststate.QuestFarmingStateReader.Source.LIVE,1,null,"",220);
+        var remembered=new com.farminghelper.queststate.QuestFarmingStateReader.Observation(
+            dead.state,com.farminghelper.queststate.QuestFarmingStateReader.Source.TIME_TRACKING,1,null,"",220);
+        var empty=new com.farminghelper.queststate.QuestFarmingStateReader.Observation(
+            com.farminghelper.queststate.CropState.EMPTY,dead.source,1,null,"",3);
+        assertFalse(progress.reopenForLiveLoss(p,remembered));
+        assertFalse(progress.reopenForLiveLoss(p,empty));
+        assertTrue(progress.reopenForLiveLoss(p,dead));assertEquals(1,progress.stats().pending);
+        progress.finish(p,true);assertTrue(progress.reopenForLiveLoss(p,empty));
+        progress.skip(p);assertFalse(progress.reopenForLiveLoss(p,dead));
+        assertTrue(progress.is(p,RunProgress.Status.SKIPPED));
+    }
 }

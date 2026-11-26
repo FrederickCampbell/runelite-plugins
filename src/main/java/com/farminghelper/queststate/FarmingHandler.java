@@ -58,27 +58,10 @@ public class FarmingHandler
     CropState predictObserved(FarmingPatch patch,String profile,String storedValue)
     {
         long unixNow=Instant.now().getEpochSecond();
-		if (storedValue == null)
-		{
-			return null;
-		}
-
-		long unixTime = 0;
-		int value = 0;
-		{
-			String[] parts = storedValue.split(":");
-			if (parts.length == 2)
-			{
-				try
-				{
-					value = Integer.parseInt(parts[0]);
-					unixTime = Long.parseLong(parts[1]);
-				}
-				catch (NumberFormatException ignored)
-				{
-				}
-			}
-		}
+        long observedAt=QuestFarmingStateReader.timestampMillis(storedValue);
+        if(observedAt<=0||observedAt/1000L>unixNow)return null;
+        long unixTime=observedAt/1000L;
+        int value=Integer.parseInt(storedValue.substring(0,storedValue.indexOf(':')));
 
 		PatchState state = patch.getImplementation().forVarbitValue(value);
 		if (state == null) return null;

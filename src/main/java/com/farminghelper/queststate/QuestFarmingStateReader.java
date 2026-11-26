@@ -161,13 +161,19 @@ public final class QuestFarmingStateReader
                 return new Observation(state, Source.LIVE, System.currentTimeMillis(),
                     protection, match.getName(), value);
             }
+            // A local undecodable value is not evidence that the historical crop
+            // is still growing. Inspect rather than silently deferring or planting.
+            return new Observation(null,Source.NONE,0,protection,match.getName());
         }
 
         // Old or cross-region flower snapshots must never suppress a Kastori visit.
         if(kastoriFlower) return new Observation(null,Source.NONE,0,protection,match.getName());
         String raw = config.getConfiguration(TIME_TRACKING, profile, match.configKey());
         String observed=recent.get(match.configKey());
-        boolean own=timestampMillis(observed)>timestampMillis(raw);
+        long localTime=timestampMillis(observed),trackerTime=timestampMillis(raw);
+        // Tracker timestamps have one-second precision; retain our last verified
+        // live value on an equal-time conflict rather than resurrecting old state.
+        boolean own=localTime>0&&localTime>=trackerTime;
         if(own)raw=observed;
         long observedAtMillis = timestampMillis(raw);
         if (observedAtMillis <= 0 || observedAtMillis > System.currentTimeMillis())
@@ -201,7 +207,10 @@ public final class QuestFarmingStateReader
         PatchImplementation impl=implementation(type);
         if(impl==null || value<0)return false;
         PatchState raw=impl.forVarbitValue(value);
-        return raw!=null && raw.getProduce()==Produce.WEEDS && value>=0 && value<=2 && raw.getStage()>0
+        // The hops decoder explicitly identifies additional Rake-action weed
+        // values (including after dead/harvested crops). Do not treat them as clean soil.
+        return raw!=null && raw.getProduce()==Produce.WEEDS && raw.getStage()>0
+            && (impl==PatchImplementation.HOPS||value>=0&&value<=2)
             && impl!=PatchImplementation.GRAPES && impl!=PatchImplementation.HESPORI && impl!=PatchImplementation.CORAL;
     }
 

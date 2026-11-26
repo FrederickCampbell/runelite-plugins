@@ -17,8 +17,14 @@ final class GuideProgress
     boolean observe(QuestFarmingStateReader.Observation o)
     {
         if (o==null||o.source != QuestFarmingStateReader.Source.LIVE || o.state == null) return false;
+        if(o.state==CropState.DEAD&&previous!=CropState.DEAD)
+        {
+            // A dead plant invalidates all success evidence for the previous crop.
+            sawWork=false;planted=false;cured=false;changedLive=false;
+            priorProtection=null;protectionInitiallyKnown=false;
+        }
         if (!protectionInitiallyKnown) { priorProtection=o.protectedByFarmer; protectionInitiallyKnown=true; }
-        if (o.state != CropState.EMPTY && o.state != CropState.GROWING && o.state != CropState.FILLING) sawWork=true;
+        if (o.state != CropState.EMPTY && o.state != CropState.GROWING && o.state != CropState.FILLING && o.state != CropState.DEAD) sawWork=true;
         if (o.state == CropState.GROWING && previous==CropState.EMPTY) planted=true;
         if (o.state == CropState.GROWING && previous==CropState.DISEASED) cured=true;
         boolean changed=previous!=null && (previous!=o.state || previousRaw!=o.rawValue);

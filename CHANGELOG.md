@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.07.1 — stabilization branch farming correctness
+
+- Verified live dead crops re-enter shared planning even after earlier completion, preservation or an optional watering detour. Explicit skips, eligibility gates and existing seedless policies remain authoritative.
+- Invalidate planting/cure evidence on death, reject invalid local decoder values instead of falling back to historical growth, prefer the last verified local snapshot on same-second tracker conflicts, and reject malformed remote observations.
+- Recognize the inherited hops decoder's documented extra weed/rake values. Add regression tests for every dead hops species, shared live-loss accounting, clear-only completion, replanting, watering detours, historical conflicts and explicit skips.
+
 ## v1.07.0 — stabilization branch overlay performance
 
 - Highlight every verified crop plot with one ground-level rectangle, derived from actual scene tile bounds. No crop model clickboxes are calculated, even for dense hops and allotments. Keep camera projection live, including the actual world view and plane.

@@ -929,7 +929,20 @@ public class FarmingHelperPlugin extends Plugin
                 else if(p==current){runProgress.finish(p,false);visible.add(p);}
                 continue;
             }
-            if(p==current&&!preparing()){progress.observe(o);if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);}
+            // Verified loss supersedes historical completion/preservation, not an explicit skip.
+            boolean reopened=runProgress.reopenForLiveLoss(p,o);
+            if(reopened&&p==current){progress.reset();activeCrop=null;compostAcknowledged=false;}
+            if(p==current&&!preparing())
+            {
+                boolean changed=progress.observe(o);
+                if(o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.DEAD)
+                {
+                    if(changed){compostAcknowledged=false;activeCrop=null;}
+                    wateredThisRun.remove(p);
+                }
+                if(activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
+            }
+            if(reopened)wateredThisRun.remove(p);
             boolean preserveCrop=preserveReplacement(p,o);
             // Preserve selected flower species without picking them; newly planted flowers may finish care.
             if((type==PatchType.FLOWER && KeepCrop.observed(type,o)!=null && preserveCrop && !(p==current&&progress.planted())) ||
@@ -940,9 +953,11 @@ public class FarmingHelperPlugin extends Plugin
             {
                 if(activeCareOnly)
                 {
-                    // A local care detour must never turn into an ordinary harvest/replant.
-                    // The local scanner below re-adds this detour only while the exact target is verified.
-                    continue;
+                    // A living crop remains a care-only detour. Verified death must
+                    // re-enter ordinary planning, subject to the selected seedless policy.
+                    if(o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.DEAD)
+                        activeCareOnly=false;
+                    else continue;
                 }
                 if(hideSeedless&&clearSeedless&&activeClearOnly&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.EMPTY)
                 {runProgress.finish(p,false);visible.add(p);continue;}

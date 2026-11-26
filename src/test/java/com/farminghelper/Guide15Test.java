@@ -54,4 +54,20 @@ public class Guide15Test
         assertEquals(Waypoints.destination(coral),SpecialRoutes.leg(coral,Waypoints.destination(coral),false,false,false,Waypoints.destination(coral)).point);
         assertFalse(PatchType.CORAL.usesCompost());
     }
+
+    @Test public void deadCropInvalidatesPreviousPlantingAndCureEvidence()
+    {
+        GuideProgress progress=new GuideProgress();
+        progress.observe(live(CropState.EMPTY,false));progress.observe(live(CropState.GROWING,false));
+        assertTrue(progress.planted());
+        progress.observe(live(CropState.DEAD,false));
+        assertFalse(progress.planted());
+        progress.observe(live(CropState.GROWING,false));
+        assertFalse(progress.finished(PatchType.HOPS,live(CropState.GROWING,false),false,false));
+        progress.observe(live(CropState.EMPTY,false));progress.observe(live(CropState.GROWING,false));
+        assertTrue(progress.finished(PatchType.HOPS,live(CropState.GROWING,false),false,false));
+        progress.reset();progress.observe(live(CropState.DISEASED,false));progress.observe(live(CropState.GROWING,false));
+        progress.observe(live(CropState.DEAD,false));progress.observe(live(CropState.GROWING,false));
+        assertFalse(progress.finished(PatchType.BUSH,live(CropState.GROWING,false),false,false,true));
+    }
 }
