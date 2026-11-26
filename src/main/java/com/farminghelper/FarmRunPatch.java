@@ -17,7 +17,7 @@ final class FarmRunPatch
 
 	FarmRunType getFarmRunType()
 	{
-		return FarmRunType.forPatchType(patchType);
+		return patchType.getRunType();
 	}
 
 	String key()
