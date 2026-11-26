@@ -666,7 +666,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         LocationContext location=LocationContext.capture(client);
         boolean arrived=loggedIn&&!location.instance&&RunOrder.arrival(lastRunLocation,location.actual);
-        lastRunLocation=loggedIn&&!location.instance?location.actual:null;
+        lastRunLocation=loggedIn?location.normalized:null;
         int level = client.getRealSkillLevel(Skill.FARMING);
         PhysicalStock supplies=stock();
         Map<Integer,Integer> bag=supplies.bag,equipped=supplies.equipped,carried=supplies.carried;
@@ -840,7 +840,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         // Do not interrupt a live care detour, a planted crop awaiting care, or preparation.
         // Ready already excludes skipped, disabled, locked, growing and hidden seedless work.
-        if(manualKeys!=null&&loggedIn&&!preparing()&&!location.instance&&pinned!=null&&current!=null&&
+        if("manual".equals(runPolicyKey)&&loggedIn&&!preparing()&&!location.instance&&pinned!=null&&current!=null&&
             careOnly.isEmpty()&&(arrived&&!progress.planted()||!ready.contains(current)))
         {
             RunOrder.promoteNearby(pinned,ready,location.actual);
