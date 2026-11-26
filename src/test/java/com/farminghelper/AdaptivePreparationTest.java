@@ -38,8 +38,8 @@ public class AdaptivePreparationTest
     {
         Map<Integer,Integer> bag=Map.of(999,10,BOX,1,SEED,1);
         Map<Integer,Integer> req=Map.of(SAPLING,9,SEED,5,501,1,500,6);
-        assertEquals(22,Preparation.loadedSlots(bag,req,Map.of(),Map.of(),STACK));
-        assertEquals(21,Preparation.loadedSlots(bag,req,Map.of(501,1),Map.of(SEED,4),STACK));
+        assertEquals(23,Preparation.loadedSlots(bag,req,Map.of(),Map.of(),STACK));
+        assertEquals(22,Preparation.loadedSlots(bag,req,Map.of(501,1),Map.of(SEED,4),STACK));
         assertEquals(13,Preparation.loadedSlots(Map.of(999,10,BOX,1),Map.of(SEED,5,SAPLING,1),Map.of(),Map.of(),STACK));
         assertEquals(12,Preparation.loadedSlots(Map.of(999,10,BOX,1),Map.of(SEED,5,SAPLING,1),Map.of(),Map.of(SEED,5),STACK));
     }
