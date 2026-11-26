@@ -33,7 +33,7 @@ public class SeedBoxStockTest
         assertEquals(2,(int)s.bag.get(RANARR));assertEquals(9,(int)s.carried.get(RANARR));
         assertEquals(14,(int)s.allocation.get(RANARR));assertEquals(5,(int)s.storage.get(RANARR));
         assertEquals(7,(int)s.shelf.get(RANARR));assertTrue(GuideView.missingItems(Map.of(RANARR,9),s.carried).isEmpty());
-        assertEquals(1,SeedBoxStock.slots(Map.of(RANARR,7),Map.of(),s.seedBox,id->true));
+        assertEquals(2,Preparation.loadedSlots(s.bag,Map.of(RANARR,7),s.equipped,s.seedBox,id->id==RANARR));
         PhysicalStock absent=new PhysicalStock(Map.of(),Map.of(),Map.of(),Map.of(),Map.of(RANARR,7),id->"",id->id);
         assertFalse(absent.carried.containsKey(RANARR));
     }
