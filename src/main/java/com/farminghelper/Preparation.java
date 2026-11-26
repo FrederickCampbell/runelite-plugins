@@ -39,9 +39,14 @@ final class Preparation
         if(entrana)return PUBLIC.get(0);
         if(initial&&level>=45&&(start==StartAt.GUILD||vaultNeeded))return GUILD_BANK;
         if(from==null)return PUBLIC.get(0);
-        List<Bank> choices=new ArrayList<>(PUBLIC);
-        if(!initial&&level>=45)choices.add(GUILD_BANK);
-        return choices.stream().min(Comparator.comparingInt(b->b.point.distanceTo2D(from))).orElse(PUBLIC.get(0));
+        Bank best=PUBLIC.get(0);
+        int distance=best.point.distanceTo2D(from);
+        for(Bank bank:PUBLIC)
+        {
+            int d=bank.point.distanceTo2D(from);
+            if(d<distance){best=bank;distance=d;}
+        }
+        return !initial&&level>=45&&GUILD.distanceTo2D(from)<distance?GUILD_BANK:best;
     }
     /** Prefer a planting-material source over generic tools. All decisions remain advisory. */
     static Bank chooseSupplies(int level,WorldPoint from,boolean initial,StartAt preference,boolean bird,
@@ -76,11 +81,17 @@ final class Preparation
     }
 
     static boolean vaultNeeded(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> bank,Map<Integer,Integer> vault)
-    {return required.entrySet().stream().anyMatch(e->e.getValue()>(long)carried.getOrDefault(e.getKey(),0)+bank.getOrDefault(e.getKey(),0)&&vault.getOrDefault(e.getKey(),0)>0);}
+    {
+        for(var e:required.entrySet())if(e.getValue()>(long)carried.getOrDefault(e.getKey(),0)+bank.getOrDefault(e.getKey(),0)&&vault.getOrDefault(e.getKey(),0)>0)return true;
+        return false;
+    }
     static boolean missing(Map<Integer,Integer> required,Map<Integer,Integer> carried)
-    {return required.entrySet().stream().anyMatch(e->carried.getOrDefault(e.getKey(),0)<e.getValue());}
+    {return storedShortage(required,carried,null);}
     static boolean storedShortage(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> storage)
-    {return required.entrySet().stream().anyMatch(e->carried.getOrDefault(e.getKey(),0)<e.getValue()&&storage.getOrDefault(e.getKey(),0)>0);}
+    {
+        for(var e:required.entrySet())if(carried.getOrDefault(e.getKey(),0)<e.getValue()&&(storage==null||storage.getOrDefault(e.getKey(),0)>0))return true;
+        return false;
+    }
     /** Count a minimum supply load; stackability is supplied by RuneLite item definitions. */
     static int slots(Map<Integer,Integer> required,Map<Integer,Integer> equipped,java.util.function.IntPredicate stackable)
     {
@@ -92,7 +103,12 @@ final class Preparation
     static int loadedSlots(Map<Integer,Integer> bag,Map<Integer,Integer> required,Map<Integer,Integer> equipped,
         Map<Integer,Integer> box,java.util.function.IntPredicate stackable)
     {
-        long count=slots(bag,Map.of(),stackable);
+        return loadedSlots(slots(bag,Map.of(),stackable),bag,required,equipped,box,stackable);
+    }
+    static int loadedSlots(int occupied,Map<Integer,Integer> bag,Map<Integer,Integer> required,Map<Integer,Integer> equipped,
+        Map<Integer,Integer> box,java.util.function.IntPredicate stackable)
+    {
+        long count=occupied;
         for(var e:required.entrySet())
         {
             int id=e.getKey(),held=bag.getOrDefault(id,0);
