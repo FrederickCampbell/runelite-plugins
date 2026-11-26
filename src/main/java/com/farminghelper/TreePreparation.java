@@ -47,7 +47,7 @@ final class TreePreparation
     static Map<Integer,Integer> allocationStock(Map<Integer,Integer> stock,Map<Integer,Integer> aliases)
     {
         Map<Integer,Integer> result=new HashMap<>(stock);
-        aliases.forEach((raw,sapling)->result.merge(sapling,stock.getOrDefault(raw,0),Integer::sum));
+        aliases.forEach((raw,sapling)->result.merge(sapling,stock.getOrDefault(raw,0),PhysicalStock::sum));
         return result;
     }
     /** Prefer already-carried seedlings, then mature stored saplings, then

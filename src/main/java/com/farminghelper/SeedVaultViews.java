@@ -34,7 +34,7 @@ final class SeedVaultViews
     private final FarmingHelperPlugin plugin;
     private final Map<Widget,WidgetState> changed=new IdentityHashMap<>();
     private Widget scrollParent;
-    private Widget[] projectedHeaders;
+    private Widget[] projectedHeaders,projectedIcons,projectedLabels,projectedLines;
     private int nativeHeight,nativeScroll,nativeVarScroll,appliedHeight=-1,customScroll,lastWidth=-1;
     private boolean scrollbarDirty;
     private final EnumMap<VaultRanking.View,Widget> buttons=new EnumMap<>(VaultRanking.View.class);
@@ -42,7 +42,7 @@ final class SeedVaultViews
     private Set<Integer> runItems;
     private boolean opened;
     private Widget parent;
-    private int originalScrollHeight=-1,originalChildCount;
+    private int originalScrollHeight=-1,appliedLeftHeight=-1,originalChildCount;
     private VaultRanking.View active;
     private boolean dirty=true, quantityDirty, nativeRefresh;
     private int buildDepth;
@@ -102,12 +102,12 @@ final class SeedVaultViews
         {
             Widget[] headers=children(client.getWidget(HEADERS));
             if(scrollParent!=client.getWidget(VIEWPORT)||scrollParent.getScrollHeight()!=appliedHeight||
-                !Arrays.equals(projectedHeaders,headers))dirty=true;
-            else for(Widget header:headers)
-            {
-                WidgetState state=changed.get(header);
-                if(state!=null&&!state.matches(header)){dirty=true;break;}
-            }
+                !Arrays.equals(projectedHeaders,headers)||
+                !Arrays.equals(projectedIcons,children(client.getWidget(ITEMS)))||
+                !Arrays.equals(projectedLabels,children(client.getWidget(LABELS)))||
+                !Arrays.equals(projectedLines,children(client.getWidget(LINES))))dirty=true;
+            else for(Map.Entry<Widget,WidgetState> entry:changed.entrySet())
+                if(!entry.getValue().matches(entry.getKey())){dirty=true;break;}
         }
         refresh();
         if(buildDepth==0)flushScrollbar();
@@ -201,6 +201,7 @@ final class SeedVaultViews
         // Do not alter native scrolling scripts; extend only if necessary.
         int bottom=y+height*(runItems==null?3:4)+(runItems==null?0:5);
         if(bottom>left.getScrollHeight()&&bottom>left.getHeight())left.setScrollHeight(bottom);
+        appliedLeftHeight=left.getScrollHeight();
         for(VaultRanking.View view:VaultRanking.View.values())
         {
             if(view==VaultRanking.View.RUN){if(runItems==null)continue;decoration(left,WidgetType.RECTANGLE,Math.max(0,x-3),y+2,Math.max(1,width-2),1,null,0x78654b,115);y+=5;}
@@ -266,11 +267,11 @@ final class SeedVaultViews
                 {
                     int n=copy.length;while(n>originalChildCount&&copy[n-1]==null)n--;
                     parent.setChildren(Arrays.copyOf(copy,n));
-                    if(originalScrollHeight>=0)parent.setScrollHeight(originalScrollHeight);
+                    if(originalScrollHeight>=0&&parent.getScrollHeight()==appliedLeftHeight)parent.setScrollHeight(originalScrollHeight);
                 }
             }
         }
-        buttons.clear();decorations.clear();parent=null;originalScrollHeight=-1;
+        buttons.clear();decorations.clear();parent=null;originalScrollHeight=-1;appliedLeftHeight=-1;
     }
 
     private static final class WidgetState
@@ -318,7 +319,7 @@ final class SeedVaultViews
             if(client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS)!=nativeVarScroll)
                 client.setVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS,nativeVarScroll);
         }
-        scrollParent=null;projectedHeaders=null;appliedHeight=-1;
+        scrollParent=null;projectedHeaders=null;projectedIcons=null;projectedLabels=null;projectedLines=null;appliedHeight=-1;
         if(exit)customScroll=0;
     }
     private static final class Pair
@@ -428,6 +429,9 @@ final class SeedVaultViews
         for(int j=0;j<sections.size();j++)
         {
             Section section=sections.get(j);int bottom=j+1<sections.size()?sections.get(j+1).y:end;
+            // Unsupported native geometry is left entirely native, including
+            // visibility. Never hide items in an unverified section.
+            if(!section.safe)continue;
             List<VaultGrid.Slot> slots=new ArrayList<>();
             for(int i=0;i<section.pairs.size();i++)
             {
@@ -435,7 +439,6 @@ final class SeedVaultViews
                 if(!selected){hide(p.icon);hide(p.label);}
                 slots.add(new VaultGrid.Slot(i,p.icon.getOriginalX(),p.icon.getOriginalY(),selected,rank.getOrDefault(p.base,Integer.MAX_VALUE)));
             }
-            if(!section.safe)continue;
             VaultGrid.Layout layout=VaultGrid.layout(new VaultGrid.Section(section.y,bottom,slots),full,shift);
             if(full)
             {
@@ -452,6 +455,7 @@ final class SeedVaultViews
         // Reset to the top on initial selection, or retain the local scroll on rebuild.
         {
             projectedHeaders=children(headerParent).clone();
+            projectedIcons=icons.clone();projectedLabels=labels.clone();projectedLines=lines.clone();
             scrollParent=viewport;nativeHeight=viewport.getScrollHeight();nativeScroll=viewport.getScrollY();
             nativeVarScroll=client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS);
             appliedHeight=Math.max(viewport.getHeight(),nativeExtent-(full?shift:0));

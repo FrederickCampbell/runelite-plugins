@@ -17,7 +17,8 @@ final class SeedBoxStock
     private static final Pattern LINE=Pattern.compile("([\\d,]+)\\s*x\\s*(.+?)\\.?$",Pattern.CASE_INSENSITIVE);
     private Map<Integer,Integer> observed=Map.of(),cached=Map.of(),before,checking;
     private boolean complete,orderKnown,adding,checkValid;
-    private int transferTick,checkTick,nativeTick=-1,revision,onlyId=-1;
+    private int transferTick,checkTick,lastCheckLineTick,nativeTick=-1,revision,onlyId=-1;
+    private Map<Integer,Integer> nativeAdditions=Map.of();
     static boolean isBox(int id){return id==ItemID.SEED_BOX||id==ItemID.SEED_BOX_OPEN;}
     static int boxId(Map<Integer,Integer> bag)
     {
@@ -25,9 +26,9 @@ final class SeedBoxStock
         return bag.getOrDefault(ItemID.SEED_BOX,0)>0?ItemID.SEED_BOX:-1;
     }
     void clear(){cached=Map.of();forget();}
-    void forget(){observed=Map.of();complete=false;orderKnown=false;nativeTick=-1;cancel();checking=null;revision++;}
+    void forget(){observed=Map.of();complete=false;orderKnown=false;nativeTick=-1;nativeAdditions=Map.of();cancel();checking=null;revision++;}
     void restore(String snapshot){clear();cached=Map.copyOf(StockSnapshot.decode(snapshot));}
-    int cachedTotal(){return cached.values().stream().mapToInt(Integer::intValue).sum();}
+    int cachedTotal(){return (int)Math.min(Integer.MAX_VALUE,cached.values().stream().mapToLong(Integer::longValue).sum());}
     String snapshot(){return StockSnapshot.encode(cached);}
     boolean known(){return complete||!observed.isEmpty();}
     boolean complete(){return complete;}
@@ -36,14 +37,25 @@ final class SeedBoxStock
     void cancel(){before=null;onlyId=-1;}
     boolean pending(){return before!=null;}
     void observe(ItemContainer container){observe(container,-1);}
-    void observe(ItemContainer container,int tick)
+    void observe(ItemContainer container,int tick){observe(container,tick,id->true);}
+    boolean observe(ItemContainer container,int tick,IntPredicate accepts)
     {
-        if(container==null)return;
+        Item[] entries=container==null?null:container.getItems();
+        if(entries==null)return false;
         Map<Integer,Integer> ordered=new LinkedHashMap<>();
-        for(Item item:container.getItems())
-            if(item!=null&&item.getId()>0&&item.getQuantity()>0)
-                ordered.merge(item.getId(),item.getQuantity(),Integer::sum);
-        replace(ordered,true,true);nativeTick=tick;cancel();checking=null;
+        for(Item item:entries)
+        {
+            if(item==null||item.getId()<=0||item.getQuantity()<=0)continue;
+            if(!accepts.test(item.getId())||ordered.containsKey(item.getId()))return false;
+            ordered.put(item.getId(),item.getQuantity());
+        }
+        if(ordered.size()>6)return false;
+        Map<Integer,Integer> additions=new HashMap<>();
+        if(complete&&tick>=0)ordered.forEach((id,n)->{
+            int delta=n-observed.getOrDefault(id,0);if(delta>0)additions.put(id,delta);
+        });
+        nativeAdditions=additions;replace(ordered,true,true);nativeTick=tick;cancel();checking=null;
+        return true;
     }
     private void replace(Map<Integer,Integer> next,boolean full,boolean ordered)
     {
@@ -63,12 +75,14 @@ final class SeedBoxStock
      * movements cannot masquerade as transfers into the seed box. */
     void begin(boolean fill,int id,Map<Integer,Integer> loose,int tick)
     {
-        cancel();before=Map.copyOf(loose);adding=fill;onlyId=id;transferTick=tick;
+        if(pending())forget();
+        checking=null;before=Map.copyOf(loose);adding=fill;onlyId=id;transferTick=tick;
     }
     boolean settle(Map<Integer,Integer> loose,int tick,IntPredicate accepts)
     {
         if(!pending())return false;
-        if(tick-transferTick>8){cancel();return false;}
+        if(tick-transferTick>8||tick<transferTick){cancel();return false;}
+        if(tick==transferTick)return false;
         Set<Integer> ids=new HashSet<>(before.keySet());ids.addAll(loose.keySet());
         Map<Integer,Integer> next=new LinkedHashMap<>(observed);
         boolean changed=false;
@@ -79,7 +93,7 @@ final class SeedBoxStock
             if(adding?delta<=0:delta>=0)continue;
             adjust(next,id,delta);changed=true;
         }
-        if(changed){cancel();replace(next,complete,false);}
+        if(changed){cancel();checking=null;replace(next,complete&&next.size()<=6,false);}
         return changed;
     }
     private static void adjust(Map<Integer,Integer> map,int id,int delta)
@@ -95,13 +109,13 @@ final class SeedBoxStock
         int consumed=Math.max(0,crop.getQuantity()-Math.max(0,looseBefore-looseAfter));
         if(consumed==0||observed.getOrDefault(crop.getItemId(),0)==0)return false;
         Map<Integer,Integer> next=new LinkedHashMap<>(observed);
-        adjust(next,crop.getItemId(),-consumed);replace(next,complete,orderKnown);return true;
+        adjust(next,crop.getItemId(),-consumed);checking=null;replace(next,complete,orderKnown);return true;
     }
     boolean chat(String message,int tick,ToIntFunction<String> resolve)
     {
         if(nativeTick==tick)return false;
         if(message.equalsIgnoreCase("The seed box contains:"))
-        {checking=new LinkedHashMap<>();checkTick=tick;checkValid=true;return false;}
+        {checking=new LinkedHashMap<>();checkTick=lastCheckLineTick=tick;checkValid=!pending();return false;}
         if(message.equalsIgnoreCase("The seed box is empty.")||message.equalsIgnoreCase("Your seed box is now empty."))
         {replace(Map.of(),true,true);cancel();checking=null;return true;}
         Matcher pickup=PICKUP.matcher(message),stolen=STOLEN.matcher(message);
@@ -111,17 +125,25 @@ final class SeedBoxStock
             int n=p?number(pickup.group(1)):1;
             if(id>0&&n>0)
             {
+                // A native increment immediately before its matching chat
+                // message is the same observation, not a second pickup.
+                if(nativeTick>=0&&tick-nativeTick==1&&nativeAdditions.getOrDefault(id,0)>=n)
+                {
+                    adjust(nativeAdditions,id,-n);return false;
+                }
+                checking=null;
                 Map<Integer,Integer> next=new LinkedHashMap<>(observed);adjust(next,id,n);
-                replace(next,complete,false);return true;
+                replace(next,complete&&next.size()<=6,false);return true;
             }
         }
-        if(checking!=null&&tick-checkTick<=2)
+        if(checking!=null&&tick-checkTick<=4)
         {
             Matcher line=LINE.matcher(message);
             if(line.matches())
             {
                 int id=resolve.applyAsInt(line.group(2)),n=number(line.group(1));
-                if(id>0&&n>0)checking.put(id,n);else checkValid=false;
+                lastCheckLineTick=tick;
+                if(id>0&&n>0&&!checking.containsKey(id)&&checking.size()<6)checking.put(id,n);else checkValid=false;
             }
         }
         return false;
@@ -130,9 +152,9 @@ final class SeedBoxStock
     {try{return Integer.parseInt(text.replace(",",""));}catch(NumberFormatException e){return 0;}}
     boolean finishCheck(int tick)
     {
-        if(checking==null||tick<=checkTick)return false;
+        if(checking==null||tick-lastCheckLineTick<2)return false;
         Map<Integer,Integer> next=checking;checking=null;
-        if(!checkValid||next.isEmpty()||tick-checkTick>3)return false;
+        if(!checkValid||next.isEmpty()||tick-checkTick>6)return false;
         replace(next,true,false);cancel();return true;
     }
     static boolean direct(Crop target,Map<Integer,Integer> contents)
@@ -156,6 +178,7 @@ final class SeedBoxStock
             int n=Math.min(loose.getOrDefault(entry.getKey(),0),entry.getValue());
             if(n>0){used=true;loose.computeIfPresent(entry.getKey(),(id,count)->count>n?count-n:null);}
         }
-        return Preparation.slots(loose,equipped,stackable)+(used?1:0);
+        int slots=Preparation.slots(loose,equipped,stackable);
+        return used&&boxId(required)<0?PhysicalStock.sum(slots,1):slots;
     }
 }

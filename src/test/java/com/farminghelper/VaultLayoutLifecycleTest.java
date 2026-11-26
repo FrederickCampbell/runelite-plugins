@@ -139,4 +139,22 @@ public class VaultLayoutLifecycleTest
         lifecycle.leave();assertFalse(a.isSelfHidden());assertFalse(al.isSelfHidden());assertEquals(250,h.getOriginalY());assertEquals(278,fresh.getOriginalY());
         assertEquals(520,height[0]);assertEquals(40,scroll[0]);
     }
+
+    @Test public void unsupportedSectionDoesNotHideOrMoveNativeItems()
+    {
+        Client c=mock(Client.class);ItemManager im=mock(ItemManager.class);FarmingHelperPlugin plugin=mock(FarmingHelperPlugin.class);
+        when(plugin.vaultAllowed(99)).thenReturn(Set.of(PatchType.HERB));when(plugin.vaultOverrides(99)).thenReturn(Map.of());
+        item(im,ItemID.POTATO_SEED,"Potato seed");
+        Widget icon=node(SeedVaultViews.ITEMS,0,WidgetType.GRAPHIC,14,128,36,32,"",ItemID.POTATO_SEED,5);
+        Widget label=node(SeedVaultViews.LABELS,0,WidgetType.TEXT,7,160,50,30,"Potato seed",-1,0);
+        Widget orphan=node(SeedVaultViews.LABELS,1,WidgetType.TEXT,72,160,50,30,"Unknown native item",-1,0);
+        parent(c,SeedVaultViews.ITEMS,icon);parent(c,SeedVaultViews.LABELS,label,orphan);
+        Widget header=node(SeedVaultViews.HEADERS,0,WidgetType.TEXT,5,100,100,20,"Allotment",-1,0);
+        parent(c,SeedVaultViews.HEADERS,header);
+        Widget viewport=parent(c,SeedVaultViews.VIEWPORT);when(viewport.getHeight()).thenReturn(200);when(viewport.getScrollHeight()).thenReturn(500);
+        SeedVaultViews view=new SeedVaultViews(c,im,plugin);view.select(VaultRanking.View.HIGHEST);
+        assertTrue(view.filter(99));assertFalse(icon.isSelfHidden());assertFalse(label.isSelfHidden());assertFalse(orphan.isSelfHidden());
+        assertEquals(128,icon.getOriginalY());assertEquals(160,label.getOriginalY());
+        verify(icon,never()).setHidden(anyBoolean());
+    }
 }

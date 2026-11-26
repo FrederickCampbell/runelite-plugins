@@ -5,6 +5,11 @@ import java.util.*;
 /** Character-local last observed stock, not a saved run. Never reads unopened game storage. */
 final class StockSnapshot
 {
+    static long time(String raw,long now)
+    {
+        try {long value=Long.parseLong(raw);return value>0&&value<=now?value:0;}
+        catch(NumberFormatException e){return 0;}
+    }
     static String encode(Map<Integer,Integer> items)
     {
         StringJoiner out=new StringJoiner(",");

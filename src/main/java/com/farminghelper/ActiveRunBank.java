@@ -115,6 +115,6 @@ final class ActiveRunBank
         if(registered&&tags!=null)tags.unregisterTag(TAG);
         // Never save or delete another plugin's configuration. Registration is
         // in-memory; no actual TagTab or permanent item tag is created.
-        registered=false;opened=false;offered=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];
+        registered=false;opened=false;offered=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];tags=null;search=null;
     }
 }

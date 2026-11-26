@@ -66,7 +66,7 @@ final class Preparation
             if(b>=missing&&v>=missing){inBank=true;inVault=true;}
             else if(b>=missing)inBank=true;
             else if(v>=missing)inVault=true;
-            else {inBank|=b>0;inVault|=v>0;unknown|=b+v<missing;}
+            else {inBank|=b>0;inVault|=v>0;unknown|=(long)b+v<missing;}
         }
         StringJoiner note=new StringJoiner(" ");
         if(inBank&&inVault)note.add("Planting supplies observed in bank / Seed Vault.");
@@ -78,7 +78,7 @@ final class Preparation
     }
 
     static boolean vaultNeeded(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> bank,Map<Integer,Integer> vault)
-    {return required.entrySet().stream().anyMatch(e->e.getValue()>carried.getOrDefault(e.getKey(),0)+bank.getOrDefault(e.getKey(),0)&&vault.getOrDefault(e.getKey(),0)>0);}
+    {return required.entrySet().stream().anyMatch(e->e.getValue()>(long)carried.getOrDefault(e.getKey(),0)+bank.getOrDefault(e.getKey(),0)&&vault.getOrDefault(e.getKey(),0)>0);}
     static boolean missing(Map<Integer,Integer> required,Map<Integer,Integer> carried)
     {return required.entrySet().stream().anyMatch(e->carried.getOrDefault(e.getKey(),0)<e.getValue());}
     static boolean storedShortage(Map<Integer,Integer> required,Map<Integer,Integer> carried,Map<Integer,Integer> storage)

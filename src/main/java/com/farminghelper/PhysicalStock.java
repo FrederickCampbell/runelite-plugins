@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.IntUnaryOperator;
 import java.util.HashMap;
+import java.util.HashSet;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import java.util.function.IntFunction;
@@ -23,8 +24,8 @@ final class PhysicalStock
     PhysicalStock(Map<Integer,Integer> bag,Map<Integer,Integer> equipped,Map<Integer,Integer> bank,
         Map<Integer,Integer> vault,Map<Integer,Integer> seedBox,IntFunction<String> names,IntUnaryOperator canonicalWorn)
     {
-        this.bag=bag;
-        this.equipped=equipped;
+        this.bag=Map.copyOf(bag);
+        this.equipped=Map.copyOf(equipped);
         this.seedBox=SeedBoxStock.boxId(bag)>0?seedBox:Map.of();
         plantingBag=combine(bag,this.seedBox);
         carried=combine(plantingBag,equipped);
@@ -35,7 +36,7 @@ final class PhysicalStock
         bankAndBag=combine(bank,plantingBag);
         travel=combine(combine(bank,bag),equipped);
         shelf=new HashMap<>(combine(bank,bag));
-        equipped.forEach((id,n)->shelf.merge(canonicalWorn.applyAsInt(id),n,Integer::sum));
+        equipped.forEach((id,n)->shelf.merge(canonicalWorn.applyAsInt(id),n,PhysicalStock::sum));
     }
 
     static boolean available(int id,int quantity,IntFunction<ItemComposition> definition)
@@ -55,25 +56,36 @@ final class PhysicalStock
     /** Collect native placeholder base IDs for display separately from physical quantities. */
     static Map<Integer,Integer> read(ItemContainer container, IntFunction<ItemComposition> definition, Set<Integer> placeholders)
     {
-        Map<Integer,Integer> stock = new HashMap<>();
-        Item[] items = container == null ? null : container.getItems();
-        if (items != null) for (Item item : items)
+        Map<Integer,Integer> stock=readChecked(container,definition,placeholders);
+        return stock==null?Map.of():stock;
+    }
+    /** Null means unavailable/incomplete; an empty map is a verified empty container.
+     * Never replace a remembered storage snapshot with a partial decode. */
+    static Map<Integer,Integer> readChecked(ItemContainer container,IntFunction<ItemComposition> definition,Set<Integer> placeholders)
+    {
+        Item[] items=container==null?null:container.getItems();
+        if(items==null)return null;
+        Map<Integer,Integer> stock=new HashMap<>();
+        Set<Integer> ghosts=new HashSet<>();
+        for(Item item:items)
         {
             if (item == null || item.getId() <= 0) continue;
             ItemComposition def = definition.apply(item.getId());
-            if (def == null) continue;
+            if (def == null) return null;
             if (def.getPlaceholderTemplateId() != -1)
             {
-                if (placeholders != null && def.getPlaceholderId() > 0) placeholders.add(def.getPlaceholderId());
+                if (def.getPlaceholderId() > 0) ghosts.add(def.getPlaceholderId());
             }
-            else if (item.getQuantity() > 0) stock.merge(item.getId(),item.getQuantity(),Integer::sum);
+            else if (item.getQuantity() > 0) stock.merge(item.getId(),item.getQuantity(),PhysicalStock::sum);
         }
+        if(placeholders!=null)placeholders.addAll(ghosts);
         return stock;
     }
+    static int sum(int a,int b){return (int)Math.min(Integer.MAX_VALUE,(long)a+b);}
     static Map<Integer,Integer> combine(Map<Integer,Integer> a,Map<Integer,Integer> b)
     {
         Map<Integer,Integer> result=new HashMap<>(a);
-        b.forEach((id,n)->result.merge(id,n,(x,y)->(int)Math.min(Integer.MAX_VALUE,(long)x+y)));
+        b.forEach((id,n)->result.merge(id,n,PhysicalStock::sum));
         return result;
     }
 }

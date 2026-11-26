@@ -40,4 +40,24 @@ public class PhysicalStockTest
         assertFalse(PhysicalStock.available(10,0,definitions));
         assertFalse(PhysicalStock.available(11,100,definitions));
     }
+
+    @Test public void incompleteNativeReadCannotMasqueradeAsEmptyOrPublishPartialPlaceholders()
+    {
+        var container=mock(net.runelite.api.ItemContainer.class);
+        var real=item("Seed",-1);var ghost=item("Seed",14401);
+        when(ghost.getPlaceholderId()).thenReturn(10);
+        Set<Integer> placeholders=new HashSet<>();
+        when(container.getItems()).thenReturn(null,new net.runelite.api.Item[]{
+            new net.runelite.api.Item(11,0),new net.runelite.api.Item(10,7),new net.runelite.api.Item(99,1)},
+            new net.runelite.api.Item[0]);
+        IntFunction<ItemComposition> definitions=id->id==10?real:id==11?ghost:null;
+        assertNull(PhysicalStock.readChecked(container,definitions,placeholders));
+        assertNull(PhysicalStock.readChecked(container,definitions,placeholders));
+        assertTrue(placeholders.isEmpty());
+        assertEquals(Map.of(),PhysicalStock.readChecked(container,definitions,placeholders));
+        assertEquals(0,StockSnapshot.time("garbage",1000));
+        assertEquals(0,StockSnapshot.time("1001",1000));
+        assertEquals(999,StockSnapshot.time("999",1000));
+        assertEquals(Integer.MAX_VALUE,PhysicalStock.sum(Integer.MAX_VALUE,1));
+    }
 }

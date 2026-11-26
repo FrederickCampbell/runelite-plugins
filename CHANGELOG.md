@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.07.2 — stabilization branch storage reliability
+
+- Treat incomplete native storage reads as unavailable rather than empty; commit bank/vault container changes after packet reconciliation. Persist per-character last successful observation timestamps, including confirmed empty storage. Keep placeholders separate from quantities.
+- Preserve pending seed-box actions across unrelated clicks, invalidate uncertain overlapping transfers, reject incomplete native reads, correlate delayed pickup messages with native increments, and wait for delayed check lines. Never promote remembered counts to carried stock.
+- Leave unverified vault sections entirely native, detect replacement icons/labels/dividers as well as headers, and restore only owned scroll extensions. Release stale Bank Tags service references. Guard integer addition and retain native item identities/actions.
+
 ## v1.07.1 — stabilization branch farming correctness
 
 - Verified live dead crops re-enter shared planning even after earlier completion, preservation or an optional watering detour. Explicit skips, eligibility gates and existing seedless policies remain authoritative.

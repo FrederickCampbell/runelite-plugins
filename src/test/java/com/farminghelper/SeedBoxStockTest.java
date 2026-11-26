@@ -69,7 +69,7 @@ public class SeedBoxStockTest
         SeedBoxStock box=new SeedBoxStock();
         box.chat("The seed box contains:",1,n->RANARR);
         box.chat("9 x Ranarr seed",1,n->RANARR);
-        assertTrue(box.finishCheck(2));assertTrue(box.complete());assertFalse(box.orderKnown());
+        assertFalse(box.finishCheck(2));assertTrue(box.finishCheck(3));assertTrue(box.complete());assertFalse(box.orderKnown());
         Crop crop=CropCatalog.findByItemId(RANARR);
         assertFalse(box.planted(crop,1,0,box.revision()));
         assertTrue(box.planted(crop,0,0,box.revision()));
@@ -87,5 +87,48 @@ public class SeedBoxStockTest
         box.observe(container);bag=Map.of(ItemID.SEED_BOX,1,RANARR,5);
         assertEquals(9,(int)PhysicalStock.combine(bag,box.carried(bag)).get(RANARR));
         box.clear();assertTrue(box.carried(bag).isEmpty());
+    }
+
+    @Test public void incompleteNativeAndDelayedChatNeverInventOrEraseStock()
+    {
+        SeedBoxStock box=new SeedBoxStock();ItemContainer container=mock(ItemContainer.class);
+        Map<Integer,Integer> bag=Map.of(ItemID.SEED_BOX,1);
+        when(container.getItems()).thenReturn(new Item[]{new Item(RANARR,7)});
+        assertTrue(box.observe(container,10,id->id==RANARR));
+        when(container.getItems()).thenReturn((Item[])null);
+        assertFalse(box.observe(container,11,id->true));
+        assertEquals(7,(int)box.carried(bag).get(RANARR));
+        when(container.getItems()).thenReturn(new Item[]{new Item(RANARR,9)});
+        assertTrue(box.observe(container,12,id->id==RANARR));
+        assertFalse(box.chat("You put 2 x Ranarr seed straight into your open seed box.",13,n->RANARR));
+        assertEquals(9,(int)box.carried(bag).get(RANARR));
+        when(container.getItems()).thenReturn(new Item[]{new Item(SNAP,2)});
+        assertFalse(box.observe(container,14,id->id==RANARR));
+        assertEquals(9,(int)box.carried(bag).get(RANARR));
+    }
+    @Test public void chatCheckWaitsForDelayedLinesAndMutationCancelsStaleCheck()
+    {
+        SeedBoxStock box=new SeedBoxStock();
+        Map<Integer,Integer> bag=Map.of(ItemID.SEED_BOX,1);
+        java.util.function.ToIntFunction<String> ids=n->n.startsWith("Ranarr")?RANARR:SNAP;
+        box.chat("The seed box contains:",1,ids);box.chat("9 x Ranarr seed",1,ids);
+        assertFalse(box.finishCheck(2));box.chat("3 x Snapdragon seed",2,ids);
+        assertFalse(box.finishCheck(3));assertTrue(box.finishCheck(4));
+        assertEquals(Map.of(RANARR,9,SNAP,3),box.carried(bag));
+        box.chat("The seed box contains:",5,ids);box.chat("9 x Ranarr seed",5,ids);
+        assertTrue(box.chat("You put 2 x Ranarr seed straight into your open seed box.",6,ids));
+        assertFalse(box.finishCheck(8));assertEquals(Map.of(RANARR,11,SNAP,3),box.carried(bag));
+    }
+    @Test public void overlappingTransfersInvalidateOldCountsAndSameTickCannotSettle()
+    {
+        SeedBoxStock box=new SeedBoxStock();ItemContainer container=mock(ItemContainer.class);
+        when(container.getItems()).thenReturn(new Item[]{new Item(RANARR,7)});
+        box.observe(container);
+        box.begin(true,RANARR,Map.of(RANARR,10),1);
+        assertFalse(box.settle(Map.of(RANARR,8),1,id->true));
+        box.begin(true,RANARR,Map.of(RANARR,8),1);
+        assertFalse(box.complete());assertEquals(7,box.cachedTotal());
+        assertTrue(box.settle(Map.of(RANARR,5),2,id->true));
+        assertEquals(Map.of(RANARR,3),box.carried(Map.of(ItemID.SEED_BOX,1)));
     }
 }

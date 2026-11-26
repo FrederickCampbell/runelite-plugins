@@ -89,7 +89,7 @@ public class FarmingHelperPlugin extends Plugin
     private int seedBoxPlantTick,seedBoxPlantRevision;
     private boolean seedBoxBank,seedBoxVault;
     private String seedBoxSaved="";
-    private int seedBoxViewTick=-1;
+    private int seedBoxViewTick=-1,seedBoxViewRevision;
     private List<?> allocationInputs=List.of();
     private Map<FarmRunPatch,Crop> allocated=Map.of();
     private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
@@ -322,7 +322,8 @@ public class FarmingHelperPlugin extends Plugin
         long id=session;thread.invokeLater(()->{
             if(id!=session||!guideRequested||run.isEmpty())return;
             loadStock();invalidateStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
-            save("observedBankV1","");save("observedVaultV1","");seedBox.clear();seedBoxSaved="";save("observedSeedBoxV2","");seedBoxPlant=null;
+            save("observedBankV1","");save("observedVaultV1","");save("observedBankV1At","");save("observedVaultV1At","");
+            seedBox.clear();seedBoxSaved="";save("observedSeedBoxV2","");seedBoxPlant=null;seedBoxViewTick=-1;
             sampleStorage();lastView=null;update();
         });
     }
@@ -447,21 +448,28 @@ public class FarmingHelperPlugin extends Plugin
     {
         int id=event.getContainerId();
         if(id==InventoryID.INVENTORY.getId()||id==InventoryID.EQUIPMENT.getId())quantities=null;
-        if(id==InventoryID.INVENTORY.getId()&&event.getItemContainer()!=null&&seedBox.known())
-            seedBox.carried(readItems(event.getItemContainer()));
+        if(config!=null&&client.getGameState()==GameState.LOGGED_IN)loadStock();
+        if(id==InventoryID.INVENTORY.getId()&&event.getItemContainer()!=null&&itemManager!=null)
+        {
+            Map<Integer,Integer> bag=PhysicalStock.readChecked(event.getItemContainer(),itemManager::getItemComposition,null);
+            if(bag!=null)
+            {
+                seedBox.carried(bag);
+                if(SeedBoxStock.boxId(bag)<0)seedBoxPlant=null;
+            }
+        }
         if(id==net.runelite.api.gameval.InventoryID.SEED_BOX&&client.getGameState()==GameState.LOGGED_IN)
         {
             loadStock();
-            if(SeedBoxStock.boxId(readItems(client.getItemContainer(InventoryID.INVENTORY)))>0)
-            {
-                seedBox.observe(event.getItemContainer(),client.getTickCount());seedBoxPlant=null;
-                seedBoxChanged();
-            }
+            if(stockProfile!=null&&itemManager!=null&&SeedBoxStock.boxId(readItems(client.getItemContainer(InventoryID.INVENTORY)))>0&&
+                seedBox.observe(event.getItemContainer(),client.getTickCount(),this::seedItem))
+            {seedBoxPlant=null;seedBoxViewTick=-1;seedBoxChanged();}
         }
         if(id==InventoryID.BANK.getId()||id==InventoryID.SEED_VAULT.getId())
         {
             sampledStorage.remove(id==InventoryID.BANK.getId()?InventoryID.BANK:InventoryID.SEED_VAULT);
-            sampleStorage();
+            // Reconcile on the game tick, after inventory and storage packets
+            // have both arrived. Do not commit intermediate transfer totals.
             if(vaultViews!=null&&id==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
         }
     }
@@ -492,9 +500,8 @@ public class FarmingHelperPlugin extends Plugin
         if(client.getGameState()!=GameState.LOGGED_IN||itemManager==null||event.isConsumed())return;
         Map<Integer,Integer> bag=stock().bag;
         if(SeedBoxStock.boxId(bag)<0)return;
-        // Settle a previous successful action before capturing the next baseline.
-        updateSeedBox();
-        seedBox.cancel();seedBoxPlant=null;
+        // Walking, examining and ordinary menu clicks do not cancel a pending
+        // transfer/plant. Reconcile only after the server's container updates.
         String option=event.getMenuOption().toLowerCase(Locale.ROOT).replace('-',' ').trim();
         String target=net.runelite.client.util.Text.removeTags(event.getMenuTarget()).toLowerCase(Locale.ROOT);
         int id=event.getItemId();
@@ -524,6 +531,7 @@ public class FarmingHelperPlugin extends Plugin
                     var observation=observe(patch);
                     if(observation.source==QuestFarmingStateReader.Source.LIVE&&observation.state==CropState.EMPTY)
                     {
+                        if(seedBoxPlant!=null||seedBox.pending()){seedBox.forget();seedBoxChanged();}
                         seedBoxPlant=patch;seedBoxPlantBag=bag;seedBoxPlantTick=client.getTickCount();
                         seedBoxPlantRevision=seedBox.revision();
                     }
@@ -569,13 +577,17 @@ public class FarmingHelperPlugin extends Plugin
         {
             var bankItems=client.getItemContainer(InventoryID.BANK);
             if(bankItems==null)return null;
-            result=PhysicalStock.combine(result,readItems(bankItems));
+            Map<Integer,Integer> observed=PhysicalStock.readChecked(bankItems,itemManager::getItemComposition,null);
+            if(observed==null)return null;
+            result=PhysicalStock.combine(result,observed);
         }
         if(seedBoxVault)
         {
             var vaultItems=client.getItemContainer(InventoryID.SEED_VAULT);
             if(vaultItems==null)return null;
-            result=PhysicalStock.combine(result,readItems(vaultItems));
+            Map<Integer,Integer> observed=PhysicalStock.readChecked(vaultItems,itemManager::getItemComposition,null);
+            if(observed==null)return null;
+            result=PhysicalStock.combine(result,observed);
         }
         return result;
     }
@@ -584,7 +596,9 @@ public class FarmingHelperPlugin extends Plugin
         seedBoxBank=visibleWidget(InterfaceID.Bankmain.UNIVERSE);
         seedBoxVault=visibleWidget(InterfaceID.SeedVault.UNIVERSE);
         Map<Integer,Integer> loose=looseSeeds(bag);
+        if(seedBox.pending()||seedBoxPlant!=null){seedBox.forget();seedBoxPlant=null;seedBoxChanged();}
         if(loose!=null)seedBox.begin(adding,seed,loose,client.getTickCount());
+        else {seedBox.forget();seedBoxChanged();}
     }
     private void seedBoxChanged()
     {
@@ -596,36 +610,40 @@ public class FarmingHelperPlugin extends Plugin
     private void updateSeedBox()
     {
         int tick=client.getTickCount();
+        if(itemManager==null||stockProfile==null)return;
         if(visibleWidget(InterfaceID.HosidiusSeedbox.UNIVERSE))
         {
-            if(seedBoxViewTick<0)seedBoxViewTick=tick;
-            if(tick==seedBoxViewTick+2)
+            if(seedBoxViewTick<0){seedBoxViewTick=tick;seedBoxViewRevision=seedBox.revision();}
+            if(tick-seedBoxViewTick>=2&&seedBoxViewRevision==seedBox.revision()&&!seedBox.pending()&&seedBoxPlant==null)
             {
                 var nativeBox=client.getItemContainer(net.runelite.api.gameval.InventoryID.SEED_BOX);
-                if(nativeBox!=null&&SeedBoxStock.boxId(stock().bag)>0)
-                {seedBox.observe(nativeBox,tick);seedBoxPlant=null;seedBoxChanged();}
+                if(SeedBoxStock.boxId(stock().bag)>0&&seedBox.observe(nativeBox,tick,this::seedItem))
+                    seedBoxChanged();
             }
         }
         else seedBoxViewTick=-1;
         if(seedBox.finishCheck(tick))seedBoxChanged();
         if(!seedBox.pending()&&seedBoxPlant==null)return;
         Map<Integer,Integer> bag=stock().bag;
-        if(SeedBoxStock.boxId(bag)<0){seedBox.cancel();seedBoxPlant=null;return;}
+        if(SeedBoxStock.boxId(bag)<0){seedBox.carried(bag);seedBoxPlant=null;return;}
         if(seedBox.pending())
         {
-            if(seedBoxBank&&!visibleWidget(InterfaceID.Bankmain.UNIVERSE)||seedBoxVault&&!visibleWidget(InterfaceID.SeedVault.UNIVERSE))seedBox.cancel();
+            if(seedBoxBank&&!visibleWidget(InterfaceID.Bankmain.UNIVERSE)||seedBoxVault&&!visibleWidget(InterfaceID.SeedVault.UNIVERSE))
+            {seedBox.forget();seedBoxChanged();}
             else
             {
                 Map<Integer,Integer> loose=looseSeeds(bag);
-                if(loose==null)seedBox.cancel();
+                if(loose==null){seedBox.forget();seedBoxChanged();}
                 else if(seedBox.settle(loose,tick,this::seedItem))seedBoxChanged();
             }
         }
         if(seedBoxPlant!=null)
         {
-            if(tick-seedBoxPlantTick>30||seedBox.revision()!=seedBoxPlantRevision){seedBoxPlant=null;return;}
+            if(seedBox.revision()!=seedBoxPlantRevision){seedBoxPlant=null;return;}
+            if(tick<=seedBoxPlantTick)return;
+            if(tick-seedBoxPlantTick>30){seedBoxPlant=null;return;}
             var observation=observe(seedBoxPlant);
-            if(observation.source!=QuestFarmingStateReader.Source.LIVE){seedBoxPlant=null;return;}
+            if(observation.source!=QuestFarmingStateReader.Source.LIVE)return;
             if(observation.state==CropState.GROWING)
             {
                 String species=QuestFarmingStateReader.livingProduceKey(seedBoxPlant.getPatchType().name(),observation);
@@ -646,7 +664,7 @@ public class FarmingHelperPlugin extends Plugin
             event.getType()!=ChatMessageType.GAMEMESSAGE&&event.getType()!=ChatMessageType.SPAM)return;
         String message=net.runelite.client.util.Text.removeTags(event.getMessage()).trim();
         if(!message.toLowerCase(Locale.ROOT).contains("seed box")&&!message.matches("^[\\d,]+\\s*x\\s*.+"))return;
-        if(SeedBoxStock.boxId(stock().bag)<0)return;
+        if(SeedBoxStock.boxId(stock().bag)<0||stockProfile==null)return;
         if(seedBox.chat(message,client.getTickCount(),this::seedByName))seedBoxChanged();
     }
 
@@ -742,6 +760,9 @@ public class FarmingHelperPlugin extends Plugin
         {
             bank.putAll(StockSnapshot.decode(setting("observedBankV1","")));
             vault.putAll(StockSnapshot.decode(setting("observedVaultV1","")));
+            long now=System.currentTimeMillis();
+            bankObservedAt=StockSnapshot.time(setting("observedBankV1At",""),now);
+            vaultObservedAt=StockSnapshot.time(setting("observedVaultV1At",""),now);
             // Migrate older cached observations without discarding genuine stock.
             if(itemManager!=null)
             {
@@ -771,23 +792,22 @@ public class FarmingHelperPlugin extends Plugin
     {
         var widget=client.getWidget(component);
         if(widget==null||widget.isHidden()){sampledStorage.remove(id);return;}
-        ItemContainer container = client.getItemContainer(id);
-        if (container == null) return;
-        if(id==InventoryID.BANK)bankObservedAt=System.currentTimeMillis();
-        if(id==InventoryID.SEED_VAULT)vaultObservedAt=System.currentTimeMillis();
-        if(!sampledStorage.add(id))return;
-        Map<Integer,Integer> observed;
-        if (id == InventoryID.BANK && itemManager != null)
+        if(itemManager==null||sampledStorage.contains(id))return;
+        ItemContainer container=client.getItemContainer(id);
+        Set<Integer> placeholders=id==InventoryID.BANK?new HashSet<>():null;
+        Map<Integer,Integer> observed=PhysicalStock.readChecked(container,itemManager::getItemComposition,placeholders);
+        if(observed==null)return; // unavailable or incomplete, retry; never erase remembered stock
+        sampledStorage.add(id);
+        if(placeholders!=null)bankPlaceholders=Set.copyOf(placeholders);
+        long now=System.currentTimeMillis();
+        if(id==InventoryID.BANK)bankObservedAt=now;
+        else if(id==InventoryID.SEED_VAULT)vaultObservedAt=now;
+        boolean changed=!observed.equals(snapshot);
+        if(changed){quantities=null;snapshot.clear();snapshot.putAll(observed);}
+        if(Objects.equals(stockProfile,config.getRSProfileKey()))
         {
-            Set<Integer> placeholders = new HashSet<>();
-            observed = PhysicalStock.read(container,itemManager::getItemComposition,placeholders);
-            bankPlaceholders = Set.copyOf(placeholders);
-        }
-        else observed = readItems(container);
-        if(!observed.equals(snapshot))
-        {
-            quantities=null;snapshot.clear();snapshot.putAll(observed);
-            if(Objects.equals(stockProfile,config.getRSProfileKey()))save(key,StockSnapshot.encode(snapshot));
+            if(changed)save(key,StockSnapshot.encode(snapshot));
+            save(key+"At",Long.toString(now));
         }
     }
 
@@ -803,6 +823,7 @@ public class FarmingHelperPlugin extends Plugin
 
     PhysicalStock stock()
     {
+        if(config!=null&&client.getGameState()==GameState.LOGGED_IN)loadStock();
         if(quantities==null)
         {
             invalidateTravel();
