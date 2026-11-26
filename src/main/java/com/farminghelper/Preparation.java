@@ -101,4 +101,37 @@ final class Preparation
         }
         return (int)Math.min(Integer.MAX_VALUE,count);
     }
+    /** Bounded prefix search. If a single stop cannot fit it remains blocked. */
+    static final class Window
+    {
+        private int low,high,limit;
+        Window(int count){high=limit=count;}
+        int limit(){return limit;}
+        boolean restrict(int count)
+        {
+            if(low!=0||limit!=high||count<1||count>=limit)return false;
+            high=limit=count;return true;
+        }
+        boolean advance(boolean fits)
+        {
+            if(!fits&&limit>1){high=limit-1;limit=Math.max(1,low+(high-low+1)/2);return true;}
+            if(fits&&limit<high){low=limit;limit=low+(high-low+1)/2;return true;}
+            return false;
+        }
+    }
+    static int workingSlots(List<FarmRunPatch> wave)
+    {
+        int reserve=0;
+        for(FarmRunPatch p:wave)
+        {
+            switch(p.getPatchType())
+            {
+                case COMPOST_BIN:break;
+                case ALLOTMENT:case HOPS:case SEAWEED:case GRAPEVINE:case FRUIT_TREE:reserve=Math.max(reserve,4);break;
+                case BIRDHOUSE:reserve=Math.max(reserve,5);break;
+                default:reserve=Math.max(reserve,2);break;
+            }
+        }
+        return reserve;
+    }
 }
