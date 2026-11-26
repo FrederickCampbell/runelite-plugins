@@ -102,4 +102,26 @@ public class AdaptivePreparationTest
         assertEquals(25,(int)req.get(CompostRun.PINEAPPLE));
         assertEquals(28,Preparation.loadedSlots(Map.of(999,2),req,Map.of(501,1),Map.of(),STACK));
     }
+    @Test public void repeatedPrefixesReuseInventoryObservationWithoutChangingFit()
+    {
+        Map<Integer,Integer> bag=Map.of(999,12,BOX,1,SEED,8,NOTE,50);
+        Map<Integer,Integer> equipped=Map.of(501,1),box=Map.of(SEED,4);
+        int[] reads={0};
+        IntPredicate stack=id->{reads[0]++;return STACK.test(id);};
+        List<Map<Integer,Integer>> demands=List.of(Map.of(SAPLING,22,SEED,13,501,1),
+            Map.of(SAPLING,11,SEED,13),Map.of(SAPLING,5,NOTE,70));
+        int[] expected=new int[demands.size()];
+        for(int i=0;i<demands.size();i++)expected[i]=Preparation.loadedSlots(bag,demands.get(i),equipped,box,stack);
+        int repeated=reads[0];reads[0]=0;
+        int occupied=Preparation.slots(bag,Map.of(),stack);
+        for(int i=0;i<demands.size();i++)assertEquals(expected[i],Preparation.loadedSlots(occupied,bag,demands.get(i),equipped,box,stack));
+        assertTrue(reads[0]<repeated);
+        assertEquals(repeated-2*bag.size(),reads[0]);
+    }
+    @Test public void missingNotedPaymentHighlightsBothPhysicalFormsOnlyWhenMissing()
+    {
+        assertEquals(Set.of(PAYMENT,NOTE),GuideView.missingItems(Map.of(NOTE,25),Map.of(NOTE,10),Map.of(NOTE,PAYMENT)));
+        assertTrue(GuideView.missingItems(Map.of(NOTE,25),Map.of(NOTE,25),Map.of(NOTE,PAYMENT)).isEmpty());
+        assertEquals(Set.of(SAPLING),GuideView.missingItems(Map.of(SAPLING,2),Map.of(SAPLING,1),Map.of(NOTE,PAYMENT)));
+    }
 }
