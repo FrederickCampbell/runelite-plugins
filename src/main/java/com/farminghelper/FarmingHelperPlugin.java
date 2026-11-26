@@ -230,7 +230,7 @@ public class FarmingHelperPlugin extends Plugin
             specialtyStaged=SpecialtyStages.stageBirds(policyKey,run);
             runProfile=config.getRSProfileKey();
             updateAccessNotes();
-            runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&p.getPatchType().isTree());
+            runHasTrees=patches.stream().anyMatch(p->eligible(p)&&p.getPatchType().isTree());
             loadStock();
             sampleStorage();
             update();
@@ -379,7 +379,7 @@ public class FarmingHelperPlugin extends Plugin
     void skipRemainingType(PatchType type)
     {
         inRun(()->{
-            for(FarmRunPatch p:patches)if(p.getPatchType()==type&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!runProgress.finished(p))runProgress.skip(p);
+            for(FarmRunPatch p:patches)if(p.getPatchType()==type&&selected(p)&&!runProgress.finished(p))runProgress.skip(p);
             lastView=null;update();
         });
     }
@@ -743,7 +743,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean bird=birdBankPhase();
         List<?> inputs=List.of(session.get(),quantities,bankPlaceholders,runItems,bird,preferenceRevision.get(),vaultAccessRevision);
         if(inputs.equals(shelfInputs))return shelfItems;
-        boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
+        boolean diving=!bird&&patches.stream().anyMatch(p->eligible(p)&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
         Set<Integer> candidates = new HashSet<>(owned.keySet());
         candidates.addAll(bankPlaceholders);
         shelfCandidates = Set.copyOf(candidates);
@@ -959,6 +959,19 @@ public class FarmingHelperPlugin extends Plugin
             p.getPatchType()==PatchType.HESPORI ? null : Waypoints.destination(p));
     }
 
+    private boolean selected(FarmRunPatch p)
+    {return ManualSelection.includes(p,run,manualKeys)&&enabled(p);}
+    private boolean eligible(FarmRunPatch p){return selected(p)&&accessNote(p).isEmpty();}
+    private List<FarmRunPatch> localCrops(LocationContext location)
+    {
+        List<FarmRunPatch> local=new ArrayList<>();
+        for(FarmRunPatch p:patches)
+        {
+            PatchType type=p.getPatchType();
+            if(type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN&&reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),location.normalized))local.add(p);
+        }
+        return local;
+    }
     private void update()
     {
         if(run.isEmpty()||!guideRequested)return;
@@ -976,7 +989,10 @@ public class FarmingHelperPlugin extends Plugin
         if(waterOfferPatch!=null&&CropCare.offerExpired(client.getTickCount()-waterOfferTick,
             waterOfferOrigin==null||location.actual==null?Integer.MAX_VALUE:waterOfferOrigin.distanceTo(location.actual)))
         {wateredThisRun.add(waterOfferPatch);waterOfferPatch=null;waterOfferOrigin=null;waterOfferTick=-1;}
-        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations))return;
+        List<FarmRunPatch> local=loggedIn&&highlight!=null?localCrops(location):List.of();
+        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations,local))return;
+        List<FarmRunPatch> eligible=new ArrayList<>();
+        if(loggedIn)for(FarmRunPatch patch:patches)if(eligible(patch))eligible.add(patch);
         Map<Integer,Integer> storage=supplies.storage,stock=supplies.stock;
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
         int storedCan=loggedIn&&runLeprechaun?CropCare.storedCan(client,this::observedItemName):-1;
@@ -1000,10 +1016,9 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn && run.contains(FarmRunType.SPECIALTY) && level<99)
             for(FarmRunPatch p:patches) if(p.getPatchType()==PatchType.SPIRIT_TREE)
             { CropState state=observations.computeIfAbsent(p,this::observe).state; if(state!=null && state!=CropState.EMPTY && state!=CropState.DEAD) spiritSlots--; }
-        if(loggedIn) for(FarmRunPatch p:patches)
+        for(FarmRunPatch p:eligible)
         {
             PatchType type=p.getPatchType();
-            if(!ManualSelection.includes(p,run,manualKeys)||!enabled(p)||!accessNote(p).isEmpty())continue;
             runProgress.include(p);
             if(!SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,type)||runProgress.is(p,RunProgress.Status.SKIPPED))continue;
             QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
@@ -1112,19 +1127,20 @@ public class FarmingHelperPlugin extends Plugin
         Set<FarmRunPatch> careOnly=new LinkedHashSet<>();
         if(loggedIn&&!preparing()&&highlight!=null&&!(specialtyStaged&&specialtyBirdPhase))
         {
-            for(FarmRunPatch p:patches)
+            boolean mainland=SpecialtyStages.fossilLastRequired(runPolicyKey)&&ready.stream().anyMatch(p->!SpecialtyStages.fossil(p));
+            for(FarmRunPatch p:local)
             {
                 PatchType type=p.getPatchType();
-                if(runProgress.is(p,RunProgress.Status.SKIPPED)||type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),location.normalized))continue;
+                if(runProgress.is(p,RunProgress.Status.SKIPPED))continue;
                 // Do not let routine watering pull Fossil Island ahead of remaining mainland work.
                 // Verified disease interruptions remain independent and can still interrupt.
-                if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
+                if(mainland&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
                 QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
-                boolean water=ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,runWater)&&highlight.hasLocalPatch(p);
+                boolean water=selected(p)&&!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,o,runWater)&&highlight.hasLocalPatch(p);
                 if(p==current&&activeAction==StepEngine.Action.WATER&&CropCare.watered(type,o))wateredThisRun.add(p);
                 if(!water||wateredThisRun.contains(p))continue;
                 if(ready.contains(p)&&!(p==current&&activeCareOnly))continue;
-                observations.put(p,o);plant.remove(p);ready.remove(p);visible.remove(p);
+                plant.remove(p);ready.remove(p);visible.remove(p);
                 careOnly.add(p);
             }
             ready.addAll(0,careOnly);
@@ -1302,7 +1318,7 @@ public class FarmingHelperPlugin extends Plugin
             if(activeLive)
             {
                 if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
-                else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,birdStock,plantingBag,farmingRequirements,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
+                else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,birdStock,plantingBag,farmingRequirements,hunter,crafting);
                 else if(action==StepEngine.Action.WATER&&wateringCan>0)localStepItems=Set.of(wateringCan);
                 else if(leprechaunWithdrawal==null)localStepItems=StepItems.select(action,type,activeCrop,stepCompost,axeId,bag);
             }
@@ -1331,7 +1347,7 @@ public class FarmingHelperPlugin extends Plugin
         if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
         {
             List<FarmRunPatch> birds=new ArrayList<>();
-            for(FarmRunPatch p:patches)if(p.getPatchType()==PatchType.BIRDHOUSE&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!runProgress.is(p,RunProgress.Status.SKIPPED)&&accessNote(p).isEmpty())birds.add(p);
+            for(FarmRunPatch p:eligible)if(p.getPatchType()==PatchType.BIRDHOUSE&&!runProgress.is(p,RunProgress.Status.SKIPPED))birds.add(p);
             birds.sort(Comparator.comparingInt(BirdhouseRun::order));
             for(FarmRunPatch p:birds)stops.add(new GuideView.Stop(p,"Birdhouses — after farming.",false,false));
         }
@@ -1495,16 +1511,14 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     private boolean showDiseaseInterrupt(String title,Map<Integer,Integer> carried,LocationContext location,
-        Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations)
+        Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,List<FarmRunPatch> local)
     {
         if(highlight==null)return false;
         WorldPoint here=location.actual;
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> verified=new LinkedHashMap<>();
         Map<FarmRunPatch,WorldPoint> approaches=new HashMap<>();
-        for(FarmRunPatch p:patches)
+        for(FarmRunPatch p:local)
         {
-            PatchType type=p.getPatchType();
-            if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||!reader.inPatchRegion(type.name(),p.getLocation(),p.getName(),location.normalized))continue;
             QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
             if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.DISEASED||!highlight.hasVerifiedDisease(p))continue;
             verified.put(p,o);approaches.put(p,highlight.approach(p));
@@ -1516,7 +1530,7 @@ public class FarmingHelperPlugin extends Plugin
             if(previous!=null)lastView=null;
             diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();return false;
         }
-        if(previous!=target){lastView=null;}
+        if(previous!=target)lastView=null;
         // Record the disease transition only when the interrupted patch itself is
         // the diseased one, so its existing completion tracker can see recovery.
         if(current==target)progress.observe(verified.get(target));

@@ -227,4 +227,35 @@ public class SidebarInteractionTest
         });
         SwingUtilities.invokeAndWait(()->assertNotNull(line(panel[0],"No patches match your filters.")));
     }
+
+    @Test public void patchToggleKeepsControlsAndUpdatesCountWithoutRebuild() throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            Character character=new Character();
+            FarmingHelperPanel panel=new FarmingHelperPanel(character);panel.home();
+            button(panel,"Settings").doClick(0);button(panel,"Patches").doClick(0);
+            JButton group=named(panel,"patch-group/Catherby",JButton.class);group.doClick(0);
+            group=named(panel,"patch-group/Catherby",JButton.class);
+            JCheckBox patch=named(panel,"enabled/"+CATHERBY.key(),JCheckBox.class);
+            JButton edit=named(panel,"edit/"+CATHERBY.key(),JButton.class);
+            patch.doClick(0);
+            assertSame(patch,named(panel,"enabled/"+CATHERBY.key(),JCheckBox.class));
+            assertSame(edit,named(panel,"edit/"+CATHERBY.key(),JButton.class));
+            assertSame(group,named(panel,"patch-group/Catherby",JButton.class));
+            assertEquals("Catherby · 0/1",group.getText());assertFalse(character.enabled(CATHERBY));
+            patch.doClick(0);assertEquals("Catherby · 1/1",group.getText());
+        });
+    }
+    @Test public void guideStructuralRefreshKeepsToolbarButNewSessionReplacesIt() throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            FarmingHelperPanel panel=new FarmingHelperPanel(new Character());
+            panel.guide(guide(true,1,12),1);
+            JButton end=button(panel,"End farming run"),settings=button(panel,"Run settings");
+            panel.guide(guide(false,2,0),1);
+            assertSame(end,button(panel,"End farming run"));assertSame(settings,button(panel,"Run settings"));
+            panel.guide(guide(true,1,12),2);
+            assertNotSame(end,button(panel,"End farming run"));
+        });
+    }
 }

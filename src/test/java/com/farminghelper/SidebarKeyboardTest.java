@@ -22,10 +22,15 @@ public class SidebarKeyboardTest
             button(panel[0],"Crop priorities").doClick(0);button(panel[0],"Herb").doClick(0);
             JButton down=button(panel[0],"Move Ranarr down");
             assertTrue(down.isEnabled());assertTrue(down.isFocusable());
+            JComboBox<?> add=named(panel[0],"add-priority/HERB",JComboBox.class);
+            JButton up=button(panel[0],"Move Ranarr up"),remove=button(panel[0],"Remove Ranarr");
             down.doClick(0);
+            assertSame(down,button(panel[0],"Move Ranarr down"));assertSame(up,button(panel[0],"Move Ranarr up"));
+            assertSame(remove,button(panel[0],"Remove Ranarr"));assertSame(add,named(panel[0],"add-priority/HERB",JComboBox.class));
             assertEquals("Snapdragon, Ranarr",character.prefs.get("cropPriority_HERB"));
             assertTrue(button(panel[0],"Move Ranarr up").isEnabled());
             button(panel[0],"Remove Ranarr").doClick(0);
+            assertSame(add,named(panel[0],"add-priority/HERB",JComboBox.class));
             assertEquals("Snapdragon",character.prefs.get("cropPriority_HERB"));
             assertTrue(button(panel[0],"Remove Snapdragon").isFocusable());
             button(panel[0],"Back").doClick(0);button(panel[0],"Patches").doClick(0);

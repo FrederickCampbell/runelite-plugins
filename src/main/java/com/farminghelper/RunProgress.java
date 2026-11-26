@@ -39,7 +39,7 @@ final class RunProgress
     {
         Set<FarmRunPatch> actionable=new HashSet<>(ready);
         states.replaceAll((p,old)->{
-            if(finished(p)||old==Status.SKIPPED||old==Status.SKIP_ON_UNLOCK||!stage.test(p))return old;
+            if(old==Status.COMPLETED||old==Status.PRESERVED||old==Status.SKIPPED||old==Status.SKIP_ON_UNLOCK||!stage.test(p))return old;
             if(actionable.contains(p))return Status.PENDING;
             return seedless.contains(p)?Status.SEEDLESS:Status.DEFERRED;
         });

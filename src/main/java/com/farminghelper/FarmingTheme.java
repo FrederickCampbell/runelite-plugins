@@ -19,6 +19,7 @@ final class FarmingTheme
     private static final boolean VERDANA=Arrays.stream(GraphicsEnvironment.getLocalGraphicsEnvironment()
         .getAvailableFontFamilyNames()).anyMatch("Verdana"::equalsIgnoreCase);
     private FarmingTheme(){}
+    static String escape(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");}
     static Font font(int style,int size)
     {
         Font base=VERDANA?new Font("Verdana",Font.PLAIN,size):FontManager.getDefaultFont();
@@ -52,8 +53,7 @@ final class FarmingTheme
             }
             if(view==null)
             {
-                String escaped=text.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
-                view=BasicHTML.createHTMLView(c,"<html>"+escaped+"</html>");
+                view=BasicHTML.createHTMLView(c,"<html>"+escape(text)+"</html>");
                 c.putClientProperty(BasicHTML.propertyKey,view);
             }
         }

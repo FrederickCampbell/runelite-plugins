@@ -127,22 +127,7 @@ final class SeedBoxStock
     }
     boolean chat(String message,int tick,ToIntFunction<String> resolve)
     {
-        if(nativeTick==tick)
-        {
-            Matcher pickup=PICKUP.matcher(message),stolen=STOLEN.matcher(message);
-            if(pickup.matches()||stolen.matches())
-            {
-                boolean p=pickup.matches();int id=resolve.applyAsInt(p?pickup.group(2):stolen.group(1));
-                int n=p?number(pickup.group(1)):1;
-                if(nativeAdditions.getOrDefault(id,0)>=n&&n>0)adjust(nativeAdditions,id,-n);
-                else if(id>0&&n>0&&!nativeBaselineKnown){complete=false;orderKnown=false;}
-            }
-            return false;
-        }
-        if(message.equalsIgnoreCase("The seed box contains:"))
-        {checking=new LinkedHashMap<>();checkTick=lastCheckLineTick=tick;checkValid=!pending();return false;}
-        if(message.equalsIgnoreCase("The seed box is empty.")||message.equalsIgnoreCase("Your seed box is now empty."))
-        {replace(Map.of(),true,true);cancel();checking=null;return true;}
+        boolean nativeNow=nativeTick==tick;
         Matcher pickup=PICKUP.matcher(message),stolen=STOLEN.matcher(message);
         if(pickup.matches()||stolen.matches())
         {
@@ -150,15 +135,13 @@ final class SeedBoxStock
             int n=p?number(pickup.group(1)):1;
             if(id>0&&n>0)
             {
-                // A native increment immediately before its matching chat
-                // message is the same observation, not a second pickup.
-                if(nativeTick>=0&&tick-nativeTick==1)
+                if(nativeNow||nativeTick>=0&&tick-nativeTick==1)
                 {
-                    if(nativeAdditions.getOrDefault(id,0)>=n)
-                    {adjust(nativeAdditions,id,-n);return false;}
-                    // A first-ever snapshot can already include the pickup.
-                    // Preserve its observed lower bound; never invent a second stack.
-                    if(!nativeBaselineKnown){complete=false;orderKnown=false;checking=null;return false;}
+                    if(nativeAdditions.getOrDefault(id,0)>=n){adjust(nativeAdditions,id,-n);return false;}
+                    // Without a previous snapshot, the message may describe seeds
+                    // already counted by the native container. Keep only the lower bound.
+                    if(!nativeBaselineKnown){complete=false;orderKnown=false;if(!nativeNow)checking=null;return false;}
+                    if(nativeNow)return false;
                 }
                 checking=null;
                 Map<Integer,Integer> next=new LinkedHashMap<>(observed);adjust(next,id,n);
@@ -166,6 +149,11 @@ final class SeedBoxStock
                 return true;
             }
         }
+        if(nativeNow)return false;
+        if(message.equalsIgnoreCase("The seed box contains:"))
+        {checking=new LinkedHashMap<>();checkTick=lastCheckLineTick=tick;checkValid=!pending();return false;}
+        if(message.equalsIgnoreCase("The seed box is empty.")||message.equalsIgnoreCase("Your seed box is now empty."))
+        {replace(Map.of(),true,true);cancel();checking=null;return true;}
         if(checking!=null&&tick-checkTick<=4)
         {
             Matcher line=LINE.matcher(message);

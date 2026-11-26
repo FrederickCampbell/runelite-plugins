@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.07.4 — stabilization branch GUI and code consolidation
+
+- Reuse sidebar priority controls on reorder/remove/add, update patch enablement counts without rebuilding rows, and preserve same-session guide header controls. Share disclosure state, native button creation, column panels, and HTML escaping.
+- Share selection/eligibility and local crop discovery between planning, disease and watering. Reuse skill reads and existing observations. Keep independent crop decisions, explicit skips, specialty stages and seedless rules.
+- Consolidate duplicate seed-box pickup parsing and redundant run status lookups. No new dependencies or global input/focus APIs.
+
 ## v1.07.3 — stabilization branch runtime reliability
 
 - Move game-state initialization and teardown to the client thread; guard deferred profile, config, plugin-message and Swing publications against old lifecycle/session identities. Coalesce obsolete guide views and release run/scene/icon state on disable.
