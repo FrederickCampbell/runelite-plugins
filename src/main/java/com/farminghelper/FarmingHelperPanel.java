@@ -730,7 +730,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || !a.notes.equals(b.notes) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || !a.notes.equals(b.notes) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)
         {
             GuideView.ItemRow old=a.items.get(i), next=b.items.get(i);
@@ -980,7 +980,7 @@ final class FarmingHelperPanel extends PluginPanel
         stepText.put(stop.patch.key(),detail);body.add(detail,BorderLayout.CENTER);
         if(stop.active)
         {
-            JButton skip=new JButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":"Skip patch");
+            JButton skip=new JButton(plugin.diseaseInterruptActive()?"Skip cure / resume run":view.waterStep?"Skip watering":"Skip patch");
             skip.addActionListener(e->plugin.skip(stop.patch));
             JPanel actions=transparent(new java.awt.GridLayout(0,1,0,2));
             if(view.compostStep){

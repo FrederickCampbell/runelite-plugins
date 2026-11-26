@@ -359,7 +359,11 @@ public class FarmingHelperPlugin extends Plugin
             {
                 if(displayed==diseaseTarget){diseasePriority.skip(displayed);diseaseTarget=null;lastView=null;}
             }
-            else if (current != null && current == displayed) runProgress.skip(current);
+            else if (current != null && current == displayed)
+            {
+                if(activeAction==StepEngine.Action.WATER)wateredThisRun.add(current);
+                else runProgress.skip(current);
+            }
             update();
         });
     }
@@ -695,7 +699,7 @@ public class FarmingHelperPlugin extends Plugin
         int storedUltra=loggedIn&&runPolicy.compost&&runLeprechaun?CompostChoice.stored(client,ItemID.BUCKET_ULTRACOMPOST):0;
         int storedBucket=loggedIn&&runPolicy.compost&&runLeprechaun?CompostChoice.stored(client,ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED):0;
         int compostId=runPolicy.compost?compost.plan(bag,stock,storedUltra):-1;
-        if(runPolicy.compost&&(compost==CompostChoice.BOTTOMLESS||compost==CompostChoice.ULTRA)&&storedBucket>0&&bag.getOrDefault(ItemID.BUCKET_ULTRACOMPOST,0)==0&&storedUltra==0)compostId=ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED;
+        if(runPolicy.compost&&(compost==CompostChoice.BOTTOMLESS||compost==CompostChoice.ULTRA)&&storedBucket>0)compostId=ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED;
         int storedCompost=loggedIn&&runLeprechaun&&runPolicy.compost?CompostChoice.stored(client,compostId):0;
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
         int contract=loggedIn?client.getVarbitValue(VarbitID.FARMGUILD_CONTRACT_TYPE):0;
@@ -907,7 +911,8 @@ public class FarmingHelperPlugin extends Plugin
             required.put(TreePreparation.FILLED_POT,rawSeeds);
             required.merge(Supplies.GARDENING_TROWEL,1,Math::max);
         }
-        boolean needsCan=rawSeeds+seedlings>0||runWater&&ready.stream().anyMatch(p->p.getPatchType().canBeWatered());
+        boolean needsCan=rawSeeds+seedlings>0||runWater&&ready.stream().anyMatch(p->p.getPatchType().canBeWatered()&&
+            (seeds.containsKey(p)||CropCare.waterNeeded(p.getPatchType(),observations.get(p),true)));
         if(needsCan&&wateringCan<=0&&storedCan<=0)
             required.put(CropCare.preferredCan(wateringCan,storedCan,CropCare.wateringCan(stock,this::observedItemName)),1);
         int vines=(int)ready.stream().filter(p->p.getPatchType()==PatchType.GRAPEVINE&&seeds.containsKey(p)).count();
@@ -966,12 +971,13 @@ public class FarmingHelperPlugin extends Plugin
             boolean replacementCarried=activeCrop!=null&&bag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
             boolean keep=preserveReplacement(current,o);
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
-            StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,stepCompost,wateringCan);
+            StepEngine.Action action=guidanceAction(type,o,keep,replacementCarried,stepCompost);
             activeAction=action;
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
             int fetch=action==StepEngine.Action.WATER&&wateringCan<=0?storedCan:
-                action==StepEngine.Action.COMPOST&&storedCompost>0&&bag.getOrDefault(stepCompost,0)==0&&stepCompost==compostId?stepCompost:-1;
+                action==StepEngine.Action.COMPOST&&bag.getOrDefault(stepCompost,0)==0&&
+                    (stepCompost==ItemID.BUCKET_ULTRACOMPOST?storedUltra>0:stepCompost==compostId&&storedCompost>0)?stepCompost:-1;
             if(fetch>0&&runLeprechaun&&activeLive&&!preparing()&&highlight!=null&&
                 highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
             {
@@ -1107,14 +1113,14 @@ public class FarmingHelperPlugin extends Plugin
             for(int i=0;i<stops.size();i++) if(stops.get(i).active) stops.set(i,new GuideView.Stop(current,instruction,!preparing(),false));
         if(preparing()&&!routeWarning.isEmpty())prepMessage+="\n"+routeWarning;
         cacheIcons(items);
-        GuideView view=new GuideView(title,instruction,items,stops,preparing()?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing()&&activeAction==StepEngine.Action.COMPOST,summary,
+        GuideView view=new GuideView(title,instruction,items,stops,preparing()?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing()&&activeAction==StepEngine.Action.COMPOST,!preparing()&&activeAction==StepEngine.Action.WATER,summary,
             new GuideView.Notes(phase==Preparation.Phase.INITIAL,storageWarning,prepHelp,details.toString()));
         normalView=view;
         publishView(view);
     }
 
     private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,
-        boolean replacementCarried,int compostId,int wateringCan)
+        boolean replacementCarried,int compostId)
     {
         if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,runWater))
             return StepEngine.Action.WATER;

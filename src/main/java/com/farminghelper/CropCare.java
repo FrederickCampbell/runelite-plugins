@@ -29,7 +29,7 @@ final class CropCare
             String n=name.apply(id);if(n==null)continue;
             int c=0;
             if(n.equalsIgnoreCase("Gricoller's can"))c=1000;
-            else if(n.matches("(?i)watering can\\([1-8]\\)"))c=n.charAt(n.length()-2)-'0';
+            else if(n.matches("(?i)watering can\\s*\\([1-8]\\)"))c=n.charAt(n.length()-2)-'0';
             if(c>charges){best=id;charges=c;}
         }
         return best;

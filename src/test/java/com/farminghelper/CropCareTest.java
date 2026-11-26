@@ -30,6 +30,17 @@ public class CropCareTest
         assertTrue(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),true));
         assertFalse(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),false));
     }
+    @Test public void nativeStoredCanUsesEnumAndRejectsEmpty()
+    {
+        net.runelite.api.Client client=org.mockito.Mockito.mock(net.runelite.api.Client.class);
+        net.runelite.api.EnumComposition variants=org.mockito.Mockito.mock(net.runelite.api.EnumComposition.class);
+        org.mockito.Mockito.when(client.getVarbitValue(1439)).thenReturn(9);
+        org.mockito.Mockito.when(client.getEnum(136)).thenReturn(variants);
+        org.mockito.Mockito.when(variants.getIntValue(9)).thenReturn(13353);
+        assertEquals(13353,CropCare.storedCan(client,id->"Gricoller's can"));
+        assertEquals(-1,CropCare.storedCan(client,id->"Watering can"));
+        assertEquals(5333,CropCare.wateringCan(Map.of(5333,1),id->"Watering can (1)"));
+    }
     @Test public void diseaseRequiresLiveVerifiedObject()
     {
         assertTrue(CropCare.needsCure(observation(CropState.DISEASED,Source.LIVE,166),true));

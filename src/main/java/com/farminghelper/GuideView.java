@@ -55,7 +55,9 @@ final class GuideView
     final List<ItemRow> items;
     final List<Stop> stops;
     final FarmRunPatch active;
-    final boolean hideSeedless,clearSeedless,compostStep;
+    final boolean hideSeedless,clearSeedless,compostStep,waterStep;
     GuideView(String title,String message,List<ItemRow> items,List<Stop> stops,FarmRunPatch active,String preparation,String supplyNote,boolean hideSeedless,boolean clearSeedless,boolean compostStep,Stats stats,Notes notes)
-    { this.title=title;this.message=message;this.items=List.copyOf(items);this.stops=List.copyOf(stops);this.active=active;this.preparation=preparation;this.supplyNote=supplyNote;this.hideSeedless=hideSeedless;this.clearSeedless=clearSeedless;this.compostStep=compostStep;this.stats=stats;this.notes=notes; }
+    {this(title,message,items,stops,active,preparation,supplyNote,hideSeedless,clearSeedless,compostStep,false,stats,notes);}
+    GuideView(String title,String message,List<ItemRow> items,List<Stop> stops,FarmRunPatch active,String preparation,String supplyNote,boolean hideSeedless,boolean clearSeedless,boolean compostStep,boolean waterStep,Stats stats,Notes notes)
+    { this.title=title;this.message=message;this.items=List.copyOf(items);this.stops=List.copyOf(stops);this.active=active;this.preparation=preparation;this.supplyNote=supplyNote;this.hideSeedless=hideSeedless;this.clearSeedless=clearSeedless;this.compostStep=compostStep;this.waterStep=waterStep;this.stats=stats;this.notes=notes; }
 }
