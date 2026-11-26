@@ -1,7 +1,7 @@
 name: Farming Helper build and regression tests
 on:
   push:
-    branches: [master, farming-helper-v1.07-stabilization, farming-helper-v1.08-refactor, farming-helper-v1.09-workflow, farming-helper-v1.10-adaptive-planning]
+    branches: [master, farming-helper-v1.07-stabilization, farming-helper-v1.08-refactor, farming-helper-v1.09-workflow, farming-helper-v1.10-adaptive-planning, farming-helper-v1.11-consolidation]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -51,7 +51,7 @@ jobs:
           if-no-files-found: ignore
 
   comparison:
-    if: github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning'
+    if: github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning' || github.ref == 'refs/heads/farming-helper-v1.11-consolidation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +68,7 @@ jobs:
           baseline_sha=84e8bdff3f6dff7113be38975fcb302cd91ed8d7
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.09-workflow ]]; then baseline_sha=27349d1781ca4be611c127f1267b5114b900fa9b; fi
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.10-adaptive-planning ]]; then baseline_sha=7c72ead2d296dc978ccf3a6bd52cba7fa1fda9bd; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=b33426ddaf38ec21620767295903f67acb18ddf2; fi
           git fetch --no-tags --depth=1 origin "$baseline_sha"
           git worktree add --detach "$baseline" FETCH_HEAD
           # Compare layout with identical display metadata, including the version shown on Home.
@@ -93,8 +94,15 @@ jobs:
               rows = [s.split() for s in (temp / (name + '.txt')).read_text().splitlines() if s.startswith('PROBE ')]
               return {op: (int(value), int(size)) for _, op, value, size in rows}
           base, tip = read('baseline'), read('candidate')
-          assert len(base) == 7 and base.keys() == tip.keys()
+          assert len(base) == 15 and base.keys() == tip.keys()
           for op, (result, size) in base.items():
               assert result == tip[op][0], op
               print(f'{op}: result={result}, bytes/op={size} -> {tip[op][1]}')
+          def timings(name):
+              rows = [s.split() for s in (temp / (name + '.txt')).read_text().splitlines() if s.startswith('TIME ')]
+              return {op: int(ns) for _, op, ns in rows}
+          a, b = timings('baseline'), timings('candidate')
+          assert a.keys() == b.keys() == base.keys()
+          for op in a:
+              print(f'{op}: median ns/op={a[op]} -> {b[op]}')
           PY
