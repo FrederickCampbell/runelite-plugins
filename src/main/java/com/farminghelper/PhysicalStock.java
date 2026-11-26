@@ -27,15 +27,16 @@ final class PhysicalStock
         this.bag=Map.copyOf(bag);
         this.equipped=Map.copyOf(equipped);
         this.seedBox=SeedBoxStock.boxId(bag)>0?seedBox:Map.of();
-        plantingBag=combine(bag,this.seedBox);
+        plantingBag=this.seedBox.isEmpty()?this.bag:combine(bag,this.seedBox);
         carried=combine(plantingBag,equipped);
         storage=combine(bank,vault);
         stock=combine(plantingBag,storage);
         aliases=TreePreparation.aliases(stock,names);
         allocation=aliases.isEmpty()?stock:TreePreparation.allocationStock(stock,aliases);
-        bankAndBag=combine(bank,plantingBag);
-        travel=combine(combine(bank,bag),equipped);
-        shelf=new HashMap<>(combine(bank,bag));
+        Map<Integer,Integer> loose=combine(bank,bag);
+        bankAndBag=this.seedBox.isEmpty()?loose:combine(loose,this.seedBox);
+        travel=combine(loose,equipped);
+        shelf=new HashMap<>(loose);
         equipped.forEach((id,n)->shelf.merge(canonicalWorn.applyAsInt(id),n,PhysicalStock::sum));
     }
 
@@ -70,7 +71,7 @@ final class PhysicalStock
         Item[] items=container==null?null:container.getItems();
         if(items==null)return null;
         Map<Integer,Integer> stock=new HashMap<>();
-        Set<Integer> ghosts=new HashSet<>();
+        Set<Integer> ghosts=placeholders==null?null:new HashSet<>();
         for(Item item:items)
         {
             if (item == null || item.getId() <= 0) continue;
@@ -78,12 +79,28 @@ final class PhysicalStock
             if(def==null){if(strict)return null;continue;}
             if (def.getPlaceholderTemplateId() != -1)
             {
-                if (def.getPlaceholderId() > 0) ghosts.add(def.getPlaceholderId());
+                if (ghosts != null && def.getPlaceholderId() > 0) ghosts.add(def.getPlaceholderId());
             }
             else if (item.getQuantity() > 0) stock.merge(item.getId(),item.getQuantity(),PhysicalStock::sum);
         }
         if(placeholders!=null)placeholders.addAll(ghosts);
         return stock;
+    }
+    /** Highest usable rank wins. Equal ranks prefer the lowest physical item ID. */
+    static int best(Map<Integer,Integer> stock, IntUnaryOperator rank, int minimum, int missing)
+    {
+        int best = missing, score = minimum;
+        for (var stack : stock.entrySet())
+        {
+            if (stack.getValue() <= 0) continue;
+            int id = stack.getKey(), candidate = rank.applyAsInt(id);
+            if (candidate > score || (candidate == score && candidate > minimum && id < best))
+            {
+                best = id;
+                score = candidate;
+            }
+        }
+        return best;
     }
     static int sum(int a,int b){return (int)Math.min(Integer.MAX_VALUE,(long)a+b);}
     static Map<Integer,Integer> combine(Map<Integer,Integer> a,Map<Integer,Integer> b)

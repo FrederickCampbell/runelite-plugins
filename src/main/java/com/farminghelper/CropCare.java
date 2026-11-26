@@ -1,6 +1,8 @@
 package com.farminghelper;
 
-import java.util.*;
+import java.util.Map;
+import java.util.regex.Pattern;
+import net.runelite.api.gameval.VarbitID;
 import java.util.function.IntFunction;
 import com.farminghelper.queststate.CropState;
 import com.farminghelper.queststate.QuestFarmingStateReader.Observation;
@@ -8,32 +10,32 @@ import com.farminghelper.queststate.QuestFarmingStateReader.Source;
 
 final class CropCare
 {
+    private static final Pattern CAN = Pattern.compile("watering can\\s*\\([1-8]\\)", Pattern.CASE_INSENSITIVE);
+
     // Native farming_tools_getstored uses varbit 1439 and enum 136.
     static int storedCan(net.runelite.api.Client client,IntFunction<String> name)
     {
-        int key=client.getVarbitValue(1439);
+        int key=client.getVarbitValue(VarbitID.FARMING_TOOLS_WATERINGCAN);
         if(key<=0)return -1;
         var variants=client.getEnum(136);
         if(variants==null)return -1;
         int id=variants.getIntValue(key);
-        return id>0?wateringCan(Map.of(id,1),name):-1;
+        return id > 0 && charges(name.apply(id)) > 0 ? id : -1;
     }
     static int preferredCan(int carried,int stored,int bank)
     {return carried>0?carried:stored>0?stored:bank>0?bank:5333;}
     static int wateringCan(Map<Integer,Integer> bag,IntFunction<String> name)
     {
-        int best=-1,charges=0;
-        for(int id:new TreeSet<>(bag.keySet()))
-        {
-            if(bag.getOrDefault(id,0)<=0)continue;
-            String n=name.apply(id);if(n==null)continue;
-            int c=0;
-            if(n.equalsIgnoreCase("Gricoller's can"))c=1000;
-            else if(n.matches("(?i)watering can\\s*\\([1-8]\\)"))c=n.charAt(n.length()-2)-'0';
-            if(c>charges){best=id;charges=c;}
-        }
-        return best;
+        return PhysicalStock.best(bag, id -> charges(name.apply(id)), 0, -1);
     }
+    private static int charges(String name)
+    {
+        if (name == null) return 0;
+        if ("Gricoller's can".equalsIgnoreCase(name)) return 1000;
+        return name.regionMatches(true, 0, "watering can", 0, 12) && CAN.matcher(name).matches()
+            ? name.charAt(name.length() - 2) - '0' : 0;
+    }
+
     static boolean waterNeeded(PatchType type,Observation o,boolean enabled)
     {
         if(!enabled||!type.canBeWatered()||o==null||o.source!=Source.LIVE||o.state!=CropState.GROWING)return false;

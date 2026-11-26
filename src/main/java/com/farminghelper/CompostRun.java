@@ -87,9 +87,11 @@ final class CompostRun
      * across stops rather than recommending a full potion for every bin. */
     static void addSupplies(Map<Integer,Integer> required,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,Map<Integer,Integer> stock,Map<FarmRunPatch,Plan> plans)
     {
-        Map<Integer,Integer> left=new HashMap<>(stock);int doses=0;
+        Map<Integer,Integer> left=null;
+        int doses=0;
         for(FarmRunPatch p:ready)if(p.getPatchType()==PatchType.COMPOST_BIN)
         {
+            if (left == null) left = new HashMap<>(stock);
             Plan plan=plan(p,observations.get(p),left);plans.put(p,plan);
             for(Map.Entry<Integer,Integer> e:plan.supplies.entrySet())
             {

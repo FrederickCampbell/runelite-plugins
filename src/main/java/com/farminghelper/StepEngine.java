@@ -12,46 +12,36 @@ final class StepEngine
 {
     enum Action
     {
-        INSPECT,
-        HARVEST,
-        CHECK_HEALTH,
-        PAY_REMOVE,
-        CHOP_TREE,
-        RAKE,
-        DIG_STUMP,
-        CLEAR_DEAD,
-        CLEAR_LIVING,
-        NEED_REPLACEMENT,
-        CURE,
-        PLANT,
-        COMPOST,
-        PROTECT_TREE,
-        WATER,
-        COMPLETE
+        INSPECT("Inspect"),
+        HARVEST("Harvest"),
+        CHECK_HEALTH("Check health"),
+        PAY_REMOVE("Pay to remove"),
+        CHOP_TREE("Chop"),
+        RAKE("Rake"),
+        DIG_STUMP("Dig stump"),
+        CLEAR_DEAD("Clear"),
+        CLEAR_LIVING("Clear"),
+        NEED_REPLACEMENT("Bring seed / sapling"),
+        CURE("Cure"),
+        PLANT("Plant"),
+        COMPOST("Compost"),
+        PROTECT_TREE("Protect"),
+        WATER("Water"),
+        COMPLETE("");
+
+        private final String label;
+
+        Action(String label)
+        {
+            this.label = label;
+        }
     }
 
     private StepEngine() {}
 
     static String label(Action action,PatchType type)
     {
-        switch(action)
-        {
-            case INSPECT:return "Inspect";
-            case HARVEST:return "Harvest";
-            case CHECK_HEALTH:return "Check health";
-            case PAY_REMOVE:return "Pay to remove";
-            case CHOP_TREE:return "Chop";
-            case RAKE:return "Rake";
-            case DIG_STUMP:return "Dig stump";
-            case CLEAR_DEAD:case CLEAR_LIVING:return "Clear";
-            case NEED_REPLACEMENT:return "Bring seed / sapling";
-            case CURE:return CropCare.prunes(type)?"Prune":"Cure";
-            case PLANT:return "Plant";
-            case COMPOST:return "Compost";
-            case PROTECT_TREE:return "Protect";
-            case WATER:return "Water";
-            default:return "";
-        }
+        return action == Action.CURE && CropCare.prunes(type) ? "Prune" : action.label;
     }
 
     static Action action(PatchType type,Observation observation,boolean preserve,boolean replacementCarried,

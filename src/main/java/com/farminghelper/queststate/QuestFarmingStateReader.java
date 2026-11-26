@@ -176,17 +176,17 @@ public final class QuestFarmingStateReader
         // live value on an equal-time conflict rather than resurrecting old state.
         boolean own=localTime>0&&localTime>=trackerTime;
         if(own)raw=observed;
-        long observedAtMillis = timestampMillis(raw);
+        long observedAtMillis = own ? localTime : trackerTime;
         if (observedAtMillis <= 0 || observedAtMillis > System.currentTimeMillis())
         {
             return new Observation(null, Source.NONE, 0, protection, match.getName());
         }
         CropState state = handler.predictObserved(match,profile,raw);
         return new Observation(state, state == null ? Source.NONE : own?Source.OBSERVED:Source.TIME_TRACKING,
-            observedAtMillis, protection, match.getName(), Integer.parseInt(raw.split(":",2)[0]));
+            observedAtMillis, protection, match.getName(), Integer.parseInt(raw,0,raw.indexOf(':'),10));
     }
 
-    private static Produce livingProduce(String type,Observation o)
+    public static Produce livingProduce(String type,Observation o)
     {
         if(o==null||o.rawValue<0||o.state==null||o.state==CropState.EMPTY||o.state==CropState.DEAD||
             o.state==CropState.STUMP||o.state==CropState.DISEASED)return null;
@@ -281,13 +281,21 @@ public final class QuestFarmingStateReader
         return patch!=null && inRegion(patch,point);
     }
 
-    private static boolean inRegion(FarmingPatch patch,WorldPoint point)
+    private WorldPoint regionTile;
+    private Collection<FarmingRegion> regions;
+
+    private boolean inRegion(FarmingPatch patch,WorldPoint point)
     {
         PatchImplementation impl=patch.getImplementation();
         if(impl==PatchImplementation.CORAL && point.getRegionID()!=13194)return false;
         if(impl==PatchImplementation.SEAWEED && (point.getRegionID()!=15008||point.getPlane()!=1))return false;
         if(impl==PatchImplementation.HESPORI && point.getRegionID()!=5021)return false;
-        return world.getRegionsForLocation(point).contains(patch.getRegion());
+        if (!point.equals(regionTile))
+        {
+            regions = world.getRegionsForLocation(point);
+            regionTile = point;
+        }
+        return regions.contains(patch.getRegion());
     }
 
     public static List<String> patchNamesForType(String type,String location)
@@ -410,19 +418,13 @@ public final class QuestFarmingStateReader
     /** The RuneLite tracker stores: varbit-value:unix-seconds. */
     public static long timestampMillis(String raw)
     {
-        if (raw == null)
-        {
-            return 0;
-        }
-        String[] fields = raw.split(":", 3);
-        if (fields.length != 2)
-        {
-            return 0;
-        }
+        if (raw == null) return 0;
+        int separator = raw.indexOf(':');
+        if (separator <= 0 || separator == raw.length() - 1) return 0;
         try
         {
-            int value = Integer.parseInt(fields[0]);
-            long epochSeconds = Long.parseLong(fields[1]);
+            int value = Integer.parseInt(raw, 0, separator, 10);
+            long epochSeconds = Long.parseLong(raw, separator + 1, raw.length(), 10);
             if (value < 0 || epochSeconds <= 0)
             {
                 return 0;

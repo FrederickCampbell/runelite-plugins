@@ -68,7 +68,8 @@ final class SeedBoxStock
     }
     private void replace(Map<Integer,Integer> next,boolean full,boolean ordered)
     {
-        observed=Collections.unmodifiableMap(new LinkedHashMap<>(next));
+        // Every caller transfers a private, ordered snapshot here.
+        observed=Collections.unmodifiableMap(next);
         cached=observed;complete=full;orderKnown=ordered;revision++;
     }
     Map<Integer,Integer> carried(Map<Integer,Integer> bag)
@@ -92,23 +93,27 @@ final class SeedBoxStock
         if(!pending())return false;
         if(tick-transferTick>8||tick<transferTick){cancel();return false;}
         if(tick==transferTick)return false;
-        Set<Integer> ids=new HashSet<>(before.keySet());ids.addAll(loose.keySet());
-        Map<Integer,Integer> next=new LinkedHashMap<>(observed);
-        boolean changed=false;
-        for(int id:ids)
+        Set<Integer> ids;
+        if (onlyId > 0) ids = Collections.singleton(onlyId);
+        else
         {
-            if((onlyId>0&&id!=onlyId)||!accepts.test(id))continue;
-            int delta=before.getOrDefault(id,0)-loose.getOrDefault(id,0);
-            if(adding?delta<=0:delta>=0)continue;
-            adjust(next,id,delta);changed=true;
+            ids = new HashSet<>(before.keySet());
+            ids.addAll(loose.keySet());
         }
-        if(changed)
+        Map<Integer,Integer> next = null;
+        for (int id : ids)
         {
-            cancel();checking=null;
-            if(next.size()>6)forget();
-            else replace(next,complete,false);
+            int delta = before.getOrDefault(id, 0) - loose.getOrDefault(id, 0);
+            if ((adding ? delta <= 0 : delta >= 0) || !accepts.test(id)) continue;
+            if (next == null) next = new LinkedHashMap<>(observed);
+            adjust(next, id, delta);
         }
-        return changed;
+        if (next == null) return false;
+        cancel();
+        checking = null;
+        if (next.size() > 6) forget();
+        else replace(next, complete, false);
+        return true;
     }
     private static void adjust(Map<Integer,Integer> map,int id,int delta)
     {
@@ -129,9 +134,10 @@ final class SeedBoxStock
     {
         boolean nativeNow=nativeTick==tick;
         Matcher pickup=PICKUP.matcher(message),stolen=STOLEN.matcher(message);
-        if(pickup.matches()||stolen.matches())
+        boolean p=pickup.matches();
+        if(p||stolen.matches())
         {
-            boolean p=pickup.matches();int id=resolve.applyAsInt(p?pickup.group(2):stolen.group(1));
+            int id=resolve.applyAsInt(p?pickup.group(2):stolen.group(1));
             int n=p?number(pickup.group(1)):1;
             if(id>0&&n>0)
             {
@@ -189,6 +195,7 @@ final class SeedBoxStock
     static int slots(Map<Integer,Integer> required,Map<Integer,Integer> equipped,Map<Integer,Integer> box,
         java.util.function.IntPredicate stackable)
     {
+        if (box.isEmpty()) return Preparation.slots(required,equipped,stackable);
         Map<Integer,Integer> loose=new HashMap<>(required);
         boolean used=false;
         for(var entry:box.entrySet())

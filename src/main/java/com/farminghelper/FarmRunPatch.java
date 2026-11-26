@@ -1,12 +1,20 @@
 package com.farminghelper;
 
-@lombok.Getter
-@lombok.RequiredArgsConstructor
 final class FarmRunPatch
 {
-	private final String location;
-	private final String name;
-	private final PatchType patchType;
+	@lombok.Getter private final String location;
+	@lombok.Getter private final String name;
+	@lombok.Getter private final PatchType patchType;
+	private final String key;
+
+	FarmRunPatch(String location, String name, PatchType patchType)
+	{
+		this.location = location;
+		this.name = name;
+		this.patchType = patchType;
+		this.key = location + "~" + patchType.name() + "~" + name;
+	}
+
 	FarmRunType getFarmRunType()
 	{
 		return FarmRunType.forPatchType(patchType);
@@ -14,7 +22,7 @@ final class FarmRunPatch
 
 	String key()
 	{
-		return location + "~" + patchType.name() + "~" + name;
+		return key;
 	}
 
 	String getDisplayName()

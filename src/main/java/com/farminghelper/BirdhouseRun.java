@@ -29,17 +29,19 @@ final class BirdhouseRun
         final String label;final int varp,object;final WorldPoint approach;
         Site(String label,int varp,int object,int x,int y){this.label=label;this.varp=varp;this.object=object;this.approach=new WorldPoint(x,y,0);}
     }
+    private static final List<Site> SITES = List.of(Site.values());
+
     static List<FarmRunPatch> patches()
     {
         List<FarmRunPatch> result=new ArrayList<>();
-        for(Site site:Site.values())result.add(new FarmRunPatch("Fossil Island",site.label,PatchType.BIRDHOUSE));
+        for(Site site:SITES)result.add(new FarmRunPatch("Fossil Island",site.label,PatchType.BIRDHOUSE));
         return result;
     }
     static Site site(FarmRunPatch p)
-    {for(Site s:Site.values())if(s.label.equals(p.getName()))return s;return null;}
+    {for(Site s:SITES)if(s.label.equals(p.getName()))return s;return null;}
     static int order(FarmRunPatch p){Site s=site(p);return s==null?Integer.MAX_VALUE:s.ordinal();}
     static boolean isObject(int id)
-    {for(Site s:Site.values())if(s.object==id)return true;return false;}
+    {for(Site s:SITES)if(s.object==id)return true;return false;}
     static boolean seeded(int raw){return raw>0&&raw<=27&&raw%3==0;}
     static CropState decode(int raw,long timestamp,long now)
     {
@@ -76,6 +78,7 @@ final class BirdhouseRun
     static Map<FarmRunPatch,String> supplies(List<FarmRunPatch> ready,Map<FarmRunPatch,Observation> states,
         Map<Integer,Integer> stock,Map<Integer,Integer> required,int hunter,int crafting)
     {
+        if (ready.stream().noneMatch(p -> p.getPatchType() == PatchType.BIRDHOUSE)) return Map.of();
         Map<Integer,Integer> left=new HashMap<>(stock);
         required.forEach((id,n)->left.merge(id,-n,Integer::sum));
         Map<FarmRunPatch,String> result=new LinkedHashMap<>();

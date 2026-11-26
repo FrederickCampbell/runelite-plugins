@@ -3,32 +3,33 @@ package com.farminghelper;
 @lombok.RequiredArgsConstructor
 enum PatchType
 {
-	ALLOTMENT("Allotment", true),
-	FLOWER("Flower", true),
-	HERB("Herb", true),
-	HOPS("Hops", true),
-	BUSH("Bush", true),
-	TREE("Tree", false),
-	FRUIT_TREE("Fruit tree", false),
-	HARDWOOD_TREE("Hardwood tree", false),
-	CACTUS("Cactus", true),
-	MUSHROOM("Mushroom", true),
-	BELLADONNA("Belladonna", true),
-	CALQUAT("Calquat", false),
-	SPIRIT_TREE("Spirit tree", false),
-	SEAWEED("Seaweed", true),
-	GRAPEVINE("Grapevine", true),
-	CELASTRUS("Celastrus", false),
-	REDWOOD("Redwood", false),
-	HESPORI("Hespori", true),
-	ANIMA("Anima", true),
-	CRYSTAL_TREE("Crystal tree", false),
-	CORAL("Coral", true),
-	COMPOST_BIN("Compost", false),
-	BIRDHOUSE("Birdhouse", false);
+	ALLOTMENT("Allotment", true, FarmRunType.ALLOTMENT_FLOWER),
+	FLOWER("Flower", true, FarmRunType.ALLOTMENT_FLOWER),
+	HERB("Herb", true, FarmRunType.HERB),
+	HOPS("Hops", true, FarmRunType.HOPS),
+	BUSH("Bush", true, FarmRunType.BUSH),
+	TREE("Tree", false, FarmRunType.TREE),
+	FRUIT_TREE("Fruit tree", false, FarmRunType.FRUIT_TREE_CALQUAT),
+	HARDWOOD_TREE("Hardwood tree", false, FarmRunType.HARDWOOD_TREE),
+	CACTUS("Cactus", true, FarmRunType.CACTUS),
+	MUSHROOM("Mushroom", true, FarmRunType.SPECIALTY),
+	BELLADONNA("Belladonna", true, FarmRunType.SPECIALTY),
+	CALQUAT("Calquat", false, FarmRunType.FRUIT_TREE_CALQUAT),
+	SPIRIT_TREE("Spirit tree", false, FarmRunType.SPECIALTY),
+	SEAWEED("Seaweed", true, FarmRunType.SPECIALTY),
+	GRAPEVINE("Grapevine", true, FarmRunType.SPECIALTY),
+	CELASTRUS("Celastrus", false, FarmRunType.SPECIALTY),
+	REDWOOD("Redwood", false, FarmRunType.SPECIALTY),
+	HESPORI("Hespori", true, FarmRunType.SPECIALTY),
+	ANIMA("Anima", true, FarmRunType.SPECIALTY),
+	CRYSTAL_TREE("Crystal tree", false, FarmRunType.SPECIALTY),
+	CORAL("Coral", true, FarmRunType.SPECIALTY),
+	COMPOST_BIN("Compost", false, FarmRunType.COMPOST),
+	BIRDHOUSE("Birdhouse", false, FarmRunType.BIRDHOUSE);
 
 	@lombok.Getter private final String displayName;
 	private final boolean usesDibber;
+	@lombok.Getter private final FarmRunType runType;
 
 	boolean usesDibber()
 	{
