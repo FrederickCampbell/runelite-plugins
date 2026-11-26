@@ -28,7 +28,7 @@ final class SeedBoxStock
     void clear(){cached=Map.of();forget();}
     void forget(){observed=Map.of();complete=false;orderKnown=false;nativeTick=-1;nativeBaselineKnown=false;nativeAdditions=Map.of();cancel();checking=null;revision++;}
     void restore(String snapshot){clear();cached=Map.copyOf(StockSnapshot.decode(snapshot));}
-    int cachedTotal(){return (int)Math.min(Integer.MAX_VALUE,cached.values().stream().mapToLong(Integer::longValue).sum());}
+    int cachedTotal(){long total=0;for(int n:cached.values())total+=n;return (int)Math.min(Integer.MAX_VALUE,total);}
     String snapshot(){return StockSnapshot.encode(cached);}
     boolean known(){return complete||!observed.isEmpty();}
     boolean complete(){return complete;}
