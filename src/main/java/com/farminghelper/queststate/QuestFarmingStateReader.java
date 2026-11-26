@@ -3,7 +3,6 @@ package com.farminghelper.queststate;
 import com.farminghelper.LocationContext;
 
 import java.util.Collection;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
@@ -20,7 +19,6 @@ import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.plugins.timetracking.Tab;
 import net.runelite.client.plugins.timetracking.TimeTrackingConfig;
 import net.runelite.client.plugins.timetracking.farming.Produce;
 
@@ -274,8 +272,6 @@ public final class QuestFarmingStateReader
             default:return 0;
         }
     }
-    public boolean compostRecorded(String type,String location,String name,int minimum)
-    {return compostTier(type,location,name)>=minimum;}
 
     /** Existing Quest Helper registry supplies the actual gardener NPC ID. */
     public int gardenerId(String patchType, String location, String patchName)
