@@ -32,6 +32,28 @@ final class StepEngine
 
     private StepEngine() {}
 
+    static String label(Action action,PatchType type)
+    {
+        switch(action)
+        {
+            case INSPECT:return "Inspect";
+            case HARVEST:return "Harvest";
+            case CHECK_HEALTH:return "Check health";
+            case PAY_REMOVE:return "Pay to remove";
+            case CHOP_TREE:return "Chop";
+            case RAKE:return "Rake";
+            case DIG_STUMP:return "Dig stump";
+            case CLEAR_DEAD:case CLEAR_LIVING:return "Clear";
+            case NEED_REPLACEMENT:return "Bring seed / sapling";
+            case CURE:return CropCare.prunes(type)?"Prune":"Cure";
+            case PLANT:return "Plant";
+            case COMPOST:return "Compost";
+            case PROTECT_TREE:return "Protect";
+            case WATER:return "Water";
+            default:return "";
+        }
+    }
+
     static Action action(PatchType type,Observation observation,boolean preserve,boolean replacementCarried,
         boolean clearOnly,boolean payGardener)
     {
