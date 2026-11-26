@@ -627,8 +627,8 @@ public class FarmingHelperPlugin extends Plugin
         {
             var inventory=client.getItemContainer(InventoryID.INVENTORY);
             int slot=widget.getIndex();
-            if(inventory!=null&&slot>=0&&slot<inventory.getItems().length&&inventory.getItems()[slot]!=null)
-                id=inventory.getItems()[slot].getId();
+            Item item=inventory!=null&&slot>=0&&slot<inventory.size()?inventory.getItem(slot):null;
+            if(item!=null)id=item.getId();
         }
         return bag.getOrDefault(id,0)>0?id:-1;
     }
