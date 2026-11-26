@@ -9,12 +9,34 @@ final class SpecialRoutes
 {
     static final WorldPoint HESPORI_ENTRANCE=new WorldPoint(1230,3730,0); // approximate; resolve cave object locally
     static final WorldPoint SEAWEED_ISLAND=new WorldPoint(3764,3899,0);
+    static final WorldPoint SEAWEED_ROPE=new WorldPoint(3731,10282,1);
+    static final int SEAWEED_ROPE_ID=30948, SEAWEED_BANK_ID=30796, SEAWEED_BOAT_ID=30919;
+    static RouteLeg seaweedExit(boolean instance)
+    {
+        String text="Climb the anchor rope to resurface, or teleport away.";
+        return instance?RouteLeg.manual(text,SURFACE):RouteLeg.approach(SEAWEED_ROPE,text,SURFACE);
+    }
     static final WorldPoint CORAL_ENTRANCE=new WorldPoint(3271,2463,0);
     static final WorldPoint CORAL_EXIT_POINT=new WorldPoint(3288,8868,1);
     static final WorldPoint ANGLER_ROWBOAT=new WorldPoint(2543,2844,0);
     static final WorldPoint CORSAIR_MOORING=new WorldPoint(2579,2843,0);
     static final WorldPoint ANGLER_MOORING=new WorldPoint(2467,2721,0);
     static final int ANGLER_ROWBOAT_VARBIT=18355;
+    static boolean onSeaweedIsland(WorldPoint p)
+    {return p!=null&&p.getPlane()==0&&p.getRegionID()==14908&&p.distanceTo(SEAWEED_ISLAND)<=8;}
+    // Only called during the seaweed-to-birdhouse handoff. Null resumes normal routing.
+    static RouteLeg birdTransfer(WorldPoint player,boolean missing,boolean storageOpen,int level)
+    {
+        if(player==null)return RouteLeg.walk(null,false);
+        if(insideSeaweed(player))return seaweedExit(false);
+        if(storageOpen)return RouteLeg.manual(missing?"Collect the remaining birdhouse supplies.":"Close the bank to continue.",NONE);
+        if(onSeaweedIsland(player))
+            return missing?RouteLeg.manual("Collect the remaining birdhouse supplies from the bank chest.",BIRD_BANK):
+                RouteLeg.manual("Use the rowboat and choose Row to the camp.",BIRD_ROW);
+        if(!missing)return null;
+        Preparation.Bank bank=Preparation.choose(level,player,false,false);
+        return RouteLeg.approach(bank.point,"Travel to "+bank.name+" or another accessible bank for birdhouse supplies.",NONE);
+    }
     static boolean insideHespori(WorldPoint p){return p!=null && p.getRegionID()==5021;}
     static boolean insideSeaweed(WorldPoint p){return p!=null && p.getRegionID()==15008;}
     static boolean insideCoral(WorldPoint p){return p!=null && p.getRegionID()==13194;}
@@ -30,7 +52,7 @@ final class SpecialRoutes
         }
         if(insideSeaweed(player))
         {
-            if(!isType(patch,PatchType.SEAWEED))return RouteLeg.manual("Use the underwater exit to resurface at the bank island.",SURFACE);
+            if(!isType(patch,PatchType.SEAWEED))return seaweedExit(instance);
             return RouteLeg.walk(instance?null:liveApproach,true);
         }
         if(insideCoral(player))

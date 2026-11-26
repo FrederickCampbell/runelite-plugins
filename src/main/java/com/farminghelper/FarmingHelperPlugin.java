@@ -67,7 +67,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile RouteLeg diseaseLeg;
     private volatile Set<Integer> diseaseItems=Collections.emptySet();
     private GuideView normalView;
-    private boolean specialtyStaged,specialtyBirdPhase;
+    private boolean specialtyStaged,specialtyBirdPhase,seaweedBirdTransfer;
     private final Map<Integer,String> itemNamesCache=new HashMap<>();
     private Crop activeCrop;
     private volatile StepEngine.Action activeAction = StepEngine.Action.INSPECT;
@@ -141,7 +141,7 @@ public class FarmingHelperPlugin extends Plugin
         nav = NavigationButton.builder().tooltip("Farming Helper").icon(ImageUtil.loadImageResource(FarmingHelperPlugin.class, "sidebar.png"))
             .panel(panel).priority(8).build();
         toolbar.addNavigation(nav);
-        overlays.add(highlight);
+        overlays.add(highlight);overlays.add(highlight.dialogue());
         if (itemHighlight != null) overlays.add(itemHighlight);
         SwingUtilities.invokeLater(panel::home);
     }
@@ -153,7 +153,7 @@ public class FarmingHelperPlugin extends Plugin
         if(vaultViews!=null){SeedVaultViews view=vaultViews;vaultViews=null;thread.invokeLater(() -> {view.close();view.flushScrollbar();});}
         reset();
         toolbar.removeNavigation(nav);
-        overlays.remove(highlight);
+        overlays.remove(highlight);overlays.remove(highlight.dialogue());
         if (itemHighlight != null) overlays.remove(itemHighlight);
         patches.clear();
         highlight.clear();
@@ -226,7 +226,7 @@ public class FarmingHelperPlugin extends Plugin
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
-        specialtyStaged=false;specialtyBirdPhase=false;
+        specialtyStaged=false;specialtyBirdPhase=false;seaweedBirdTransfer=false;
         runProgress.reset();
         temporaryCare=null;temporaryPay=null;temporarySeedless=null;temporaryReplacement=Collections.emptyMap();hopping=false;runProfile=null;
         progress.reset();
@@ -832,6 +832,7 @@ public class FarmingHelperPlugin extends Plugin
         // A fresh pinned order is necessary because birdhouses were deliberately absent.
         if(loggedIn&&specialtyStaged&&!specialtyBirdPhase&&ready.isEmpty()&&run.contains(FarmRunType.BIRDHOUSE))
         {
+            seaweedBirdTransfer=patches.stream().anyMatch(p->p.getPatchType()==PatchType.SEAWEED&&runProgress.is(p,RunProgress.Status.COMPLETED));
             specialtyBirdPhase=true;current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
             phase=Preparation.Phase.ACTIVE;visitedStorage=false;pinned=null;
             update();return;
@@ -903,7 +904,10 @@ public class FarmingHelperPlugin extends Plugin
         }
         Map<Integer,Integer> farmingRequirements=new LinkedHashMap<>(required);
         Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?supplies.bankAndBag:stock;
-        Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
+        int hunter=client.getRealSkillLevel(Skill.HUNTER),crafting=client.getRealSkillLevel(Skill.CRAFTING);
+        if(specialtyStaged&&specialtyBirdPhase)
+            birdStock=BirdhouseRun.preferCarried(ready,observations,bag,birdStock,required,hunter,crafting);
+        Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(ready,observations,birdStock,required,hunter,crafting);
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
         Map<Integer,Integer> physicalRequired=TreePreparation.physicalRequirements(required,pendingSaplings);
@@ -998,7 +1002,7 @@ public class FarmingHelperPlugin extends Plugin
         String storageWarning=loggedIn?GuidePresentation.storageWarning(bankStale,level>=45&&!birdBankPhase()&&vaultStale):"";
         String prepHelp=GuidePresentation.PREPARATION_HELP;
         if(specialtyStaged&&!specialtyBirdPhase&&run.contains(FarmRunType.BIRDHOUSE))
-            details.add("Birdhouses are last. Use Resupply if needed.");
+            details.add("Birdhouses are last. Resupply after seaweed if needed.");
         if(specialtyStaged&&specialtyBirdPhase&&current!=null)
             details.add("Birdhouse supplies: logs or houses, hammer, chisel, bait and clockworks.");
         if(loggedIn && current!=null)
@@ -1050,6 +1054,14 @@ public class FarmingHelperPlugin extends Plugin
                 if(routeToStorage&&(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
                     &&!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
             }
+        }
+        if(loggedIn&&!preparing()&&seaweedBirdTransfer&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE))
+        {
+            boolean missing=Preparation.missing(physicalRequired,bag);
+            RouteLeg transfer=SpecialRoutes.insideSeaweed(player)?SpecialRoutes.seaweedExit(instance):
+                aboard||instance&&!location.inHouse()?leg:SpecialRoutes.birdTransfer(player,missing,storageOpen(),level);
+            if(transfer!=null)leg=transfer;
+            else seaweedBirdTransfer=false;
         }
         if(!preparing()&&current!=null&&current.getPatchType()==PatchType.CORAL)
             instruction="Wear the Medallion of the deep OR fishbowl helmet and diving apparatus before entering.\n"+instruction;

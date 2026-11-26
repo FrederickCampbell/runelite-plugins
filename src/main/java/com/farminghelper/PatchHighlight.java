@@ -11,6 +11,9 @@ import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.ui.overlay.OverlayLayer;
+import net.runelite.api.widgets.Widget;
+import net.runelite.client.util.Text;
 import net.runelite.client.ui.overlay.OverlayUtil;
 
 /** Quest Helper object targets and Advisor-style grouping, with region + varbit identity.
@@ -23,14 +26,43 @@ final class PatchHighlight extends Overlay
     private final Map<FarmRunPatch,List<GameObject>> resolved=new HashMap<>();
     private int resolvedTick=-1,resolvedPlane=-1;
     private WorldView resolvedView;
+    // Keep scene outlines below the interface; only dialogue needs a widget-layer overlay.
+    private final Overlay dialogue=new Overlay()
+    {
+        @Override public Dimension render(Graphics2D graphics)
+        {
+            RouteLeg leg=plugin.get().activeLeg();
+            if(leg!=null&&leg.interaction==RouteLeg.Interaction.BIRD_ROW)
+            {
+                Widget choice=rowChoice();
+                if(choice!=null)draw(graphics,choice.getBounds());
+            }
+            return null;
+        }
+    };
     @Inject PatchHighlight(Client client,Provider<FarmingHelperPlugin> plugin)
-    {this.client=client;this.plugin=plugin;setPosition(OverlayPosition.DYNAMIC);}
+    {
+        this.client=client;this.plugin=plugin;setPosition(OverlayPosition.DYNAMIC);
+        dialogue.setPosition(OverlayPosition.DYNAMIC);dialogue.setLayer(OverlayLayer.ABOVE_WIDGETS);
+    }
+    Overlay dialogue(){return dialogue;}
+    static boolean matchesRowChoice(String text)
+    {return text!=null&&"Row to the camp.".equals(Text.removeTags(text).replaceFirst("^\\[\\d+\\]\\s*","").trim());}
+    private Widget rowChoice()
+    {
+        Widget options=client.getWidget(219,1);
+        if(options==null||options.isHidden())return null;
+        for(Widget[] group:new Widget[][]{options.getChildren(),options.getNestedChildren()})
+            if(group!=null)for(Widget choice:group)
+                if(choice!=null&&!choice.isHidden()&&matchesRowChoice(choice.getText()))return choice;
+        return null;
+    }
     Iterable<GameObject> objects(){return objects;}
     void spawned(GameObject object)
     {
         if(object==null)return;
         ObjectComposition c=client.getObjectDefinition(object.getId());
-        if(BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || verificationObject(c))
+        if(object.getId()==SpecialRoutes.SEAWEED_BANK_ID || object.getId()==SpecialRoutes.SEAWEED_BOAT_ID || object.getId()==SpecialRoutes.SEAWEED_ROPE_ID || BirdhouseRun.isObject(object.getId()) || PatchObjects.known(object.getId()) || QuestTargets.known(object.getId()) || isTransition(c) || isVine(c) || verificationObject(c))
         {if(objects.add(object))resolved.clear();return;}
         if(c!=null && c.getImpostorIds()!=null)
             for(int id:c.getImpostorIds()) if(PatchObjects.known(id) || QuestTargets.known(id) || verificationObject(client.getObjectDefinition(id))){if(objects.add(object))resolved.clear();return;}
@@ -166,8 +198,10 @@ final class PatchHighlight extends Overlay
         {
             case HESPORI_ENTER:return n.contains("cave entrance");
             case HESPORI_EXIT:return n.contains("cave exit") || n.contains("cave entrance") && hasAction(c,"Exit");
+            case BIRD_BANK:return id==SpecialRoutes.SEAWEED_BANK_ID;
+            case BIRD_ROW:return id==SpecialRoutes.SEAWEED_BOAT_ID;
             case DIVE:return id==30919 || n.contains("rowboat") && hasAction(c,"Dive");
-            case SURFACE:return hasAction(c,"Surface") || hasAction(c,"Climb-up") && n.contains("rope");
+            case SURFACE:return id==SpecialRoutes.SEAWEED_ROPE_ID;
             case CORAL_ENTER:return id==57904 || c!=null && c.getId()==57904;
             case CORAL_EXIT:return id==57903 || c!=null && c.getId()==57903;
             case BOARD:return n.contains("gangplank") && (hasAction(c,"Board") || hasAction(c,"Cross"));
@@ -198,6 +232,7 @@ final class PatchHighlight extends Overlay
         RouteLeg leg=helper.activeLeg();
         if(leg!=null && leg.interaction!=RouteLeg.Interaction.NONE)
         {
+            if(leg.interaction==RouteLeg.Interaction.BIRD_ROW&&rowChoice()!=null)return null;
             GameObject selected=null;int distance=Integer.MAX_VALUE;
             WorldPoint anchor=leg.point==null?client.getLocalPlayer().getWorldLocation():leg.point;
             for(GameObject o:objects)if(sameView(o) && transitionMatches(leg.interaction,o))
