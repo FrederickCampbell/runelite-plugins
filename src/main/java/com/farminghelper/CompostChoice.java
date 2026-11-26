@@ -1,5 +1,6 @@
 package com.farminghelper;
 
+import java.util.Map;
 import net.runelite.api.gameval.ItemID;
 
 /** Explicit compost preference; a filled bottomless bucket's contents cannot
@@ -21,6 +22,42 @@ enum CompostChoice
     {
         try { return valueOf(value); }
         catch (IllegalArgumentException | NullPointerException e) { return oldEnabled ? BOTTOMLESS : NONE; }
+    }
+    // Shared Tool leprechaun storage, read by the game's farming-tools exchange.
+    static final int LEPRECHAUN_ULTRACOMPOST=5732;
+    // Keep explicit regular/super/none settings. Ultra and bottomless share
+    // the same supply alternatives; the item ID cannot prove bucket contents.
+    int plan(Map<Integer,Integer> bag,Map<Integer,Integer> stock,int storedUltra)
+    {
+        if(this!=ULTRA&&this!=BOTTOMLESS)return item;
+        int bucket=BOTTOMLESS.item;
+        if(bag.getOrDefault(bucket,0)>0)return bucket;
+        if(storedUltra>0||bag.getOrDefault(ULTRA.item,0)>0)return ULTRA.item;
+        return stock.getOrDefault(bucket,0)>0?bucket:ULTRA.item;
+    }
+    static void addRequired(Map<Integer,Integer> required,int item,int count,int storedUltra,
+        Map<Integer,Integer> stock,Map<Integer,Integer> bag)
+    {
+        if(item!=ULTRA.item){Supplies.addCompost(required,item,count);return;}
+        int deficit=Math.max(0,count-Math.max(0,storedUltra));
+        // A known filled bucket in storage is an alternative to collecting
+        // additional loose compost; no extra bucket if carried loose covers it.
+        if(deficit>bag.getOrDefault(ULTRA.item,0)&&stock.getOrDefault(BOTTOMLESS.item,0)>0)
+            Supplies.addCompost(required,BOTTOMLESS.item,1);
+        else Supplies.addCompost(required,item,deficit);
+    }
+    static int localItem(int planned,Map<Integer,Integer> bag,int storedUltra)
+    {
+        if(planned!=ULTRA.item&&planned!=BOTTOMLESS.item)return planned;
+        if(bag.getOrDefault(BOTTOMLESS.item,0)>0)return BOTTOMLESS.item;
+        if(bag.getOrDefault(ULTRA.item,0)>0||storedUltra>0)return ULTRA.item;
+        return planned;
+    }
+    static boolean withdrawUltra(int item,Map<Integer,Integer> bag,int storedUltra)
+    {
+        return item==ItemID.BUCKET_ULTRACOMPOST&&storedUltra>0&&
+            bag.getOrDefault(ItemID.BUCKET_ULTRACOMPOST,0)==0&&
+            bag.getOrDefault(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED,0)==0;
     }
     static boolean isOrdinary(int id)
     {

@@ -47,7 +47,7 @@ final class RunOrder
     // Shared route selection: preset identity never changes the itinerary.
     // Physical site identities are retained; only known same-visit blocks are merged.
     private static final List<String> MIXED=List.of("Farming Guild","Gnome Stronghold","Tree Gnome Village",
-        "Lumbridge Castle","Varrock","Champions' Guild","Al Kharid","Draynor Manor","South Falador",
+        "Lumbridge Castle","Varrock","Champions' Guild","Al Kharid","South Falador","Draynor Manor",
         "Falador Park","Taverley","Rimmington","Port Sarim","North Ardougne","Ardougne Monastery",
         "Yanille","Seers' Village","Catherby","Brimhaven","Tai Bwo Wannai","Canifis mushroom","Morytania",
         "Harmony Island","Lletya","Prifddinas","Troll Stronghold","Weiss","Etceteria","Hosidius",
@@ -81,7 +81,11 @@ final class RunOrder
             // Off-island use the documented stable south-to-north catalogue direction.
             WorldPoint south=BirdhouseRun.Site.MEADOW_SOUTH.approach,north=BirdhouseRun.Site.VALLEY_NORTH.approach;
             boolean reverse=start!=null&&proxy(start,north)<100&&proxy(start,north)<proxy(start,south);
-            ps.sort(Comparator.comparingInt(RunOrder::localOrder)
+            // Mixed Catherby visits finish the selected farm plots before the fruit tree.
+            boolean catherbyMixed="Catherby".equals(site)&&ps.stream().anyMatch(p->p.getPatchType()==PatchType.FRUIT_TREE);
+            ps.sort(Comparator.comparingInt((FarmRunPatch p)->catherbyMixed?
+                    p.getPatchType()==PatchType.HERB?-2:
+                    p.getPatchType()==PatchType.ALLOTMENT||p.getPatchType()==PatchType.FLOWER||p.getPatchType()==PatchType.COMPOST_BIN?-1:localOrder(p):localOrder(p))
                 .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?(reverse?-BirdhouseRun.order(p):BirdhouseRun.order(p)):0));
             ordered.add(new Group(site,ps));
         });
@@ -113,9 +117,21 @@ final class RunOrder
                 {ordered.remove(i);ordered.add(first,g);break;}
             }
         }
+        // Preserve explicit selected pairs even when initial proximity or saplings promote a site.
+        pair(ordered,"South Falador","Draynor Manor");
+        pair(ordered,"Falador Park","Taverley");
         // Entrana comes before Fossil Island, both after ordinary surface work.
         ordered.sort(Comparator.comparingInt(g->terminalOrder(g.site)));
         return ordered;
+    }
+    private static void pair(List<Group> ordered,String first,String second)
+    {
+        Group a=ordered.stream().filter(g->first.equals(g.site)).findFirst().orElse(null);
+        Group b=ordered.stream().filter(g->second.equals(g.site)).findFirst().orElse(null);
+        if(a==null||b==null)return;
+        int at=Math.min(ordered.indexOf(a),ordered.indexOf(b));
+        ordered.remove(a);ordered.remove(b);
+        ordered.add(at,a);ordered.add(at+1,b);
     }
     private static boolean terminal(Group g){return "Entrana".equals(g.site)||"Fossil Island".equals(g.site);}
     /** Keep the established order. Insert newly ready mainland work before the terminal islands. */
