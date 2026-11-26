@@ -15,7 +15,7 @@ public class FarmRunTypeTest
 		EnumSet<PatchType> categorized = EnumSet.noneOf(PatchType.class);
 		for (PatchType patchType : PatchType.values())
 		{
-			FarmRunType.forPatchType(patchType);
+			patchType.getRunType();
 			categorized.add(patchType);
 		}
 		assertEquals(EnumSet.allOf(PatchType.class), categorized);
@@ -24,12 +24,12 @@ public class FarmRunTypeTest
 	@Test
 	public void usesExpectedFarmRunCategories()
 	{
-		assertEquals(FarmRunType.ALLOTMENT_FLOWER, FarmRunType.forPatchType(PatchType.ALLOTMENT));
-		assertEquals(FarmRunType.ALLOTMENT_FLOWER, FarmRunType.forPatchType(PatchType.FLOWER));
-		assertEquals(FarmRunType.HERB, FarmRunType.forPatchType(PatchType.HERB));
-		assertEquals(FarmRunType.FRUIT_TREE_CALQUAT, FarmRunType.forPatchType(PatchType.CALQUAT));
-		assertEquals(FarmRunType.SPECIALTY, FarmRunType.forPatchType(PatchType.SEAWEED));
-		assertEquals(FarmRunType.SPECIALTY, FarmRunType.forPatchType(PatchType.ANIMA));
+		assertEquals(FarmRunType.ALLOTMENT_FLOWER, PatchType.ALLOTMENT.getRunType());
+		assertEquals(FarmRunType.ALLOTMENT_FLOWER, PatchType.FLOWER.getRunType());
+		assertEquals(FarmRunType.HERB, PatchType.HERB.getRunType());
+		assertEquals(FarmRunType.FRUIT_TREE_CALQUAT, PatchType.CALQUAT.getRunType());
+		assertEquals(FarmRunType.SPECIALTY, PatchType.SEAWEED.getRunType());
+		assertEquals(FarmRunType.SPECIALTY, PatchType.ANIMA.getRunType());
 	}
 
 	@Test
