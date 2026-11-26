@@ -769,16 +769,6 @@ public class FarmingHelperPlugin extends Plugin
         }
         Set<Integer> tagged = new HashSet<>(CuratedBank.shelf(broad,shelfCandidates,this::observedItemName,client,config,
             bird,!bird&&runHasTrees,diving,teleports(shelfCandidates).keySet()));
-        // A native placeholder can survive a change to the stock-based crop recommendation.
-        if (!bird && !bankPlaceholders.isEmpty())
-        {
-            List<PatchType> types = selectedRunTypes();
-            for (int id : bankPlaceholders)
-            {
-                Crop crop = VaultRanking.resolve(id,observedItemName(id));
-                if (crop != null && types.contains(crop.getPatchType())) tagged.add(id);
-            }
-        }
         shelfItems = Set.copyOf(tagged);
         shelfInputs=inputs;
         return shelfItems;
@@ -1186,9 +1176,8 @@ public class FarmingHelperPlugin extends Plugin
             for(FarmRunPatch p:plant)if(p.getPatchType().isTree()&&p.getPatchType()!=PatchType.SPIRIT_TREE&&
                 CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->c.getLevel()<=level&&bag.getOrDefault(c.getItemId(),0)>=c.getQuantity()))
                 carriedSaplings.add(p.getPatchType());
-            int usedSlots=estimatedOccupied;
             // Shortest Path navigates the active leg; the shared planner alone orders patches.
-            pinned=new RunOrder(RunOrder.shared(ready,start,guildFirst,usedSlots>=25?carriedSaplings:Collections.emptySet()));
+            pinned=new RunOrder(RunOrder.shared(ready,start,guildFirst,estimatedOccupied>=25?carriedSaplings:Collections.emptySet()));
         }
         if (pinned != null) pinned.order(ready, plant, visible);
         // A selected, local dry crop can be watered without a new planting allocation.
