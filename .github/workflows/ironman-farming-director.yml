@@ -81,10 +81,10 @@ jobs:
             java -Xms256m -Xmx256m -cp "$out:$cp" com.farminghelper.RefactorProbe | tee "$RUNNER_TEMP/$revision.txt"
             xvfb-run -a java -cp "$fixtures:$out:$cp" com.farminghelper.RefactorProbe preview
           done
+          java -cp "$out:$cp" com.farminghelper.RefactorProbe pixels "$baseline"
           python3 - <<'PY'
           import os
           from pathlib import Path
-          from PIL import Image, ImageChops
           temp = Path(os.environ['RUNNER_TEMP'])
           def read(name):
               rows = [s.split() for s in (temp / (name + '.txt')).read_text().splitlines() if s.startswith('PROBE ')]
@@ -94,13 +94,4 @@ jobs:
           for op, (result, size) in base.items():
               assert result == tip[op][0], op
               print(f'{op}: result={result}, bytes/op={size} -> {tip[op][1]}')
-          originals = sorted((temp / 'farming-baseline/build/reports').glob('farming-helper-*.png'))
-          assert len(originals) == 3
-          for original in originals:
-              a = Image.open(original).convert('RGB')
-              b = Image.open(Path('build/reports') / original.name).convert('RGB')
-              assert a.size == b.size
-              difference = ImageChops.difference(a, b).getbbox()
-              print(f'{original.name}: {a.size}, changed bounds={difference}')
-              assert difference is None
           PY

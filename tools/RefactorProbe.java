@@ -18,6 +18,21 @@ public final class RefactorProbe
 
     public static void main(String[] args) throws Exception
     {
+        if (args.length == 2 && "pixels".equals(args[0]))
+        {
+            for (String name : List.of("farming-helper-preview.png", "farming-helper-home-preview.png", "farming-helper-preparation.png"))
+            {
+                var a = javax.imageio.ImageIO.read(new java.io.File(args[1] + "/build/reports", name));
+                var b = javax.imageio.ImageIO.read(new java.io.File("build/reports", name));
+                if (a.getWidth()!=b.getWidth() || a.getHeight()!=b.getHeight()) throw new AssertionError(name);
+                int changed = 0;
+                for (int y=0; y<a.getHeight(); y++) for (int x=0; x<a.getWidth(); x++)
+                    if (a.getRGB(x,y)!=b.getRGB(x,y)) changed++;
+                System.out.printf("%s: %dx%d, changed pixels=%d%n",name,a.getWidth(),a.getHeight(),changed);
+                if (changed != 0) throw new AssertionError(name);
+            }
+            return;
+        }
         if (args.length > 0 && "preview".equals(args[0]))
         {
             FarmingHelperPreviewTest preview = new FarmingHelperPreviewTest();
