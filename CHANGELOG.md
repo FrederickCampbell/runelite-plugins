@@ -2,6 +2,8 @@
 
 ## v1.06
 
+- Seed-box reliability: confirm closed-box transfers from player actions and loose-inventory/storage deltas, reconcile native contents and explicit game messages, track verified planting consumption, and keep character-local historical quantities without treating stale counts as current stock. Existing cyan inventory guidance remains shared.
+
 - Add the default-on **Prefer contracts** checkbox under Crop priorities. Reserve one available active contract crop for an eligible selected Guild patch before manual and automatic preferences; fall back normally when unavailable. Keep existing living-contract protection independent.
 
 - Require explicit display-test opt-in for the OS-dependent Swing keyboard focus regression; CI continues to run it on an isolated virtual display. Normal installer builds retain all other tests.
