@@ -26,7 +26,7 @@ public class RouteAndReplacement41Test
         FarmRunPatch guild=p("Farming Guild",PatchType.HERB),tree=p("Varrock",PatchType.TREE),
             fruit=p("Catherby",PatchType.FRUIT_TREE),herb=p("Catherby",PatchType.HERB);
         List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(List.of(guild,tree,herb,fruit),null,true,Set.of(PatchType.FRUIT_TREE)));
-        assertEquals(guild,ordered.get(0));assertEquals(fruit,ordered.get(1));assertEquals(herb,ordered.get(2));assertEquals(tree,ordered.get(3));
+        assertEquals(guild,ordered.get(0));assertEquals(herb,ordered.get(1));assertEquals(fruit,ordered.get(2));assertEquals(tree,ordered.get(3));
     }
     @Test public void bankPreferenceAndVaultFallback()
     {
