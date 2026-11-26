@@ -3,7 +3,7 @@
 ## v1.09 — local farming workflow
 
 - Prefer verified nearby selected plots over remote work before a patch is underway, without changing seed allocation or the pinned itinerary.
-- Combine distinct tool withdrawals for verified plots sharing a nearby tool leprechaun, reserving two free inventory slots for optional collection.
+- Combine distinct tool withdrawals and ordinary compost quantities for verified plots sharing a nearby tool leprechaun, reserving two free inventory slots for optional collection. Continue the collection while the native exchange remains open.
 - Suggest noting recognized farm produce when inventory is nearly full, preserving required supplies and local compost-bin materials.
 - Track verified local crop planting ahead of the active step using existing transition logic, preserving protection requirements and keeping partially completed patches active.
 - Highlight the leprechaun and safe inventory-relief item, including surplus empty buckets within verified native storage capacity.

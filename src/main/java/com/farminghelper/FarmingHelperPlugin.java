@@ -1390,8 +1390,9 @@ public class FarmingHelperPlugin extends Plugin
                 int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
                 if(free>0)leprechaunWithdrawal=LeprechaunWithdrawal.plan(magicSecateurs,false,1,free,"Magic secateurs");
             }
-            if(activeLive&&!preparing()&&leprechaunWithdrawal!=null)
-                leprechaunWithdrawal=localCollection(leprechaunWithdrawal,current,ready,seeds,observations,bag,carried,wateringCan,stepCompost);
+            if(activeLive&&!preparing()&&runLeprechaun&&highlight!=null&&
+                (leprechaunWithdrawal!=null||visibleWidget(InterfaceID.FarmingTools.UNIVERSE)))
+                leprechaunWithdrawal=localCollection(leprechaunWithdrawal,current,ready,seeds,observations,bag,carried,plantingBag,wateringCan,stepCompost);
             if(leprechaunWithdrawal!=null)
                 instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
             else if(action==StepEngine.Action.WATER&&wateringCan<=0)
@@ -1590,30 +1591,42 @@ public class FarmingHelperPlugin extends Plugin
 
     private LeprechaunWithdrawal localCollection(LeprechaunWithdrawal primary,FarmRunPatch patch,List<FarmRunPatch> ready,
         Map<FarmRunPatch,Crop> seeds,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
-        Map<Integer,Integer> bag,Map<Integer,Integer> carried,int wateringCan,int compost)
+        Map<Integer,Integer> bag,Map<Integer,Integer> carried,Map<Integer,Integer> plantingBag,int wateringCan,int compost)
     {
-        if(primary.quantity==0)return primary;
+        if(primary!=null&&primary.quantity==0)return primary;
         int free=Math.max(0,28-Preparation.slots(bag,Map.of(),this::stackable)-2);
-        if(free<=1)return primary;
+        if(free<=0||!highlight.hasLocalPatch(patch))return primary;
         var npc=highlight.leprechaun(patch);
         if(npc==null)return primary;
         boolean barbarian=client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3;
+        int compostDemand=0;
+        String site=RunOrder.site(patch);
         for(FarmRunPatch other:ready)
         {
-            if(!RunOrder.site(patch).equals(RunOrder.site(other))||!highlight.hasLocalPatch(other)||highlight.leprechaun(other)!=npc)continue;
+            if(!site.equals(RunOrder.site(other))||!highlight.hasLocalPatch(other)||highlight.leprechaun(other)!=npc)continue;
             var o=observations.get(other);
             if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE)continue;
             PatchType type=other.getPatchType();
             if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||type==PatchType.HESPORI)continue;
             Crop crop=seeds.get(other);
-            boolean replacement=crop!=null&&stock().plantingBag.getOrDefault(crop.getItemId(),0)>=crop.getQuantity();
+            boolean replacement=crop!=null&&plantingBag.getOrDefault(crop.getItemId(),0)>=crop.getQuantity();
             StepEngine.Action next=other==patch?activeAction:StepEngine.action(type,o,preserveReplacement(other,o),replacement,false,runPayRemoval&&type.isTree()&&gardener(other)>0);
             if(o.state==CropState.EMPTY&&reader.hasWeeds(type.name(),o.rawValue))next=StepEngine.Action.RAKE;
             primary=LeprechaunWithdrawal.append(primary,LeprechaunWithdrawal.resolve(client,next,type,compost,barbarian,bag,carried,wateringCan,free,this::observedItemName),free);
             if(replacement)
+            {
                 primary=LeprechaunWithdrawal.append(primary,LeprechaunWithdrawal.resolve(client,StepEngine.Action.PLANT,type,compost,barbarian,bag,carried,wateringCan,free,this::observedItemName),free);
+                if(CompostChoice.isOrdinary(compost)&&type.usesCompost()&&!(other==patch&&compostAcknowledged)&&
+                    (o.state==CropState.EMPTY||o.state==CropState.DEAD||o.state==CropState.STUMP||
+                     o.state==CropState.HARVESTABLE||o.state==CropState.UNCHECKED||CropReplacement.mature(type,o)))
+                {
+                    int tier=o.state==CropState.EMPTY?highlight.liveCompostTier(other):-1;
+                    if(tier<CompostChoice.minimumTier(compost))compostDemand++;
+                }
+            }
         }
-        return primary;
+        return CompostChoice.isOrdinary(compost)?LeprechaunWithdrawal.withCompost(primary,compost,
+            Math.max(0,compostDemand-bag.getOrDefault(compost,0)),LeprechaunWithdrawal.stored(client,compost),free,observedItemName(compost)):primary;
     }
 
     private int localDistance(FarmRunPatch patch,WorldPoint here,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations)

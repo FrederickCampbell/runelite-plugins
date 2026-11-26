@@ -74,6 +74,19 @@ public class LocalWorkflowTest
         var full=LeprechaunWithdrawal.plan(ItemID.RAKE,false,1,0,"Rake");
         assertSame(full,LeprechaunWithdrawal.append(full,spade,3));
     }
+    @Test public void compostCollectionRespectsTotalSlotsStorageAndExistingPlan()
+    {
+        int ultra=ItemID.BUCKET_ULTRACOMPOST;
+        var rake=LeprechaunWithdrawal.plan(ItemID.RAKE,false,1,4,"Rake");
+        var plan=LeprechaunWithdrawal.withCompost(rake,ultra,4,10,3,"Ultracompost");
+        assertEquals(2,plan.companion.quantity);
+        assertEquals("Remove 2 total",plan.companion.label());
+        assertTrue(plan.instruction().contains("2 × Ultracompost"));
+        assertSame(plan,LeprechaunWithdrawal.withCompost(plan,ultra,4,10,3,"Ultracompost"));
+        assertEquals(3,LeprechaunWithdrawal.withCompost(plan,ultra,4,10,4,"Ultracompost").companion.quantity);
+        assertEquals(1,LeprechaunWithdrawal.withCompost(null,ultra,4,1,5,"Ultracompost").quantity);
+        assertNull(LeprechaunWithdrawal.withCompost(null,ultra,4,10,0,"Ultracompost"));
+    }
     @Test public void onlyNoteKnownUnreservedProduceAndRespectFaladorCabbage()
     {
         int cabbage=ItemID.CABBAGE,melon=ItemID.WATERMELON;

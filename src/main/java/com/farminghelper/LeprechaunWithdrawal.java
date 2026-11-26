@@ -106,11 +106,33 @@ final class LeprechaunWithdrawal
      * A zero-quantity primary must first be resolved by the player. */
     static LeprechaunWithdrawal append(LeprechaunWithdrawal primary,LeprechaunWithdrawal extra,int free)
     {
-        if(extra==null||extra.quantity<=0||free<=0)return primary;
+        if(extra==null||extra.quantity<=0||free<extra.quantity)return primary;
         if(primary==null)return extra;
         if(primary.quantity<=0||primary.child==extra.child)return primary;
         LeprechaunWithdrawal tail=append(primary.companion,extra,free-primary.quantity);
         return tail==primary.companion?primary:new LeprechaunWithdrawal(primary.child,primary.quantity,primary.name,tail);
+    }
+    /** Upgrade an existing ordinary-compost withdrawal or add it to the
+     * collection. Quantities are manual total counts, not menu operations. */
+    static LeprechaunWithdrawal withCompost(LeprechaunWithdrawal primary,int item,int demand,int stock,int free,String name)
+    {
+        if(!CompostChoice.isOrdinary(item)||demand<=0||stock<=0||free<=0)return primary;
+        int child=child(item,false),used=0,already=0;
+        for(LeprechaunWithdrawal p=primary;p!=null;p=p.companion)
+        {
+            if(p.quantity==0)return primary;
+            used+=p.quantity;
+            if(p.child==child)already=p.quantity;
+        }
+        int quantity=Math.min(Math.min(demand,stock),Math.max(0,free-used+already));
+        if(quantity<=already)return primary;
+        if(already==0)return append(primary,new LeprechaunWithdrawal(child,quantity,name,null),free);
+        return replaceQuantity(primary,child,quantity);
+    }
+    private static LeprechaunWithdrawal replaceQuantity(LeprechaunWithdrawal p,int child,int quantity)
+    {
+        if(p.child==child)return new LeprechaunWithdrawal(p.child,quantity,p.name,p.companion);
+        return new LeprechaunWithdrawal(p.child,p.quantity,p.name,replaceQuantity(p.companion,child,quantity));
     }
     static LeprechaunWithdrawal plan(int item,boolean water,int stored,int free,String name)
     {
@@ -121,15 +143,16 @@ final class LeprechaunWithdrawal
     String label()
     {
         if(quantity==0)return "Free a slot";
+        if(quantity>1)return "Remove "+quantity+" total";
         return child==componentToId(FarmingTools.WATERINGCAN)||child==componentToId(FarmingTools.BOTTOMLESS_BUCKET)?"Remove 1":"Remove-1";
     }
     String instruction()
     {
         if(quantity==0)return "Make one free inventory slot and withdraw "+name+" from the tool leprechaun";
-        if(companion==null||companion.companion==null)
+        if(quantity==1&&(companion==null||companion.quantity==1&&companion.companion==null))
             return "Withdraw 1 × "+name+(companion==null?"":" and 1 × "+companion.name)+" from the tool leprechaun";
         StringJoiner items=new StringJoiner(", ");
-        for(LeprechaunWithdrawal p=this;p!=null;p=p.companion)items.add("1 × "+p.name);
+        for(LeprechaunWithdrawal p=this;p!=null;p=p.companion)items.add(p.quantity+" × "+p.name);
         return "Withdraw "+items+" from the tool leprechaun";
     }
 }
