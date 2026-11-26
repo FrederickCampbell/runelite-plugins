@@ -55,16 +55,19 @@ final class TreePreparation
     static Map<Integer,Integer> preparation(Map<FarmRunPatch,Crop> allocated,Map<Integer,Integer> stock,
         Map<Integer,Integer> aliases,Map<Integer,Integer> carried,IntFunction<String> name)
     {
+        if(aliases.isEmpty()||allocated.isEmpty())return Map.of();
         Map<Integer,Integer> need=new LinkedHashMap<>(), result=new LinkedHashMap<>();
         for(Crop c:allocated.values())if(c.getName().endsWith(" sapling"))need.merge(c.getItemId(),c.getQuantity(),Integer::sum);
         for(var entry:need.entrySet())
         {
             int sapling=entry.getKey();
             int remaining=Math.max(0,entry.getValue()-carried.getOrDefault(sapling,0));
-            List<Integer> candidates=new ArrayList<>();
-            aliases.forEach((id,target)->{if(target==sapling)candidates.add(id);});
-            candidates.sort(Comparator.comparing((Integer id)->stage(id,sapling,name)).thenComparingInt(Integer::intValue));
-            for(int id:candidates)if(stage(id,sapling,name)!=Stage.SEED)
+            if(remaining==0)continue;
+            Map<Integer,Stage> candidateStages=new HashMap<>();
+            aliases.forEach((id,target)->{if(target==sapling)candidateStages.put(id,stage(id,sapling,name));});
+            List<Integer> candidates=new ArrayList<>(candidateStages.keySet());
+            candidates.sort(Comparator.<Integer,Stage>comparing(candidateStages::get).thenComparingInt(Integer::intValue));
+            for(int id:candidates)if(candidateStages.get(id)!=Stage.SEED)
             {
                 int n=Math.min(remaining,Math.min(stock.getOrDefault(id,0),carried.getOrDefault(id,0)));
                 if(n>0){result.put(id,n);remaining-=n;}
@@ -81,6 +84,7 @@ final class TreePreparation
 
     static Map<Integer,Integer> pending(Map<Integer,Integer> preparation,Map<Integer,Integer> aliases)
     {
+        if(preparation.isEmpty())return Map.of();
         Map<Integer,Integer> pending=new HashMap<>();
         preparation.forEach((id,n)->{Integer sapling=aliases.get(id);if(sapling!=null)pending.merge(sapling,n,Integer::sum);});
         return pending;
@@ -96,6 +100,7 @@ final class TreePreparation
 
     static Map<Stage,Integer> counts(Map<Integer,Integer> preparation,Map<Integer,Integer> aliases,IntFunction<String> name)
     {
+        if(preparation.isEmpty())return Map.of();
         Map<Stage,Integer> counts=new EnumMap<>(Stage.class);
         preparation.forEach((id,n)->counts.merge(stage(id,aliases.get(id),name),n,PhysicalStock::sum));
         return counts;
