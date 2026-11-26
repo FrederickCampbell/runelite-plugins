@@ -2,7 +2,7 @@ package com.farminghelper;
 
 import java.util.*;
 import net.runelite.api.gameval.ItemID;
-import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
 
 /** Inventory guidance is deliberately separate from the full run shopping list. */
 final class StepItems
@@ -32,11 +32,7 @@ final class StepItems
         return carried.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0 ? ItemID.FAIRY_ENCHANTED_SECATEURS : ItemID.SECATEURS;
     }
     /** Pick one matching slot, in inventory order, irrespective of render traversal. */
-    static boolean firstSlot(int id,int index,Item[] inventory)
-    {
-        if(inventory==null||index<0||index>=inventory.length||inventory[index]==null||inventory[index].getId()!=id)return false;
-        for(int i=0;i<index;i++)if(inventory[i]!=null&&inventory[i].getId()==id)return false;
-        return true;
-    }
+    static boolean firstSlot(int id,int index,ItemContainer inventory)
+    {return inventory!=null&&index>=0&&inventory.find(id)==index;}
     private StepItems(){}
 }
