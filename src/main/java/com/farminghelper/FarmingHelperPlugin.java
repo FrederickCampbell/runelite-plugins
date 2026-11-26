@@ -108,7 +108,7 @@ public class FarmingHelperPlugin extends Plugin
     private boolean visitedStorage;
     private WorldPoint preparationOrigin;
     private List<FarmRunPatch> pinned;
-    private volatile boolean fetchingLeprechaun;
+    private volatile LeprechaunWithdrawal leprechaunWithdrawal;
     private boolean shortestPathAvailable;
     private FarmingHelperPanel panel;
     private NavigationButton nav;
@@ -223,7 +223,7 @@ public class FarmingHelperPlugin extends Plugin
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;preparationOrigin=null;
-        pinned=null;fetchingLeprechaun=false;allocationInputs=List.of();allocated=Map.of();
+        pinned=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
@@ -396,7 +396,7 @@ public class FarmingHelperPlugin extends Plugin
         if(event.getGameState()==GameState.HOPPING&&guideRequested)
         {
             // Preserve same-character run decisions, but release scene-local routes/widgets.
-            hopping=true;fetchingLeprechaun=false;highlight.clear();if(navigation!=null)navigation.stop();
+            hopping=true;leprechaunWithdrawal=null;highlight.clear();if(navigation!=null)navigation.stop();
             if(runBank!=null)runBank.close();if(vaultViews!=null)vaultViews.close();
             activeLive=false;stepItems=Collections.emptySet();lastAccessLevel=-1;
         }
@@ -962,7 +962,7 @@ public class FarmingHelperPlugin extends Plugin
         GuideView.Stats summary=runProgress.stats();
         String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain.":"Run finished.";
         activeAction=StepEngine.Action.INSPECT;
-        activeLive=false;fetchingLeprechaun=false;
+        activeLive=false;leprechaunWithdrawal=null;
         Set<Integer> localStepItems=Collections.emptySet();
         if(current!=null)
         {
@@ -981,9 +981,10 @@ public class FarmingHelperPlugin extends Plugin
             if(fetch>0&&runLeprechaun&&activeLive&&!preparing()&&highlight!=null&&
                 highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
             {
-                fetchingLeprechaun=true;
-                instruction=(Preparation.slots(bag,Collections.emptyMap(),this::stackable)>=28?"Make one free inventory slot, then ":"")+
-                    "Withdraw "+observedItemName(fetch)+" from the tool leprechaun, then "+(action==StepEngine.Action.WATER?"water":"compost")+" the patch, or skip.";
+                int free=Math.max(0,28-Preparation.slots(bag,Collections.emptyMap(),this::stackable));
+                int stored=action==StepEngine.Action.WATER?1:CompostChoice.stored(client,fetch);
+                leprechaunWithdrawal=LeprechaunWithdrawal.plan(fetch,action==StepEngine.Action.WATER,compostCount,stored,free,observedItemName(fetch));
+                instruction=leprechaunWithdrawal.instruction()+", then "+(action==StepEngine.Action.WATER?"water":"compost")+" the patch, or skip.";
             }
             else if(action==StepEngine.Action.WATER&&wateringCan<=0)
                 instruction="Obtain a filled watering can, then water this patch, or skip.";
@@ -995,7 +996,7 @@ public class FarmingHelperPlugin extends Plugin
                 if(type==PatchType.COMPOST_BIN)localStepItems=CompostRun.stepItems(current,o,binPlans.get(current),bag);
                 else if(type==PatchType.BIRDHOUSE)localStepItems=BirdhouseRun.stepItems(current,o,birdStock,bag,farmingRequirements,client.getRealSkillLevel(Skill.HUNTER),client.getRealSkillLevel(Skill.CRAFTING));
                 else if(action==StepEngine.Action.WATER&&wateringCan>0)localStepItems=Set.of(wateringCan);
-                else if(!fetchingLeprechaun)localStepItems=StepItems.select(action,type,activeCrop,stepCompost,axeId,bag);
+                else if(leprechaunWithdrawal==null)localStepItems=StepItems.select(action,type,activeCrop,stepCompost,axeId,bag);
             }
             if(type==PatchType.BIRDHOUSE){activeAction=StepEngine.Action.INSPECT;instruction=current.getName()+": "+instruction;}
         }
@@ -1267,7 +1268,7 @@ public class FarmingHelperPlugin extends Plugin
     String override(FarmRunPatch p) { return setting("directorCrop_"+p.key(),""); }
     String accessNote(FarmRunPatch p) { return accessNotes.getOrDefault(p.key(),""); }
     StepEngine.Action activeAction() { return diseaseTarget!=null?StepEngine.Action.CURE:activeAction; }
-    boolean fetchingLeprechaun(){return guideRequested&&!preparing()&&diseaseTarget==null&&fetchingLeprechaun;}
+    LeprechaunWithdrawal leprechaunWithdrawal(){return guideRequested&&!preparing()&&diseaseTarget==null?leprechaunWithdrawal:null;}
     boolean activeLive() { return guideRequested && (diseaseTarget!=null||activeLive&&!preparing()); }
     int patchCount(FarmRunPatch p) { return QuestFarmingStateReader.patchNamesForType(p.getPatchType().name(),p.getLocation()).size(); }
     Set<Integer> requiredItems() { return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:requiredItems; }

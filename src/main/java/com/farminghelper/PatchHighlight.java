@@ -26,12 +26,25 @@ final class PatchHighlight extends Overlay
     private final Map<FarmRunPatch,List<GameObject>> resolved=new HashMap<>();
     private int resolvedTick=-1,resolvedPlane=-1;
     private WorldView resolvedView;
-    // Keep scene outlines below the interface; only dialogue needs a widget-layer overlay.
+    // Keep scene outlines below the interface; highlight native exchange and dialogue widgets above it.
     private final Overlay dialogue=new Overlay()
     {
         @Override public Dimension render(Graphics2D graphics)
         {
-            RouteLeg leg=plugin.get().activeLeg();
+            FarmingHelperPlugin helper=plugin.get();
+            LeprechaunWithdrawal withdrawal=helper.leprechaunWithdrawal();
+            if(withdrawal!=null)
+            {
+                Widget slot=exchangeSlot(withdrawal);
+                if(slot!=null)
+                {
+                    Rectangle bounds=slot.getBounds();
+                    draw(graphics,bounds,Color.RED);
+                    label(graphics,withdrawal.label(),bounds.x+bounds.width/2,bounds.y+bounds.height-4,Color.RED);
+                    return null;
+                }
+            }
+            RouteLeg leg=helper.activeLeg();
             if(leg!=null&&leg.interaction==RouteLeg.Interaction.BIRD_ROW)
             {
                 Widget choice=rowChoice();
@@ -46,6 +59,13 @@ final class PatchHighlight extends Overlay
         dialogue.setPosition(OverlayPosition.DYNAMIC);dialogue.setLayer(OverlayLayer.ABOVE_WIDGETS);
     }
     Overlay dialogue(){return dialogue;}
+    private Widget exchangeSlot(LeprechaunWithdrawal withdrawal)
+    {
+        Widget root=client.getWidget(125,0);
+        if(root==null||root.isHidden())return null;
+        Widget slot=client.getWidget(125,withdrawal.child);
+        return slot==null||slot.isHidden()?null:slot;
+    }
     static boolean matchesRowChoice(String text)
     {return text!=null&&"Row to the camp.".equals(Text.removeTags(text).replaceFirst("^\\[\\d+\\]\\s*","").trim());}
     private Widget rowChoice()
@@ -254,14 +274,15 @@ final class PatchHighlight extends Overlay
         }
         FarmRunPatch patch=helper.activePatch();if(patch==null)return null;
         StepEngine.Action action=helper.activeAction();
-        if(helper.fetchingLeprechaun())
+        LeprechaunWithdrawal withdrawal=helper.leprechaunWithdrawal();
+        if(withdrawal!=null&&exchangeSlot(withdrawal)==null)
         {
             NPC npc=leprechaun(patch);
             if(npc!=null)
             {
-                draw(graphics,npc.getConvexHull());
-                net.runelite.api.Point p=npc.getCanvasTextLocation(graphics,"▼",npc.getLogicalHeight()+30);
-                if(p!=null){graphics.setColor(Color.CYAN);graphics.drawString("▼",p.getX(),p.getY());}
+                draw(graphics,npc.getConvexHull(),Color.RED);
+                net.runelite.api.Point p=npc.getCanvasTextLocation(graphics," ",npc.getLogicalHeight()+20);
+                if(p!=null)arrow(graphics,p.getX(),p.getY());
             }
         }
         if(patch.getPatchType()==PatchType.HESPORI && action==StepEngine.Action.HARVEST)return null;
@@ -274,7 +295,14 @@ final class PatchHighlight extends Overlay
             return null;
         }
         List<GameObject> group=resolve(patch);
-        for(GameObject o:group)draw(graphics,o.getClickbox());
+        Rectangle patchBounds=null;
+        for(GameObject o:group)
+        {
+            Shape shape=o.getClickbox();draw(graphics,shape);
+            if(shape!=null&&action==StepEngine.Action.COMPOST&&helper.activeLive())
+                patchBounds=patchBounds==null?shape.getBounds():patchBounds.union(shape.getBounds());
+        }
+        if(patchBounds!=null)label(graphics,"Compost",patchBounds.x+patchBounds.width/2,patchBounds.y-6,Color.CYAN);
         if(group.isEmpty() && QuestTargets.get(patch)!=null)
         {
             WorldPoint point=QuestTargets.get(patch).point;LocalPoint local=LocalPoint.fromWorld(client,point);
@@ -297,10 +325,40 @@ final class PatchHighlight extends Overlay
         if(dx*dy<0 || dx+dy==0)return -1;
         return dx+dy>0?0:1;
     }
-    private static void draw(Graphics2D graphics,Shape shape)
+    private static void draw(Graphics2D graphics,Shape shape){draw(graphics,shape,Color.CYAN);}
+    private static void draw(Graphics2D graphics,Shape shape,Color color)
     {
         if(shape==null)return;
-        graphics.setColor(new Color(0,255,255,35));graphics.fill(shape);
-        graphics.setColor(Color.CYAN);graphics.draw(shape);
+        Graphics2D g=(Graphics2D)graphics.create();
+        try
+        {
+            g.setColor(new Color(color.getRed(),color.getGreen(),color.getBlue(),35));g.fill(shape);
+            g.setColor(color);if(Color.RED.equals(color))g.setStroke(new BasicStroke(2f));g.draw(shape);
+        }
+        finally{g.dispose();}
+    }
+    private static void arrow(Graphics2D graphics,int x,int y)
+    {
+        Graphics2D g=(Graphics2D)graphics.create();
+        try
+        {
+            Polygon arrow=new Polygon(new int[]{x-7,x+7,x+7,x+17,x,x-17,x-7},
+                new int[]{y-44,y-44,y-20,y-20,y,y-20,y-20},7);
+            g.setColor(Color.RED);g.fill(arrow);
+            g.setColor(Color.BLACK);g.setStroke(new BasicStroke(2f));g.draw(arrow);
+        }
+        finally{g.dispose();}
+    }
+    private static void label(Graphics2D graphics,String text,int center,int baseline,Color color)
+    {
+        Graphics2D g=(Graphics2D)graphics.create();
+        try
+        {
+            g.setFont(g.getFont().deriveFont(Font.BOLD,13f));
+            int x=center-g.getFontMetrics().stringWidth(text)/2;
+            g.setColor(Color.BLACK);g.drawString(text,x+1,baseline+1);
+            g.setColor(color);g.drawString(text,x,baseline);
+        }
+        finally{g.dispose();}
     }
 }

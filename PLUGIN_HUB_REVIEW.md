@@ -15,7 +15,7 @@ The player performs all game actions. The plugin reads farming observations, dis
 3. With Bank Tags remembering the last tab, switch between native tags and the farming shelf. Withdraw, equip, close, reopen, switch to birdhouses and disable the plugin. Inspect saved tags and layouts.
 4. Verify Kastori flowers next to fruit trees, numbered vine patches, both compost-bin sizes, protected contracts, a newly actionable remote patch and a disease interruption. Check same-character hopping and character switching on specialty travel legs.
 
-5. In an allotment, flower or hops run, verify carried, leprechaun-stored and bank-only watering cans and compost; check simultaneous patch and leprechaun highlights, optional watering skips, and temporary settings reset. Verify Start/Continue stays pinned above the scrollable guide.
+5. In an allotment, flower or hops run, verify carried, leprechaun-stored and bank-only watering cans and compost; check the large red arrow, red leprechaun outline, cyan Compost label, exchange slot and recommended quantity (including ordinary cans, Gricoller's can, full inventory, and partial storage), optional watering skips, and temporary settings reset. Verify Start/Continue stays pinned above the scrollable guide.
 6. In a mixed seaweed/birdhouse run, verify underwater exit, optional resupply, rowboat dialogue highlight and sufficient-carried-supply behavior.
 
 Automated build and regression tests passed for v1.05 (187 tests). Live acceptance remains a player-side check.
