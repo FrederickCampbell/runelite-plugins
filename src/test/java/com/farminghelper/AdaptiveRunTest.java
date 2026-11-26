@@ -3,6 +3,7 @@ package com.farminghelper;
 import java.util.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.client.events.PluginMessage;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -39,6 +40,27 @@ public class AdaptiveRunTest
         ready=new ArrayList<>(List.of(distant));
         RunOrder.promoteNearby(pinned,ready,new WorldPoint(3052,3309,0));
         assertEquals(List.of(distant),ready);
+    }
+
+    @Test public void shortestPathChoiceIsIndependentAndExpires()
+    {
+        List<PluginMessage> sent=new ArrayList<>();
+        NavigationBridge bridge=new NavigationBridge(sent::add);bridge.enabled(true);
+        WorldPoint from=new WorldPoint(3000,3300,0),a=new WorldPoint(3030,3330,0),b=new WorldPoint(3040,3340,0);
+        bridge.chooseNearby(from,List.of(a,b));
+        assertTrue(bridge.choosing());
+        PluginMessage query=sent.get(0);
+        assertEquals("query",query.getName());
+        assertEquals(List.of(a,b),query.getData().get("target"));
+        bridge.message(new PluginMessage("shortestpath","result",Map.of("id","stale","reached",true,"target",a)));
+        assertTrue(bridge.choosing());
+        bridge.message(new PluginMessage("shortestpath","result",Map.of("id",query.getData().get("id"),"reached",true,"target",b)));
+        assertFalse(bridge.choosing());
+        assertEquals(b,bridge.takeChoice());
+        assertEquals(1,sent.size());
+        bridge.chooseNearby(from,List.of(a,b));
+        for(int i=0;i<8;i++)bridge.tick(from);
+        assertFalse(bridge.choosing());assertNull(bridge.takeChoice());
     }
 
     @Test public void walkingDoesNotCountAsArrival()

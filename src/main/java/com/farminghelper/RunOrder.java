@@ -120,28 +120,39 @@ final class RunOrder
     /** Move only ready members of a nearby selected block. Keep the rest of the
      * itinerary stable and preserve the existing terminal-island ordering.
      * This is a bounded geographic preference, not a path cost estimate. */
-    static void promoteNearby(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,WorldPoint here)
+    static Map<WorldPoint,FarmRunPatch> nearbyTargets(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,WorldPoint here)
     {
-        if(here==null||ready.isEmpty())return;
+        Map<WorldPoint,FarmRunPatch> targets=new LinkedHashMap<>();
+        if(here==null||ready.isEmpty())return targets;
         Set<FarmRunPatch> allowed=new HashSet<>(ready);
         Map<String,List<FarmRunPatch>> groups=new LinkedHashMap<>();
         for(FarmRunPatch p:itinerary)
             if(allowed.contains(p)&&terminalOrder(site(p))==0)
                 groups.computeIfAbsent(block(site(p)),k->new ArrayList<>()).add(p);
-        List<FarmRunPatch> best=null;double distance=70;
+        List<FarmRunPatch> entries=new ArrayList<>();
         for(List<FarmRunPatch> group:groups.values())
         {
             group.sort(Comparator.comparingInt(RunOrder::localOrder));
-            WorldPoint entry=surface(group.get(0));
-            if(entry==null||entry.getPlane()!=here.getPlane())continue;
-            double d=proxy(here,entry);
-            if(d<distance){best=group;distance=d;}
+            FarmRunPatch p=group.get(0);WorldPoint entry=surface(p);
+            if(entry!=null&&entry.getPlane()==here.getPlane()&&proxy(here,entry)<70)entries.add(p);
         }
-        if(best!=null)
-        {
-            itinerary.removeAll(best);itinerary.addAll(0,best);
-            ready.removeAll(best);ready.addAll(0,best);
-        }
+        entries.sort(Comparator.comparingDouble(p->proxy(here,surface(p))));
+        for(FarmRunPatch p:entries)targets.putIfAbsent(surface(p),p);
+        return targets;
+    }
+    static void promoteNearby(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,WorldPoint here)
+    {
+        Map<WorldPoint,FarmRunPatch> targets=nearbyTargets(itinerary,ready,here);
+        if(!targets.isEmpty())promoteBlock(itinerary,ready,targets.values().iterator().next());
+    }
+    static void promoteBlock(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,FarmRunPatch entry)
+    {
+        if(entry==null||!ready.contains(entry)||terminalOrder(site(entry))!=0)return;
+        String selected=block(site(entry));List<FarmRunPatch> group=new ArrayList<>();
+        for(FarmRunPatch p:itinerary)if(ready.contains(p)&&selected.equals(block(site(p))))group.add(p);
+        group.sort(Comparator.comparingInt(RunOrder::localOrder));
+        itinerary.removeAll(group);itinerary.addAll(0,group);
+        ready.removeAll(group);ready.addAll(0,group);
     }
     static boolean arrival(WorldPoint before,WorldPoint after)
     {return before!=null&&after!=null&&before.distanceTo2D(after)>12;}

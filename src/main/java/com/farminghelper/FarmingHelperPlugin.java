@@ -107,7 +107,8 @@ public class FarmingHelperPlugin extends Plugin
     private boolean visitedStorage;
     private WorldPoint preparationOrigin;
     private List<FarmRunPatch> pinned;
-    private WorldPoint lastRunLocation;
+    private WorldPoint lastRunLocation,adaptiveOrigin;
+    private Map<WorldPoint,FarmRunPatch> adaptiveTargets=Map.of();
     private volatile boolean fetchingUltra;
     private boolean shortestPathAvailable;
     private FarmingHelperPanel panel;
@@ -223,7 +224,7 @@ public class FarmingHelperPlugin extends Plugin
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;preparationOrigin=null;
-        pinned=null;lastRunLocation=null;fetchingUltra=false;allocationInputs=List.of();allocated=Map.of();
+        pinned=null;lastRunLocation=null;clearAdaptiveChoice();fetchingUltra=false;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
@@ -379,7 +380,7 @@ public class FarmingHelperPlugin extends Plugin
         if(event.getGameState()==GameState.HOPPING&&guideRequested)
         {
             // Preserve same-character run decisions, but release scene-local routes/widgets.
-            hopping=true;lastRunLocation=null;fetchingUltra=false;highlight.clear();if(navigation!=null)navigation.stop();
+            hopping=true;lastRunLocation=null;clearAdaptiveChoice();fetchingUltra=false;highlight.clear();if(navigation!=null)navigation.stop();
             if(runBank!=null)runBank.close();if(vaultViews!=null)vaultViews.close();
             activeLive=false;stepItems=Collections.emptySet();lastAccessLevel=-1;
         }
@@ -673,7 +674,7 @@ public class FarmingHelperPlugin extends Plugin
         // Run this before normal planning, even during banking or birdhouses. No
         // mutations to the normal guide cursor, progress, or preparation state.
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations=new HashMap<>();
-        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations))return;
+        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations)){clearAdaptiveChoice();return;}
         Map<Integer,Integer> storage=supplies.storage,stock=supplies.stock;
         int wateringCan=CropCare.wateringCan(bag,this::observedItemName);
         boolean protect=runPolicy.protection, pay=runPayRemoval;
@@ -840,10 +841,32 @@ public class FarmingHelperPlugin extends Plugin
         }
         // Do not interrupt a live care detour, a planted crop awaiting care, or preparation.
         // Ready already excludes skipped, disabled, locked, growing and hidden seedless work.
-        if("manual".equals(runPolicyKey)&&loggedIn&&!preparing()&&!location.instance&&pinned!=null&&current!=null&&
-            careOnly.isEmpty()&&(arrived&&!progress.planted()||!ready.contains(current)))
+        boolean adapt="manual".equals(runPolicyKey)&&loggedIn&&!preparing()&&!location.instance&&pinned!=null&&
+            current!=null&&careOnly.isEmpty();
+        if(adapt&&(arrived&&!progress.planted()||!ready.contains(current)))
         {
+            clearAdaptiveChoice();
             RunOrder.promoteNearby(pinned,ready,location.actual);
+            // Never spend time comparing routes when a selected site's patch is already close.
+            // Else use one bounded multi-target Shortest Path query with no config overrides.
+            Map<WorldPoint,FarmRunPatch> targets=RunOrder.nearbyTargets(pinned,ready,location.actual);
+            if(shortestPathAvailable&&navigation!=null&&targets.size()>1&&
+                RunOrder.proxy(location.actual,targets.keySet().iterator().next())>12)
+            {
+                adaptiveOrigin=location.actual;adaptiveTargets=targets;
+                navigation.request(location.pathStart(),null,false);
+                navigation.chooseNearby(location.pathStart(),targets.keySet());
+            }
+        }
+        else if(adaptiveOrigin!=null)
+        {
+            if(!adapt||progress.planted()||location.actual==null||location.actual.distanceTo2D(adaptiveOrigin)>5)
+                clearAdaptiveChoice();
+            else if(!navigation.choosing())
+            {
+                RunOrder.promoteBlock(pinned,ready,adaptiveTargets.get(navigation.takeChoice()));
+                clearAdaptiveChoice();
+            }
         }
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current) { current=next;progress.reset();activeCrop=null;compostAcknowledged=false; if(current!=null) progress.observe(observations.get(current)); }
@@ -1065,7 +1088,8 @@ public class FarmingHelperPlugin extends Plugin
         WorldPoint actionPoint=localApproach!=null?localApproach:current==null?null:Waypoints.destination(current);
         boolean atAction=player!=null&&actionPoint!=null&&player.getPlane()==actionPoint.getPlane()&&player.distanceTo(actionPoint)<=5;
         stepItems=!preparing()&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&atAction?localStepItems:Collections.emptySet();
-        if(navigation!=null)navigation.request(loggedIn?location.pathStart():null,leg.point,leg.probe);
+        if(navigation!=null&&adaptiveOrigin==null)navigation.request(loggedIn?location.pathStart():null,leg.point,leg.probe);
+        if(adaptiveOrigin!=null)instruction="Checking nearby selected patches…\n"+instruction;
         if(location.inHouse()&&!shortestPathAvailable&&current!=null&&!preparing())
             instruction="Use an available house teleport toward the next patch, or leave your house.\n"+instruction;
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
@@ -1083,6 +1107,12 @@ public class FarmingHelperPlugin extends Plugin
             new GuideView.Notes(phase==Preparation.Phase.INITIAL,storageWarning,prepHelp,details.toString()));
         normalView=view;
         publishView(view);
+    }
+
+    private void clearAdaptiveChoice()
+    {
+        adaptiveOrigin=null;adaptiveTargets=Map.of();
+        if(navigation!=null)navigation.cancelChoice();
     }
 
     private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,

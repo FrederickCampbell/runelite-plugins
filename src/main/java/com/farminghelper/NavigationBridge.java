@@ -15,6 +15,9 @@ final class NavigationBridge
     private boolean enabled, owned, probe, refreshPending, modern;
     private int ticks, sequence;
     private String queryId, targetId, clearId, status="";
+    private String choiceId;
+    private int choiceTicks;
+    private WorldPoint chosenNearby;
     private Object clearTarget;
     private List<TransportHint> hints=Collections.emptyList();
     TransportHint nearbyTransport(WorldPoint player){return enabled&&owned?TransportHint.nearby(hints,player):null;}
@@ -25,6 +28,7 @@ final class NavigationBridge
     void stop(){reset(true);}
     private void reset(boolean clear)
     {
+        cancelChoice();
         if(clear)releaseDisplayed();
         else {clearId=null;clearTarget=null;}
         requested=null;displayed=null;start=null;owned=false;probe=false;refreshPending=false;
@@ -79,8 +83,21 @@ final class NavigationBridge
         }
         return Objects.equals(expected,actual);
     }
+    /** Independent, non-displaying query for a small shortlist of eligible sites. */
+    void chooseNearby(WorldPoint from,Collection<WorldPoint> targets)
+    {
+        cancelChoice();
+        if(!enabled||from==null||targets.size()<2)return;
+        choiceId="farming-helper-choice-"+(++sequence);
+        post("query",Map.of("id",choiceId,"start",from,"target",List.copyOf(targets)));
+    }
+    boolean choosing(){return choiceId!=null;}
+    WorldPoint takeChoice(){WorldPoint result=chosenNearby;chosenNearby=null;return result;}
+    void cancelChoice(){choiceId=null;choiceTicks=0;chosenNearby=null;}
     void tick(WorldPoint from)
     {
+        // Old versions and slow/cancelled searches never stall a farming run.
+        if(choiceId!=null&&++choiceTicks>=8)cancelChoice();
         if(!enabled || requested==null)return;
         if(from!=null)start=from;
         ticks++;
@@ -108,6 +125,13 @@ final class NavigationBridge
     {
         if(!enabled || !"shortestpath".equals(event.getNamespace()) || event.getData()==null)return;
         Map<String,Object> data=event.getData();Object id=data.get("id");
+        if("result".equals(event.getName())&&choiceId!=null&&choiceId.equals(id))
+        {
+            choiceId=null;modern=true;
+            if(Boolean.TRUE.equals(data.get("reached"))&&data.get("target") instanceof WorldPoint)
+                chosenNearby=(WorldPoint)data.get("target");
+            return;
+        }
         if("currentTarget".equals(event.getName())&&clearId!=null&&clearId.equals(id))
         {
             Object expected=clearTarget;clearId=null;clearTarget=null;
