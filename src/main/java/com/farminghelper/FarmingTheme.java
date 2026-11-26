@@ -74,17 +74,14 @@ final class FarmingTheme
         control.revalidate();control.repaint();
     }
 
-    private static void wrapText(JComponent c)
+    private static final ComponentAdapter RESIZE_TEXT = new ComponentAdapter()
     {
-        c.addComponentListener(new ComponentAdapter(){
-            @Override public void componentResized(ComponentEvent event){fitText(c);}
-        });
-        c.addPropertyChangeListener(event->{
-            String property=event.getPropertyName();
-            if("text".equals(property)||"icon".equals(property)||"font".equals(property))fitText(c);
-        });
-    }
-
+        @Override public void componentResized(ComponentEvent event){fitText((JComponent)event.getComponent());}
+    };
+    private static final java.beans.PropertyChangeListener UPDATE_TEXT = event -> {
+        String property=event.getPropertyName();
+        if ("text".equals(property)||"icon".equals(property)||"font".equals(property)) fitText((JComponent)event.getSource());
+    };
     static void apply(Component c)
     {
         if(c instanceof JComponent)
@@ -134,7 +131,11 @@ final class FarmingTheme
                         j.setFont(font(old!=null&&old.isBold()?Font.BOLD:Font.PLAIN,12));
                 }
                 if(j instanceof AbstractButton && j.getClientProperty("farming.icon")==null ||
-                    j instanceof JLabel && ((JLabel)j).getText()!=null && !((JLabel)j).getText().isEmpty())wrapText(j);
+                    j instanceof JLabel && ((JLabel)j).getText()!=null && !((JLabel)j).getText().isEmpty())
+                {
+                    j.addComponentListener(RESIZE_TEXT);
+                    j.addPropertyChangeListener(UPDATE_TEXT);
+                }
             }
         }
         // Do not style look-and-feel-owned children of composite controls (combo arrows, etc.).
