@@ -56,7 +56,10 @@ final class VaultRanking
             for(Crop crop:order)
             {
                 Map<Integer,Integer> quantities=stock.get(crop);
-                if(quantities==null||quantities.values().stream().mapToLong(Integer::longValue).sum()<crop.getQuantity())continue;
+                if(quantities==null)continue;
+                long countAvailable=0;
+                for(int quantity:quantities.values()){countAvailable+=quantity;if(countAvailable>=crop.getQuantity())break;}
+                if(countAvailable<crop.getQuantity())continue;
                 selected.addAll(quantities.keySet());
                 if(++count>=limit)break;
             }
