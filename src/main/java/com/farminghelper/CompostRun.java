@@ -153,16 +153,17 @@ final class CompostRun
             int id=e.getKey();if(!batchItem(id))return false;
             batches.put(id,e.getValue());return true;
         });
-        int free=Math.max(0,28-Preparation.loadedSlots(bag,required,equipped,box,stackable)
-            -Math.max(0,occupied-Preparation.slots(bag,Map.of(),stackable)));
+        int free=Math.max(0,28-Preparation.loadedSlots(Math.max(occupied,Preparation.slots(bag,Map.of(),stackable)),
+            bag,required,equipped,box,stackable));
         boolean selected=false;
         for(var e:batches.entrySet())
         {
             int id=e.getKey(),held=bag.getOrDefault(id,0),need=e.getValue();
-            int n=stackable.test(id)?(held>0||free>0?need:0):Math.min(need,held+free);
+            boolean stack=stackable.test(id);
+            int n=stack?(held>0||free>0?need:0):Math.min(need,held+free);
             if(n<=0)continue;
             required.put(id,n);selected=true;
-            free-=stackable.test(id)?(held>0?0:1):Math.max(0,n-held);
+            free-=stack?(held>0?0:1):Math.max(0,n-held);
         }
         if(!selected&&!batches.isEmpty())required.put(batches.keySet().iterator().next(),1);
     }
