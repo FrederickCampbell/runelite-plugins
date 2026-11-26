@@ -87,4 +87,18 @@ final class Preparation
         long n=0;for(var e:required.entrySet()) {int count=Math.max(0,e.getValue()-equipped.getOrDefault(e.getKey(),0));n+=count==0?0:stackable.test(e.getKey())?1:count;}
         return (int)Math.min(Integer.MAX_VALUE,n);
     }
+    /** Actual occupied inventory plus additional required loose items. Equipment and
+     * confirmed boxed seeds cover requirements without using additional slots. */
+    static int loadedSlots(Map<Integer,Integer> bag,Map<Integer,Integer> required,Map<Integer,Integer> equipped,
+        Map<Integer,Integer> box,java.util.function.IntPredicate stackable)
+    {
+        long count=slots(bag,Map.of(),stackable);
+        for(var e:required.entrySet())
+        {
+            int id=e.getKey(),held=bag.getOrDefault(id,0);
+            long missing=(long)e.getValue()-held-equipped.getOrDefault(id,0)-box.getOrDefault(id,0);
+            if(missing>0)count+=stackable.test(id)?(held>0?0:1):missing;
+        }
+        return (int)Math.min(Integer.MAX_VALUE,count);
+    }
 }
