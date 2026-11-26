@@ -74,6 +74,13 @@ public class SupplyPolishTest
             assertEquals(FarmingTheme.INPUT,combo.getBackground());
             for(KeepCrop crop:KeepCrop.values())assertNotNull(crop.label,crop.crop());
         });
-        assertEquals("Farming Helper · v1.06",FarmingHelperPanel.versionLabel());
+        Properties metadata=new Properties();
+        try(java.io.InputStream stream=FarmingHelperPanel.class.getResourceAsStream("runelite-plugin.properties"))
+        {
+            assertNotNull(stream);metadata.load(stream);
+        }
+        String version=metadata.getProperty("version");
+        assertNotNull(version);assertFalse(version.isBlank());
+        assertEquals("Farming Helper · v"+version,FarmingHelperPanel.versionLabel());
     }
 }
