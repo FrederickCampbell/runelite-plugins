@@ -44,7 +44,7 @@ final class GuideItemHighlight extends WidgetItemOverlay
         else if(group==InterfaceID.SEED_VAULT)
             color=helper.missingStorageItems().contains(id)?Color.CYAN:null;
         else if(group==InterfaceID.BANKMAIN)
-            color=helper.recommendedItems().contains(id)?FarmingTheme.WARNING:null;
+            color=helper.missingStorageItems().contains(id)?Color.CYAN:helper.recommendedItems().contains(id)?FarmingTheme.WARNING:null;
         else return;
         if(color==null)return;
         BufferedImage outline=items.getItemOutline(id,widget.getQuantity(),color);
