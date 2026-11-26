@@ -16,6 +16,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Inventory maintained source and reference candidates
+        run: python3 tools/consolidation-audit.py
       - name: Build and test with a virtual display
         run: xvfb-run -a bash gradlew clean test build --stacktrace
       - name: Verify regression totals and every shipped class
