@@ -16,7 +16,7 @@ final class NavigationBridge
     private int ticks,clearAge;
     private static final AtomicLong SEQUENCE=new AtomicLong();
     private String queryId, targetId, clearId, status="";
-    private Object clearTarget;
+    private WorldPoint clearTarget;
     private List<TransportHint> hints=Collections.emptyList();
     TransportHint nearbyTransport(WorldPoint player){return enabled&&owned?TransportHint.nearby(hints,player):null;}
     NavigationBridge(Consumer<PluginMessage> send){this.send=send;}

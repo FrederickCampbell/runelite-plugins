@@ -24,6 +24,7 @@ final class ActiveRunBank
     private final ItemManager items;
     private Set<Integer> ids=Collections.emptySet(), admitted=Collections.emptySet();
     private int[] lastLayout=new int[0];
+    private Set<Integer> layoutEligible=Set.of(),layoutOwned=Set.of();
     private boolean registered,opened,offered,birdPhase;
     ActiveRunBank(Client client,PluginManager plugins,ItemManager items)
     {this.client=client;this.plugins=plugins;this.items=items;}
@@ -34,7 +35,7 @@ final class ActiveRunBank
             // TagManager is deliberately bound inside the native plugin injector.
             // Reuse that exact instance without requiring Bank Tags as a dependency.
             TagManager actual=p.getInjector().getInstance(TagManager.class);
-            if(tags!=actual){if(registered&&tags!=null)tags.unregisterTag(TAG);registered=false;tags=actual;admitted=Collections.emptySet();search=p.getInjector().getInstance(BankSearch.class);}
+            if(tags!=actual){release();tags=actual;search=p.getInjector().getInstance(BankSearch.class);}
             return (BankTagsPlugin)p;
         }
         return null;
@@ -74,16 +75,18 @@ final class ActiveRunBank
         if(!bankOpen()){release();return;}
         BankTagsPlugin api=service();
         if(!enabled||next==null||api==null){close(api);return;}
-        boolean changed=updateEligible(next,owned);register();
+        updateEligible(next,owned);register();
         if(!opened){opened=true;offered=false;lastLayout=new int[0];}
         boolean stageChanged=birdPhase!=bird;birdPhase=bird;
         if(stageChanged)lastLayout=new int[0];
         if(offered&&!TAG.equals(api.getActiveTag()))return; // Respect manual browsing.
-        int[] layout=BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory);
-        if(!offered&&!ids.isEmpty()){offered=true;open(api,layout);}
-        else if(!offered&&TAG.equals(api.getActiveTag()))api.closeBankTag();
-        else if(offered&&(stageChanged||!Arrays.equals(layout,lastLayout)))open(api,layout);
-        else if(offered&&changed&&search!=null)search.layoutBank();
+        if(!offered&&ids.isEmpty())
+        {if(TAG.equals(api.getActiveTag()))api.closeBankTag();return;}
+        boolean changed=!layoutEligible.equals(ids)||!layoutOwned.equals(owned);
+        if(offered&&!stageChanged&&!changed)return;
+        int[] layout=reconcile(owned);
+        if(!offered||stageChanged||!Arrays.equals(layout,lastLayout)){offered=true;open(api,layout);}
+        else if(changed&&search!=null)search.layoutBank();
     }
     String show(Set<Integer> next,Set<Integer> owned,boolean bird)
     {
@@ -94,13 +97,18 @@ final class ActiveRunBank
         if(ids.isEmpty() && (!opened || birdPhase!=bird || lastLayout.length==0))return "No matching farming items or placeholders in this bank view.";
         if(!opened||birdPhase!=bird)lastLayout=new int[0];birdPhase=bird;
         register();opened=true;offered=true;
-        open(api,BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory));
+        open(api,reconcile(owned));
         return "";
     }
-    private boolean updateEligible(Set<Integer> next,Set<Integer> owned)
+    private int[] reconcile(Set<Integer> owned)
+    {
+        int[] layout=BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory);
+        layoutEligible=ids;layoutOwned=Set.copyOf(owned);return layout;
+    }
+    private void updateEligible(Set<Integer> next,Set<Integer> owned)
     {
         Set<Integer> filtered=new HashSet<>(owned);filtered.retainAll(next);
-        boolean changed=!ids.equals(filtered);ids=Set.copyOf(filtered);return changed;
+        if(!ids.equals(filtered))ids=Set.copyOf(filtered);
     }
     void bankClosed(){release();}
     void close(){close(bankOpen()?service():null);}
@@ -116,6 +124,6 @@ final class ActiveRunBank
         if(registered&&tags!=null)tags.unregisterTag(TAG);
         // Never save or delete another plugin's configuration. Registration is
         // in-memory; no actual TagTab or permanent item tag is created.
-        registered=false;opened=false;offered=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];tags=null;search=null;
+        registered=false;opened=false;offered=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];layoutEligible=Set.of();layoutOwned=Set.of();tags=null;search=null;
     }
 }

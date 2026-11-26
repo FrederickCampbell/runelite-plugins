@@ -6,7 +6,7 @@ The player performs all game actions. The plugin reads farming observations, dis
 | --- | --- |
 | Seed Vault | Native item widgets retain their IDs, indices, quantities and listeners. The helper restores owned visual changes before native rebuilds and reapplies validated layout afterward. The generic scrollbar refresh runs outside native script callbacks. |
 | Bank Tags | The active-run predicate admits relevant physical IDs and their native placeholders in the supplied temporary layout. The native Bank Tags plugin manages remembered tabs. |
-| Shortest Path | The guide tracks its displayed leg. Modern ownership checks compare the reported destination before clearing. Legacy integrations have limited ownership information. |
+| Shortest Path | The guide tracks its displayed leg. Modern ownership checks compare the reported destination before clearing. Legacy integrations without ownership responses are never cleared automatically. |
 
 ## Live acceptance
 

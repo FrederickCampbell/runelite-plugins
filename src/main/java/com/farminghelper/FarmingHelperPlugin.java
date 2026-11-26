@@ -46,7 +46,7 @@ public class FarmingHelperPlugin extends Plugin
     private NavigationBridge navigation;
     private SeedVaultViews vaultViews;
     private ActiveRunBank runBank;
-    private volatile long preferenceRevision;
+    private final AtomicLong preferenceRevision=new AtomicLong();
     private volatile RouteLeg activeLeg;
     @Inject private ClientThread thread;
     @Inject private ConfigManager config;
@@ -229,7 +229,6 @@ public class FarmingHelperPlugin extends Plugin
             runPolicyKey=policyKey;
             specialtyStaged=SpecialtyStages.stageBirds(policyKey,run);
             runProfile=config.getRSProfileKey();
-            refreshRunPreferences();
             updateAccessNotes();
             runHasTrees=patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&p.getPatchType().isTree());
             loadStock();
@@ -269,6 +268,7 @@ public class FarmingHelperPlugin extends Plugin
         lastView = null;
         activeLeg=null;
         if(navigation!=null)navigation.stop();
+        icons=Map.of();
     }
 
     private void end(){clearRun();showHome();}
@@ -287,7 +287,7 @@ public class FarmingHelperPlugin extends Plugin
     private void resetClientState()
     {
         if(vaultViews!=null)vaultViews.close();
-        lastAccessLevel=-1;
+        lastAccessLevel=-1;accessTicks=0;
         vaultAccessible=Collections.emptySet();vaultAccessRevision++;
         accessNotes=Collections.emptyMap();
         invalidateStock();
@@ -317,22 +317,28 @@ public class FarmingHelperPlugin extends Plugin
     boolean runHasTrees(){return runHasTrees;}
     boolean runWater(){return runWater;}
     boolean runLeprechaun(){return runLeprechaun;}
+    /** All sidebar run mutations use one session/profile gate. */
+    private void inRun(Runnable action)
+    {
+        long id=session.get();
+        thread.invokeLater(()->{
+            if(running&&runtimeReady&&guideRequested&&id==session.get()&&!run.isEmpty()&&
+                Objects.equals(runProfile,config.getRSProfileKey()))action.run();
+        });
+    }
     void setRunSupplies(Boolean water,Boolean leprechaun)
     {
-        long id=session.get();thread.invokeLater(()->{
-            if(id!=session.get()||!guideRequested)return;
+        inRun(()->{
             if(water!=null)temporaryWater=water;
             if(leprechaun!=null)temporaryLeprechaun=leprechaun;
-            refreshRunPreferences();lastView=null;update();
+            lastView=null;update();
         });
     }
     void setRunPolicy(RunPolicy policy,Boolean pay)
     {
-        long id=session.get();thread.invokeLater(()->{
-            if(id!=session.get()||!guideRequested||runPolicyKey==null)return;
+        inRun(()->{
             if(policy!=null)temporaryCare=policy;
             if(pay!=null)temporaryPay=pay;
-            refreshRunPreferences();
             lastView=null;update();
         });
     }
@@ -343,8 +349,7 @@ public class FarmingHelperPlugin extends Plugin
     Set<Integer> activeStepItems(){return !guideRequested?Collections.emptySet():diseaseTarget!=null?diseaseItems:!preparing()?stepItems:Collections.emptySet();}
     void resetObservedStock()
     {
-        long id=session.get();thread.invokeLater(()->{
-            if(id!=session.get()||!guideRequested||run.isEmpty())return;
+        inRun(()->{
             loadStock();invalidateStock();bank.clear();vault.clear();bankObservedAt=0;vaultObservedAt=0;
             save("observedBankV1","");save("observedVaultV1","");save("observedBankV1At","");save("observedVaultV1At","");
             seedBox.clear();seedBoxSaved="";save("observedSeedBoxV2","");seedBoxPlant=null;seedBoxViewTick=-1;
@@ -353,20 +358,19 @@ public class FarmingHelperPlugin extends Plugin
     }
     void acknowledgeCompost(FarmRunPatch patch)
     {
-        long id=session.get();thread.invokeLater(()->{
-            if(id!=session.get()||!guideRequested||current!=patch||activeAction!=StepEngine.Action.COMPOST)return;
+        inRun(()->{
+            if(current!=patch||activeAction!=StepEngine.Action.COMPOST)return;
             compostAcknowledged=true;lastView=null;update();
         });
     }
     void setSeedlessPolicy(SeedlessPolicy policy)
     {
-        long id=session.get();thread.invokeLater(()->{if(id!=session.get()||!guideRequested||run.isEmpty())return;temporarySeedless=policy;refreshRunPreferences();sampleStorage();lastView=null;update();});
+        inRun(()->{temporarySeedless=policy;sampleStorage();lastView=null;update();});
     }
     String runReplacement(PatchType type){return temporaryReplacement.getOrDefault(type,"");}
     void setRunReplacement(PatchType type,String mode)
     {
-        long id=session.get();thread.invokeLater(()->{
-            if(id!=session.get()||!guideRequested||run.isEmpty())return;
+        inRun(()->{
             Map<PatchType,String> next=new EnumMap<>(PatchType.class);next.putAll(temporaryReplacement);
             if(KeepCrop.explicit(mode))next.put(type,mode);else next.remove(type);
             temporaryReplacement=Map.copyOf(next);lastView=null;update();
@@ -374,8 +378,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     void skipRemainingType(PatchType type)
     {
-        long id=session.get();thread.invokeLater(()->{
-            if(id!=session.get()||!guideRequested)return;
+        inRun(()->{
             for(FarmRunPatch p:patches)if(p.getPatchType()==type&&ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&!runProgress.finished(p))runProgress.skip(p);
             lastView=null;update();
         });
@@ -383,13 +386,13 @@ public class FarmingHelperPlugin extends Plugin
     List<PatchType> selectedRunTypes()
     {
         Set<PatchType> result=EnumSet.noneOf(PatchType.class);
-        for(FarmRunPatch p:patches)if(ManualSelection.includes(p,run,manualKeys)&&enabled(p))result.add(p.getPatchType());
+        Set<FarmRunType> types=run;Set<String> keys=manualKeys;
+        for(FarmRunPatch p:patches)if(ManualSelection.includes(p,types,keys)&&enabled(p))result.add(p.getPatchType());
         return new ArrayList<>(result);
     }
     void skip(FarmRunPatch displayed)
     {
-        long id=session.get();thread.invokeLater(() -> {
-            if(id!=session.get()||!guideRequested)return;
+        inRun(()->{
             if(diseaseTarget!=null)
             {
                 if(displayed==diseaseTarget){diseasePriority.skip(displayed);diseaseTarget=null;lastView=null;}
@@ -430,6 +433,8 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onGameObjectDespawned(GameObjectDespawned event) { highlight.despawned(event.getGameObject()); }
     @Subscribe public void onNpcSpawned(NpcSpawned event) { highlight.npcChanged(); }
     @Subscribe public void onNpcDespawned(NpcDespawned event) { highlight.npcChanged(); }
+    @Subscribe public void onWorldEntityDespawned(WorldEntityDespawned event)
+    {highlight.removeView(event.getWorldEntity().getWorldView());}
     @Subscribe public void onGameStateChanged(GameStateChanged event)
     {
         if(event.getGameState()==GameState.LOADING || event.getGameState()==GameState.LOGIN_SCREEN) highlight.clear();
@@ -447,7 +452,8 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onGameTick(GameTick event)
     {
         if(!running||!runtimeReady||client.getGameState()!=GameState.LOGGED_IN)return;
-        if(hopping){hopping=false;if(!Objects.equals(runProfile,config.getRSProfileKey()))reset();lastView=null;}
+        if(!run.isEmpty()&&!Objects.equals(runProfile,config.getRSProfileKey()))reset();
+        if(hopping){hopping=false;lastView=null;}
         sampleStorage();
         updateSeedBox();
         // Re-evaluate quest, diary, Hunter and Sailing gates even when Farming is unchanged.
@@ -518,7 +524,7 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
     {
         if("shortestpath".equals(event.getGroup()))onClient(this::invalidateTravel);
-        if("farming-helper".equals(event.getGroup())&&!event.getKey().startsWith("observed"))preferenceRevision++;
+        if("farming-helper".equals(event.getGroup())&&!event.getKey().startsWith("observed"))preferenceRevision.incrementAndGet();
     }
 
     @Subscribe public void onPostClientTick(PostClientTick event)
@@ -735,7 +741,7 @@ public class FarmingHelperPlugin extends Plugin
         Set<Integer> runItems=vaultRunItems();
         if(runItems==null)return null;
         boolean bird=birdBankPhase();
-        List<?> inputs=List.of(session.get(),quantities,bankPlaceholders,runItems,bird,preferenceRevision,vaultAccessRevision);
+        List<?> inputs=List.of(session.get(),quantities,bankPlaceholders,runItems,bird,preferenceRevision.get(),vaultAccessRevision);
         if(inputs.equals(shelfInputs))return shelfItems;
         boolean diving=!bird&&patches.stream().anyMatch(p->ManualSelection.includes(p,run,manualKeys)&&enabled(p)&&accessNote(p).isEmpty()&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
         Set<Integer> candidates = new HashSet<>(owned.keySet());
@@ -771,8 +777,8 @@ public class FarmingHelperPlugin extends Plugin
     void showActiveRunBank(java.util.function.Consumer<String> feedback)
     {
         long id=session.get();
-        thread.invokeLater(()->{
-            if(id!=session.get()||!guideRequested||!flag("activeRunBank",true))return;
+        inRun(()->{
+            if(!flag("activeRunBank",true))return;
             sampleStorage();update();
             String message=updateRunBank(true);
             if(!message.isEmpty())SwingUtilities.invokeLater(()->{if(id==session.get()&&guideRequested)feedback.accept(message);});
@@ -783,7 +789,7 @@ public class FarmingHelperPlugin extends Plugin
         if(!guideRequested||diseaseTarget!=null||preparing()||current==null||navigation==null||client.getLocalPlayer()==null||activeLeg!=null&&activeLeg.interaction!=RouteLeg.Interaction.NONE)return null;
         return navigation.nearbyTransport(LocationContext.capture(client).pathStart());
     }
-    long preferenceRevision(){return preferenceRevision;}
+    long preferenceRevision(){return preferenceRevision.get();}
     long vaultAccessRevision(){return vaultAccessRevision;}
     boolean vaultAccessReady(int level){return lastAccessLevel==level;}
     Set<PatchType> vaultAllowed(int level)
@@ -955,8 +961,9 @@ public class FarmingHelperPlugin extends Plugin
 
     private void update()
     {
-        if (run.isEmpty() || !guideRequested || hopping) return;
+        if(run.isEmpty()||!guideRequested)return;
         refreshRunPreferences();
+        if(hopping)return;
         String title=runLabel;
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         LocationContext location=LocationContext.capture(client);
@@ -1129,7 +1136,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<FarmRunPatch,Crop> committed=current!=null && activeCrop!=null && observations.get(current)!=null &&
             observations.get(current).source==QuestFarmingStateReader.Source.LIVE
             ? Map.of(current,activeCrop):Collections.emptyMap();
-        List<?> inputs=List.of(List.copyOf(plant),level,supplies,preferenceRevision,committed,hideSeedless,temporaryReplacement,contract,Optional.ofNullable(preferredContract));
+        List<?> inputs=List.of(List.copyOf(plant),level,supplies,preferenceRevision.get(),committed,hideSeedless,temporaryReplacement,contract,Optional.ofNullable(preferredContract));
         if(!inputs.equals(allocationInputs))
         {
             allocated=SeedChoices.allocate(plant,level,supplies.allocation,this::priority,this::override,committed,hideSeedless,this::autoLily,preferredContract);
@@ -1554,13 +1561,13 @@ public class FarmingHelperPlugin extends Plugin
     }
     void continueRun()
     {
-        long id=session.get();thread.invokeLater(()->{if(id!=session.get()||!guideRequested)return;
+        inRun(()->{
             if(phase==Preparation.Phase.INITIAL){pinned=null;current=null;activeCrop=null;progress.reset();}
             phase=Preparation.Phase.ACTIVE;update();});
     }
     void resupply()
     {
-        long id=session.get();thread.invokeLater(()->{if(id!=session.get()||!guideRequested||diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(Preparation.Phase.RESUPPLY);update();});
+        inRun(()->{if(diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(Preparation.Phase.RESUPPLY);update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
@@ -1657,7 +1664,7 @@ public class FarmingHelperPlugin extends Plugin
     boolean canSave() { return config!=null&&config.getRSProfileKey() != null; }
     void save(String key, String value)
     {
-        if (canSave()) {config.setRSProfileConfiguration("farming-helper",key,value);if(!key.startsWith("observed"))preferenceRevision++;}
+        if (canSave()) {config.setRSProfileConfiguration("farming-helper",key,value);if(!key.startsWith("observed"))preferenceRevision.incrementAndGet();}
     }
 
 }

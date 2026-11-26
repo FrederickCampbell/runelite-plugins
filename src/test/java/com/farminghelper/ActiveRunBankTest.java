@@ -92,4 +92,40 @@ public class ActiveRunBankTest
         assertEquals(Set.of(1513),displayed);
         assertFalse(ActiveRunBank.includes(Set.of(1513),1515,real));
     }
+
+    @Test public void unchangedShelfDoesNotReconcileAndManualBrowsingDefersUpdates()
+    {
+        Client client=mock(Client.class);
+        var manager=mock(net.runelite.client.plugins.PluginManager.class);
+        var items=mock(net.runelite.client.game.ItemManager.class);
+        var api=mock(net.runelite.client.plugins.banktags.BankTagsPlugin.class);
+        var injector=mock(com.google.inject.Injector.class);
+        var tags=mock(net.runelite.client.plugins.banktags.TagManager.class);
+        var search=mock(net.runelite.client.plugins.bank.BankSearch.class);
+        var root=mock(net.runelite.api.widgets.Widget.class);
+        when(client.getGameState()).thenReturn(net.runelite.api.GameState.LOGGED_IN);
+        when(client.getWidget(net.runelite.api.gameval.InterfaceID.Bankmain.UNIVERSE)).thenReturn(root);
+        when(manager.getPlugins()).thenReturn(java.util.List.of(api));when(manager.isPluginActive(api)).thenReturn(true);
+        when(api.getInjector()).thenReturn(injector);
+        when(injector.getInstance(net.runelite.client.plugins.banktags.TagManager.class)).thenReturn(tags);
+        when(injector.getInstance(net.runelite.client.plugins.bank.BankSearch.class)).thenReturn(search);
+        when(api.getActiveTag()).thenReturn(ActiveRunBank.TAG);
+        ItemComposition def=mock(ItemComposition.class);when(def.getName()).thenReturn("Spade");
+        when(items.getItemComposition(952)).thenReturn(def);
+        ActiveRunBank bank=new ActiveRunBank(client,manager,items);
+        bank.tick(Set.of(952),Set.of(952),true,false);
+        clearInvocations(items,search,api);
+        bank.tick(Set.of(952),Set.of(952),true,false);
+        verifyNoInteractions(items,search);
+        when(api.getActiveTag()).thenReturn("Personal");
+        bank.tick(Set.of(),Set.of(),true,false);
+        verifyNoInteractions(items,search);
+        when(api.getActiveTag()).thenReturn(ActiveRunBank.TAG);
+        bank.tick(Set.of(),Set.of(),true,false);
+        clearInvocations(items,search);
+        bank.tick(Set.of(),Set.of(),true,false);
+        verifyNoInteractions(items,search);
+        bank.bankClosed();
+        verify(tags).unregisterTag(ActiveRunBank.TAG);
+    }
 }

@@ -4,7 +4,8 @@
 
 - Move game-state initialization and teardown to the client thread; guard deferred profile, config, plugin-message and Swing publications against old lifecycle/session identities. Coalesce obsolete guide views and release run/scene/icon state on disable.
 - Shortest Path clears only after an exact, current, unmodified destination response; legacy silence never permits a global clear. Bound release checks and use unique request IDs across bridge restarts.
-- Avoid allocating inventory ID arrays in item overlays; classify repeated scene object definitions once per scene. Remove duplicate navigation state and widget-open polling; use the existing game-tick storage sampler.
+- Avoid allocating inventory ID arrays in item overlays; classify repeated scene object definitions once per scene and release despawned world views. Remove duplicate navigation state and widget-open polling; use the existing game-tick storage sampler.
+- Centralize run mutation guards and preference refresh, avoid unchanged bank shelf reconciliation, reset native service registration on replacement, and document consolidation targets for v1.07.4.
 
 ## v1.07.2 — stabilization branch storage reliability
 

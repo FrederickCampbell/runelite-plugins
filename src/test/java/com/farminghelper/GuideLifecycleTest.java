@@ -357,4 +357,36 @@ public class GuideLifecycleTest
         }
         finally {plugin.shutDown();}
     }
+
+    @Test public void queuedCallbacksCannotReenableNavigationAfterAPluginRestart() throws Exception
+    {
+        var queue=new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+        doAnswer(i->{queue.add(i.getArgument(0));return null;}).when(thread).invokeLater(any(Runnable.class));
+        Player player=mock(Player.class);
+        when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(new WorldPoint(2813,3463,0));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(72);
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(config.getRSProfileKey()).thenReturn("one");
+        when(shortestPath.getName()).thenReturn("Shortest Path");
+        when(reader.observeType(anyString(),anyString(),anyString(),any())).thenReturn(
+            new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
+        SwingUtilities.invokeAndWait(plugin::startUp);
+        queue.remove().run();
+        plugin.startManual(Set.of("Catherby~HERB~"));queue.remove().run();
+        assertNotNull(plugin.activePatch());
+        plugin.onPluginChanged(new net.runelite.client.events.PluginChanged(shortestPath,true));
+        plugin.setRunPolicy(RunPolicy.NONE,false);
+        SwingUtilities.invokeAndWait(()->{plugin.shutDown();plugin.startUp();});
+        plugin.startManual(Set.of("Yanille~HOPS~"));
+        for(Runnable task;(task=queue.poll())!=null;)task.run();
+        assertEquals("Yanille",plugin.activePatch().getLocation());
+        assertEquals(RunPolicy.BOTH,plugin.runPolicy());
+        verifyNoInteractions(bus);
+        SwingUtilities.invokeAndWait(plugin::shutDown);
+        for(Runnable task;(task=queue.poll())!=null;)task.run();
+        assertNull(plugin.activePatch());
+        SwingUtilities.invokeAndWait(()->{});
+    }
 }

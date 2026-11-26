@@ -23,6 +23,7 @@ final class PatchHighlight extends Overlay
     private final Client client;
     private final Provider<FarmingHelperPlugin> plugin;
     private final Set<GameObject> objects=new HashSet<>();
+    private final Map<Integer,Boolean> classified=new HashMap<>();
     private final Map<FarmRunPatch,List<GameObject>> resolved=new HashMap<>();
     private int resolvedTick=-1,resolvedPlane=-1;
     private WorldView resolvedView;
@@ -103,24 +104,30 @@ final class PatchHighlight extends Overlay
     {
         if(object==null)return;
         int id=object.getId();
-        if(knownObject(id)||classified.computeIfAbsent(id,this::classify))
+        if(knownObject(id)||Boolean.TRUE.equals(classified.computeIfAbsent(id,this::classify)))
             if(objects.add(object))invalidateSceneTargets();
     }
-    private final Map<Integer,Boolean> classified=new HashMap<>();
     private static boolean knownObject(int id)
     {
         return id==SpecialRoutes.SEAWEED_BANK_ID||id==SpecialRoutes.SEAWEED_BOAT_ID||id==SpecialRoutes.SEAWEED_ROPE_ID||
             BirdhouseRun.isObject(id)||PatchObjects.known(id)||QuestTargets.known(id);
     }
-    private boolean classify(int id)
+    private Boolean classify(int id)
     {
         ObjectComposition c=client.getObjectDefinition(id);
+        if(c==null)return null;
         if(isTransition(c)||isVine(c)||verificationObject(c))return true;
         if(c!=null&&c.getImpostorIds()!=null)
             for(int variant:c.getImpostorIds())if(knownObject(variant)||verificationObject(client.getObjectDefinition(variant)))return true;
         return false;
     }
     void despawned(GameObject o){if(objects.remove(o))invalidateSceneTargets();}
+    void removeView(WorldView view)
+    {
+        if(view==null)return;
+        if(objects.removeIf(o->o.getWorldView()==view)||resolvedView==view)invalidateSceneTargets();
+        if(resolvedView==view){resolvedView=null;resolvedTick=-1;resolvedPlane=-1;}
+    }
     void clear(){objects.clear();classified.clear();invalidateSceneTargets();resolvedView=null;resolvedTick=-1;resolvedPlane=-1;}
     void transformed(){invalidateSceneTargets();}
     void npcChanged(){leprechauns.clear();gardeners.clear();}

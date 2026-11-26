@@ -128,4 +128,15 @@ public class PatchHighlightPerformanceTest
         }
         finally {graphics.dispose();}
     }
+
+    @Test public void unloadedWorldViewDoesNotRetainSceneObjects()
+    {
+        Client client=mock(Client.class);FarmingHelperPlugin helper=mock(FarmingHelperPlugin.class);
+        WorldView a=mock(WorldView.class),b=mock(WorldView.class);
+        GameObject first=object(a,0,10,20,1,1),second=object(b,0,10,20,1,1);
+        PatchHighlight overlay=new PatchHighlight(client,()->helper);
+        overlay.spawned(first);overlay.spawned(second);overlay.removeView(a);
+        List<GameObject> left=new ArrayList<>();overlay.objects().forEach(left::add);
+        assertEquals(List.of(second),left);
+    }
 }
