@@ -23,7 +23,8 @@ for p in maintained:
     raw = p.read_text(encoding='utf-8')
     clean = strip_comments(raw)
     count = len(raw.splitlines())
-    print(f'FILE {p.relative_to(PROD)} lines={count} streams={clean.count(".stream(")} collection_creations={len(re.findall(r"new (?:HashMap|HashSet|ArrayList|LinkedHashMap|LinkedHashSet|TreeMap|TreeSet|EnumMap|StringJoiner)\b", clean))}')
+    creations=len(re.findall(r'new (?:HashMap|HashSet|ArrayList|LinkedHashMap|LinkedHashSet|TreeMap|TreeSet|EnumMap|StringJoiner)\b', clean))
+    print(f'FILE {p.relative_to(PROD)} lines={count} streams={clean.count(".stream(")} collection_creations={creations}')
     for match in method.finditer(clean):
         name = match.group(1)
         if references[name]==1:
