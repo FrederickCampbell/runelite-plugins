@@ -56,6 +56,9 @@ final class RunTeleports
      * item, then the reference order. Deduplicate identical item IDs. */
     static Map<Integer,Set<String>> select(Collection<FarmRunPatch> ready,Map<Integer,List<String>> eligible,
         Map<Integer,Integer> carried)
+    {return select(ready,eligible,carried,null,null);}
+    static Map<Integer,Set<String>> select(Collection<FarmRunPatch> ready,Map<Integer,List<String>> eligible,
+        Map<Integer,Integer> carried,Map<Integer,Integer> available,java.util.function.IntBinaryOperator quantity)
     {
         Set<String> sites=new LinkedHashSet<>();for(FarmRunPatch p:ready)sites.add(RunOrder.site(p));
         Map<Integer,Set<String>> result=new LinkedHashMap<>();
@@ -68,6 +71,8 @@ final class RunTeleports
                 int rank=Integer.MAX_VALUE;
                 for(String dest:entry.getValue()){int n=refs.indexOf(dest);if(n>=0)rank=Math.min(rank,n);}
                 if(rank==Integer.MAX_VALUE)continue;
+                int id=entry.getKey(),visits=result.containsKey(id)?result.get(id).size()+1:1;
+                if(available!=null&&quantity.applyAsInt(id,visits)>available.getOrDefault(id,0))continue;
                 int score=(carried.getOrDefault(entry.getKey(),0)>0?0:result.containsKey(entry.getKey())?100:200)+rank;
                 if(score<bestScore||score==bestScore&&entry.getKey()<best){best=entry.getKey();bestScore=score;}
             }
