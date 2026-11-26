@@ -55,9 +55,6 @@ final class RunTeleports
     /** One useful owned option per site. Prefer carried, then an already chosen
      * item, then the reference order. Deduplicate identical item IDs. */
     static Map<Integer,Set<String>> select(Collection<FarmRunPatch> ready,Map<Integer,List<String>> eligible,
-        Map<Integer,Integer> carried)
-    {return select(ready,eligible,carried,null,null);}
-    static Map<Integer,Set<String>> select(Collection<FarmRunPatch> ready,Map<Integer,List<String>> eligible,
         Map<Integer,Integer> carried,Map<Integer,Integer> available,java.util.function.IntBinaryOperator quantity)
     {
         if(ready.isEmpty()||eligible.isEmpty())return Map.of();
@@ -77,7 +74,7 @@ final class RunTeleports
                 if(rank==Integer.MAX_VALUE)continue;
                 int score=(carried.getOrDefault(id,0)>0?0:chosen!=null?100:200)+rank;
                 if(score>bestScore||score==bestScore&&id>=best)continue;
-                if(available!=null&&quantity.applyAsInt(id,chosen==null?1:chosen.size()+1)>available.getOrDefault(id,0))continue;
+                if(quantity.applyAsInt(id,chosen==null?1:chosen.size()+1)>available.getOrDefault(id,0))continue;
                 best=id;bestScore=score;
             }
             if(best>=0)result.computeIfAbsent(best,id->new LinkedHashSet<>()).add(site);
