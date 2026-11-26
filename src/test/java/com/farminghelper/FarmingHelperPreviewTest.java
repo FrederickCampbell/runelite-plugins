@@ -17,7 +17,7 @@ public class FarmingHelperPreviewTest
     {
         BufferedImage image = new BufferedImage(225,500,BufferedImage.TYPE_INT_RGB);
         SwingUtilities.invokeAndWait(() -> {
-            com.formdev.flatlaf.FlatDarkLaf.setup();
+            net.runelite.client.ui.laf.RuneLiteLAF.setup();
             FarmingHelperPanel panel = new FarmingHelperPanel(new FarmingHelperPlugin());
             FarmRunPatch patch = new FarmRunPatch("Falador","",PatchType.HERB);
             panel.guide(new GuideView("Herb Run","Harvest the herbs, then plant Ranarr.",
@@ -45,7 +45,7 @@ public class FarmingHelperPreviewTest
     {
         BufferedImage image=new BufferedImage(225,500,BufferedImage.TYPE_INT_RGB);
         SwingUtilities.invokeAndWait(()->{
-            com.formdev.flatlaf.FlatDarkLaf.setup();
+            net.runelite.client.ui.laf.RuneLiteLAF.setup();
             FarmingHelperPanel panel=new FarmingHelperPanel(new FarmingHelperPlugin());panel.home();
             assertNotNull(findButton(panel,"Settings"));assertNull(findButton(panel,"End farming run"));
             panel.setSize(image.getWidth(),image.getHeight());layout(panel);
@@ -56,7 +56,7 @@ public class FarmingHelperPreviewTest
     @Test public void primaryRunControlsHavePlayIconAndStayProminent()throws Exception
     {
         SwingUtilities.invokeAndWait(()->{
-            com.formdev.flatlaf.FlatDarkLaf.setup();
+            net.runelite.client.ui.laf.RuneLiteLAF.setup();
             int[] clicks={0};
             JButton start=FarmingHelperPanel.runButton("Start Run",()->clicks[0]++);
             JButton resume=FarmingHelperPanel.runButton("Continue Run",()->clicks[0]++);

@@ -16,8 +16,6 @@ import static com.farminghelper.FarmingIcons.Kind.*;
 import java.util.List;
 import java.util.function.Consumer;
 import javax.swing.*;
-import net.runelite.client.ui.ColorScheme;
-import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.api.gameval.ItemID;
 
@@ -417,12 +415,7 @@ final class FarmingHelperPanel extends PluginPanel
         }
         addRow(new JSeparator());
         sectionToggle("Individual runs",individualOpen,()->{individualOpen=!individualOpen;showHome();});
-        if(individualOpen)
-        {
-            JPanel results=new JPanel();results.setOpaque(false);results.setLayout(new BoxLayout(results,BoxLayout.Y_AXIS));
-            searchField(individualSearch,"Find a run…",v->{individualSearch=v;fillIndividual(results);});
-            fillIndividual(results);addRow(results);
-        }
+        if(individualOpen)individualRuns();
         addRow(navRow("Manual Run","Choose your own patches",LIST,-1,FORWARD,this::openManual));
         JLabel version=new JLabel(versionLabel(),SwingConstants.CENTER);version.setFont(FarmingTheme.font(Font.PLAIN,10));version.setForeground(FarmingTheme.MUTED);
         footer.add(version);finish();
@@ -487,19 +480,38 @@ final class FarmingHelperPanel extends PluginPanel
         b.getAccessibleContext().setAccessibleDescription((open?"Collapse ":"Expand ")+title);
         b.addActionListener(e->action.run());addRow(b);
     }
-    private void fillIndividual(JPanel results)
+    private void individualRuns()
     {
-        results.removeAll();Map<String,Runnable> choices=new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-        for(PatchType type:PatchType.values())choices.put(RunPreset.individualTitle(type),()->plugin.startIndividual(type));
-        choices.put("Allotment & Flower Run",()->plugin.startCombinedShortcut(FarmRunType.ALLOTMENT_FLOWER));
-        choices.put("Fruit Tree & Calquat Run",()->plugin.startCombinedShortcut(FarmRunType.FRUIT_TREE_CALQUAT));
-        choices.forEach((name,action)->{if(name.toLowerCase(Locale.ROOT).contains(individualSearch.toLowerCase(Locale.ROOT))){
-            int sprite=-1;for(PatchType type:PatchType.values())if(RunPreset.individualTitle(type).equals(name)){sprite=patchSprite(type);break;}
-            if(name.equals("Allotment & Flower Run"))sprite=ItemID.MARIGOLD_SEED;
-            if(name.equals("Fruit Tree & Calquat Run"))sprite=ItemID.PLANTPOT_CALQUAT_SAPLING;
-            resultRow(results,navRow(name,"",LEAF,sprite,PLAY,()->start(action)));}});
-        if(results.getComponentCount()==0)resultRow(results,text("No runs match your search.",FarmingTheme.MUTED));
-        results.revalidate();results.repaint();
+        Map<String,JButton> choices=new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for(PatchType type:PatchType.values())
+        {
+            String name=RunPreset.individualTitle(type);
+            choices.put(name,navRow(name,"",LEAF,patchSprite(type),PLAY,()->start(()->plugin.startIndividual(type))));
+        }
+        choices.put("Allotment & Flower Run",navRow("Allotment & Flower Run","",LEAF,ItemID.MARIGOLD_SEED,PLAY,
+            ()->start(()->plugin.startCombinedShortcut(FarmRunType.ALLOTMENT_FLOWER))));
+        choices.put("Fruit Tree & Calquat Run",navRow("Fruit Tree & Calquat Run","",LEAF,ItemID.PLANTPOT_CALQUAT_SAPLING,PLAY,
+            ()->start(()->plugin.startCombinedShortcut(FarmRunType.FRUIT_TREE_CALQUAT))));
+        JPanel results=transparent(null);
+        results.setLayout(new BoxLayout(results,BoxLayout.Y_AXIS));
+        choices.values().forEach(button->resultRow(results,button));
+        JTextArea empty=text("No runs match your search.",FarmingTheme.MUTED);
+        resultRow(results,empty);
+        Consumer<String> filter=query->{
+            individualSearch=query;
+            String term=query.trim().toLowerCase(Locale.ROOT);
+            boolean any=false;
+            for(var entry:choices.entrySet())
+            {
+                boolean match=entry.getKey().toLowerCase(Locale.ROOT).contains(term);
+                entry.getValue().getParent().setVisible(match);
+                any|=match;
+            }
+            empty.getParent().setVisible(!any);
+            results.revalidate();results.repaint();
+        };
+        searchField(individualSearch,"Find a run…",filter);
+        filter.accept(individualSearch);addRow(results);
     }
     void emptySelection()
     {
@@ -594,6 +606,7 @@ final class FarmingHelperPanel extends PluginPanel
             groups.forEach((key,patches)->{
                 JPanel group=new JPanel(new BorderLayout(2,0));group.setBackground(FarmingTheme.CARD);
                 JCheckBox parent=new JCheckBox();parent.setName("manual-group/"+key);
+                parent.putClientProperty("farming.focusFallback","Select all");
                 parent.addActionListener(e->{
                     boolean all=patches.stream().allMatch(p->manual.contains(p.key()));
                     for(FarmRunPatch p:patches)if(all)manual.remove(p.key());else manual.add(p.key());
@@ -603,7 +616,7 @@ final class FarmingHelperPanel extends PluginPanel
                 boolean open=manualGroups.contains(key);
                 JButton fold=FarmingIcons.button(open?COLLAPSE:EXPAND,(open?"Collapse patches · ":"Expand patches · ")+key,
                     FarmingTheme.MUTED,()->{if(!manualGroups.add(key))manualGroups.remove(key);rebuild();});
-                fold.setName("manual-fold/"+key);group.add(fold,BorderLayout.EAST);resultRow(list,group);
+                fold.setName("manual-fold/"+key);fold.putClientProperty("farming.focusFallback","Select all");group.add(fold,BorderLayout.EAST);resultRow(list,group);
                 if(open)for(FarmRunPatch p:patches)
                 {
                     JCheckBox child=check(patchLabel(p,manualByLocation),manual.contains(p.key()),on->{
@@ -611,6 +624,7 @@ final class FarmingHelperPanel extends PluginPanel
                         save();
                     });
                     child.setName("manual/"+p.key());
+                    child.putClientProperty("farming.focusFallback","Select all");
                     child.setMargin(new java.awt.Insets(3,12,3,0));
                     children.put(p.key(),child);resultRow(list,child);
                 }
@@ -717,36 +731,45 @@ final class FarmingHelperPanel extends PluginPanel
     private boolean sameStructure(GuideView a,GuideView b)
     {
         if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || !a.notes.equals(b.notes) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
-        for(int i=0;i<a.items.size();i++)if(!rowKey(a.items.get(i)).equals(rowKey(b.items.get(i))))return false;
+        for(int i=0;i<a.items.size();i++)
+        {
+            GuideView.ItemRow old=a.items.get(i), next=b.items.get(i);
+            if(old.id!=next.id || old.recommended!=next.recommended)return false;
+        }
         for(int i=0;i<a.stops.size();i++)if(a.stops.get(i).patch!=b.stops.get(i).patch || a.stops.get(i).done!=b.stops.get(i).done || a.stops.get(i).active!=b.stops.get(i).active)return false;
         return true;
     }
     private void refreshRows(GuideView before, GuideView view)
     {
-        if (requirementsHeader != null && !requirementsTitle(before).equals(requirementsTitle(view)))
-            requirementsHeader.setText(requirementsTitle(view));
+        if (requirementsHeader != null)
+        {
+            String title=requirementsTitle(view);
+            if(!title.equals(requirementsHeader.getText()))requirementsHeader.setText(title);
+        }
         for (int i = 0; i < view.items.size(); i++)
         {
             GuideView.ItemRow item = view.items.get(i);
+            if(item.equals(before.items.get(i)))continue;
             SupplyRow row = supplyRows.get(rowKey(item));
-            if (row != null && !item.equals(before.items.get(i))) row.update(item);
+            if (row != null) row.update(item);
         }
         for (int i = 0; i < view.stops.size(); i++)
         {
             GuideView.Stop stop = view.stops.get(i);
+            if(stop.instruction.equals(before.stops.get(i).instruction))continue;
             JTextArea label = stepText.get(stop.patch.key());
-            if (label != null && !stop.instruction.equals(before.stops.get(i).instruction))
+            if (label != null)
                 label.setText((stop.active ? "▶ " : "") + stop.instruction);
         }
     }
 
     private JButton supplySection(String title, String topic, String help, boolean optional, GuideView view)
     {
-        if (view.items.stream().noneMatch(item -> item.recommended == optional)) return null;
         boolean open = optional ? teleportsOpen : requiredOpen;
         JButton fold=disclosure(title,open);
         JPanel section=transparent(new BorderLayout(0,2));
         fold.setName(topic);
+        fold.getAccessibleContext().setAccessibleDescription((open?"Collapse ":"Expand ")+topic);
         // Two keyboard targets share one native button surface. Help owns its own click area.
         fold.putClientProperty("farming.inlineHelp",Boolean.TRUE);
         JPanel header=transparent(new java.awt.GridBagLayout());
@@ -787,6 +810,7 @@ final class FarmingHelperPanel extends PluginPanel
             SupplyRow row=new SupplyRow(item);
             supplyRows.put(rowKey(item),row);body.add(row);
         }
+        if(body.getComponentCount()==0)body.add(text(optional?"No teleports recommended for the remaining patches.":"No items needed for this run.",FarmingTheme.MUTED));
         FarmingTheme.apply(body);
         return body;
     }
@@ -832,16 +856,22 @@ final class FarmingHelperPanel extends PluginPanel
             progress.getAccessibleContext().setAccessibleDescription(progress.getToolTipText());
             progress.setPreferredSize(new Dimension(1,6));addRow(progress);
         }
-        // The preparation action stays above the checklists; every patch step stays below both.
+        requirementsHeader=null;
+        if(isPreparing || view.active!=null || !view.items.isEmpty())
+        {
+            requirementsHeader=supplySection(requirementsTitle(view),"Recommended items",GuidePresentation.ITEMS_HELP,false,view);
+            supplySection("Recommended teleports","Recommended teleports",GuidePresentation.TRAVEL_HELP,true,view);
+        }
         if(isPreparing)
         {
             heading(view.notes.initial?"Preparation":"Resupply",view.notes.preparationHelp.isEmpty()?GuidePresentation.PREPARATION_HELP:view.notes.preparationHelp);
             line(view.preparation,true);
             if(!view.notes.storageWarning.isEmpty())helpRow(view.notes.storageWarning,FarmingTheme.WARNING,GuidePresentation.STORAGE_HELP);
-            addRow(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
+            JPanel action=transparent(new BorderLayout());
+            action.setBorder(BorderFactory.createEmptyBorder(3,8,6,8));
+            action.add(runButton(view.notes.initial?"Start Run":"Continue Run",plugin::continueRun));
+            FarmingTheme.apply(action);footer.add(action);
         }
-        requirementsHeader=supplySection(requirementsTitle(view),"Recommended items",GuidePresentation.ITEMS_HELP,false,view);
-        supplySection("Recommended teleports","Recommended teleports",GuidePresentation.TRAVEL_HELP,true,view);
         if(!isPreparing && view.active!=null)
         {
             heading(plugin.diseaseInterruptActive()?"Disease detected":"Current patch");
@@ -1199,7 +1229,7 @@ final class FarmingHelperPanel extends PluginPanel
             {
                 JButton fold=disclosure(count,open);
                 fold.addActionListener(e->{if(!patchExpanded.add(key))patchExpanded.remove(key);fillPatches(results);});
-                fold.setName("patch-group/"+key);resultRow(results,fold);
+                fold.setName("patch-group/"+key);fold.putClientProperty("farming.focusFallback","Search patches…");resultRow(results,fold);
             }
             else resultRow(results,text(count,FarmingTheme.MUTED));
             if(open)for(FarmRunPatch p:list)
@@ -1207,7 +1237,7 @@ final class FarmingHelperPanel extends PluginPanel
                 JPanel row=transparent(new BorderLayout(2,0));row.setBorder(BorderFactory.createEmptyBorder(2,8,2,0));
                 JCheckBox enabled=check(patchLabel(p,patchByLocation),plugin.enabled(p),
                     on->{plugin.save("patchEnabled_"+p.key(),Boolean.toString(on));fillPatches(results);});
-                enabled.setName("enabled/"+p.key());
+                enabled.setName("enabled/"+p.key());enabled.putClientProperty("farming.focusFallback","Search patches…");
                 String issue=plugin.accessNote(p);enabled.setToolTipText(issue.isEmpty()?p.getDisplayName():issue);
                 enabled.getAccessibleContext().setAccessibleDescription(enabled.getToolTipText());
                 if(!issue.isEmpty()){
@@ -1222,7 +1252,7 @@ final class FarmingHelperPanel extends PluginPanel
                     String behavior="PRESERVE".equals(saved)?"Keep planted":"REPLANT".equals(saved)?"Harvest & replant":"Use preferences";
                     String description="Edit "+p.getDisplayName()+" · "+(old.isEmpty()?"Automatic":old)+" · "+behavior;
                     JButton edit=FarmingIcons.button(MORE,description,old.isEmpty()&&!KeepCrop.explicit(saved)?FarmingTheme.MUTED:FarmingTheme.SUCCESS);
-                    edit.setName("edit/"+p.key());
+                    edit.setName("edit/"+p.key());edit.putClientProperty("farming.focusFallback","Search patches…");
                     edit.addActionListener(e->editPatch(p,edit,results,old,saved));
                     row.add(edit,BorderLayout.EAST);
                 }

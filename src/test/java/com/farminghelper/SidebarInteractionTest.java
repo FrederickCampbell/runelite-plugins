@@ -36,12 +36,12 @@ public class SidebarInteractionTest
         }
         return result;
     }
-    private static JButton button(Container root,String name)
+    static JButton button(Container root,String name)
     {
         return descendants(root).stream().filter(c->c instanceof JButton && name.equals(c.getAccessibleContext().getAccessibleName()))
             .map(c->(JButton)c).findFirst().orElseThrow(()->new AssertionError("No button "+name));
     }
-    private static <T extends JComponent> T named(Container root,String name,Class<T> type)
+    static <T extends JComponent> T named(Container root,String name,Class<T> type)
     {
         return descendants(root).stream().filter(c->type.isInstance(c)&&name.equals(c.getName()))
             .map(type::cast).findFirst().orElseThrow(()->new AssertionError("No control "+name));
@@ -67,6 +67,9 @@ public class SidebarInteractionTest
             JButton travel=named(panel,"Recommended teleports",JButton.class);
             assertSame(items.getParent(),button(panel,"Help for Recommended items").getParent());
             assertSame(travel.getParent(),button(panel,"Help for Recommended teleports").getParent());
+            List<JComponent> preparation=descendants(panel);
+            assertTrue(preparation.indexOf(travel)<preparation.indexOf(line(panel,"Collect supplies.")));
+            assertNull(SwingUtilities.getAncestorOfClass(JScrollPane.class,button(panel,"Start Run")));
             JTextArea seed=line(panel,"Ranarr seed");assertNotNull(seed);
             assertNotNull(line(panel,"Last seen · Seed Vault 12"));
             panel.guide(guide(true,2,0),2);
@@ -81,6 +84,63 @@ public class SidebarInteractionTest
             panel.guide(guide(false,3,0),2);
             assertNotNull(line(panel,"Camelot teleport"));
             assertFalse(named(panel,"Recommended items",JButton.class).getText().contains("missing"));
+        });
+    }
+    @Test public void anEmptyChecklistKeepsBothDisclosuresAboveTheActivePatch() throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            FarmingHelperPanel panel=new FarmingHelperPanel(new Character());
+            GuideView view=new GuideView("Herb Run","Harvest",List.of(),guide(false,0,0).stops,
+                CATHERBY,"","",false,false,false,GuideView.Stats.UNKNOWN,GuideView.Notes.EMPTY);
+            panel.guide(view,4);
+            JButton items=named(panel,"Recommended items",JButton.class);
+            JButton travel=named(panel,"Recommended teleports",JButton.class);
+            assertFalse(items.getText().contains("missing"));
+            items.doClick(0);travel.doClick(0);
+            assertNotNull(line(panel,"No items needed for this run."));
+            assertNotNull(line(panel,"No teleports recommended for the remaining patches."));
+            panel.setSize(200,400);
+            layout(panel);
+            for(JButton fold:List.of(items,travel))
+            {
+                JPanel header=(JPanel)fold.getParent();
+                JButton help=button(header,"Help for "+fold.getName());
+                assertTrue(help.isFocusable());
+                assertTrue(fold.getBounds().contains(help.getBounds()));
+                assertSame(help,SwingUtilities.getDeepestComponentAt(header,help.getX()+help.getWidth()/2,help.getY()+help.getHeight()/2));
+                assertSame(fold,SwingUtilities.getDeepestComponentAt(header,5,fold.getHeight()/2));
+            }
+        });
+    }
+    private static void layout(Container component)
+    {
+        component.doLayout();
+        for(Component child:component.getComponents())if(child instanceof Container)layout((Container)child);
+    }
+    @Test public void individualSearchReusesTheSameRunButtonsAndSprites() throws Exception
+    {
+        Character character=new Character();
+        FarmingHelperPanel[] panel=new FarmingHelperPanel[1];JTextField[] field=new JTextField[1];
+        JButton[] tree=new JButton[1];
+        SwingUtilities.invokeAndWait(()->{
+            panel[0]=new FarmingHelperPanel(character);panel[0].home();
+            button(panel[0],"Individual runs").doClick(0);
+            field[0]=named(panel[0],"Find a run…",JTextField.class);
+            tree[0]=button(panel[0],"Fruit Tree & Calquat Run");field[0].setText("herb");
+        });
+        SwingUtilities.invokeAndWait(()->{
+            assertFalse(tree[0].getParent().isVisible());
+            assertTrue(button(panel[0],"Herb Run").getParent().isVisible());
+            field[0].setText("nothing matches");
+        });
+        SwingUtilities.invokeAndWait(()->{
+            assertTrue(line(panel[0],"No runs match your search.").getParent().isVisible());
+            field[0].setText(" TREE ");
+        });
+        SwingUtilities.invokeAndWait(()->{
+            assertSame(tree[0],button(panel[0],"Fruit Tree & Calquat Run"));
+            assertTrue(tree[0].getParent().isVisible());
+            assertFalse(line(panel[0],"No runs match your search.").getParent().isVisible());
         });
     }
     @Test public void changingManualSelectionKeepsThePickerAndCorrectMixedState() throws Exception
