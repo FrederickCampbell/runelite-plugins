@@ -175,6 +175,23 @@ final class PatchHighlight extends Overlay
             default:return false;
         }
     }
+    /** Resolve a local NPC from the scene, never a guessed map target. */
+    NPC leprechaun(FarmRunPatch patch)
+    {
+        if(client.getLocalPlayer()==null||client.getTopLevelWorldView()==null)return null;
+        WorldPoint anchor=Waypoints.destination(patch),player=client.getLocalPlayer().getWorldLocation();
+        if(anchor==null)return null;
+        NPC best=null;int distance=Integer.MAX_VALUE;
+        for(NPC npc:client.getTopLevelWorldView().npcs())
+        {
+            if(!"Tool leprechaun".equalsIgnoreCase(npc.getName()))continue;
+            WorldPoint point=npc.getWorldLocation();
+            if(point==null||point.distanceTo(anchor)>25||point.distanceTo(player)>25)continue;
+            int d=point.distanceTo(player);
+            if(d<distance){best=npc;distance=d;}
+        }
+        return best;
+    }
     @Override public Dimension render(Graphics2D graphics)
     {
         FarmingHelperPlugin helper=plugin.get();if(client.getLocalPlayer()==null)return null;
@@ -202,6 +219,12 @@ final class PatchHighlight extends Overlay
         }
         FarmRunPatch patch=helper.activePatch();if(patch==null)return null;
         StepEngine.Action action=helper.activeAction();
+        if(helper.fetchingUltra())
+        {
+            NPC npc=leprechaun(patch);
+            if(npc!=null)draw(graphics,npc.getConvexHull());
+            return null;
+        }
         if(patch.getPatchType()==PatchType.HESPORI && action==StepEngine.Action.HARVEST)return null;
         if(action==StepEngine.Action.PAY_REMOVE || action==StepEngine.Action.PROTECT_TREE)
         {

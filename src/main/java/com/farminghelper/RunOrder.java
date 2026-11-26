@@ -117,6 +117,34 @@ final class RunOrder
         ordered.sort(Comparator.comparingInt(g->terminalOrder(g.site)));
         return ordered;
     }
+    /** Move only ready members of a nearby selected block. Keep the rest of the
+     * itinerary stable and preserve the existing terminal-island ordering.
+     * This is a bounded geographic preference, not a path cost estimate. */
+    static void promoteNearby(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready,WorldPoint here)
+    {
+        if(here==null||ready.isEmpty())return;
+        Set<FarmRunPatch> allowed=new HashSet<>(ready);
+        Map<String,List<FarmRunPatch>> groups=new LinkedHashMap<>();
+        for(FarmRunPatch p:itinerary)
+            if(allowed.contains(p)&&terminalOrder(site(p))==0)
+                groups.computeIfAbsent(block(site(p)),k->new ArrayList<>()).add(p);
+        List<FarmRunPatch> best=null;double distance=70;
+        for(List<FarmRunPatch> group:groups.values())
+        {
+            group.sort(Comparator.comparingInt(RunOrder::localOrder));
+            WorldPoint entry=surface(group.get(0));
+            if(entry==null||entry.getPlane()!=here.getPlane())continue;
+            double d=proxy(here,entry);
+            if(d<distance){best=group;distance=d;}
+        }
+        if(best!=null)
+        {
+            itinerary.removeAll(best);itinerary.addAll(0,best);
+            ready.removeAll(best);ready.addAll(0,best);
+        }
+    }
+    static boolean arrival(WorldPoint before,WorldPoint after)
+    {return before!=null&&after!=null&&before.distanceTo2D(after)>12;}
     private static boolean terminal(Group g){return "Entrana".equals(g.site)||"Fossil Island".equals(g.site);}
     /** Keep the established order. Insert newly ready mainland work before the terminal islands. */
     static void appendReady(List<FarmRunPatch> itinerary,List<FarmRunPatch> ready)

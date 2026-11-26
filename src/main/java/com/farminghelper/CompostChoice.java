@@ -22,6 +22,22 @@ enum CompostChoice
         try { return valueOf(value); }
         catch (IllegalArgumentException | NullPointerException e) { return oldEnabled ? BOTTOMLESS : NONE; }
     }
+    // Shared Tool leprechaun storage, read by the game's farming-tools exchange.
+    static final int LEPRECHAUN_ULTRACOMPOST=5732;
+    static int localItem(int planned,java.util.Map<Integer,Integer> bag,int storedUltra)
+    {
+        if(planned==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED&&
+            bag.getOrDefault(planned,0)==0&&
+            (bag.getOrDefault(ItemID.BUCKET_ULTRACOMPOST,0)>0||storedUltra>0))
+            return ItemID.BUCKET_ULTRACOMPOST;
+        return planned;
+    }
+    static boolean withdrawUltra(int item,java.util.Map<Integer,Integer> bag,int storedUltra)
+    {
+        return item==ItemID.BUCKET_ULTRACOMPOST&&storedUltra>0&&
+            bag.getOrDefault(ItemID.BUCKET_ULTRACOMPOST,0)==0&&
+            bag.getOrDefault(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED,0)==0;
+    }
     static boolean isOrdinary(int id)
     {
         return id == ItemID.BUCKET_COMPOST || id == ItemID.BUCKET_SUPERCOMPOST || id == ItemID.BUCKET_ULTRACOMPOST;
