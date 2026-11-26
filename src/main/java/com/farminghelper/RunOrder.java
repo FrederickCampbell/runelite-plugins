@@ -5,6 +5,35 @@ import net.runelite.api.coords.WorldPoint;
 
 final class RunOrder
 {
+    private final List<FarmRunPatch> itinerary;
+    private final Map<FarmRunPatch,Integer> ranks = new HashMap<>();
+    private final Comparator<FarmRunPatch> byRank = Comparator.comparingInt(ranks::get);
+
+    RunOrder(List<Group> groups)
+    {
+        itinerary = flatten(groups);
+        index();
+    }
+
+    void order(List<FarmRunPatch> ready, List<FarmRunPatch> plant, List<FarmRunPatch> visible)
+    {
+        if (!ranks.keySet().containsAll(ready))
+        {
+            appendReady(itinerary, ready);
+            index();
+        }
+        for (List<FarmRunPatch> patches : List.of(ready, plant, visible))
+        {
+            patches.removeIf(p -> !ranks.containsKey(p));
+            patches.sort(byRank);
+        }
+    }
+
+    private void index()
+    {
+        for (int i = 0; i < itinerary.size(); i++) ranks.put(itinerary.get(i), i);
+    }
+
     static String site(FarmRunPatch p)
     {
         String loc=p.getLocation(); PatchType t=p.getPatchType();

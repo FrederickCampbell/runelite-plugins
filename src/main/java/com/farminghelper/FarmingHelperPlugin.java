@@ -128,7 +128,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile Set<Integer> stepItems=Collections.emptySet();
     private boolean visitedStorage;
     private WorldPoint preparationOrigin;
-    private List<FarmRunPatch> pinned;
+    private RunOrder pinned;
     private volatile LeprechaunWithdrawal leprechaunWithdrawal;
         private volatile FarmingHelperPanel panel;
     private NavigationButton nav;
@@ -1026,7 +1026,7 @@ public class FarmingHelperPlugin extends Plugin
                 waterOfferOrigin==null||location.actual==null?Integer.MAX_VALUE:waterOfferOrigin.distanceTo(location.actual)))
                 settleWater(waterOfferPatch);
         }
-        if(loggedIn&&showDiseaseInterrupt(title,carried,location,observations,local)){clearWaterOffer();return;}
+        if(loggedIn&&showDiseaseInterrupt(title,supplies,location,observations,local)){clearWaterOffer();return;}
         List<FarmRunPatch> eligible=new ArrayList<>();
         if(loggedIn)for(FarmRunPatch patch:patches)if(eligible(patch))eligible.add(patch);
         Map<Integer,Integer> storage=supplies.storage,stock=supplies.stock;
@@ -1040,7 +1040,9 @@ public class FarmingHelperPlugin extends Plugin
         int storedBucket=loggedIn&&runPolicy.compost&&runLeprechaun?CompostChoice.stored(client,ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED):0;
         int compostId=runPolicy.compost?compost.plan(bag,stock,storedUltra):-1;
         if(runPolicy.compost&&(compost==CompostChoice.BOTTOMLESS||compost==CompostChoice.ULTRA)&&storedBucket>0)compostId=ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED;
-        int storedCompost=loggedIn&&runLeprechaun&&runPolicy.compost?CompostChoice.stored(client,compostId):0;
+        int storedCompost = compostId == ItemID.BUCKET_ULTRACOMPOST ? storedUltra :
+            compostId == ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED ? storedBucket :
+            loggedIn && runLeprechaun && runPolicy.compost ? CompostChoice.stored(client,compostId) : 0;
         List<FarmRunPatch> ready=new ArrayList<>(), plant=new ArrayList<>(), visible=new ArrayList<>();
         int contract=loggedIn?client.getVarbitValue(VarbitID.FARMGUILD_CONTRACT_TYPE):0;
         Crop contractCrop=preferContracts()?CropCatalog.contractCrop(contract):null;
@@ -1059,39 +1061,39 @@ public class FarmingHelperPlugin extends Plugin
             if(!SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,type)||runProgress.is(p,RunProgress.Status.SKIPPED))continue;
             QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
             if(o==null) continue;
-            if(type==PatchType.BIRDHOUSE)
+            if (type == PatchType.BIRDHOUSE || type == PatchType.COMPOST_BIN)
             {
-                if(runProgress.finished(p)){visible.add(p);continue;}
-                if(p==current&&o.source==QuestFarmingStateReader.Source.LIVE)
+                if (!runProgress.finished(p))
                 {
-                    if(o.rawValue>=0&&!BirdhouseRun.seeded(o.rawValue))birdhouseTouched.add(p);
-                    if(BirdhouseRun.seeded(o.rawValue)&&birdhouseTouched.contains(p)){runProgress.finish(p,false);visible.add(p);continue;}
+                    if (type == PatchType.BIRDHOUSE && p == current && o.source == QuestFarmingStateReader.Source.LIVE)
+                    {
+                        if (o.rawValue >= 0 && !BirdhouseRun.seeded(o.rawValue)) birdhouseTouched.add(p);
+                        if (BirdhouseRun.seeded(o.rawValue) && birdhouseTouched.contains(p)) runProgress.finish(p,false);
+                    }
+                    if (!runProgress.finished(p))
+                    {
+                        if (type == PatchType.BIRDHOUSE ? o.state != CropState.GROWING : actionable(type,o.state)) ready.add(p);
+                        else if (type == PatchType.COMPOST_BIN && p == current) runProgress.finish(p,false);
+                        else continue;
+                    }
                 }
-                if(o.state!=CropState.GROWING){ready.add(p);visible.add(p);}
-                continue;
-            }
-            if(type==PatchType.COMPOST_BIN)
-            {
-                if(runProgress.finished(p)){visible.add(p);continue;}
-                if(actionable(type,o.state)){ready.add(p);visible.add(p);}
-                else if(p==current){runProgress.finish(p,false);visible.add(p);}
+                visible.add(p);
                 continue;
             }
             // Verified loss supersedes historical completion/preservation, not an explicit skip.
             boolean reopened=runProgress.reopenForLiveLoss(p,o);
             if(reopened&&p==current){progress.reset();activeCrop=null;compostAcknowledged=false;}
-            if(p==current&&!preparing())
+            if (p == current && !preparing() && progress.observe(o) &&
+                o.source == QuestFarmingStateReader.Source.LIVE && o.state == CropState.DEAD)
             {
-                boolean changed=progress.observe(o);
-                if(o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.DEAD)
-                {
-                    if(changed){compostAcknowledged=false;activeCrop=null;}
-                }
+                compostAcknowledged = false;
+                activeCrop = null;
             }
             if(reopened){wateredThisRun.remove(p);if(waterOfferPatch==p)clearWaterOffer();}
-            boolean preserveCrop=preserveReplacement(p,o);
+            KeepCrop species=KeepCrop.observed(type,o);
+            boolean preserveCrop=resolveReplacement(p,species);
             // Preserve selected flower species without picking them; newly planted flowers may finish care.
-            if((type==PatchType.FLOWER && KeepCrop.observed(type,o)!=null && preserveCrop && !(p==current&&progress.planted())) ||
+            if((type==PatchType.FLOWER && species!=null && preserveCrop && !(p==current&&progress.planted())) ||
                 ("Farming Guild".equals(p.getLocation()) && QuestFarmingStateReader.isLivingContractCrop(type.name(),o,contract)))
             {runProgress.finish(p,true);continue;}
             if(runProgress.finished(p)) { visible.add(p); continue; }
@@ -1112,7 +1114,8 @@ public class FarmingHelperPlugin extends Plugin
 
                 // The player may carry a lower-ranked seed than the initially allocated bank crop.
                 // Prefer a usable carried replacement for the active mature patch over preserving it prematurely.
-                if(CropReplacement.configurable(type)&&!preserveCrop&&CropReplacement.mature(type,o)&&!progress.planted()&&
+                boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
+                if(mature&&!preserveCrop&&!progress.planted()&&
                     (activeCrop==null||plantingBag.getOrDefault(activeCrop.getItemId(),0)<activeCrop.getQuantity())&&
                     !(preferredContract!=null&&"Farming Guild".equals(p.getLocation())&&type==preferredContract.getPatchType()&&
                         level>=preferredContract.getLevel()&&supplies.allocation.getOrDefault(preferredContract.getItemId(),0)>=preferredContract.getQuantity()))
@@ -1120,7 +1123,6 @@ public class FarmingHelperPlugin extends Plugin
                     Crop carriedReplacement=SeedChoices.allocate(List.of(p),level,plantingBag,this::priority,this::override,Collections.emptyMap(),true,this::autoLily).get(p);
                     if(carriedReplacement!=null)activeCrop=carriedReplacement;
                 }
-                boolean mature=CropReplacement.configurable(type)&&CropReplacement.mature(type,o);
                 if(mature&&preserveCrop&&o.source==QuestFarmingStateReader.Source.LIVE&&!CropReplacement.actionable(type,o,true))
                 {runProgress.finish(p,true);visible.add(p);continue;}
                 if(!mature&&progress.finished(type,o,wants,hasPayment,preserveCrop)) { runProgress.finish(p,false); visible.add(p); continue; }
@@ -1145,16 +1147,9 @@ public class FarmingHelperPlugin extends Plugin
                 carriedSaplings.add(p.getPatchType());
             int usedSlots=Preparation.slots(bag,Collections.emptyMap(),this::stackable);
             // Shortest Path navigates the active leg; the shared planner alone orders patches.
-            pinned=RunOrder.flatten(RunOrder.shared(ready,start,guildFirst,usedSlots>=25?carriedSaplings:Collections.emptySet()));
+            pinned=new RunOrder(RunOrder.shared(ready,start,guildFirst,usedSlots>=25?carriedSaplings:Collections.emptySet()));
         }
-        if(pinned!=null)
-        {
-            RunOrder.appendReady(pinned,ready);
-            Map<FarmRunPatch,Integer> rank=new HashMap<>();
-            for(int i=0;i<pinned.size();i++)rank.put(pinned.get(i),i);
-            for(List<FarmRunPatch> list:List.of(ready,plant,visible))
-            {list.removeIf(p->!rank.containsKey(p));list.sort(Comparator.comparingInt(rank::get));}
-        }
+        if (pinned != null) pinned.order(ready, plant, visible);
         // A selected, local dry crop can be watered without a new planting allocation.
         // Disease is handled independently before the ordinary planner.
         Set<FarmRunPatch> careOnly=new LinkedHashSet<>();
@@ -1188,7 +1183,6 @@ public class FarmingHelperPlugin extends Plugin
             allocationInputs=inputs;
         }
         Map<FarmRunPatch,Crop> seeds=allocated;
-        int seedlessCount=0;
         Set<FarmRunPatch> seedless=new HashSet<>();
         Set<FarmRunPatch> clearOnly=new HashSet<>();
         if(hideSeedless)
@@ -1200,7 +1194,6 @@ public class FarmingHelperPlugin extends Plugin
                 for(FarmRunPatch p:seedless)if(ClearOnly.eligible(observations.get(p).state)||CropReplacement.mature(p.getPatchType(),observations.get(p)))clearOnly.add(p);
                 seedless.removeAll(clearOnly);
             }
-            seedlessCount=seedless.size();
             ready.removeAll(seedless);visible.removeAll(seedless);
         }
         if(loggedIn)runProgress.update(p->SpecialtyStages.includes(specialtyStaged,specialtyBirdPhase,p.getPatchType()),ready,seedless);
@@ -1287,7 +1280,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             DivingKit.require(required,supplies.travel,carried);
         }
-        Map<Integer,Integer> farmingRequirements=new LinkedHashMap<>(required);
+        Map<Integer,Integer> farmingRequirements=SpecialRoutes.isType(current,PatchType.BIRDHOUSE)?new LinkedHashMap<>(required):Map.of();
         Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?supplies.bankAndBag:stock;
         int hunter=client.getRealSkillLevel(Skill.HUNTER),crafting=client.getRealSkillLevel(Skill.CRAFTING);
         if(specialtyStaged&&specialtyBirdPhase)
@@ -1300,16 +1293,11 @@ public class FarmingHelperPlugin extends Plugin
         {
             int n=required.get(id);
             if((CompostChoice.isOrdinary(id)||id==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)&&bag.getOrDefault(id,0)>=n&&binPlans.isEmpty())continue;
-            GuideView.ItemRow row=itemRow(id,n,carried,false);
             int pending=pendingSaplings.getOrDefault(id,0);
-            if(pending>0)row=new GuideView.ItemRow(row.id,row.name+" ("+pending+" to prepare)",row.owned,row.needed,row.bank,row.vault,row.recommended);
-            items.add(row);
+            items.add(itemRow(id,n,supplies,false,pending>0?" ("+pending+" to prepare)":""));
         }
         if(yieldTool&&!required.containsKey(magicSecateurs))
-        {
-            GuideView.ItemRow row=itemRow(magicSecateurs,1,carried,false);
-            items.add(new GuideView.ItemRow(row.id,row.name+" (optional yield boost)",row.owned,row.needed,row.bank,row.vault,false));
-        }
+            items.add(itemRow(magicSecateurs,1,supplies,false," (optional yield boost)"));
         requiredItems=Set.copyOf(required.keySet());
         missingStorageItems=GuideView.missingItems(physicalRequired,carried);
         Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
@@ -1320,10 +1308,8 @@ public class FarmingHelperPlugin extends Plugin
             :Collections.emptyMap();
         Set<Integer> missingTravel=new HashSet<>();
         teleports.forEach((id,sites)->{
-            GuideView.ItemRow row=itemRow(id,1,carried,true);
-            String name=observedItemName(id);
-            items.add(new GuideView.ItemRow(id,(name.isEmpty()?row.name:name)+" — "+String.join(", ",sites),
-                row.owned,row.needed,row.bank,row.vault,true));
+            GuideView.ItemRow row=itemRow(id,1,supplies,true," — "+String.join(", ",sites));
+            items.add(row);
             if(!row.satisfied()&&row.bank>0)missingTravel.add(id);
         });
         missingTeleports=Set.copyOf(missingTravel);
@@ -1444,7 +1430,7 @@ public class FarmingHelperPlugin extends Plugin
                 }
             }
         }
-        if(seedlessCount>0)details.add(seedlessCount+" patch(es) skipped for missing seeds.");
+        if(!seedless.isEmpty())details.add(seedless.size()+" patch(es) skipped for missing seeds.");
         if(!clearOnly.isEmpty())details.add(clearOnly.size()+" patch(es) to harvest / clear without replanting.");
         if(current==null&&preparing())phase=Preparation.Phase.ACTIVE;
         // All processed patches remain visible in the completed history across stages.
@@ -1470,17 +1456,15 @@ public class FarmingHelperPlugin extends Plugin
                 prepHelp+="\nCheck a tool leprechaun for missing tools.";
             // Preparation is entered only at run start or by the Resupply button.
             // Keep the explicit Start/Continue action available even when supplies are ready.
+            if (!routeToStorage) leg=RouteLeg.walk(null,false);
+            else if (aboard || instance && !location.inHouse() || SpecialRoutes.insideHespori(player) ||
+                SpecialRoutes.insideSeaweed(player) || SpecialRoutes.insideCoral(player))
             {
                 RouteLeg exit=SpecialRoutes.leg(null,player,aboard,rowboat,instance,null);
-                if(!routeToStorage)leg=RouteLeg.walk(null,false);
-                else if(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
-                    leg=exit.instruction.isEmpty()?RouteLeg.manual("Leave the current instance before banking.",RouteLeg.Interaction.NONE):exit;
-                else leg=RouteLeg.approach(preparationBank.point,vaultTarget?"Travel to the Guild bank approach, then use the Seed Vault immediately west of the chest.":"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
-                // Ordinary bank approach is already named above. Preserve actual
-                // special-transport/instance instructions when necessary.
-                if(routeToStorage&&(aboard||instance&&!location.inHouse()||SpecialRoutes.insideHespori(player)||SpecialRoutes.insideSeaweed(player)||SpecialRoutes.insideCoral(player))
-                    &&!leg.instruction.isEmpty())prepMessage+="\n"+leg.instruction;
+                leg=exit.instruction.isEmpty()?RouteLeg.manual("Leave the current instance before banking.",RouteLeg.Interaction.NONE):exit;
+                prepMessage+="\n"+leg.instruction;
             }
+            else leg=RouteLeg.approach(preparationBank.point,vaultTarget?"Travel to the Guild bank approach, then use the Seed Vault immediately west of the chest.":"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
         }
         if(loggedIn&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE)&&
             (SpecialRoutes.onSeaweedIsland(player)||!preparing()&&seaweedBirdTransfer))
@@ -1563,21 +1547,21 @@ public class FarmingHelperPlugin extends Plugin
         }
     }
 
-    private boolean showDiseaseInterrupt(String title,Map<Integer,Integer> carried,LocationContext location,
+    private boolean showDiseaseInterrupt(String title,PhysicalStock supplies,LocationContext location,
         Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,List<FarmRunPatch> local)
     {
         if(highlight==null)return false;
         WorldPoint here=location.actual;
-        Map<FarmRunPatch,QuestFarmingStateReader.Observation> verified=new LinkedHashMap<>();
-        Map<FarmRunPatch,WorldPoint> approaches=new HashMap<>();
+        Map<Integer,Integer> carried=supplies.carried;
+        Map<FarmRunPatch,WorldPoint> approaches=new LinkedHashMap<>();
         for(FarmRunPatch p:local)
         {
             QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
             if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.DISEASED||!highlight.hasVerifiedDisease(p))continue;
-            verified.put(p,o);approaches.put(p,highlight.approach(p));
+            approaches.put(p,highlight.approach(p));
         }
         FarmRunPatch previous=diseaseTarget;
-        FarmRunPatch target=diseasePriority.select(verified.keySet(),p->{WorldPoint a=approaches.get(p);return a==null?Integer.MAX_VALUE:here.distanceTo(a);});
+        FarmRunPatch target=diseasePriority.select(approaches.keySet(),p->{WorldPoint a=approaches.get(p);return a==null?Integer.MAX_VALUE:here.distanceTo(a);});
         if(target==null)
         {
             if(previous!=null)lastView=null;
@@ -1586,9 +1570,9 @@ public class FarmingHelperPlugin extends Plugin
         if(previous!=target)lastView=null;
         // Record the disease transition only when the interrupted patch itself is
         // the diseased one, so its existing completion tracker can see recovery.
-        if(current==target)progress.observe(verified.get(target));
+        if(current==target)progress.observe(observations.get(target));
         PatchType type=target.getPatchType();
-        int cure=CropCare.prunes(type)?(carried.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0?ItemID.FAIRY_ENCHANTED_SECATEURS:ItemID.SECATEURS):ItemID.PLANT_CURE;
+        int cure=StepItems.cure(type,carried);
         diseaseItems=Set.of(cure);
         missingStorageItems=GuideView.missingItems(Map.of(cure,1),carried);
         missingTeleports=Collections.emptySet();
@@ -1597,12 +1581,12 @@ public class FarmingHelperPlugin extends Plugin
         diseaseTarget=target;
         if(navigation!=null)navigation.request(location.pathStart(),approach,false);
         String instruction=CropCare.prunes(type)?"Prune the diseased crop with secateurs.":"Use plant cure on the diseased crop.";
-        Map<Integer,Integer> bag=stock().bag;
+        Map<Integer,Integer> bag=supplies.bag;
         leprechaunWithdrawal=contextualWithdrawal(target,StepEngine.Action.CURE,-1,bag,carried,-1,false);
         if(leprechaunWithdrawal!=null)instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
         else if(carried.getOrDefault(cure,0)==0)instruction+=CropCare.prunes(type)?" Obtain secateurs or skip this cure.":" Obtain plant cure from a nearby farmer or shop if available, or skip this cure.";
         String resume=preparing()?"Preparation / resupply":current==null?"The remaining run":current.getDisplayName();
-        List<GuideView.ItemRow> items=new ArrayList<>();items.add(itemRow(cure,1,carried,false));
+        List<GuideView.ItemRow> items=List.of(itemRow(cure,1,supplies,false,""));
         List<GuideView.Stop> stops=new ArrayList<>();stops.add(new GuideView.Stop(target,instruction,true,false));
         if(normalView!=null)for(GuideView.Stop stop:normalView.stops)if(stop.patch!=target)stops.add(new GuideView.Stop(stop.patch,stop.active?"Paused: "+stop.instruction:stop.instruction,false,stop.done));
         cacheIcons(items);
@@ -1617,8 +1601,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     private boolean storageOpen()
     {
-        var b=client.getWidget(InterfaceID.Bankmain.UNIVERSE);var v=client.getWidget(InterfaceID.SeedVault.UNIVERSE);
-        return b!=null&&!b.isHidden()||v!=null&&!v.isHidden();
+        return visibleWidget(bank.widget) || visibleWidget(vault.widget);
     }
     private boolean preparing(){return phase==Preparation.Phase.INITIAL||phase==Preparation.Phase.RESUPPLY;}
     private void beginPreparation(Preparation.Phase next)
@@ -1664,14 +1647,14 @@ public class FarmingHelperPlugin extends Plugin
         var image=itemManager.getImage(itemId);if(image!=null)image.addTo(label);
     }
 
-    private GuideView.ItemRow itemRow(int id,int count,Map<Integer,Integer> carried,boolean recommended)
+    private GuideView.ItemRow itemRow(int id,int count,PhysicalStock supplies,boolean recommended,String suffix)
     {
         Crop crop=CropCatalog.findByItemId(id);
         String name=crop==null?Supplies.name(id):crop.getItemName();
-        if(name.startsWith("Item #")){String actual=observedItemName(id);if(!actual.isEmpty())name=actual;}
-        int boxed=stock().seedBox.getOrDefault(id,0);
+        if(recommended || name.startsWith("Item #")){String actual=observedItemName(id);if(!actual.isEmpty())name=actual;}
+        int boxed=supplies.seedBox.getOrDefault(id,0);
         if(boxed>0&&!recommended)name+=" (box: "+boxed+")";
-        return new GuideView.ItemRow(id,name,carried.getOrDefault(id,0),count,
+        return new GuideView.ItemRow(id,name+suffix,supplies.carried.getOrDefault(id,0),count,
             bank.items.getOrDefault(id,0),vault.items.getOrDefault(id,0),recommended);
     }
 

@@ -9,26 +9,27 @@ final class StepItems
 {
     static Set<Integer> select(StepEngine.Action action,PatchType type,Crop crop,int compost,int axe,Map<Integer,Integer> bag)
     {
-        Set<Integer> result=new LinkedHashSet<>();
-        switch(action)
+        switch (action)
         {
-            case COMPOST: if(compost>=0)result.add(compost);break;
-            case PLANT: if(crop!=null)result.add(crop.getItemId());break;
-            case RAKE: result.add(ItemID.RAKE);break;
-            case DIG_STUMP: case CLEAR_DEAD: case CLEAR_LIVING: result.add(ItemID.SPADE);break;
-            case PAY_REMOVE: result.add(ItemID.COINS);break;
-            case CHOP_TREE: if(axe>0)result.add(axe);break;
-            case CURE:
-                if(CropCare.prunes(type))
-                    result.add(bag.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0?ItemID.FAIRY_ENCHANTED_SECATEURS:ItemID.SECATEURS);
-                else result.add(ItemID.PLANT_CURE);
-                break;
+            case COMPOST: return compost >= 0 ? Set.of(compost) : Set.of();
+            case PLANT: return crop == null ? Set.of() : Set.of(crop.getItemId());
+            case RAKE: return Set.of(ItemID.RAKE);
+            case DIG_STUMP: case CLEAR_DEAD: case CLEAR_LIVING: return Set.of(ItemID.SPADE);
+            case PAY_REMOVE: return Set.of(ItemID.COINS);
+            case CHOP_TREE: return axe > 0 ? Set.of(axe) : Set.of();
+            case CURE: return Set.of(cure(type, bag));
             case PROTECT_TREE:
-                for(ProtectionPayment cost:CropCatalog.protection(crop))result.add(cost.getItemId());
-                break;
-            default:break;
+                Set<Integer> payment = new HashSet<>();
+                for (ProtectionPayment cost : CropCatalog.protection(crop)) payment.add(cost.getItemId());
+                return Set.copyOf(payment);
+            default: return Set.of();
         }
-        return Set.copyOf(result);
+    }
+
+    static int cure(PatchType type, Map<Integer,Integer> carried)
+    {
+        if (!CropCare.prunes(type)) return ItemID.PLANT_CURE;
+        return carried.getOrDefault(ItemID.FAIRY_ENCHANTED_SECATEURS,0)>0 ? ItemID.FAIRY_ENCHANTED_SECATEURS : ItemID.SECATEURS;
     }
     /** Pick one matching slot, in inventory order, irrespective of render traversal. */
     static boolean firstSlot(int id,int index,Item[] inventory)
