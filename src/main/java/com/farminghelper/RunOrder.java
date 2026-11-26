@@ -117,9 +117,21 @@ final class RunOrder
                 {ordered.remove(i);ordered.add(first,g);break;}
             }
         }
+        // Preserve explicit selected pairs even when initial proximity or saplings promote a site.
+        pair(ordered,"South Falador","Draynor Manor");
+        pair(ordered,"Falador Park","Taverley");
         // Entrana comes before Fossil Island, both after ordinary surface work.
         ordered.sort(Comparator.comparingInt(g->terminalOrder(g.site)));
         return ordered;
+    }
+    private static void pair(List<Group> ordered,String first,String second)
+    {
+        Group a=ordered.stream().filter(g->first.equals(g.site)).findFirst().orElse(null);
+        Group b=ordered.stream().filter(g->second.equals(g.site)).findFirst().orElse(null);
+        if(a==null||b==null)return;
+        int at=Math.min(ordered.indexOf(a),ordered.indexOf(b));
+        ordered.remove(a);ordered.remove(b);
+        ordered.add(at,a);ordered.add(at+1,b);
     }
     private static boolean terminal(Group g){return "Entrana".equals(g.site)||"Fossil Island".equals(g.site);}
     /** Keep the established order. Insert newly ready mainland work before the terminal islands. */

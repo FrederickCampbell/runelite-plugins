@@ -2,6 +2,7 @@ package com.farminghelper;
 
 import java.util.*;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.coords.WorldPoint;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -23,6 +24,14 @@ public class FixedRouteCompostTest
         assertEquals(List.of(park,taverley,fruit),order(taverley,fruit,park));
         assertEquals(List.of(farm,manor),order(manor,farm));
         assertEquals(List.of(herb,fruit),order(fruit,herb));
+    }
+
+    @Test public void startingNearSecondMemberCannotReverseFixedPair()
+    {
+        FarmRunPatch park=p("Falador",PatchType.TREE),taverley=p("Taverley",PatchType.TREE),
+            farm=p("Falador",PatchType.HERB),manor=p("Draynor Manor",PatchType.BELLADONNA);
+        assertEquals(List.of(park,taverley),RunOrder.flatten(RunOrder.shared(List.of(park,taverley),new WorldPoint(2936,3438,0),false,Set.of())));
+        assertEquals(List.of(farm,manor),RunOrder.flatten(RunOrder.shared(List.of(farm,manor),new WorldPoint(3084,3356,0),false,Set.of())));
     }
 
     @Test public void leprechaunAndBucketReduceSupplyRequirements()
