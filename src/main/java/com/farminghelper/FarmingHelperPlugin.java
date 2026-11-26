@@ -133,6 +133,7 @@ public class FarmingHelperPlugin extends Plugin
     private WorldPoint preparationOrigin;
     private RunOrder pinned;
     private Set<FarmRunPatch> preparedWave=Set.of();
+    private PhysicalStock preparedStock;
     private volatile LeprechaunWithdrawal leprechaunWithdrawal;
         private volatile FarmingHelperPanel panel;
     private NavigationButton nav;
@@ -245,7 +246,7 @@ public class FarmingHelperPlugin extends Plugin
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;preparationOrigin=null;
-        pinned=null;preparedWave=Set.of();leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
+        pinned=null;preparedWave=Set.of();preparedStock=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;clearWaterOffer();compostMissing=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
@@ -1274,7 +1275,7 @@ public class FarmingHelperPlugin extends Plugin
         // checklist is scoped. A committed active wave is not enlarged every tick.
         boolean boundary=loggedIn&&current!=null&&!preparedWave.isEmpty()&&!preparedWave.contains(current);
         int limit=ready.size();
-        if(!preparing()&&!boundary&&!preparedWave.isEmpty()&&current!=null)
+        if((!preparing()||preparedStock==supplies)&&!boundary&&!preparedWave.isEmpty()&&current!=null)
         {
             limit=0;
             while(limit<ready.size()&&preparedWave.contains(ready.get(limit)))limit++;
@@ -1366,8 +1367,6 @@ public class FarmingHelperPlugin extends Plugin
             birdStock=BirdhouseRun.preferCarried(wave,observations,plantingBag,birdStock,required,hunter,crafting);
         Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(wave,observations,birdStock,required,hunter,crafting);
         ProtectionPayment.reserve(required,paymentNeeds,bag,this::itemDefinition,paymentNotes);
-        if(wave.size()==1&&wave.get(0).getPatchType()==PatchType.COMPOST_BIN)
-            CompostRun.batch(required,bag,actualOccupied,this::stackable);
         List<GuideView.ItemRow> items=new ArrayList<>();
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
         Map<Integer,Integer> physicalRequired=TreePreparation.physicalRequirements(required,pendingSaplings);
@@ -1386,6 +1385,14 @@ public class FarmingHelperPlugin extends Plugin
             int n=RunTeleports.quantity(id,sites.size(),observedItemName(id),stackable(id));
             travelCounts.put(id,n);load.merge(id,n,Math::max);
         });
+        if(wave.size()==1&&wave.get(0).getPatchType()==PatchType.COMPOST_BIN)
+        {
+            CompostRun.batch(load,bag,equipped,supplies.seedBox,actualOccupied,this::stackable);
+            required.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
+            required.values().removeIf(n->n<=0);
+            physicalRequired.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
+            physicalRequired.values().removeIf(n->n<=0);
+        }
         int slots=Preparation.loadedSlots(bag,load,equipped,supplies.seedBox,this::stackable)
             +Math.max(0,actualOccupied-Preparation.slots(bag,Map.of(),this::stackable));
         int reserve=Preparation.workingSlots(wave);
@@ -1394,7 +1401,10 @@ public class FarmingHelperPlugin extends Plugin
         {
             // Only a missing supply for the very next patch justifies interrupting
             // the run. Missing future supplies and optional yield tools do not.
-            needsResupply=physicalRequired.entrySet().stream().anyMatch(e->e.getKey()!=magicSecateurs&&
+            boolean localBinBatch=current.getPatchType()==PatchType.COMPOST_BIN&&binPlans.containsKey(current)&&
+                (observations.get(current).state==CropState.EMPTY||observations.get(current).state==CropState.FILLING)&&
+                binPlans.get(current).supplies.keySet().stream().anyMatch(id->CompostRun.material(id)&&bag.getOrDefault(id,0)>0);
+            needsResupply=!localBinBatch&&physicalRequired.entrySet().stream().anyMatch(e->e.getKey()!=magicSecateurs&&
                 e.getValue()>carried.getOrDefault(e.getKey(),0)&&paymentStorage.getOrDefault(e.getKey(),0)>0);
             probeBoundary=false;limit=window.limit();continue;
         }
@@ -1411,7 +1421,7 @@ public class FarmingHelperPlugin extends Plugin
             }
         }
         if(window.advance(fits)){limit=window.limit();continue;}
-        preparedWave=Set.copyOf(wave);
+        preparedWave=Set.copyOf(wave);preparedStock=supplies;
         if(needsResupply&&!preparing())beginPreparation(Preparation.Phase.RESUPPLY);
         for(int id:SupplyOrder.ordered(required,this::observedItemName))
         {
@@ -1862,7 +1872,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     void resupply()
     {
-        inRun(()->{if(diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(Preparation.Phase.RESUPPLY);update();});
+        inRun(()->{if(diseaseTarget!=null||current==null)return;sampleStorage();preparedStock=null;beginPreparation(Preparation.Phase.RESUPPLY);update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
