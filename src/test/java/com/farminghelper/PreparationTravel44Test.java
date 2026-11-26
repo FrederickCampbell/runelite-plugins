@@ -7,6 +7,12 @@ import static org.junit.Assert.*;
 
 public class PreparationTravel44Test
 {
+    private static Map<Integer,Set<String>> select(Collection<FarmRunPatch> patches,Map<Integer,List<String>> eligible,Map<Integer,Integer> carried)
+    {
+        Map<Integer,Integer> available=new HashMap<>();
+        eligible.keySet().forEach(id->available.put(id,1));
+        return RunTeleports.select(patches,eligible,carried,available,(id,visits)->1);
+    }
     @Test public void initialAndResupplyPreferKnownVaultPlantingShortage()
     {
         Map<Integer,Integer> needed=Map.of(1,5),bank=Map.of(1,2),vault=Map.of(1,3);
@@ -36,7 +42,7 @@ public class PreparationTravel44Test
         FarmRunPatch tree=new FarmRunPatch("Lumbridge","",PatchType.TREE);
         FarmRunPatch belladonna=new FarmRunPatch("Auburnvale","",PatchType.BELLADONNA);
         assertEquals(Map.of(1,Set.of("Lumbridge farm"),2,Set.of("Lumbridge Castle"),3,Set.of("Auburnvale belladonna")),
-            RunTeleports.select(List.of(hops,tree,belladonna),Map.of(1,List.of("Chronicle"),2,List.of("Lumbridge tablet"),
+            select(List.of(hops,tree,belladonna),Map.of(1,List.of("Chronicle"),2,List.of("Lumbridge tablet"),
                 3,List.of("Trinket of fairies: Tool Lep - Nemus Retreat")),Map.of()));
     }
 
@@ -56,9 +62,9 @@ public class PreparationTravel44Test
             new FarmRunPatch("Weiss","",PatchType.HERB),new FarmRunPatch("Falador","",PatchType.HERB));
         Map<Integer,List<String>> eligible=Map.of(1,List.of("Eternal teleport crystal: Lletya","Eternal teleport crystal: Prifddinas"),
             2,List.of("Teleport crystal: Lletya","Teleport crystal: Prifddinas"),3,List.of("Icy basalt"),4,List.of("Chronicle"));
-        Map<Integer,Set<String>> selected=RunTeleports.select(ready,eligible,Map.of(2,1));
+        Map<Integer,Set<String>> selected=select(ready,eligible,Map.of(2,1));
         assertEquals(Map.of(2,Set.of("Lletya","Prifddinas"),3,Set.of("Weiss")),selected);
-        assertTrue(RunTeleports.select(List.of(),eligible,Map.of()).isEmpty());
+        assertTrue(select(List.of(),eligible,Map.of()).isEmpty());
     }
     @Test public void everyMainlandDestinationHasARealTransportAndAnglersRetreatUsesItsBoat() throws Exception
     {
@@ -72,7 +78,7 @@ public class PreparationTravel44Test
         for(FarmRunPatch patch:patches)
         {
             boolean boat="Anglers' Retreat".equals(RunOrder.site(patch));
-            assertEquals(patch.key(),boat,RunTeleports.select(List.of(patch),Map.of(1,destinations),Map.of()).isEmpty());
+            assertEquals(patch.key(),boat,select(List.of(patch),Map.of(1,destinations),Map.of()).isEmpty());
         }
     }
 
