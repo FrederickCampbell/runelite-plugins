@@ -423,8 +423,54 @@ final class SeedVaultViews
         }
         for(Widget line:lines)if(line!=null&&!line.isSelfHidden()&&lineOffset!=Integer.MIN_VALUE&&
             sectionAt(sections,line.getOriginalY()+lineOffset)!=null&&!usedLines.contains(line))full=false;
-        int shift=0;
-        for(int j=0;j<sections.size();j++)
+        // An unverified section must not produce a partially filtered Active Run.
+        // Keep the restored native interface, including every required item.
+        if(sections.stream().anyMatch(s->!s.safe))return true;
+        int projectedExtent=nativeExtent;
+        if(full)
+        {
+            List<Pair> all=new ArrayList<>();
+            List<VaultGrid.Slot> slots=new ArrayList<>();
+            Set<Integer> columns=new TreeSet<>();
+            int rowHeight=1;
+            for(Section section:sections)
+            {
+                for(Pair p:section.pairs)
+                {
+                    boolean selected=p.placeholder?placeholderRelevant(p.base,keep,active==VaultRanking.View.RUN?runItems:null):keep.contains(p.id);
+                    slots.add(new VaultGrid.Slot(all.size(),p.icon.getOriginalX(),p.icon.getOriginalY(),selected,rank.getOrDefault(p.base,Integer.MAX_VALUE)));
+                    columns.add(p.icon.getOriginalX());
+                    rowHeight=Math.max(rowHeight,p.label.getOriginalY()-p.icon.getOriginalY()+p.label.getHeight());
+                    all.add(p);
+                }
+            }
+            // Check that the native columns do not overlap any item label before
+            // using them across categories. Otherwise leave native layout intact.
+            List<Integer> xs=new ArrayList<>(columns);
+            int left=0,right=0;
+            for(Pair p:all)
+            {
+                int dx=p.label.getOriginalX()-p.icon.getOriginalX();
+                left=Math.max(left,-dx);right=Math.max(right,Math.max(p.icon.getWidth(),dx+p.label.getWidth()));
+            }
+            for(int i=1;i<xs.size();i++)if(xs.get(i)-xs.get(i-1)<left+right)return true;
+            int start=sections.get(0).y+4;
+            // Do not move into the native contract / favourites area.
+            for(Widget label:labels)if(label!=null&&!label.isSelfHidden()&&label.getOriginalY()<sections.get(0).y
+                &&label.getOriginalY()+label.getHeight()>start)return true;
+            for(Section section:sections){hide(section.header);hide(section.line);}
+            for(VaultGrid.Slot slot:slots)if(!slot.keep){Pair p=all.get(slot.key);hide(p.icon);hide(p.label);}
+            List<VaultGrid.Move> moves=VaultGrid.flat(slots,xs,start,rowHeight+4);
+            int bottom=sections.get(0).y;
+            for(VaultGrid.Move m:moves)
+            {
+                Pair p=all.get(m.key);int dx=p.label.getOriginalX()-p.icon.getOriginalX(),dy=p.label.getOriginalY()-p.icon.getOriginalY();
+                move(p.icon,m.x,m.y,false);move(p.label,m.x+dx,m.y+dy,false);
+                bottom=Math.max(bottom,m.y+dy+p.label.getHeight()+4);
+            }
+            projectedExtent=Math.max(viewport.getHeight(),layerOffset+bottom);
+        }
+        else for(int j=0;j<sections.size();j++)
         {
             Section section=sections.get(j);int bottom=j+1<sections.size()?sections.get(j+1).y:end;
             // Unsupported native geometry is left entirely native, including
@@ -437,18 +483,12 @@ final class SeedVaultViews
                 if(!selected){hide(p.icon);hide(p.label);}
                 slots.add(new VaultGrid.Slot(i,p.icon.getOriginalX(),p.icon.getOriginalY(),selected,rank.getOrDefault(p.base,Integer.MAX_VALUE)));
             }
-            VaultGrid.Layout layout=VaultGrid.layout(new VaultGrid.Section(section.y,bottom,slots),full,shift);
-            if(full)
-            {
-                move(section.header,section.header.getOriginalX(),section.header.getOriginalY()-shift,layout.hideHeader);
-                move(section.line,section.line.getOriginalX(),section.line.getOriginalY()-shift,layout.hideHeader);
-            }
+            VaultGrid.Layout layout=VaultGrid.layout(new VaultGrid.Section(section.y,bottom,slots),false,0);
             for(VaultGrid.Move m:layout.moves)
             {
                 Pair p=section.pairs.get(m.key);int dx=p.label.getOriginalX()-p.icon.getOriginalX(),dy=p.label.getOriginalY()-p.icon.getOriginalY();
                 move(p.icon,m.x,m.y,false);move(p.label,m.x+dx,m.y+dy,false);
             }
-            shift+=layout.saved;
         }
         // Reset to the top on initial selection, or retain the local scroll on rebuild.
         {
@@ -456,7 +496,7 @@ final class SeedVaultViews
             projectedIcons=icons.clone();projectedLabels=labels.clone();projectedLines=lines.clone();
             scrollParent=viewport;nativeHeight=viewport.getScrollHeight();nativeScroll=viewport.getScrollY();
             nativeVarScroll=client.getVarcIntValue(VarClientID.SEED_VAULT_SCROLLPOS);
-            appliedHeight=Math.max(viewport.getHeight(),nativeExtent-(full?shift:0));
+            appliedHeight=projectedExtent;
             int scroll=Math.max(0,Math.min(customScroll,appliedHeight-viewport.getHeight()));
             scroll(viewport,appliedHeight,scroll,scroll);
         }

@@ -49,5 +49,17 @@ final class VaultGrid
         int saved=slots.get(slots.size()-1).y-slots.get(selected.size()-1).y;
         return new Layout(moves,false,Math.max(0,saved));
     }
+    /** Reuse verified native column coordinates, but ignore category boundaries. */
+    static List<Move> flat(List<Slot> slots,List<Integer> columns,int start,int pitch)
+    {
+        List<Slot> selected=new ArrayList<>();
+        for(Slot s:slots)if(s.keep)selected.add(s);
+        selected.sort(Comparator.comparingInt((Slot s)->s.rank).thenComparingInt(s->s.y).thenComparingInt(s->s.x));
+        List<Move> moves=new ArrayList<>(selected.size());
+        if(columns.isEmpty()||pitch<=0)return moves;
+        for(int i=0;i<selected.size();i++)
+            moves.add(new Move(selected.get(i).key,columns.get(i%columns.size()),start+i/columns.size()*pitch));
+        return moves;
+    }
     private VaultGrid(){}
 }

@@ -735,14 +735,18 @@ public class FarmingHelperPlugin extends Plugin
     Set<Integer> vaultRunItems()
     {
         if(!guideRequested||run.isEmpty())return null;
-        return requiredItems();
+        // The checklist covers the current preparation window, but the vault
+        // must also reveal planting materials allocated to later windows.
+        Set<Integer> ids=new HashSet<>(requiredItems());
+        if(diseaseTarget==null)for(Crop crop:allocated.values())ids.add(crop.getItemId());
+        return Set.copyOf(ids);
     }
 
     private boolean birdBankPhase(){return specialtyStaged&&specialtyBirdPhase||run.size()==1&&run.contains(FarmRunType.BIRDHOUSE);}
     private Set<Integer> bankRunItems(Map<Integer,Integer> owned)
     {
-        Set<Integer> runItems=vaultRunItems();
-        if(runItems==null)return null;
+        if(!guideRequested||run.isEmpty())return null;
+        Set<Integer> runItems=requiredItems();
         boolean bird=birdBankPhase();
         List<?> inputs=List.of(session.get(),quantities,bankPlaceholders,runItems,bird,preferenceRevision.get(),vaultAccessRevision);
         if(inputs.equals(shelfInputs))return shelfItems;

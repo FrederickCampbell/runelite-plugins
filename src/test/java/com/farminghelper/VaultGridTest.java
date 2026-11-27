@@ -8,6 +8,15 @@ public class VaultGridTest
 {
     private static VaultGrid.Slot slot(int key,int x,int y,boolean keep,int rank)
     {return new VaultGrid.Slot(key,x,y,keep,rank);}
+    @Test public void flatGridIgnoresCategoriesAndWrapsAtNativeColumns()
+    {
+        var moves=VaultGrid.flat(List.of(slot(0,14,128,false,99),slot(1,79,278,true,2),
+            slot(2,14,428,true,0),slot(3,79,500,true,1)),List.of(14,79),104,66);
+        assertEquals(3,moves.size());
+        assertEquals(2,moves.get(0).key);assertEquals(14,moves.get(0).x);assertEquals(104,moves.get(0).y);
+        assertEquals(3,moves.get(1).key);assertEquals(79,moves.get(1).x);assertEquals(104,moves.get(1).y);
+        assertEquals(1,moves.get(2).key);assertEquals(14,moves.get(2).x);assertEquals(170,moves.get(2).y);
+    }
     @Test public void nativeSlotsAreReusedWithoutChangingItemIdentity()
     {
         VaultGrid.Section section=new VaultGrid.Section(200,420,List.of(
