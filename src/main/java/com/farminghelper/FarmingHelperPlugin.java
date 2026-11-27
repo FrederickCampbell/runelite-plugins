@@ -99,7 +99,9 @@ public class FarmingHelperPlugin extends Plugin
     }
     private PhysicalStock quantities;
     private final SeedBoxStock seedBox=new SeedBoxStock();
-    private volatile boolean seedBoxOwned;
+    private volatile boolean seedBoxOwned,herbSackOwned,reagentPouchOwned;
+    private Map<Integer,Integer> harvestBankSnapshot;
+    private Map<HarvestContainers.Kind,HarvestContainers.Choice> bankHarvestContainers=Map.of(),carriedHarvestContainers=Map.of();
     private boolean boxEnabled=true;
     private FarmRunPatch seedBoxPlant;
     private Map<Integer,Integer> seedBoxPlantBag=Map.of();
@@ -289,7 +291,8 @@ public class FarmingHelperPlugin extends Plugin
         accessNotes=Collections.emptyMap();
         invalidateStock();
         stores.forEach(Store::clear);
-        stockProfile=null;seedBox.clear();seedBoxOwned=false;seedBoxPlant=null;seedBoxSaved="";seedBoxViewTick=-1;
+        stockProfile=null;seedBox.clear();seedBoxOwned=false;herbSackOwned=false;reagentPouchOwned=false;
+        harvestBankSnapshot=null;bankHarvestContainers=Map.of();carriedHarvestContainers=Map.of();seedBoxPlant=null;seedBoxSaved="";seedBoxViewTick=-1;
         seedBoxPlantBag=Map.of();shelfItems=Set.of();shelfCandidates=Set.of();
         clearRun();
     }
@@ -946,6 +949,11 @@ public class FarmingHelperPlugin extends Plugin
             invalidateTravel();
             Map<Integer,Integer> bag=readItems(client.getItemContainer(InventoryID.INVENTORY));
             seedBoxOwned=SeedBoxStock.boxId(bag)>0||SeedBoxStock.boxId(bank.items)>0;
+            carriedHarvestContainers=HarvestContainers.find(bag,this::itemDefinition);
+            if(harvestBankSnapshot!=bank.items)
+            {harvestBankSnapshot=bank.items;bankHarvestContainers=HarvestContainers.find(bank.items,this::itemDefinition);}
+            herbSackOwned=carriedHarvestContainers.containsKey(HarvestContainers.Kind.HERB)||bankHarvestContainers.containsKey(HarvestContainers.Kind.HERB);
+            reagentPouchOwned=carriedHarvestContainers.containsKey(HarvestContainers.Kind.REAGENT)||bankHarvestContainers.containsKey(HarvestContainers.Kind.REAGENT);
             Map<Integer,Integer> confirmed=seedBox.carried(bag);
             quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank.items,vault.items,enabled?confirmed:Map.of(),this::observedItemName,
                 id->itemManager==null?id:itemManager.canonicalize(id));
@@ -954,6 +962,33 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     boolean seedBoxOwned(){return seedBoxOwned;}
+    boolean herbSackOwned(){return herbSackOwned;}
+    boolean reagentPouchOwned(){return reagentPouchOwned;}
+    private boolean useHarvestContainer(HarvestContainers.Kind kind)
+    {return flag(kind==HarvestContainers.Kind.HERB?"directorUseHerbSack":"directorUseReagentPouch",true);}
+    private String harvestContainerNote(List<FarmRunPatch> wave,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations)
+    {
+        StringJoiner advice=new StringJoiner("\n");
+        for(HarvestContainers.Kind kind:HarvestContainers.Kind.values())
+        {
+            if(!useHarvestContainer(kind))continue;
+            var carried=carriedHarvestContainers.get(kind);
+            var choice=carried==null?bankHarvestContainers.get(kind):carried;
+            if(choice==null)continue;
+            Set<Integer> species=new HashSet<>();
+            for(FarmRunPatch patch:wave)
+            {
+                var o=observations.get(patch);
+                if(o==null||o.state!=CropState.HARVESTABLE&&o.state!=CropState.UNCHECKED)continue;
+                var produce=QuestFarmingStateReader.livingProduce(patch.getPatchType().name(),o);
+                if(HarvestContainers.eligible(kind,patch.getPatchType(),produce))species.add(produce.getItemID());
+            }
+            if(species.size()<2)continue;
+            advice.add((carried==null?"If banking, bring and open ":choice.open?"Check remaining space in ":"Open and check ")+
+                choice.name+" ("+choice.capacity+" per type; contents not verified).");
+        }
+        return advice.toString();
+    }
     private Map<Integer,List<String>> teleports(Set<Integer> candidates)
     {
         return eligibleTravel.computeIfAbsent(candidates,ids->
@@ -1552,7 +1587,13 @@ public class FarmingHelperPlugin extends Plugin
                 boolean localBin=ready.stream().anyMatch(p->p.getPatchType()==PatchType.COMPOST_BIN&&RunOrder.site(p).equals(RunOrder.site(current)));
                 var produce=QuestFarmingStateReader.livingProduce(type.name(),o);
                 boolean existingStack=produce!=null&&bag.getOrDefault(produce.getItemID(),0)>0&&stackable(produce.getItemID());
-                if(free==0&&((action==StepEngine.Action.HARVEST&&!existingStack)||leprechaunWithdrawal!=null&&leprechaunWithdrawal.quantity==0))
+                var kind=type==PatchType.HERB?HarvestContainers.Kind.HERB:HarvestContainers.Kind.REAGENT;
+                var container=carriedHarvestContainers.get(kind);
+                boolean canTryContainer=action==StepEngine.Action.HARVEST&&leprechaunWithdrawal==null&&container!=null&&container.open&&
+                    useHarvestContainer(kind)&&HarvestContainers.eligible(kind,type,produce);
+                if(free==0&&canTryContainer)
+                    instruction="Harvest into your open "+container.name+" if it has room; otherwise note produce or free a slot. "+instruction;
+                else if(free==0&&((action==StepEngine.Action.HARVEST&&!existingStack)||leprechaunWithdrawal!=null&&leprechaunWithdrawal.quantity==0))
                 {
                     Map<Integer,Integer> reserved=required;
                     if(localBin)
@@ -1619,6 +1660,8 @@ public class FarmingHelperPlugin extends Plugin
         else if(boxEnabled&&SeedBoxStock.boxId(bag)<0&&SeedBoxStock.boxId(bank.items)>0&&
             physicalRequired.keySet().stream().filter(id->seedItem(id)&&stackable(id)&&!prepSeeds.containsKey(id)&&id!=ItemID.HESPORI_SEED).limit(2).count()==2)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"If banking, bring the seed box and check its contents to pack eligible seeds.";
+        String harvestContainers=harvestContainerNote(wave,observations);
+        if(!harvestContainers.isEmpty())supplyNote+=(supplyNote.isEmpty()?"":"\n")+harvestContainers;
         if(yieldTool&&storedMagic&&carried.getOrDefault(magicSecateurs,0)==0)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Magic secateurs stored with tool leprechauns; carry or equip for the optional harvest bonus.";
         if(rawSeeds+seedlings>0&&wateringCan<=0&&storedCan>0)supplyNote+="\nCollect the stored watering can from a tool leprechaun before watering seedlings.";

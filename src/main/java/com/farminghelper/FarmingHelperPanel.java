@@ -1034,6 +1034,8 @@ final class FarmingHelperPanel extends PluginPanel
         seedBox.setEnabled(plugin.seedBoxOwned());
         seedBox.setToolTipText(plugin.seedBoxOwned()?"Pack eligible seeds when it saves inventory space.":"Seed box not observed in inventory or bank.");
         addRow(seedBox);
+        containerPreference("Use herb sack","directorUseHerbSack",plugin.herbSackOwned());
+        containerPreference("Use reagent pouch","directorUseReagentPouch",plugin.reagentPouchOwned());
         heading("Default crop care");
         choice("Compost type",CompostChoice.values(),plugin.compostChoice(),"Bottomless bucket uses ultracompost if the bucket is unavailable.",
             v->plugin.save("directorCompostChoice",v.name()));
@@ -1122,6 +1124,13 @@ final class FarmingHelperPanel extends PluginPanel
     private void seedlessChoice(SeedlessPolicy selected,Consumer<SeedlessPolicy> change)
     {choice("Missing planting supplies",SeedlessPolicy.values(),selected,"Guide anyway: show missing supplies. Harvest / clear: clear occupied patches. Skip: omit seedless patches.",change);}
 
+    private void containerPreference(String title,String key,boolean owned)
+    {
+        JCheckBox box=check(title,plugin.flag(key,true),on->plugin.save(key,Boolean.toString(on)));
+        box.setEnabled(owned);
+        box.setToolTipText(owned?"Recommend when useful for known upcoming harvests.":"Container not observed in inventory or bank.");
+        addRow(box);
+    }
     private void preferenceCheck(String title,String key,boolean fallback)
     {addRow(check(title,plugin.flag(key,fallback),on->plugin.save(key,Boolean.toString(on))));}
     private void groupedPreferences()
