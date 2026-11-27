@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.11.4 — unified supply preparation
+- Enabled, owned and useful containers enter the ordinary requirement map, inventory slot calculation, checklist and native withdrawal outlines; carried variants satisfy their own requirement.
+- Seed-box packing remains conditional on confirmed contents; herb sack and reagent pouch capacity is not assumed. Preparation continues to the bank if bank supplies remain after a vault visit.
+- Keep existing storage layouts and player-controlled interactions.
+
 ## v1.11.3 — route-aware bank preparation
 - Query Shortest Path sequentially from an observed open bank for each distinct actionable destination; prefer matched owned transportation at the top of the native Bank Tags layout.
 - Keep static recommendations for unresolved routes; never infer item requirements from ambiguous object/spell edges or override Shortest Path settings.

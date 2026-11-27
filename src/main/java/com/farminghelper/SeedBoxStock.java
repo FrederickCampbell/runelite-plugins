@@ -181,6 +181,24 @@ final class SeedBoxStock
         if(!checkValid||next.isEmpty()||tick-checkTick>6)return false;
         replace(next,true,false);cancel();return true;
     }
+    /** A banked box costs a slot, so only recommend it for at least two
+     * obtainable seed types. Unknown contents are never credited as capacity. */
+    static int requiredBox(Map<Integer,Integer> required,Map<Integer,Integer> bag,Map<Integer,Integer> bank,
+        Map<Integer,Integer> storage,Map<Integer,Integer> confirmed,boolean complete,IntPredicate eligible)
+    {
+        int held=boxId(bag),id=held>0?held:boxId(bank);
+        if(id<0)return -1;
+        int types=0;
+        for(var e:required.entrySet())
+        {
+            int seed=e.getKey();
+            if(e.getValue()<=0||!eligible.test(seed))continue;
+            if(held>0&&confirmed.getOrDefault(seed,0)>0)return held;
+            if(e.getValue()>(long)bag.getOrDefault(seed,0)+storage.getOrDefault(seed,0))continue;
+            if(++types>=2&&(!complete||confirmed.size()<6))return id;
+        }
+        return -1;
+    }
     /** Hypothetical packing plan, never a physical stock observation. Only
      * verified contents establish how many distinct types can still fit. */
     static Map<Integer,Integer> packing(Map<Integer,Integer> required,Map<Integer,Integer> bag,

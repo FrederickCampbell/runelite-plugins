@@ -26,6 +26,20 @@ public class SeedBoxStockTest
         assertEquals(6,SeedBoxStock.packing(Map.of(1,100),Map.of(1,1),Map.of(),
             Map.of(2,1,3,1,4,1,5,1,6,1,7,1),true,id->true).size());
     }
+    @Test public void bankedSeedBoxIsRequiredOnlyForObtainableEligibleTypes()
+    {
+        int box=ItemID.SEED_BOX,open=ItemID.SEED_BOX_OPEN;
+        var required=Map.of(RANARR,3,SNAP,4);
+        var bank=Map.of(box,1,RANARR,3,SNAP,4);
+        assertEquals(box,SeedBoxStock.requiredBox(required,Map.of(),bank,bank,Map.of(),false,id->true));
+        assertEquals(-1,SeedBoxStock.requiredBox(required,Map.of(),bank,bank,Map.of(),false,id->id==RANARR));
+        assertEquals(-1,SeedBoxStock.requiredBox(required,Map.of(),Map.of(),bank,Map.of(),false,id->true));
+        assertEquals(-1,SeedBoxStock.requiredBox(required,Map.of(),bank,Map.of(RANARR,3),Map.of(),false,id->true));
+        assertEquals(open,SeedBoxStock.requiredBox(Map.of(RANARR,3),Map.of(open,1),bank,bank,Map.of(RANARR,3),true,id->true));
+        assertEquals(3,Preparation.loadedSlots(Map.of(),Map.of(box,1,RANARR,3,SNAP,4),Map.of(),Map.of(),id->id!=box));
+        assertEquals(Set.of(box),GuideView.missingItems(Map.of(box,1),Map.of()));
+        assertTrue(GuideView.missingItems(Map.of(open,1),Map.of(open,1)).isEmpty());
+    }
     @Test public void orderedNativeContentsAndRemoval()
     {
         SeedBoxStock box=new SeedBoxStock();

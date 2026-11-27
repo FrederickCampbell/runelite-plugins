@@ -55,5 +55,12 @@ final class HarvestContainers
         if(kind==Kind.HERB)return type==PatchType.HERB&&!produce.name().equals("GOUTWEED")&&!produce.name().equals("ANYHERB");
         return SECONDARIES.contains(produce.getItemID());
     }
+    /** Use the carried variant first; never request another copy or credit
+     * unobserved capacity. A reagent pouch can help repeated same-type harvests. */
+    static Choice required(Kind kind,boolean enabled,Choice carried,Choice bank,int species,int harvests)
+    {
+        if(!enabled||species<2&&(kind==Kind.HERB||harvests<2))return null;
+        return carried!=null?carried:bank;
+    }
     private HarvestContainers(){}
 }
