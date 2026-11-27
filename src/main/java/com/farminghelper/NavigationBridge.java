@@ -12,6 +12,7 @@ final class NavigationBridge
 {
     private final Consumer<PluginMessage> send;
     private WorldPoint requested, displayed, start;
+    private Set<WorldPoint> bankTargets=Set.of();
     private boolean enabled, owned, probe, refreshPending, modern;
     private int ticks,clearAge;
     private static final AtomicLong SEQUENCE=new AtomicLong();
@@ -29,25 +30,29 @@ final class NavigationBridge
     {
         if(clear)releaseDisplayed();
         else {clearId=null;clearTarget=null;}
-        requested=null;displayed=null;start=null;owned=false;probe=false;refreshPending=false;
+        requested=null;displayed=null;start=null;bankTargets=Set.of();owned=false;probe=false;refreshPending=false;
         queryId=null;targetId=null;status="";ticks=0;hints=Collections.emptyList();
     }
     void request(WorldPoint from,WorldPoint to,boolean verify)
+    {request(from,to,verify,Set.of());}
+    void requestBanks(WorldPoint from,WorldPoint fallback,Set<WorldPoint> candidates)
+    {request(from,fallback,true,candidates);}
+    private void request(WorldPoint from,WorldPoint to,boolean verify,Set<WorldPoint> candidates)
     {
         if(!enabled)return;
         // In-flight queries from the pre-teleport origin must not supply hints
         // or an approach for the post-teleport scene.
         boolean jumped=from!=null&&start!=null&&(from.getPlane()!=start.getPlane()||from.distanceTo2D(start)>12);
-        if(Objects.equals(requested,to)&&probe==verify&&!(queryId!=null&&jumped))return;
+        if(Objects.equals(requested,to)&&probe==verify&&bankTargets.equals(candidates)&&!(queryId!=null&&jumped))return;
         releaseDisplayed();
-        requested=from==null?null:to;displayed=null;owned=false;start=from;probe=verify;ticks=0;status="";
+        requested=from==null?null:to;displayed=null;owned=false;start=from;probe=verify;bankTargets=candidates;ticks=0;status="";
         queryId=null;targetId=null;refreshPending=false;hints=Collections.emptyList();
         if(to==null || from==null)return;
         if(verify)
         {
             queryId="farming-helper-query-"+SEQUENCE.incrementAndGet();
             status="Checking route…";
-            post("query",Map.of("id",queryId,"start",from,"target",to));
+            post("query",Map.of("id",queryId,"start",from,"target",candidates.isEmpty()?to:candidates));
             targetId="farming-helper-probe-"+SEQUENCE.incrementAndGet();
             post("getTarget",Map.of("id",targetId));
         }
@@ -89,7 +94,7 @@ final class NavigationBridge
         {
             // No response: installed version may predate query. One legacy request only.
             queryId=null;
-            if(modern)status="Route check did not finish. Follow the guide’s transport instruction.";
+            if(modern&&bankTargets.isEmpty())status="Route check did not finish. Follow the guide’s transport instruction.";
             else display(requested);
             return;
         }
@@ -120,6 +125,16 @@ final class NavigationBridge
         {
             modern=true;queryId=null;targetId=null;
             hints=TransportHint.read(data.get("transports"));
+            if(!bankTargets.isEmpty())
+            {
+                Object target=data.get("target");
+                // Multi-target support is optional. Never display a returned
+                // point that was not one of our verified bank approaches.
+                if(Boolean.TRUE.equals(data.get("reached"))&&target instanceof WorldPoint&&bankTargets.contains(target))
+                    display((WorldPoint)target);
+                else {hints=Collections.emptyList();display(requested);}
+                return true;
+            }
             if(Boolean.TRUE.equals(data.get("reached"))){display(requested);return true;}
             // A small reachable approach is preferable to a blocked object tile.
             Object near=data.get("closest");

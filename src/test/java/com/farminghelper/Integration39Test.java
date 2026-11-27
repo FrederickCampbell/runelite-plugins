@@ -29,6 +29,20 @@ public class Integration39Test
         assertTrue(NavigationBridge.matchesTarget(patch,List.of(patch)));
         assertFalse(NavigationBridge.matchesTarget(patch,List.of(patch,from)));
     }
+    @Test public void bankQueryUsesNativeMultipleTargetsAndKeepsSingleOwnedRoute()
+    {
+        List<PluginMessage> sent=new ArrayList<>();
+        NavigationBridge bridge=new NavigationBridge(sent::add);bridge.enabled(true);
+        WorldPoint start=new WorldPoint(2572,3102,0),yanille=new WorldPoint(2613,3092,0),draynor=new WorldPoint(3092,3243,0);
+        Set<WorldPoint> banks=Set.of(yanille,draynor);
+        bridge.requestBanks(start,draynor,banks);
+        PluginMessage query=sent.get(0);
+        assertEquals(banks,query.getData().get("target"));
+        assertTrue(bridge.message(new PluginMessage("shortestpath","result",Map.of("id",query.getData().get("id"),"reached",true,"target",yanille))));
+        assertEquals(yanille,sent.get(sent.size()-1).getData().get("target"));
+        assertTrue(Preparation.bankCandidates(99).contains(yanille));
+        assertFalse(Preparation.bankCandidates(1).contains(Preparation.GUILD));
+    }
     @Test public void teleportInvalidatesPendingRouteFromOldOrigin()
     {
         List<PluginMessage> sent=new ArrayList<>();

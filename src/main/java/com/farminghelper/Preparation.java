@@ -23,7 +23,16 @@ final class Preparation
         new Bank("Falador east",new WorldPoint(3013,3355,0)),new Bank("Varrock east",new WorldPoint(3253,3420,0)),
         new Bank("Al Kharid",new WorldPoint(3269,3166,0)),new Bank("Edgeville",new WorldPoint(3094,3491,0)),
         new Bank("Catherby",new WorldPoint(2809,3441,0)),new Bank("Seers' Village",new WorldPoint(2724,3493,0)),
-        new Bank("Castle Wars",new WorldPoint(2443,3083,0)));
+        new Bank("Castle Wars",new WorldPoint(2443,3083,0)),new Bank("Yanille",new WorldPoint(2613,3092,0)),
+        new Bank("Ardougne south",new WorldPoint(2655,3283,0)),new Bank("Ardougne north",new WorldPoint(2618,3332,0)),
+        new Bank("Falador west",new WorldPoint(2947,3368,0)));
+    static Set<WorldPoint> bankCandidates(int level)
+    {
+        Set<WorldPoint> points=new LinkedHashSet<>();
+        for(Bank bank:PUBLIC)points.add(bank.point);
+        if(level>=45)points.add(GUILD);
+        return Collections.unmodifiableSet(points);
+    }
     static Bank choose(int level,WorldPoint from,boolean initial,boolean entrana)
     {
         return choose(level,from,initial,entrana,StartAt.GUILD,false);

@@ -133,7 +133,8 @@ public class FarmingHelperPlugin extends Plugin
     private boolean activeClearOnly, compostAcknowledged;
     private volatile Set<Integer> stepItems=Collections.emptySet();
     private volatile int spaceItem=-1;
-    private boolean visitedStorage;
+    private boolean visitedStorage,explicitResupply;
+    private volatile boolean preparationVault;
     private WorldPoint preparationOrigin;
     private RunOrder pinned;
     private Set<FarmRunPatch> preparedWave=Set.of();
@@ -249,7 +250,7 @@ public class FarmingHelperPlugin extends Plugin
         if(runBank!=null)runBank.close();
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
-        phase=Preparation.Phase.UNCHECKED;visitedStorage=false;preparationOrigin=null;
+        phase=Preparation.Phase.UNCHECKED;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationOrigin=null;
         pinned=null;preparedWave=Set.of();preparedStock=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;clearWaterOffer();compostMissing=false;
@@ -1699,6 +1700,8 @@ public class FarmingHelperPlugin extends Plugin
         Set<FarmRunPatch> listed=new HashSet<>();for(GuideView.Stop stop:stops)listed.add(stop.patch);
         for(FarmRunPatch p:patches)if(runProgress.finished(p)&&!listed.contains(p))stops.add(new GuideView.Stop(p,runProgress.is(p,RunProgress.Status.PRESERVED)?"Preserved":"Completed",false,true));
         String prepMessage="";
+        Set<WorldPoint> bankCandidates=Set.of();
+        preparationVault=false;
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
         if(preparing() && loggedIn)
         {
@@ -1709,8 +1712,11 @@ public class FarmingHelperPlugin extends Plugin
             boolean vaultTarget=preparationBank==Preparation.SEED_VAULT;
             // A known vault shortage may still remain after visiting a regular
             // bank. Only the explicit preparation session can suggest it.
-            boolean routeToStorage=!missingStorageItems.isEmpty() && (!visitedStorage||vaultTarget&&vaultOutstanding&&!atStorage);
-            prepMessage=GuidePresentation.preparation(routeToStorage,preparationBank.name,missingStorageItems.isEmpty());
+            boolean routeToStorage=(!missingStorageItems.isEmpty()||explicitResupply) && (!visitedStorage||vaultTarget&&vaultOutstanding&&!atStorage);
+            preparationVault=vaultTarget&&vaultOutstanding;
+            boolean flexible=routeToStorage&&!vaultTarget&&preparationBank!=Preparation.FOSSIL_BANK&&
+                !(phase==Preparation.Phase.INITIAL&&startAt()==Preparation.StartAt.GUILD&&level>=45)&&navigation!=null&&navigation.enabled();
+            prepMessage=GuidePresentation.preparation(routeToStorage,flexible?"a reachable bank":preparationBank.name,missingStorageItems.isEmpty()&&!routeToStorage);
             String sources=Preparation.sourceNote(plantingRequired,carried,bank.items,vault.items,!bankStale,!vaultStale);
             if(!sources.isEmpty())prepHelp+="\n"+sources;
             if(vaultOutstanding)prepHelp+="\nThe Seed Vault is west of the Guild bank chest.";
@@ -1726,7 +1732,11 @@ public class FarmingHelperPlugin extends Plugin
                 leg=exit.instruction.isEmpty()?RouteLeg.manual("Leave the current instance before banking.",RouteLeg.Interaction.NONE):exit;
                 prepMessage+="\n"+leg.instruction;
             }
-            else leg=RouteLeg.approach(preparationBank.point,vaultTarget?"Travel to the Guild bank approach, then use the Seed Vault immediately west of the chest.":"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
+            else
+            {
+                leg=RouteLeg.approach(preparationBank.point,vaultTarget?"Travel to the Guild bank approach, then use the Seed Vault immediately west of the chest.":flexible?"Follow the route to a reachable bank, or use any accessible bank.":"Travel to "+preparationBank.name+" or another accessible bank.",RouteLeg.Interaction.NONE);
+                if(flexible)bankCandidates=Preparation.bankCandidates(level);
+            }
         }
         if(loggedIn&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE)&&
             (SpecialRoutes.onSeaweedIsland(player)||!preparing()&&seaweedBirdTransfer))
@@ -1748,7 +1758,12 @@ public class FarmingHelperPlugin extends Plugin
         WorldPoint actionPoint=localApproach!=null?localApproach:current==null?null:Waypoints.destination(current);
         boolean atAction=player!=null&&actionPoint!=null&&player.getPlane()==actionPoint.getPlane()&&player.distanceTo(actionPoint)<=5;
         stepItems=!preparing()&&leg.interaction==RouteLeg.Interaction.NONE&&activeLive&&(atAction||spaceItem>0)?localStepItems:Collections.emptySet();
-        if(navigation!=null)navigation.request(loggedIn?location.pathStart():null,leg.point,leg.probe);
+        if(navigation!=null)
+        {
+            if(!bankCandidates.isEmpty()&&leg.interaction==RouteLeg.Interaction.NONE)
+                navigation.requestBanks(location.pathStart(),leg.point,bankCandidates);
+            else navigation.request(loggedIn?location.pathStart():null,leg.point,leg.probe);
+        }
         if(location.inHouse()&&(navigation==null||!navigation.enabled())&&current!=null&&!preparing())
             instruction="Use an available house teleport toward the next patch, or leave your house.\n"+instruction;
         if(!leg.instruction.isEmpty())instruction=leg.instruction+(current==null?"":"\n"+instruction);
@@ -1918,20 +1933,22 @@ public class FarmingHelperPlugin extends Plugin
         return visibleWidget(bank.widget) || visibleWidget(vault.widget);
     }
     private boolean preparing(){return phase==Preparation.Phase.INITIAL||phase==Preparation.Phase.RESUPPLY;}
+    boolean preparationActive(){return guideRequested&&preparing()&&diseaseTarget==null;}
+    boolean preparationVault(){return preparationVault;}
     private void beginPreparation(Preparation.Phase next)
     {
         clearWaterOffer();preparationOrigin=LocationContext.capture(client).normalized;
-        phase=next;visitedStorage=false;
+        phase=next;visitedStorage=false;explicitResupply=false;
     }
     void continueRun()
     {
         inRun(()->{
             if(phase==Preparation.Phase.INITIAL){pinned=null;current=null;activeCrop=null;progress.reset();}
-            phase=Preparation.Phase.ACTIVE;update();});
+            phase=Preparation.Phase.ACTIVE;explicitResupply=false;update();});
     }
     void resupply()
     {
-        inRun(()->{if(diseaseTarget!=null||current==null)return;sampleStorage();preparedStock=null;beginPreparation(Preparation.Phase.RESUPPLY);update();});
+        inRun(()->{if(diseaseTarget!=null||current==null)return;sampleStorage();preparedStock=null;beginPreparation(Preparation.Phase.RESUPPLY);explicitResupply=true;update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)
