@@ -806,10 +806,10 @@ public class FarmingHelperPlugin extends Plugin
         PhysicalStock supplies=stock();
         Set<Integer> eligible=bankRunItems(supplies.shelf);
         boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"));
-        if(bankAware&&bank.sampled&&!bankRoutes.started())
-            bankRoutes.begin(LocationContext.capture(client).pathStart(),bankItinerary);
+        if(bank.sampled&&!bankRoutes.started())
+            bankRoutes.begin(bankAware?LocationContext.capture(client).pathStart():null,bankItinerary);
         if(bankAware&&bankRoutes.started())bankRoutes.tick(navigation);
-        List<Integer> priority=bankAware&&bankRoutes.started()
+        List<Integer> priority=bankRoutes.started()
             ?bankRoutes.priority(teleports(supplies.travel.keySet()),supplies.travel,supplies.carried,bankFallback,manual)
             :List.copyOf(bankFallback.keySet());
         if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase(),priority);

@@ -12,12 +12,12 @@ final class BankRoutePlan
     private final Map<String,Set<String>> routes=new LinkedHashMap<>();
     private String pending,site;
     private int age,budget;
-    private boolean started,finished,frozen;
+    private boolean started,finished,frozen,initialPublished,finalPublished;
     private List<Integer> published=List.of();
     void reset()
     {
         origin=null;remaining.clear();routes.clear();pending=null;site=null;
-        age=budget=0;started=finished=frozen=false;published=List.of();
+        age=budget=0;started=finished=frozen=initialPublished=finalPublished=false;published=List.of();
     }
     void freeze(){frozen=true;}
     boolean frozen(){return frozen;}
@@ -72,8 +72,13 @@ final class BankRoutePlan
     List<Integer> priority(Map<Integer,List<String>> eligible,Map<Integer,Integer> available,
         Map<Integer,Integer> carried,Map<Integer,Set<String>> fallback,boolean manual)
     {
-        if(frozen&&!manual)return published;
-        if(!finished&&!manual)return published.isEmpty()?published=List.copyOf(fallback.keySet()):published;
+        if(!manual&&(frozen&&initialPublished||finalPublished))return published;
+        if(!finished&&!manual)
+        {
+            if(!initialPublished){published=List.copyOf(fallback.keySet());initialPublished=true;}
+            return published;
+        }
+        initialPublished=true;finalPublished=finished;
         LinkedHashSet<Integer> result=new LinkedHashSet<>();
         for(Set<String> labels:routes.values())for(String label:labels)
         {

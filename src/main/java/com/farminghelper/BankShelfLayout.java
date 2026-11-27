@@ -46,8 +46,6 @@ final class BankShelfLayout
     private static int order(String n,String[] ordered)
     {for(int i=0;i<ordered.length;i++)if(n.equals(ordered[i])||n.startsWith(ordered[i]+" ")||n.startsWith(ordered[i]+"("))return i;return ordered.length;}
     private static void pad(List<Integer> out){while(out.size()%WIDTH!=0)out.add(-1);}
-    private static void block(List<Integer> out,List<Integer> ids)
-    {out.addAll(ids);}
     private static List<Integer> take(Set<Integer> left,java.util.function.IntPredicate condition,Comparator<Integer> comparator)
     {List<Integer> result=new ArrayList<>();for(int id:left)if(condition.test(id))result.add(id);result.sort(comparator);left.removeAll(result);return result;}
     private static void familyRows(List<Integer> out,List<Integer> items,IntFunction<String> names)
@@ -88,15 +86,15 @@ final class BankShelfLayout
             }
             if(Arrays.stream(cells).anyMatch(id->id>=0)){for(int id:cells)out.add(id);}
         }
-        block(out,overflow);
-        block(out,take(left,id->cape(name(names,id)),byName));
-        block(out,take(left,id->CuratedBank.divingEquipment(name(names,id)),Comparator.comparingInt((Integer id)->slot(name(names,id),equipment.applyAsInt(id))).thenComparing(byName)));
-        block(out,take(left,id->diary(name(names,id)),byName));
+        out.addAll(overflow);
+        out.addAll(take(left,id->cape(name(names,id)),byName));
+        out.addAll(take(left,id->CuratedBank.divingEquipment(name(names,id)),Comparator.comparingInt((Integer id)->slot(name(names,id),equipment.applyAsInt(id))).thenComparing(byName)));
+        out.addAll(take(left,id->diary(name(names,id)),byName));
         // Permanent travel accessories, then one row per jewellery family.
-        block(out,take(left,id->transport.applyAsInt(id)==PERMANENT&&!jewellery(name(names,id))&&!consumableTeleport(name(names,id)),byName));
+        out.addAll(take(left,id->transport.applyAsInt(id)==PERMANENT&&!jewellery(name(names,id))&&!consumableTeleport(name(names,id)),byName));
         familyRows(out,take(left,id->transport.applyAsInt(id)>=0&&jewellery(name(names,id)),byName),names);
-        block(out,take(left,id->transport.applyAsInt(id)>=0&&!consumableTeleport(name(names,id)),byName));
-        block(out,take(left,id->name(names,id).equals("dramen staff")||name(names,id).equals("lunar staff"),byName));
+        out.addAll(take(left,id->transport.applyAsInt(id)>=0&&!consumableTeleport(name(names,id)),byName));
+        out.addAll(take(left,id->name(names,id).equals("dramen staff")||name(names,id).equals("lunar staff"),byName));
         // 4-column rune matrix on the left, spell equipment in the right-hand block.
         List<Integer> runes=take(left,id->name(names,id).endsWith(" rune"),byName);
         List<Integer> spell=take(left,id->spellGear(name(names,id)),Comparator.comparingInt((Integer id)->name(names,id).contains("rune pouch")?0:name(names,id).startsWith("tome of")?2:1).thenComparing(byName));
@@ -108,13 +106,13 @@ final class BankShelfLayout
             List<Integer> spare=new ArrayList<>();
             for(int id:runes){int i=Arrays.asList(RUNES).indexOf(name(names,id).replaceFirst(" rune$",""));if(i<0||cells[i/4*WIDTH+i%4]>=0)spare.add(id);else cells[i/4*WIDTH+i%4]=id;}
             for(int i=0;i<spell.size();i++)cells[i/4*WIDTH+4+i%4]=spell.get(i);
-            for(int id:cells)out.add(id);block(out,spare);
+            for(int id:cells)out.add(id);out.addAll(spare);
         }
-        block(out,take(left,id->consumableTeleport(name(names,id))||name(names,id).equals("master scroll book"),byName));
-        block(out,take(left,id->{String n=name(names,id);return order(n,TOOL_ORDER)<TOOL_ORDER.length||n.contains(" axe")||n.endsWith(" logs")||n.contains("watering can");},Comparator.comparingInt((Integer id)->order(name(names,id),TOOL_ORDER)).thenComparing(byName)));
-        block(out,take(left,id->order(name(names,id),COMPOST_ORDER)<COMPOST_ORDER.length||name(names,id).contains("compost"),Comparator.comparingInt((Integer id)->order(name(names,id),COMPOST_ORDER)).thenComparing(byName)));
+        out.addAll(take(left,id->consumableTeleport(name(names,id))||name(names,id).equals("master scroll book"),byName));
+        out.addAll(take(left,id->{String n=name(names,id);return order(n,TOOL_ORDER)<TOOL_ORDER.length||n.contains(" axe")||n.endsWith(" logs")||n.contains("watering can");},Comparator.comparingInt((Integer id)->order(name(names,id),TOOL_ORDER)).thenComparing(byName)));
+        out.addAll(take(left,id->order(name(names,id),COMPOST_ORDER)<COMPOST_ORDER.length||name(names,id).contains("compost"),Comparator.comparingInt((Integer id)->order(name(names,id),COMPOST_ORDER)).thenComparing(byName)));
         // Pot/seedling preparation is a separate shelf, not a new crop allocation.
-        block(out,take(left,id->CuratedBank.saplingPreparation(name(names,id)),Comparator.comparingInt((Integer id)->{String n=name(names,id);return n.equals("plant pot")||n.equals("empty plant pot")?0:n.equals("filled plant pot")?1:n.endsWith("(w)")?3:2;}).thenComparing(byName)));
+        out.addAll(take(left,id->CuratedBank.saplingPreparation(name(names,id)),Comparator.comparingInt((Integer id)->{String n=name(names,id);return n.equals("plant pot")||n.equals("empty plant pot")?0:n.equals("filled plant pot")?1:n.endsWith("(w)")?3:2;}).thenComparing(byName)));
         Map<String,List<Integer>> crops=new TreeMap<>();
         for(int id:take(left,id->{String n=name(names,id);return CropCatalog.findByItemId(id)!=null||n.endsWith(" seed")||n.endsWith(" seeds")||n.contains("sapling")||n.endsWith(" spore")||n.endsWith(" spores");},byName))
         {
@@ -122,8 +120,8 @@ final class BankShelfLayout
             crops.computeIfAbsent(kind,k->new ArrayList<>()).add(id);
         }
         // All remaining explicit supplies, including protection payments, get their own block.
-        block(out,take(left,id->true,byName));
-        for(List<Integer> group:crops.values())block(out,group);
+        out.addAll(take(left,id->true,byName));
+        for(List<Integer> group:crops.values())out.addAll(group);
         while(!out.isEmpty()&&out.get(out.size()-1)==-1)out.remove(out.size()-1);
         return out.stream().mapToInt(Integer::intValue).toArray();
     }
