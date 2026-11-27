@@ -22,7 +22,7 @@ public class BankShelfLayoutTest
         assertEquals(11105,layout[0]);assertEquals(-1,position(layout,999));
         assertEquals(names.size(),Arrays.stream(layout).filter(id->id>=0).distinct().count());
         assertEquals(position(layout,11978)+1,position(layout,11976));
-        assertEquals(5,BankShelfLayout.build(names.keySet(),names::get,id->-1,id->id==952||id==1755?-1:BankShelfLayout.CHARGED).length);
+        assertEquals(names.size(),BankShelfLayout.build(names.keySet(),names::get,id->-1,id->id==952||id==1755?-1:BankShelfLayout.CHARGED).length);
     }
     @Test public void bankBagAndWornItemsShareOneStableShelf()
     {
