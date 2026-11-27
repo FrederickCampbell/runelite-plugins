@@ -1171,7 +1171,7 @@ public class FarmingHelperPlugin extends Plugin
             if(ahead!=null&&ahead.planted()&&o.state==CropState.GROWING)
             {
                 Crop planted=observedCrop(type,o);
-                boolean payment=protect&&type.supportsProtection()&&planted!=null&&!CropCatalog.protection(planted).isEmpty()&&
+                boolean payment=protect&&!immune(p)&&type.supportsProtection()&&planted!=null&&!CropCatalog.protection(planted).isEmpty()&&
                     CropCatalog.protection(planted).stream().allMatch(cost->ProtectionPayment.carried(cost,bag,this::itemDefinition));
                 if(!ahead.finished(type,o,payment,payment))
                 {ready.add(p);visible.add(p);continue;}
@@ -1189,7 +1189,7 @@ public class FarmingHelperPlugin extends Plugin
                 }
                 if(hideSeedless&&clearSeedless&&activeClearOnly&&o.source==QuestFarmingStateReader.Source.LIVE&&o.state==CropState.EMPTY)
                 {runProgress.finish(p,false);visible.add(p);continue;}
-                boolean wants=protect && activeCrop!=null && type.supportsProtection() && !CropCatalog.protection(activeCrop).isEmpty();
+                boolean wants=protect && !immune(p) && activeCrop!=null && type.supportsProtection() && !CropCatalog.protection(activeCrop).isEmpty();
                 boolean hasPayment=wants && CropCatalog.protection(activeCrop).stream().allMatch(cost -> ProtectionPayment.carried(cost,bag,this::itemDefinition));
 
                 // The player may carry a lower-ranked seed than the initially allocated bank crop.
@@ -1241,7 +1241,7 @@ public class FarmingHelperPlugin extends Plugin
                 // Verified disease interruptions remain independent and can still interrupt.
                 if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
                 QuestFarmingStateReader.Observation o=observations.computeIfAbsent(p,this::observe);
-                if(wateredThisRun.contains(p)||!CropCare.waterNeeded(type,o,runWater))continue;
+                if(wateredThisRun.contains(p)||immune(p)||!CropCare.waterNeeded(type,o,runWater))continue;
                 if(ready.contains(p)&&!(p==current&&activeCareOnly))continue;
                 plant.remove(p);ready.remove(p);visible.remove(p);
                 careOnly.add(p);
@@ -1343,7 +1343,7 @@ public class FarmingHelperPlugin extends Plugin
             Crop crop=seeds.get(p);PatchType type=p.getPatchType();
             if(crop!=null){waveSeeds.put(p,crop);if(type==PatchType.GRAPEVINE)vines++;}
             yieldTool|=!careOnly.contains(p)&&Supplies.secateursUseful(type,observations.get(p));
-            needsWater|=runWater&&type.canBeWatered()&&(crop!=null||!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,observations.get(p),true));
+            needsWater|=runWater&&!immune(p)&&type.canBeWatered()&&(crop!=null||!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,observations.get(p),true));
             diving|=type==PatchType.CORAL;
         }
         Map<Integer,Integer> paymentNeeds=new LinkedHashMap<>(),paymentNotes=new HashMap<>();
@@ -1372,7 +1372,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             Crop c=seeds.get(p);PatchType type=p.getPatchType();
             if(c!=null) required.merge(c.getItemId(),c.getQuantity(),Integer::sum);
-            if(CropCare.usesCompost(c)) compostCount++;
+            if(CropCare.usesCompost(c,immune(p))) compostCount++;
             if((c!=null||clearOnly.contains(p))&&type.isTree()&&type!=PatchType.CRYSTAL_TREE&&type!=PatchType.CALQUAT)
             {
                 var o=observations.get(p);
@@ -1382,7 +1382,7 @@ public class FarmingHelperPlugin extends Plugin
             if(protect && (c!=null || (p==current && progress.planted() && activeCrop!=null)))
             {
                 Crop paymentCrop=c!=null?c:activeCrop;
-                if(type.supportsProtection()) for(ProtectionPayment cost:CropCatalog.protection(paymentCrop))
+                if(!immune(p)&&type.supportsProtection()) for(ProtectionPayment cost:CropCatalog.protection(paymentCrop))
                     paymentNeeds.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);
             }
         }
@@ -1458,18 +1458,6 @@ public class FarmingHelperPlugin extends Plugin
                 e.getValue()>carried.getOrDefault(e.getKey(),0)&&paymentStorage.getOrDefault(e.getKey(),0)>0);
             probeBoundary=false;limit=window.limit();continue;
         }
-        if(!fits&&limit>1)
-        {
-            // On an oversized Guild start use the nearby resupply point, not a
-            // forced round trip. Otherwise find a feasible contiguous prefix.
-            if(current!=null&&"Farming Guild".equals(RunOrder.site(current))&&
-                location.normalized!=null&&location.normalized.distanceTo2D(Preparation.GUILD)<120)
-            {
-                int localLimit=0;
-                while(localLimit<limit&&"Farming Guild".equals(RunOrder.site(ready.get(localLimit))))localLimit++;
-                if(window.restrict(localLimit)){limit=window.limit();continue;}
-            }
-        }
         if(window.advance(fits)){limit=window.limit();continue;}
         if(preparedWave.size()!=wave.size()||!preparedWave.containsAll(wave))preparedWave=Set.copyOf(wave);
         preparedStock=supplies;
@@ -1514,7 +1502,7 @@ public class FarmingHelperPlugin extends Plugin
             boolean keep=preserveReplacement(current,o);
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
             int compostTier=0;
-            if(activeLive&&CropCare.usesCompost(activeCrop)&&!activeClearOnly&&o.state==CropState.EMPTY)
+            if(activeLive&&CropCare.usesCompost(activeCrop,immune(current))&&!activeClearOnly&&o.state==CropState.EMPTY)
             {
                 int liveTier=highlight==null?-1:highlight.liveCompostTier(current);
                 compostTier=liveTier>=0?liveTier:reader.compostTier(type.name(),current.getLocation(),current.getName());
@@ -1524,7 +1512,7 @@ public class FarmingHelperPlugin extends Plugin
             if(action!=StepEngine.Action.WATER||preparing())clearWaterOffer();
             else if(waterOfferPatch!=current)
             {waterOfferPatch=current;waterOfferTick=client.getTickCount();waterOfferOrigin=location.actual;}
-            if(activeLive&&CropCare.usesCompost(activeCrop)&&!activeClearOnly&&(action==StepEngine.Action.COMPOST||action==StepEngine.Action.PLANT))
+            if(activeLive&&CropCare.usesCompost(activeCrop,immune(current))&&!activeClearOnly&&(action==StepEngine.Action.COMPOST||action==StepEngine.Action.PLANT))
                 compostMissing=compostTier==0;
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
@@ -1785,6 +1773,12 @@ public class FarmingHelperPlugin extends Plugin
         }
     }
 
+    private boolean immune(FarmRunPatch p)
+    {
+        return p!=null&&CropCare.siteImmune(p,
+            "Falador".equals(p.getLocation())&&client.getVarbitValue(net.runelite.api.Varbits.DIARY_FALADOR_ELITE)==1,
+            "Kourend".equals(p.getLocation())&&client.getVarbitValue(net.runelite.api.Varbits.DIARY_KOUREND_EASY)==1);
+    }
     private static Crop observedCrop(PatchType type,QuestFarmingStateReader.Observation o)
     {
         var produce=QuestFarmingStateReader.livingProduce(type.name(),o);
@@ -1818,7 +1812,7 @@ public class FarmingHelperPlugin extends Plugin
             if(replacement)
             {
                 primary=LeprechaunWithdrawal.append(primary,LeprechaunWithdrawal.resolve(client,StepEngine.Action.PLANT,type,compost,barbarian,bag,carried,wateringCan,free,this::observedItemName),free);
-                if(CompostChoice.isOrdinary(compost)&&CropCare.usesCompost(crop)&&!(other==patch&&compostAcknowledged)&&
+                if(CompostChoice.isOrdinary(compost)&&CropCare.usesCompost(crop,immune(other))&&!(other==patch&&compostAcknowledged)&&
                     (o.state==CropState.EMPTY||o.state==CropState.DEAD||o.state==CropState.STUMP||
                      o.state==CropState.HARVESTABLE||o.state==CropState.UNCHECKED||CropReplacement.mature(type,o)))
                 {
@@ -1852,13 +1846,13 @@ public class FarmingHelperPlugin extends Plugin
     private StepEngine.Action guidanceAction(PatchType type,QuestFarmingStateReader.Observation o,boolean keep,
         boolean replacementCarried,int compostId,int compostTier)
     {
-        if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&CropCare.waterNeeded(type,o,runWater))
+        if((progress.planted()||activeCareOnly)&&!wateredThisRun.contains(current)&&!immune(current)&&CropCare.waterNeeded(type,o,runWater))
             return StepEngine.Action.WATER;
         if(progress.planted()&&o.state==CropState.GROWING)return StepEngine.Action.PROTECT_TREE;
         if(o.state==CropState.EMPTY)
         {
             if(activeLive&&reader.hasWeeds(type.name(),o.rawValue))return StepEngine.Action.RAKE;
-            if(activeLive&&compostId>=0&&CropCare.usesCompost(activeCrop)&&!activeClearOnly&&
+            if(activeLive&&compostId>=0&&CropCare.usesCompost(activeCrop,immune(current))&&!activeClearOnly&&
                 !compostAcknowledged&&compostTier<CompostChoice.minimumTier(compostId))return StepEngine.Action.COMPOST;
             if(activeCrop!=null&&type.isTree()&&!replacementCarried)return StepEngine.Action.NEED_REPLACEMENT;
         }

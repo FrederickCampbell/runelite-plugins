@@ -56,7 +56,7 @@ jobs:
           if-no-files-found: ignore
 
   comparison:
-    if: github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning' || github.ref == 'refs/heads/farming-helper-v1.11-consolidation'
+    if: github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning' || github.ref == 'refs/heads/farming-helper-v1.11-consolidation' || github.ref == 'refs/heads/farming-helper-v1.11.2-validation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
           baseline_sha=84e8bdff3f6dff7113be38975fcb302cd91ed8d7
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.09-workflow ]]; then baseline_sha=27349d1781ca4be611c127f1267b5114b900fa9b; fi
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.10-adaptive-planning ]]; then baseline_sha=7c72ead2d296dc978ccf3a6bd52cba7fa1fda9bd; fi
-          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=b33426ddaf38ec21620767295903f67acb18ddf2; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation || "$GITHUB_REF_NAME" == farming-helper-v1.11.2-validation ]]; then baseline_sha=b488266d316690a8a3a0f133459c1f1890fe1938; fi
           git fetch --no-tags --depth=1 origin "$baseline_sha"
           git worktree add --detach "$baseline" FETCH_HEAD
           # Compare layout with identical display metadata, including the version shown on Home.

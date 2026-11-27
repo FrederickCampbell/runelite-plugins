@@ -37,8 +37,24 @@ final class CropCare
     }
 
     /** Poison ivy is disease immune and compost does not improve its yield. */
-    static boolean usesCompost(Crop crop)
-    {return crop!=null&&crop.getPatchType().usesCompost()&&crop.getItemId()!=net.runelite.api.gameval.ItemID.POISONIVY_BUSH_SEED;}
+    static boolean usesCompost(Crop crop){return usesCompost(crop,false);}
+    static boolean usesCompost(Crop crop,boolean immune)
+    {
+        if(crop==null||!crop.getPatchType().usesCompost()||crop.getItemId()==net.runelite.api.gameval.ItemID.POISONIVY_BUSH_SEED)return false;
+        if(!immune)return true;
+        switch(crop.getPatchType())
+        {
+            case ALLOTMENT:case HERB:case HOPS:case SEAWEED:case CELASTRUS:case CRYSTAL_TREE:return true;
+            default:return false;
+        }
+    }
+    static boolean siteImmune(FarmRunPatch p,boolean faladorElite,boolean kourendEasy)
+    {
+        if(p==null)return false;
+        PatchType type=p.getPatchType();String site=p.getLocation();
+        return faladorElite&&type==PatchType.TREE&&"Falador".equals(site)||
+            kourendEasy&&"Kourend".equals(site)&&(type==PatchType.ALLOTMENT||type==PatchType.FLOWER||type==PatchType.HERB);
+    }
 
     static boolean waterNeeded(PatchType type,Observation o,boolean enabled)
     {return enabled&&type.canBeWatered()&&o!=null&&o.localGuidance()&&o.state==CropState.GROWING&&dryStage(type,o.rawValue);}

@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.11.2 — adaptive run management
+- Compact verified Seed Vault sections into one scrollable grid and retain later-wave materials.
+- Add optional seed box packing and harvest-container preferences; unknown contents are never credited as free capacity.
+- Prefer reachable banks through the Shortest Path multi-target API, including deposit-only resupply.
+- Highlight preparation storage and preserve the active guide through loading and stale route queries.
+- Delay ordinary noting until inventory space is needed; avoid unnecessary poison ivy compost and confirmed diary-immune crop care.
+- Update mutable guide details and supply notes in place; choose the largest feasible preparation prefix rather than forcing a Guild-only wave.
+- Live-client acceptance, exact container contents and the reported ALS incident remain subject to manual verification.
+
 ## v1.11.1 — release audit
 
 - Match Time Tracking's seasonal growth and regrowth ticks, including profile-specific offsets and the Deadman exception.

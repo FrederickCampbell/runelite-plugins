@@ -41,6 +41,7 @@ final class FarmingHelperPanel extends PluginPanel
     private long guideSession=Long.MIN_VALUE;
     private boolean requiredOpen=false,completedOpen=false,lastPreparing=false,teleportsOpen=false;
     private JButton requirementsHeader,bankShortcut,runDetailsHelp;
+    private JTextArea supplyNoteLabel;
     private boolean guideRendered;
     private boolean settingsFromRun=false,patchByLocation=true,showLocked=false,manualByLocation=false;
     private String patchSearch="",individualSearch="";
@@ -382,7 +383,7 @@ final class FarmingHelperPanel extends PluginPanel
         addRow(button);
         return button;
     }
-    private void caption(String value){JTextArea t=text(value,FarmingTheme.MUTED);t.setFont(FarmingTheme.font(Font.PLAIN,11));addRow(t);}
+    private JTextArea caption(String value){JTextArea t=text(value,FarmingTheme.MUTED);t.setFont(FarmingTheme.font(Font.PLAIN,11));addRow(t);return t;}
 
 
     // Sidebar visibility is not the lifetime of an active run. The guide header
@@ -728,7 +729,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || (a.notes.initial!=b.notes.initial || !a.notes.storageWarning.equals(b.notes.storageWarning) || !a.notes.preparationHelp.equals(b.notes.preparationHelp) || a.notes.details.isEmpty()!=b.notes.details.isEmpty()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || a.supplyNote.isEmpty()!=b.supplyNote.isEmpty() || (a.notes.initial!=b.notes.initial || !a.notes.storageWarning.equals(b.notes.storageWarning) || !a.notes.preparationHelp.equals(b.notes.preparationHelp) || a.notes.details.isEmpty()!=b.notes.details.isEmpty()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)
         {
             GuideView.ItemRow old=a.items.get(i), next=b.items.get(i);
@@ -740,6 +741,7 @@ final class FarmingHelperPanel extends PluginPanel
     private void refreshRows(GuideView before, GuideView view)
     {
         if(runDetailsHelp!=null&&!before.notes.details.equals(view.notes.details))updateHelp(runDetailsHelp,view.notes.details);
+        if(supplyNoteLabel!=null&&!before.supplyNote.equals(view.supplyNote))supplyNoteLabel.setText(view.supplyNote);
         if (requirementsHeader != null)
         {
             String title=requirementsTitle(view);
@@ -830,7 +832,7 @@ final class FarmingHelperPanel extends PluginPanel
     private void renderGuide(GuideView view)
     {
         if(sameStructure(previousGuide,view)){refreshRows(previousGuide,view);previousGuide=view;return;}
-        stepText.clear();
+        stepText.clear();supplyNoteLabel=null;
         boolean sameActive=guideRendered && lastActive==view.active;
         guideRendered=true;
         previousGuide=view;
@@ -878,7 +880,7 @@ final class FarmingHelperPanel extends PluginPanel
         {
             heading(plugin.diseaseInterruptActive()?"Disease detected":"Current patch");
             for(GuideView.Stop stop:view.stops)if(stop.active&&!stop.done)renderStop(view,stop);
-            if(plugin.diseaseInterruptActive()&&!view.supplyNote.isEmpty())caption(view.supplyNote);
+            if(plugin.diseaseInterruptActive()&&!view.supplyNote.isEmpty())supplyNoteLabel=caption(view.supplyNote);
         }
         else if(!isPreparing)
         {
@@ -909,7 +911,7 @@ final class FarmingHelperPanel extends PluginPanel
             }
             if(!isPreparing&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
         }
-        if(!view.supplyNote.isEmpty()&&!plugin.diseaseInterruptActive())caption(view.supplyNote);
+        if(!view.supplyNote.isEmpty()&&!plugin.diseaseInterruptActive())supplyNoteLabel=caption(view.supplyNote);
         runDetailsHelp=view.notes.details.isEmpty()?null:helpRow("Run details",FarmingTheme.MUTED,view.notes.details);
         if(view.stops.stream().anyMatch(stop->!stop.done&&!stop.active))
         {
