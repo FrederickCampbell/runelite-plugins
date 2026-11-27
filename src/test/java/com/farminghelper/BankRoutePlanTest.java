@@ -34,6 +34,7 @@ public class BankRoutePlanTest
         plan.message(Map.of("id",sent.get(0).getData().get("id"),"reached",true,"transports",List.of(Map.of("displayInfo","Camelot tablet"))));
         assertEquals(List.of(2),plan.priority(Map.of(1,Set.of("Catherby")),false));
         assertEquals(List.of(1),plan.priority(Map.of(1,Set.of("Catherby")),true));
+        assertTrue(plan.routes().isEmpty());
         assertTrue(BankRoutePlan.bankMode("INVENTORY_AND_BANK"));assertFalse(BankRoutePlan.bankMode("UNLOCKED"));
     }
     @Test public void timeoutAndLegacySilenceRetainFallback()

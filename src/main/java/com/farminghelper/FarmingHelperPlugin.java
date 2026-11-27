@@ -1457,7 +1457,7 @@ public class FarmingHelperPlugin extends Plugin
                 (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id)));
         Set<String> travelSites=new LinkedHashSet<>();for(FarmRunPatch patch:travelWave)travelSites.add(RunOrder.site(patch));
         int pouch=RouteSupplies.pouch(carried,supplies.travel);
-        Map<Integer,Integer> pouchRunes=bankRoutes.routes().isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
+        Map<Integer,Integer> pouchRunes=!loggedIn||bankRoutes.routes().isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
         boolean elite=loggedIn&&client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)==1;
         List<?> routeInputs=List.of(travelSites,bankRoutes.routes(),fallbackTravel,supplies,travelOptions,pouch,pouchRunes,elite);
         if(!routeInputs.equals(routeSupplyInputs))

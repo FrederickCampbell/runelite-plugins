@@ -13,15 +13,15 @@ final class BankRoutePlan
     private Map<String,List<String>> resolved=Map.of();
     private String pending,site;
     private int age,budget;
-    private boolean started,finished,frozen,initialPublished,finalPublished;
+    private boolean started,finished,frozen,initialPublished;
     private List<Integer> published=List.of();
     void reset()
     {
         origin=null;remaining.clear();routes.clear();resolved=Map.of();pending=null;site=null;
-        age=budget=0;started=finished=frozen=initialPublished=finalPublished=false;published=List.of();
+        age=budget=0;started=finished=frozen=initialPublished=false;published=List.of();
     }
     void freeze(){frozen=true;}
-    void closeVisit(){remaining.clear();routes.clear();pending=null;site=null;started=false;finished=false;frozen=false;initialPublished=false;finalPublished=false;published=List.of();}
+    void closeVisit(){remaining.clear();routes.clear();pending=null;site=null;started=false;finished=false;frozen=false;initialPublished=false;published=List.of();}
     Map<String,List<String>> routes(){return resolved;}
     private void finish(){finished=true;if(!frozen)resolved=Map.copyOf(routes);}
     boolean frozen(){return frozen;}
@@ -80,9 +80,9 @@ final class BankRoutePlan
     }
     List<Integer> priority(Map<Integer,Set<String>> supplies,boolean manual)
     {
-        if(!manual&&(frozen&&initialPublished||finalPublished))return published;
-        initialPublished=true;finalPublished=finished;
-        if(manual&&finished&&!routes.isEmpty())resolved=Map.copyOf(routes);
+        if(!manual&&initialPublished&&(frozen||!finished))return published;
+        initialPublished=true;
+        if(!manual&&published.size()==supplies.size()&&supplies.keySet().containsAll(published))return published;
         return published=List.copyOf(supplies.keySet());
     }
 }
