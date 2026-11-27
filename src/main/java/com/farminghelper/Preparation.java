@@ -140,23 +140,10 @@ final class Preparation
             {loose.remove(entry.getKey());removed++;}
         return loadedSlots(Math.max(0,occupied-removed),loose,required,equipped,planned,stackable);
     }
-    /** Bounded prefix search. If a single stop cannot fit it remains blocked. */
-    static final class Window
-    {
-        private int low,high,limit;
-        Window(int count){high=limit=count;}
-        int limit(){return limit;}
-        boolean advance(boolean fits)
-        {
-            if(!fits&&limit>1){high=limit-1;limit=Math.max(1,low+(high-low+1)/2);return true;}
-            if(fits&&limit<high){low=limit;limit=low+(high-low+1)/2;return true;}
-            return false;
-        }
-    }
-    static int workingSlots(List<FarmRunPatch> wave)
+    static int workingSlots(List<FarmRunPatch> remaining)
     {
         int reserve=0;
-        for(FarmRunPatch p:wave)
+        for(FarmRunPatch p:remaining)
         {
             switch(p.getPatchType())
             {

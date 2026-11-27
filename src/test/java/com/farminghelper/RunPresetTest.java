@@ -42,6 +42,26 @@ public class RunPresetTest
         List<RunOrder.Group> fixed=RunOrder.shared(input,null,true,java.util.Set.of());
         assertEquals(List.of("Farming Guild","Gnome Stronghold","Varrock"),fixed.stream().map(g->g.site).collect(Collectors.toList()));
     }
+    @Test public void protectedManualKeepsTreeRouteAndRegionalVisits()
+    {
+        FarmRunPatch guild=p("Farming Guild",PatchType.HERB),gnome=p("Gnome Stronghold",PatchType.TREE),
+            varrock=p("Varrock",PatchType.TREE),park=p("Falador",PatchType.TREE),taverley=p("Taverley",PatchType.TREE),
+            fruit=p("Catherby",PatchType.FRUIT_TREE),herb=p("Catherby",PatchType.HERB),south=p("Falador",PatchType.HERB),
+            manor=p("Draynor Manor",PatchType.BELLADONNA),kastori=p("Kastori",PatchType.CALQUAT),
+            auburn=p("Auburnvale",PatchType.TREE),bella=p("Auburnvale",PatchType.BELLADONNA),
+            champ=p("Champions' Guild",PatchType.BUSH),mushroom=p("Morytania",PatchType.MUSHROOM),
+            fossil=p("Fossil Island",PatchType.HARDWOOD_TREE);
+        List<FarmRunPatch> input=List.of(fossil,south,herb,champ,manor,bella,fruit,guild,park,kastori,taverley,gnome,varrock,auburn,mushroom);
+        List<FarmRunPatch> expected=List.of(guild,gnome,varrock,park,taverley,fruit,herb,south,manor,kastori,auburn,bella,champ,mushroom,fossil);
+        List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(input,null,true,true));
+        assertEquals(expected,ordered);
+        ordered.remove(guild);
+        RunOrder.preferProtectedLocal(ordered,new ArrayList<>(ordered),null,false,new WorldPoint(2810,3462,0),p->p==herb?0:100);
+        assertEquals(gnome,ordered.get(0));
+        RunOrder.preferProtectedLocal(ordered,new ArrayList<>(ordered),null,false,new WorldPoint(3433,3461,0),p->100);
+        assertEquals(mushroom,ordered.get(0));
+    }
+
     @Test public void bankAndCapacityAreAdvisory()
     {
         assertEquals(Preparation.GUILD,Preparation.choose(45,new WorldPoint(3092,3243,0),true,false).point);

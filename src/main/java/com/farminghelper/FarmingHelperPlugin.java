@@ -152,8 +152,6 @@ public class FarmingHelperPlugin extends Plugin
     private volatile boolean preparationVault,preparationAtStorage;
     private WorldPoint preparationOrigin;
     private RunOrder pinned;
-    private Set<FarmRunPatch> preparedWave=Set.of();
-    private PhysicalStock preparedStock;
     private volatile LeprechaunWithdrawal leprechaunWithdrawal;
         private volatile FarmingHelperPanel panel;
     private NavigationButton nav;
@@ -267,7 +265,7 @@ public class FarmingHelperPlugin extends Plugin
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationAtStorage=false;preparationOrigin=null;
-        pinned=null;preparedWave=Set.of();preparedStock=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
+        pinned=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;clearWaterOffer();compostMissing=false;
         diseasePriority.reset();diseaseTarget=null;diseaseLeg=null;diseaseItems=Collections.emptySet();normalView=null;
@@ -1006,7 +1004,7 @@ public class FarmingHelperPlugin extends Plugin
     boolean reagentPouchOwned(){return reagentPouchOwned;}
     private boolean useHarvestContainer(HarvestContainers.Kind kind)
     {return flag(kind==HarvestContainers.Kind.HERB?"directorUseHerbSack":"directorUseReagentPouch",true);}
-    private String harvestContainerRequirements(List<FarmRunPatch> wave,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
+    private String harvestContainerRequirements(List<FarmRunPatch> remaining,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
         Map<Integer,Integer> required)
     {
         StringJoiner advice=new StringJoiner("\n");
@@ -1018,7 +1016,7 @@ public class FarmingHelperPlugin extends Plugin
             if(carried==null&&stored==null)continue;
             Set<Integer> species=new HashSet<>();
             int harvests=0;
-            for(FarmRunPatch patch:wave)
+            for(FarmRunPatch patch:remaining)
             {
                 var o=observations.get(patch);
                 if(o==null||o.state!=CropState.HARVESTABLE&&o.state!=CropState.UNCHECKED)continue;
@@ -1264,12 +1262,9 @@ public class FarmingHelperPlugin extends Plugin
         {
             WorldPoint start=location.normalized;
             boolean guildFirst=startAt()==Preparation.StartAt.GUILD&&level>=45;
-            Set<PatchType> carriedSaplings=EnumSet.noneOf(PatchType.class);
-            for(FarmRunPatch p:plant)if(p.getPatchType().isTree()&&p.getPatchType()!=PatchType.SPIRIT_TREE&&
-                CropCatalog.crops(p.getPatchType()).stream().anyMatch(c->c.getLevel()<=level&&bag.getOrDefault(c.getItemId(),0)>=c.getQuantity()))
-                carriedSaplings.add(p.getPatchType());
-            // Shortest Path navigates the active leg; the shared planner alone orders patches.
-            pinned=new RunOrder(RunOrder.shared(ready,start,guildFirst,estimatedOccupied>=25?carriedSaplings:Collections.emptySet()));
+            // Only manual Guild-start runs use the protected itinerary.
+            boolean protectedManual=guildFirst&&"manual".equals(runPolicyKey);
+            pinned=new RunOrder(RunOrder.shared(ready,start,guildFirst,protectedManual),protectedManual);
         }
         if (pinned != null) pinned.order(ready, plant, visible);
         // A selected, local dry crop can be watered without a new planting allocation.
@@ -1326,7 +1321,7 @@ public class FarmingHelperPlugin extends Plugin
             seaweedBirdTransfer=SpecialRoutes.insideSeaweed(location.normalized)||SpecialRoutes.onSeaweedIsland(location.normalized)||
                 patches.stream().anyMatch(p->p.getPatchType()==PatchType.SEAWEED&&runProgress.is(p,RunProgress.Status.COMPLETED));
             specialtyBirdPhase=true;clearWaterOffer();current=null;activeCrop=null;progress.reset();activeCareOnly=false;activeClearOnly=false;
-            phase=Preparation.Phase.ACTIVE;visitedStorage=false;pinned=null;preparedWave=Set.of();
+            phase=Preparation.Phase.ACTIVE;visitedStorage=false;pinned=null;
             update();return;
         }
         if(loggedIn&&!preparing()&&highlight!=null&&location.actual!=null)
@@ -1335,7 +1330,9 @@ public class FarmingHelperPlugin extends Plugin
             boolean currentLive=current!=null&&(progress.underway()||compostAcknowledged||
                 activeObservation!=null&&activeObservation.source==QuestFarmingStateReader.Source.LIVE&&
                 localDistance(current,location.actual,observations)<=2);
-            RunOrder.preferLocal(ready,visible,current,currentLive,p->localDistance(p,location.actual,observations));
+            if("manual".equals(runPolicyKey)&&startAt()==Preparation.StartAt.GUILD&&level>=45)
+                RunOrder.preferProtectedLocal(ready,visible,current,currentLive,location.actual,p->localDistance(p,location.actual,observations));
+            else RunOrder.preferLocal(ready,visible,current,currentLive,p->localDistance(p,location.actual,observations));
         }
         if(!bankItinerary.equals(ready))bankItinerary=List.copyOf(ready);
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
@@ -1354,20 +1351,7 @@ public class FarmingHelperPlugin extends Plugin
         activeClearOnly=clearOnly.contains(current);
         activeCareOnly=careOnly.contains(current);
         if(current!=null && !progress.planted()) activeCrop=seeds.get(current);
-        // Retain the complete ready itinerary and allocation. Only the withdrawal
-        // checklist is scoped. A committed active wave is not enlarged every tick.
-        boolean boundary=loggedIn&&current!=null&&!preparedWave.isEmpty()&&!preparedWave.contains(current);
-        int limit=ready.size();
-        if((!preparing()||preparedStock==supplies)&&!boundary&&!preparedWave.isEmpty()&&current!=null)
-        {
-            limit=0;
-            while(limit<ready.size()&&preparedWave.contains(ready.get(limit)))limit++;
-            if(limit==0)limit=ready.size();
-        }
-        Preparation.Window window=new Preparation.Window(limit);
-        boolean probeBoundary=boundary&&!preparing()&&!progress.underway()&&phase==Preparation.Phase.ACTIVE;
-        boolean needsResupply=false;
-        if(probeBoundary)limit=1;
+        // Keep the complete actionable itinerary independent of inventory capacity.
         ItemContainer inventory=client.getItemContainer(InventoryID.INV);
         int actualOccupied=Math.max(estimatedOccupied,inventory==null?0:inventory.count());
         boolean autoWeed=loggedIn&&client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2;
@@ -1380,25 +1364,23 @@ public class FarmingHelperPlugin extends Plugin
         Map<String,List<String>> bankRouteSnapshot=bankRoutes.routes();
         Map<Integer,Integer> pouchRunes=!loggedIn||bankRouteSnapshot.isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
         boolean elite=loggedIn&&client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)==1;
-        for(;;)
-        {
-        final List<FarmRunPatch> wave=ready.subList(0,limit);
-        Map<FarmRunPatch,Crop> waveSeeds=new LinkedHashMap<>();
+        final List<FarmRunPatch> remaining=ready;
+        Map<FarmRunPatch,Crop> remainingSeeds=new LinkedHashMap<>();
         boolean yieldTool=false,needsWater=false,diving=false;
         int vines=0;
-        for(FarmRunPatch p:wave)
+        for(FarmRunPatch p:remaining)
         {
             Crop crop=seeds.get(p);PatchType type=p.getPatchType();
-            if(crop!=null){waveSeeds.put(p,crop);if(type==PatchType.GRAPEVINE)vines++;}
+            if(crop!=null){remainingSeeds.put(p,crop);if(type==PatchType.GRAPEVINE)vines++;}
             yieldTool|=!careOnly.contains(p)&&Supplies.secateursUseful(type,observations.get(p));
             needsWater|=runWater&&!immune(p)&&type.canBeWatered()&&(crop!=null||!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,observations.get(p),true));
             diving|=type==PatchType.CORAL;
         }
         Map<Integer,Integer> paymentNeeds=new LinkedHashMap<>(),paymentNotes=new HashMap<>();
-        Map<Integer,Integer> required=Supplies.guideKit(wave,careOnly,autoWeed,barbarian);
-        if(!clearOnly.isEmpty()&&waveSeeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
+        Map<Integer,Integer> required=Supplies.guideKit(remaining,careOnly,autoWeed,barbarian);
+        if(!clearOnly.isEmpty()&&remainingSeeds.isEmpty()) {required.remove(ItemID.DIBBER);required.remove(ItemID.RAKE);}
         if(loggedIn&&runLeprechaun)required.entrySet().removeIf(e->carried.getOrDefault(e.getKey(),0)==0&&LeprechaunWithdrawal.stored(client,e.getKey())>=e.getValue());
-        for(FarmRunPatch p:wave)
+        for(FarmRunPatch p:remaining)
         {
             QuestFarmingStateReader.Observation state=observations.get(p);
             if(state!=null && state.state==CropState.DISEASED)
@@ -1414,9 +1396,9 @@ public class FarmingHelperPlugin extends Plugin
         // stock must not create a mandatory banking route.
         if(yieldTool&&(carried.getOrDefault(magicSecateurs,0)>0||!storedMagic&&stock.getOrDefault(magicSecateurs,0)>0))required.put(magicSecateurs,1);
         Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
-        CompostRun.addSupplies(required,wave,observations,stock,bag,binPlans);
+        CompostRun.addSupplies(required,remaining,observations,stock,bag,binPlans);
         int compostCount=0,coins=0,axeId=0;boolean needsAxe=false;
-        for(FarmRunPatch p:wave)
+        for(FarmRunPatch p:remaining)
         {
             Crop c=seeds.get(p);PatchType type=p.getPatchType();
             if(c!=null) required.merge(c.getItemId(),c.getQuantity(),Integer::sum);
@@ -1436,7 +1418,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(coins>0) required.merge(ItemID.COINS,coins,Integer::sum);
         if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;required.put(axeId,1);}
-        Map<Integer,Integer> prepSeeds=TreePreparation.preparation(waveSeeds,stock,aliases,bag,this::observedItemName);
+        Map<Integer,Integer> prepSeeds=TreePreparation.preparation(remainingSeeds,stock,aliases,bag,this::observedItemName);
         var stages=TreePreparation.counts(prepSeeds,aliases,this::observedItemName);
         int rawSeeds=stages.getOrDefault(TreePreparation.Stage.SEED,0),seedlings=stages.getOrDefault(TreePreparation.Stage.SEEDLING,0),
             watered=stages.getOrDefault(TreePreparation.Stage.WATERED,0);
@@ -1456,10 +1438,10 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Integer> farmingRequirements=SpecialRoutes.isType(current,PatchType.BIRDHOUSE)?new LinkedHashMap<>(required):Map.of();
         Map<Integer,Integer> birdStock=specialtyStaged&&specialtyBirdPhase?supplies.bankAndBag:stock;
         if(specialtyStaged&&specialtyBirdPhase)
-            birdStock=BirdhouseRun.preferCarried(wave,observations,plantingBag,birdStock,required,hunter,crafting);
-        Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(wave,observations,birdStock,required,hunter,crafting);
+            birdStock=BirdhouseRun.preferCarried(remaining,observations,plantingBag,birdStock,required,hunter,crafting);
+        Map<FarmRunPatch,String> birdhousePlans=BirdhouseRun.supplies(remaining,observations,birdStock,required,hunter,crafting);
         ProtectionPayment.reserve(required,paymentNeeds,bag,this::itemDefinition,paymentNotes);
-        String harvestContainers=harvestContainerRequirements(wave,observations,required);
+        String harvestContainers=harvestContainerRequirements(remaining,observations,required);
         Map<Integer,Integer> pendingSaplings=TreePreparation.pending(prepSeeds,aliases);
         Map<Integer,Integer> physicalRequired=pendingSaplings.isEmpty()?required:TreePreparation.physicalRequirements(required,pendingSaplings);
         java.util.function.IntPredicate boxEligible=id->seedItem(id)&&stackable(id)&&!prepSeeds.containsKey(id)&&id!=ItemID.HESPORI_SEED;
@@ -1469,10 +1451,10 @@ public class FarmingHelperPlugin extends Plugin
         paymentNotes.forEach((note,base)->paymentStorage.merge(note,
             Math.max(0,bank.items.getOrDefault(base,0)-Math.max(0,physicalRequired.getOrDefault(base,0)-bag.getOrDefault(base,0))),PhysicalStock::sum));
         // Travel remains advisory; do not force a bank trip solely for optional teleports.
-        List<FarmRunPatch> travelWave=wave;
-        if(localSite!=null){travelWave=new ArrayList<>(wave);travelWave.removeIf(p->localSite.equals(RunOrder.site(p)));}
+        List<FarmRunPatch> travelRemaining=remaining;
+        if(localSite!=null){travelRemaining=new ArrayList<>(remaining);travelRemaining.removeIf(p->localSite.equals(RunOrder.site(p)));}
         Set<String> travelSites=new LinkedHashSet<>();
-        for(FarmRunPatch patch:travelWave)travelSites.add(RunOrder.site(patch));
+        for(FarmRunPatch patch:travelRemaining)travelSites.add(RunOrder.site(patch));
         List<?> routeInputs=List.of(List.copyOf(travelSites),bankRouteSnapshot,supplies,travelOptions,pouch,pouchRunes,elite);
         if(!routeInputs.equals(routeSupplyInputs))
         {
@@ -1485,7 +1467,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Set<String>> teleports=routeSupplyPlan.sites;
         Map<Integer,Integer> travelCounts=routeSupplyPlan.quantities,load=new LinkedHashMap<>(physicalRequired);
         travelCounts.forEach((id,n)->load.merge(id,n,Math::max));
-        if(wave.size()==1&&wave.get(0).getPatchType()==PatchType.COMPOST_BIN)
+        if(remaining.size()==1&&remaining.get(0).getPatchType()==PatchType.COMPOST_BIN)
         {
             CompostRun.batch(load,bag,equipped,supplies.seedBox,actualOccupied,this::stackable);
             required.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
@@ -1504,23 +1486,8 @@ public class FarmingHelperPlugin extends Plugin
         int packed=Preparation.packedSlots(actualOccupied,bag,load,equipped,supplies.seedBox,packing,this::stackable);
         boolean requiresPacking=packed<looseSlots;
         int slots=requiresPacking?packed:looseSlots;
-        int reserve=Preparation.workingSlots(wave);
+        int reserve=Preparation.workingSlots(remaining);
         boolean fits=slots<=28-reserve;
-        if(probeBoundary)
-        {
-            // Only a missing supply for the very next patch justifies interrupting
-            // the run. Missing future supplies and optional yield tools do not.
-            boolean localBinBatch=current.getPatchType()==PatchType.COMPOST_BIN&&binPlans.containsKey(current)&&
-                (observations.get(current).state==CropState.EMPTY||observations.get(current).state==CropState.FILLING)&&
-                binPlans.get(current).supplies.keySet().stream().anyMatch(id->CompostRun.material(id)&&bag.getOrDefault(id,0)>0);
-            needsResupply=!localBinBatch&&physicalRequired.entrySet().stream().anyMatch(e->e.getKey()!=magicSecateurs&&
-                e.getValue()>carried.getOrDefault(e.getKey(),0)&&paymentStorage.getOrDefault(e.getKey(),0)>0);
-            probeBoundary=false;limit=window.limit();continue;
-        }
-        if(window.advance(fits)){limit=window.limit();continue;}
-        if(preparedWave.size()!=wave.size()||!preparedWave.containsAll(wave))preparedWave=Set.copyOf(wave);
-        preparedStock=supplies;
-        if(needsResupply&&!preparing())beginPreparation(Preparation.Phase.RESUPPLY);
         List<GuideView.ItemRow> items=new ArrayList<>(required.size()+teleports.size());
         for(int id:SupplyOrder.ordered(required,this::observedItemName))
         {
@@ -1587,7 +1554,7 @@ public class FarmingHelperPlugin extends Plugin
             }
             if(activeLive&&!preparing()&&runLeprechaun&&highlight!=null&&
                 (leprechaunWithdrawal!=null||visibleWidget(InterfaceID.FarmingTools.UNIVERSE)))
-                leprechaunWithdrawal=localCollection(leprechaunWithdrawal,current,wave,seeds,observations,bag,carried,plantingBag,wateringCan,stepCompost,estimatedOccupied,barbarian);
+                leprechaunWithdrawal=localCollection(leprechaunWithdrawal,current,remaining,seeds,observations,bag,carried,plantingBag,wateringCan,stepCompost,estimatedOccupied,barbarian);
             if(leprechaunWithdrawal!=null)
                 instruction=leprechaunWithdrawal.instruction()+", then "+instruction;
             else if(action==StepEngine.Action.WATER&&wateringCan<=0)
@@ -1728,8 +1695,7 @@ public class FarmingHelperPlugin extends Plugin
             details.add("Birdhouse supplies: logs or houses, hammer, chisel, bait and clockworks.");
         if(loggedIn && current!=null)
         {
-            if(!fits)supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Free inventory space before preparing this patch (including working space).";
-            if(wave.size()<ready.size())details.add("Preparing "+wave.size()+" of "+ready.size()+" remaining patches; resupply as needed.");
+            if(!fits)supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Full run exceeds available inventory space. Carry what you need first and resupply when convenient.";
             details.add("Estimated occupied slots: "+slots+" / 28; working space: "+reserve+".");
             if(phase==Preparation.Phase.UNCHECKED)
             {
@@ -1829,8 +1795,6 @@ public class FarmingHelperPlugin extends Plugin
             new GuideView.Notes(phase==Preparation.Phase.INITIAL,storageWarning,prepHelp,details.toString()));
         normalView=view;
         publishView(view);
-        break;
-        }
     }
 
     private boolean immune(FarmRunPatch p)
@@ -2003,7 +1967,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     void resupply()
     {
-        inRun(()->{if(diseaseTarget!=null||current==null)return;sampleStorage();preparedStock=null;beginPreparation(Preparation.Phase.RESUPPLY);explicitResupply=true;update();});
+        inRun(()->{if(diseaseTarget!=null||current==null)return;sampleStorage();beginPreparation(Preparation.Phase.RESUPPLY);explicitResupply=true;update();});
     }
 
     private void cacheIcons(List<GuideView.ItemRow> rows)

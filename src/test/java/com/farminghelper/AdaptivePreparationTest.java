@@ -44,26 +44,13 @@ public class AdaptivePreparationTest
         assertEquals(12,Preparation.loadedSlots(Map.of(999,10,BOX,1),Map.of(SEED,5,SAPLING,1),Map.of(),Map.of(SEED,5),STACK));
     }
 
-    @Test public void oversizedCustomRunProducesBoundedPrefix()
+    @Test public void oversizedRunRequirementsRemainComplete()
     {
-        Preparation.Window window=new Preparation.Window(60);
-        int probes=0;
-        do {probes++;assertTrue(probes<=15);}
-        while(window.advance(Preparation.loadedSlots(Map.of(999,5),Map.of(SAPLING,window.limit()),Map.of(),Map.of(),STACK)<=26));
-        assertEquals(21,window.limit());
-        Preparation.Window blocked=new Preparation.Window(60);
-        do {assertTrue(blocked.limit()>0);}while(blocked.advance(false));
-        assertEquals(1,blocked.limit());
-        Preparation.Window shortRun=new Preparation.Window(8);
-        assertFalse(shortRun.advance(true));
-        assertEquals(8,shortRun.limit());
-    }
-
-    @Test public void guildBoundaryIsOptionalAndDoesNotDeleteTheRun()
-    {
-        Preparation.Window next=new Preparation.Window(36);
-        do {}while(next.advance(next.limit()<=20));
-        assertEquals(20,next.limit());
+        Map<Integer,Integer> demand=Map.of(SAPLING,60,SEED,180);
+        assertEquals(66,Preparation.loadedSlots(Map.of(999,5),demand,Map.of(),Map.of(),STACK));
+        assertEquals(Integer.valueOf(60),demand.get(SAPLING));
+        assertEquals(Integer.valueOf(180),demand.get(SEED));
+        assertEquals(Set.of(SAPLING,SEED),GuideView.missingItems(demand,Map.of(SAPLING,21,SEED,179)));
         assertEquals(4,Preparation.workingSlots(List.of(p("Farming Guild",PatchType.ALLOTMENT),p("Farming Guild",PatchType.TREE))));
         assertEquals(5,Preparation.workingSlots(List.of(p("Fossil Island",PatchType.BIRDHOUSE))));
         assertEquals(0,Preparation.workingSlots(List.of(p("Farming Guild",PatchType.COMPOST_BIN))));

@@ -21,12 +21,12 @@ public class RouteAndReplacement41Test
         assertEquals(entrana,result.get(result.size()-2));assertEquals(fossil,result.get(result.size()-1));
         assertEquals(result,RunOrder.flatten(RunOrder.shared(List.of(guild,tree,champ,entrana,fossil,hops),null,true,java.util.Set.of())));
     }
-    @Test public void lowSpacePrioritizesCarriedSaplingTypeOnly()
+    @Test public void carriedSaplingsDoNotOverrideRoute()
     {
         FarmRunPatch guild=p("Farming Guild",PatchType.HERB),tree=p("Varrock",PatchType.TREE),
             fruit=p("Catherby",PatchType.FRUIT_TREE),herb=p("Catherby",PatchType.HERB);
         List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(List.of(guild,tree,herb,fruit),null,true,Set.of(PatchType.FRUIT_TREE)));
-        assertEquals(guild,ordered.get(0));assertEquals(herb,ordered.get(1));assertEquals(fruit,ordered.get(2));assertEquals(tree,ordered.get(3));
+        assertEquals(List.of(guild,tree,herb,fruit),ordered);
     }
     @Test public void bankPreferenceAndVaultFallback()
     {

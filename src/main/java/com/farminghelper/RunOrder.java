@@ -6,11 +6,14 @@ import net.runelite.api.coords.WorldPoint;
 final class RunOrder
 {
     private final List<FarmRunPatch> itinerary;
+    private final boolean protectedManual;
     private final Map<FarmRunPatch,Integer> ranks = new HashMap<>();
     private final Comparator<FarmRunPatch> byRank = Comparator.comparingInt(ranks::get);
 
-    RunOrder(List<Group> groups)
+    RunOrder(List<Group> groups){this(groups,false);}
+    RunOrder(List<Group> groups,boolean protectedManual)
     {
+        this.protectedManual=protectedManual;
         itinerary = flatten(groups);
         index();
     }
@@ -20,6 +23,7 @@ final class RunOrder
         if (!ranks.keySet().containsAll(ready))
         {
             appendReady(itinerary, ready);
+            if(protectedManual)itinerary.sort(Comparator.comparingInt(p->protectedRank(block(site(p)))));
             index();
         }
         for (List<FarmRunPatch> patches : List.of(ready, plant, visible))
@@ -54,6 +58,21 @@ final class RunOrder
             ready.remove(best);ready.add(0,best);
             if(visible.remove(best))visible.add(0,best);
         }
+    }
+    // Local promotion must never jump an ordinary protected region. Salve arrival is the deliberate exception.
+    private static final WorldPoint SALVE_GRAVEYARD=new WorldPoint(3433,3461,0);
+    static void preferProtectedLocal(List<FarmRunPatch> ready,List<FarmRunPatch> visible,FarmRunPatch current,
+        boolean currentLive,WorldPoint player,java.util.function.ToIntFunction<FarmRunPatch> distance)
+    {
+        if(ready.isEmpty()||currentLive&&ready.contains(current)||player==null)return;
+        FarmRunPatch first=ready.get(0),best=first;
+        if("Farming Guild".equals(site(first)))return;
+        if("Gnome Stronghold".equals(site(first)))
+            for(FarmRunPatch candidate:ready)
+                if("Gnome Stronghold".equals(site(candidate))&&distance.applyAsInt(candidate)<=15&&distance.applyAsInt(candidate)<distance.applyAsInt(best))best=candidate;
+        if(!terminalOrderPositive(first)&&player.getPlane()==0&&player.distanceTo2D(SALVE_GRAVEYARD)<=5)
+            for(FarmRunPatch candidate:ready)if(candidate.getPatchType()==PatchType.MUSHROOM){best=candidate;break;}
+        if(best!=first){ready.remove(best);ready.add(0,best);if(visible.remove(best))visible.add(0,best);}
     }
     private static boolean ordinary(FarmRunPatch p)
     {
@@ -117,6 +136,13 @@ final class RunOrder
         "Kastori","Aldarin","Great Conch","Anglers' Retreat","Entrana","Fossil Island");
     private static String block(String site)
     {return "Lumbridge farm".equals(site)?"Champions' Guild":site;}
+    private static final List<String> PROTECTED=List.of("Farming Guild","Gnome Stronghold","Tree Gnome Village","Lumbridge Castle","Varrock","Falador Park","Taverley","Catherby","Brimhaven","Tai Bwo Wannai","South Falador","Draynor Manor","Kastori","Auburnvale","Auburnvale belladonna");
+    private static int protectedRank(String site)
+    {
+        if(terminalOrder(site)>0)return 1000+terminalOrder(site);
+        int n=PROTECTED.indexOf(site);if(n>=0)return n;
+        int m=MIXED.indexOf(site);return PROTECTED.size()+(m<0?MIXED.size():m);
+    }
     private static int localOrder(FarmRunPatch p)
     {
         if(p.getPatchType()==PatchType.HESPORI||p.getPatchType()==PatchType.CORAL||p.getPatchType()==PatchType.SEAWEED)return 5;
@@ -126,7 +152,9 @@ final class RunOrder
         if(p.getPatchType().isTree())return 1;
         return 2;
     }
-    static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,Set<PatchType> carriedSaplings)
+    static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,Set<PatchType> ignored)
+    {return shared(patches,start,guildFirst,false);}
+    static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,boolean protectedManual)
     {
         Set<PatchType> types=EnumSet.noneOf(PatchType.class);
         patches.forEach(p->types.add(p.getPatchType()));
@@ -144,13 +172,18 @@ final class RunOrder
         boolean reverse=start!=null&&northDistance<100&&northDistance<proxy(start,south);
         byBlock.forEach((site,ps)->{
             // Mixed Catherby visits finish the selected farm plots before the fruit tree.
-            boolean catherbyMixed="Catherby".equals(site)&&ps.stream().anyMatch(p->p.getPatchType()==PatchType.FRUIT_TREE);
+            boolean catherbyMixed=!protectedManual&&"Catherby".equals(site)&&ps.stream().anyMatch(p->p.getPatchType()==PatchType.FRUIT_TREE);
             ps.sort(Comparator.comparingInt((FarmRunPatch p)->catherbyMixed?
                     p.getPatchType()==PatchType.HERB?-2:
                     p.getPatchType()==PatchType.ALLOTMENT||p.getPatchType()==PatchType.FLOWER||p.getPatchType()==PatchType.COMPOST_BIN?-1:localOrder(p):localOrder(p))
                 .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?(reverse?-BirdhouseRun.order(p):BirdhouseRun.order(p)):0));
             ordered.add(new Group(site,ps));
         });
+        if(protectedManual)
+        {
+            ordered.sort(Comparator.comparingInt(g->protectedRank(g.site)));
+            return ordered;
+        }
         final List<String> ref=reference;
         ordered.sort(Comparator.comparingInt((Group g)->{
             int n=ref.indexOf(g.site);
@@ -166,17 +199,6 @@ final class RunOrder
                 .min(Comparator.comparingDouble(g->proxy(start,g.entry()))).orElse(null);
             if(near!=null){ordered.remove(near);ordered.add(0,near);}
             else if(guild!=null){ordered.remove(guild);ordered.add(Math.min(1,ordered.size()),guild);}
-        }
-        // Full inventories benefit from an early carried-sapling block. Never split a site or move terminal legs.
-        if(!carriedSaplings.isEmpty())
-        {
-            int first=guildFirst&&!ordered.isEmpty()&&"Farming Guild".equals(ordered.get(0).site)?1:0;
-            for(int i=first;i<ordered.size();i++)
-            {
-                Group g=ordered.get(i);
-                if(!terminal(g)&&g.patches.stream().anyMatch(p->carriedSaplings.contains(p.getPatchType())))
-                {ordered.remove(i);ordered.add(first,g);break;}
-            }
         }
         // Preserve explicit selected pairs even when initial proximity or saplings promote a site.
         pair(ordered,"South Falador","Draynor Manor");
