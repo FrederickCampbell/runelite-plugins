@@ -9,17 +9,21 @@ final class BankRoutePlan
 {
     private WorldPoint origin;
     private final Map<String,WorldPoint> remaining=new LinkedHashMap<>();
-    private final Map<String,Set<String>> routes=new LinkedHashMap<>();
+    private final Map<String,List<String>> routes=new LinkedHashMap<>();
+    private Map<String,List<String>> resolved=Map.of();
     private String pending,site;
     private int age,budget;
     private boolean started,finished,frozen,initialPublished,finalPublished;
     private List<Integer> published=List.of();
     void reset()
     {
-        origin=null;remaining.clear();routes.clear();pending=null;site=null;
+        origin=null;remaining.clear();routes.clear();resolved=Map.of();pending=null;site=null;
         age=budget=0;started=finished=frozen=initialPublished=finalPublished=false;published=List.of();
     }
     void freeze(){frozen=true;}
+    void closeVisit(){remaining.clear();routes.clear();pending=null;site=null;started=false;finished=false;frozen=false;initialPublished=false;finalPublished=false;published=List.of();}
+    Map<String,List<String>> routes(){return resolved;}
+    private void finish(){finished=true;if(!frozen)resolved=Map.copyOf(routes);}
     boolean frozen(){return frozen;}
     boolean started(){return started;}
     boolean finished(){return finished;}
@@ -39,60 +43,46 @@ final class BankRoutePlan
     {
         if(!started||finished)return;
         if(++budget>=100||pending!=null&&++age>=30)
-        {pending=null;finished=true;return;}
+        {pending=null;finish();return;}
         if(pending!=null||!navigation.bankQueryReady())return;
-        if(remaining.isEmpty()){finished=true;return;}
+        if(remaining.isEmpty()){finish();return;}
         var next=remaining.entrySet().iterator().next();
         site=next.getKey();WorldPoint target=next.getValue();remaining.remove(site);
         pending=navigation.bankQuery(origin,target);age=0;
-        if(pending==null)finished=true;
+        if(pending==null)finish();
     }
     boolean message(Map<String,Object> data)
     {
         if(pending==null||!pending.equals(data.get("id")))return false;
         pending=null;
         if(Boolean.TRUE.equals(data.get("reached")))routes.put(site,descriptions(data.get("transports")));
-        if(remaining.isEmpty())finished=true;
+        if(remaining.isEmpty())finish();
         return true;
     }
-    /** Only item/spell edges lack an object interaction; exact shelf labels
-     * subsequently distinguish known items from spells and POH furniture. */
-    static Set<String> descriptions(Object raw)
+    /** Preserve spell and item labels, fairy-ring dependencies and repeated
+     * transport occurrences; ordinary object interactions are not item IDs. */
+    static List<String> descriptions(Object raw)
     {
-        Set<String> labels=new LinkedHashSet<>();
+        List<String> labels=new ArrayList<>();
         if(raw instanceof Collection)for(Object edge:(Collection<?>)raw)
         {
             if(!(edge instanceof Map))continue;
             Map<?,?> m=(Map<?,?>)edge;Object object=m.get("objectInfo"),display=m.get("displayInfo");
-            if((object==null||object instanceof String&&((String)object).isBlank())&&display instanceof String&&!((String)display).isBlank())
-                labels.add((String)display);
+            String action=Objects.toString(object,"").toLowerCase(Locale.ROOT);
+            if(action.contains("fairy ring"))labels.add(RouteSupplies.FAIRY);
+            else if(action.isBlank())
+            {
+                if(display instanceof String&&!((String)display).isBlank())labels.add((String)display);
+                else labels.add(RouteSupplies.UNKNOWN);
+            }
         }
         return labels;
     }
-    List<Integer> priority(Map<Integer,List<String>> eligible,Map<Integer,Integer> available,
-        Map<Integer,Integer> carried,Map<Integer,Set<String>> fallback,boolean manual)
+    List<Integer> priority(Map<Integer,Set<String>> supplies,boolean manual)
     {
         if(!manual&&(frozen&&initialPublished||finalPublished))return published;
-        if(!finished&&!manual)
-        {
-            if(!initialPublished){published=List.copyOf(fallback.keySet());initialPublished=true;}
-            return published;
-        }
         initialPublished=true;finalPublished=finished;
-        LinkedHashSet<Integer> result=new LinkedHashSet<>();
-        for(Set<String> labels:routes.values())for(String label:labels)
-        {
-            int best=-1,score=Integer.MAX_VALUE;
-            for(var e:eligible.entrySet())
-            {
-                int id=e.getKey();if(available.getOrDefault(id,0)<=0||!e.getValue().contains(label))continue;
-                int rank=carried.getOrDefault(id,0)>0?0:result.contains(id)?1:2;
-                if(rank<score||rank==score&&id<best){best=id;score=rank;}
-            }
-            if(best>0)result.add(best);
-        }
-        // The existing static fallback remains for legs with no successful reply.
-        fallback.forEach((id,sites)->{if(sites.stream().anyMatch(s->!routes.containsKey(s)))result.add(id);});
-        return published=List.copyOf(result);
+        if(manual&&finished&&!routes.isEmpty())resolved=Map.copyOf(routes);
+        return published=List.copyOf(supplies.keySet());
     }
 }

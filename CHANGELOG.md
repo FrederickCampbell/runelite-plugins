@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.11.5 — transportation dependency resolution
+- Preserve fairy-ring and spell dependencies from public Shortest Path responses. Read owned rune pouch contents through RuneLite, recommend additional loose runes and required fairy-ring staff, and use one travel plan for the checklist, bank priority and inventory budgeting.
+- Retain conservative fallback for unresolved routes and quantities; no hidden API, automatic withdrawal or pathfinder duplication. Independent bank-origin routes remain estimates, not a globally optimized itinerary.
+
 ## v1.11.4 — unified supply preparation
 - Enabled, owned and useful containers enter the ordinary requirement map, inventory slot calculation, checklist and native withdrawal outlines; carried variants satisfy their own requirement.
 - Seed-box packing remains conditional on confirmed contents; herb sack and reagent pouch capacity is not assumed. Preparation continues to the bank if bank supplies remain after a vault visit.

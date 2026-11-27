@@ -115,6 +115,8 @@ public class FarmingHelperPlugin extends Plugin
     private final BankRoutePlan bankRoutes=new BankRoutePlan();
     private List<FarmRunPatch> bankItinerary=List.of();
     private Map<Integer,Set<String>> bankFallback=Map.of();
+    private List<?> routeSupplyInputs=List.of();
+    private RouteSupplies.Plan routeSupplyPlan;
     private Set<Integer> shelfItems=Set.of(), shelfCandidates=Set.of(), bankPlaceholders=Set.of();
     private String stockProfile;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
@@ -251,7 +253,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         run = Collections.emptySet();
         if(runBank!=null)runBank.close();
-        bankRoutes.reset();bankItinerary=List.of();bankFallback=Map.of();
+        bankRoutes.reset();bankItinerary=List.of();bankFallback=Map.of();routeSupplyInputs=List.of();routeSupplyPlan=null;
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationAtStorage=false;preparationOrigin=null;
@@ -551,7 +553,7 @@ public class FarmingHelperPlugin extends Plugin
     }
     @Subscribe public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
     {
-        if("shortestpath".equals(event.getGroup()))onClient(this::invalidateTravel);
+        if("shortestpath".equals(event.getGroup()))onClient(()->{invalidateTravel();bankRoutes.reset();routeSupplyInputs=List.of();});
         if("farming-helper".equals(event.getGroup())&&!event.getKey().startsWith("observed"))preferenceRevision.incrementAndGet();
     }
 
@@ -569,7 +571,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             bank.sampled=false;
             if(runBank!=null)runBank.bankClosed();
-            bankRoutes.reset();
+            bankRoutes.closeVisit();
         }
         if(event.getGroupId()==InterfaceID.SEED_VAULT)vault.sampled=false;
     }
@@ -769,7 +771,7 @@ public class FarmingHelperPlugin extends Plugin
         if(!guideRequested||run.isEmpty())return null;
         Set<Integer> runItems=requiredItems();
         boolean bird=birdBankPhase();
-        List<?> inputs=List.of(session.get(),quantities,bankPlaceholders,runItems,bird,preferenceRevision.get(),vaultAccessRevision);
+        List<?> inputs=List.of(session.get(),quantities,bankPlaceholders,runItems,bankFallback.keySet(),bird,preferenceRevision.get(),vaultAccessRevision);
         if(inputs.equals(shelfInputs))return shelfItems;
         boolean diving=!bird&&patches.stream().anyMatch(p->eligible(p)&&(p.getPatchType()==PatchType.SEAWEED||p.getPatchType()==PatchType.CORAL));
         Set<Integer> candidates = new HashSet<>(owned.keySet());
@@ -777,6 +779,7 @@ public class FarmingHelperPlugin extends Plugin
         shelfCandidates = Set.copyOf(candidates);
         // Preserve the broad shelf across preparation windows.
         Set<Integer> broad=new HashSet<>(runItems);
+        broad.addAll(bankFallback.keySet());
         List<PatchType> selectedTypes=selectedRunTypes();
         for(PatchType type:selectedTypes)
             for(Crop crop:CropCatalog.crops(type))
@@ -802,15 +805,16 @@ public class FarmingHelperPlugin extends Plugin
         if(runBank==null)return "The farming bank view is unavailable.";
         boolean enabled=flag("activeRunBank",true);
         if(!enabled||!guideRequested||run.isEmpty()||!runBank.bankOpen())
-        {bankRoutes.reset();runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
+        {bankRoutes.closeVisit();runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
         PhysicalStock supplies=stock();
         Set<Integer> eligible=bankRunItems(supplies.shelf);
-        boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"));
+        boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"))
+            &&!"false".equalsIgnoreCase(config.getConfiguration("shortestpath","includeBankPath"));
         if(bank.sampled&&!bankRoutes.started())
             bankRoutes.begin(bankAware?LocationContext.capture(client).pathStart():null,bankItinerary);
         if(bankAware&&bankRoutes.started())bankRoutes.tick(navigation);
         List<Integer> priority=bankRoutes.started()
-            ?bankRoutes.priority(teleports(supplies.travel.keySet()),supplies.travel,supplies.carried,bankFallback,manual)
+            ?bankRoutes.priority(bankFallback,manual)
             :List.copyOf(bankFallback.keySet());
         if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase(),priority);
         runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase(),priority);return "";
@@ -1449,13 +1453,22 @@ public class FarmingHelperPlugin extends Plugin
         // Travel remains advisory; do not force a bank trip solely for optional teleports.
         List<FarmRunPatch> travelWave=wave;
         if(localSite!=null){travelWave=new ArrayList<>(wave);travelWave.removeIf(p->localSite.equals(RunOrder.site(p)));}
-        Map<Integer,Set<String>> teleports=RunTeleports.select(travelWave,travelOptions,carried,supplies.travel,
+        Map<Integer,Set<String>> fallbackTravel=RunTeleports.select(travelWave,travelOptions,carried,supplies.travel,
                 (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id)));
-        Map<Integer,Integer> travelCounts=new LinkedHashMap<>(),load=new LinkedHashMap<>(physicalRequired);
-        teleports.forEach((id,sites)->{
-            int n=RunTeleports.quantity(id,sites.size(),observedItemName(id),stackable(id));
-            travelCounts.put(id,n);load.merge(id,n,Math::max);
-        });
+        Set<String> travelSites=new LinkedHashSet<>();for(FarmRunPatch patch:travelWave)travelSites.add(RunOrder.site(patch));
+        int pouch=RouteSupplies.pouch(carried,supplies.travel);
+        Map<Integer,Integer> pouchRunes=bankRoutes.routes().isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
+        boolean elite=loggedIn&&client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)==1;
+        List<?> routeInputs=List.of(travelSites,bankRoutes.routes(),fallbackTravel,supplies,travelOptions,pouch,pouchRunes,elite);
+        if(!routeInputs.equals(routeSupplyInputs))
+        {
+            routeSupplyInputs=routeInputs;
+            routeSupplyPlan=RouteSupplies.plan(travelSites,bankRoutes.routes(),fallbackTravel,travelOptions,supplies.travel,carried,equipped,
+                pouch,pouchRunes,elite,this::observedItemName,this::stackable);
+        }
+        Map<Integer,Set<String>> teleports=routeSupplyPlan.sites;
+        Map<Integer,Integer> travelCounts=routeSupplyPlan.quantities,load=new LinkedHashMap<>(physicalRequired);
+        travelCounts.forEach((id,n)->load.merge(id,n,Math::max));
         if(wave.size()==1&&wave.get(0).getPatchType()==PatchType.COMPOST_BIN)
         {
             CompostRun.batch(load,bag,equipped,supplies.seedBox,actualOccupied,this::stackable);

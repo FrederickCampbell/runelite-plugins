@@ -1,0 +1,78 @@
+# Rune costs derived from Shortest Path 9c83c978c082618ac0a045b0c9fdba253955f75e teleportation_spells.tsv and teleportation_spells_swapped.tsv; BSD-2-Clause upstream; eligibility remains with Shortest Path. Only unambiguous rune-only rows.
+Annakarl Teleport	blood rune:2,law rune:2
+Arceuus Library Teleport	earth rune:2,law rune:1
+Ardougne Teleport	law rune:2,water rune:2
+Barbarian Teleport	astral rune:2,fire rune:3,law rune:2
+Barrows Teleport	blood rune:1,law rune:2,soul rune:2
+Battlefront Teleport	earth rune:1,fire rune:1,law rune:1
+Camelot Teleport	air rune:5,law rune:1
+Camelot Teleport: Seers'	air rune:5,law rune:1
+Carrallanger Teleport	law rune:2,soul rune:2
+Catherby Teleport	astral rune:3,law rune:3,water rune:10
+Cemetery Teleport	blood rune:1,law rune:1,soul rune:1
+Civitas illa Fortis Teleport	earth rune:1,fire rune:1,law rune:2
+Dareeyak Teleport	air rune:2,fire rune:3,law rune:2
+Draynor Manor Teleport	earth rune:1,law rune:1,water rune:1
+Falador Teleport	air rune:3,law rune:1,water rune:1
+Fenkenstrain's Castle Teleport	earth rune:1,law rune:1,soul rune:1
+Fishing Guild Teleport	astral rune:3,law rune:3,water rune:10
+Ghorrock Teleport	law rune:2,water rune:8
+Harmony Island Teleport	law rune:1,nature rune:1,soul rune:1
+Ice Plateau Teleport	astral rune:3,law rune:3,water rune:8
+Kharyrll Teleport	blood rune:1,law rune:2
+Khazard Teleport	astral rune:2,law rune:2,water rune:4
+Kourend Castle Teleport	fire rune:1,law rune:2,water rune:1
+Lassar Teleport	law rune:2,water rune:4
+Lumbridge Teleport	air rune:3,earth rune:1,law rune:1
+Mind Altar Teleport	law rune:1,mind rune:2
+Moonclan Teleport	astral rune:2,earth rune:2,law rune:1
+Ourania Teleport	astral rune:2,earth rune:6,law rune:1
+Paddewwa Teleport	air rune:1,fire rune:1,law rune:2
+Respawn Teleport	law rune:1,soul rune:1
+Salve Graveyard Teleport	law rune:1,soul rune:2
+Senntisten Teleport	law rune:2,soul rune:1
+Spellbook Swap (Ancient): Annakarl Teleport	astral rune:3,blood rune:2,cosmic rune:2,law rune:3
+Spellbook Swap (Ancient): Carrallanger Teleport	astral rune:3,cosmic rune:2,law rune:3,soul rune:2
+Spellbook Swap (Ancient): Dareeyak Teleport	air rune:2,astral rune:3,cosmic rune:2,fire rune:3,law rune:3
+Spellbook Swap (Ancient): Ghorrock Teleport	astral rune:3,cosmic rune:2,law rune:3,water rune:8
+Spellbook Swap (Ancient): Kharyrll Teleport	astral rune:3,blood rune:1,cosmic rune:2,law rune:3
+Spellbook Swap (Ancient): Lassar Teleport	astral rune:3,cosmic rune:2,law rune:3,water rune:4
+Spellbook Swap (Ancient): Paddewwa Teleport	air rune:1,astral rune:3,cosmic rune:2,fire rune:1,law rune:3
+Spellbook Swap (Ancient): Senntisten Teleport	astral rune:3,cosmic rune:2,law rune:3,soul rune:1
+Spellbook Swap (Arceuus): Ape Atoll Teleport	astral rune:3,blood rune:2,cosmic rune:2,law rune:3,soul rune:2
+Spellbook Swap (Arceuus): Arceuus Library Teleport	astral rune:3,cosmic rune:2,earth rune:2,law rune:2
+Spellbook Swap (Arceuus): Barrows Teleport	astral rune:3,blood rune:1,cosmic rune:2,law rune:3,soul rune:2
+Spellbook Swap (Arceuus): Battlefront Teleport	astral rune:3,cosmic rune:2,earth rune:1,fire rune:1,law rune:2
+Spellbook Swap (Arceuus): Cemetery Teleport	astral rune:3,blood rune:1,cosmic rune:2,law rune:2,soul rune:1
+Spellbook Swap (Arceuus): Draynor Manor Teleport	astral rune:3,cosmic rune:2,earth rune:1,law rune:2,water rune:1
+Spellbook Swap (Arceuus): Fenkenstrain's Castle Teleport	astral rune:3,cosmic rune:2,earth rune:1,law rune:2,soul rune:1
+Spellbook Swap (Arceuus): Harmony Island Teleport	astral rune:3,cosmic rune:2,law rune:2,nature rune:1,soul rune:1
+Spellbook Swap (Arceuus): Mind Altar Teleport	astral rune:3,cosmic rune:2,law rune:2,mind rune:2
+Spellbook Swap (Arceuus): Respawn Teleport	astral rune:3,cosmic rune:2,law rune:2,soul rune:1
+Spellbook Swap (Arceuus): Salve Graveyard Teleport	astral rune:3,cosmic rune:2,law rune:2,soul rune:2
+Spellbook Swap (Arceuus): West Ardougne Teleport	astral rune:3,cosmic rune:2,law rune:3,soul rune:2
+Spellbook Swap (Standard): Ardougne Teleport	astral rune:3,cosmic rune:2,law rune:3,water rune:2
+Spellbook Swap (Standard): Camelot Teleport	air rune:5,astral rune:3,cosmic rune:2,law rune:2
+Spellbook Swap (Standard): Camelot Teleport: Seers'	air rune:5,astral rune:3,cosmic rune:2,law rune:2
+Spellbook Swap (Standard): Civitas illa Fortis Teleport	astral rune:3,cosmic rune:2,earth rune:1,fire rune:1,law rune:3
+Spellbook Swap (Standard): Falador Teleport	air rune:3,astral rune:3,cosmic rune:2,law rune:2,water rune:1
+Spellbook Swap (Standard): Kourend Castle Teleport	astral rune:3,cosmic rune:2,fire rune:1,law rune:3,water rune:1
+Spellbook Swap (Standard): Lumbridge Teleport	air rune:3,astral rune:3,cosmic rune:2,earth rune:1,law rune:2
+Spellbook Swap (Standard): Teleport to House (Inside)	air rune:1,astral rune:3,cosmic rune:2,earth rune:1,law rune:2
+Spellbook Swap (Standard): Teleport to House (Outside)	air rune:1,astral rune:3,cosmic rune:2,earth rune:1,law rune:2
+Spellbook Swap (Standard): Teleport to House	air rune:1,astral rune:3,cosmic rune:2,earth rune:1,law rune:2
+Spellbook Swap (Standard): Trollheim Teleport	astral rune:3,cosmic rune:2,fire rune:2,law rune:3
+Spellbook Swap (Standard): Varrock Teleport	air rune:3,astral rune:3,cosmic rune:2,fire rune:1,law rune:2
+Spellbook Swap (Standard): Varrock Teleport: Grand Exchange	air rune:3,astral rune:3,cosmic rune:2,fire rune:1,law rune:2
+Spellbook Swap (Standard): Watchtower Teleport	astral rune:3,cosmic rune:2,earth rune:2,law rune:3
+Spellbook Swap (Standard): Watchtower Teleport: Yanille	astral rune:3,cosmic rune:2,earth rune:2,law rune:3
+Teleport to House (Inside)	air rune:1,earth rune:1,law rune:1
+Teleport to House (Outside)	air rune:1,earth rune:1,law rune:1
+Teleport to House	air rune:1,earth rune:1,law rune:1
+Trollheim Teleport	fire rune:2,law rune:2
+Varrock Teleport	air rune:3,fire rune:1,law rune:1
+Varrock Teleport: Grand Exchange	air rune:3,fire rune:1,law rune:1
+Watchtower Teleport	earth rune:2,law rune:2
+Watchtower Teleport: Yanille	earth rune:2,law rune:2
+Waterbirth Teleport	astral rune:2,law rune:1,water rune:1
+West Ardougne Teleport	law rune:2,soul rune:2
