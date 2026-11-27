@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.11.1 — release audit
+
+- Match Time Tracking's seasonal growth and regrowth ticks, including profile-specific offsets and the Deadman exception.
+- Retain the most recent confirmed patch observation, defer live patch reads behind modal interfaces, and reject invalid remote birdhouse records.
+- Ship the sidebar version and upstream notices as standard Plugin Hub resources.
+
 ## v1.11 — consolidation and performance
 
 - Reuse one inventory occupancy estimate and native filled-slot count per planning update. Move prefix-invariant reads out of the prefix loop, avoid copying storage without noted payments, and reuse unchanged preparation commitments.

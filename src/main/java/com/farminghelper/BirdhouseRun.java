@@ -1,12 +1,13 @@
 package com.farminghelper;
 
-import java.time.Instant;
 import java.util.*;
 import net.runelite.api.Client;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.plugins.timetracking.TimeTrackingConfig;
+import com.farminghelper.queststate.QuestFarmingStateReader;
 import com.farminghelper.queststate.CropState;
 import com.farminghelper.queststate.QuestFarmingStateReader.Observation;
 import com.farminghelper.queststate.QuestFarmingStateReader.Source;
@@ -53,14 +54,17 @@ final class BirdhouseRun
     }
     static Observation observe(Client client,ConfigManager config,FarmRunPatch p,boolean local)
     {
-        Site s=site(p);int cached=-1;long time=0;
-        if(s==null)return new Observation(null,Source.NONE,0,null,p.getName());
-        String value=config.getRSProfileConfiguration("timetracking","birdhouse."+s.varp);
-        if(value!=null)try{String[] parts=value.split(":");if(parts.length==2){cached=Integer.parseInt(parts[0]);time=Long.parseLong(parts[1]);}}catch(NumberFormatException ignored){}
-        int raw=local?client.getVarpValue(s.varp):cached;
-        long now=Instant.now().getEpochSecond();
-        if(raw!=cached)time=0;
-        return new Observation(decode(raw,time,now),local?Source.LIVE:cached>=0?Source.TIME_TRACKING:Source.NONE,time*1000,null,p.getName(),raw);
+        Site s = site(p);
+        if (s == null) return new Observation(null, Source.NONE, 0, null, p.getName());
+        String stored = config.getRSProfileConfiguration(TimeTrackingConfig.CONFIG_GROUP, TimeTrackingConfig.BIRD_HOUSE + "." + s.varp);
+        long now = System.currentTimeMillis();
+        long time = QuestFarmingStateReader.timestampMillis(stored);
+        int cached = time > 0 && time <= now ? Integer.parseInt(stored, 0, stored.indexOf(':'), 10) : -1;
+        int raw = local ? client.getVarpValue(s.varp) : cached;
+        if (cached < 0 || raw != cached) time = 0;
+        CropState state = decode(raw, time / 1000, now / 1000);
+        Source source = local ? Source.LIVE : state == null ? Source.NONE : Source.TIME_TRACKING;
+        return new Observation(state, source, time, null, p.getName(), raw);
     }
     private static final int[] HOUSES={ItemID.BIRDHOUSE_NORMAL,ItemID.BIRDHOUSE_OAK,ItemID.BIRDHOUSE_WILLOW,ItemID.BIRDHOUSE_TEAK,ItemID.BIRDHOUSE_MAPLE,ItemID.BIRDHOUSE_MAHOGANY,ItemID.BIRDHOUSE_YEW,ItemID.BIRDHOUSE_MAGIC,ItemID.BIRDHOUSE_REDWOOD};
     private static final int[] LOGS={1511,1521,1519,6333,1517,6332,1515,1513,19669};

@@ -2,6 +2,7 @@ package com.farminghelper.queststate;
 
 import com.farminghelper.LocationContext;
 
+import java.time.Clock;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -13,11 +14,13 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.WidgetNode;
 import net.runelite.api.GameObject;
 import net.runelite.api.ObjectComposition;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.widgets.WidgetModalMode;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.timetracking.TimeTrackingConfig;
 import net.runelite.client.plugins.timetracking.farming.Produce;
@@ -34,6 +37,7 @@ public final class QuestFarmingStateReader
     private static final String TIME_TRACKING = TimeTrackingConfig.CONFIG_GROUP;
     private final Client client;
     private final ConfigManager config;
+    private final Clock clock;
     private static final FarmingWorld world=new FarmingWorld();
     private static final Map<String,Map<String,FarmingPatch>> sites=indexSites();
     private static Map<String,Map<String,FarmingPatch>> indexSites()
@@ -58,13 +62,48 @@ public final class QuestFarmingStateReader
     }
 
     private final FarmingHandler handler;
-    private final Map<String,String> recent=new HashMap<>();
+    private final Map<String,Observation> recent=new HashMap<>();
     private final java.util.Set<String> staleCompost=new java.util.HashSet<>();
     private String recentProfile;
+    private int modalCheckTick = -1;
+    private boolean modalOpen;
+    private int modalStartTick;
+
+    // Time Tracking ignores patch varbits while a modal interface delays their updates.
+    private boolean modalOpen()
+    {
+        int tick = client.getTickCount();
+        if (tick != modalCheckTick)
+        {
+            boolean continuing = modalOpen && tick == modalCheckTick + 1;
+            modalCheckTick = tick;
+            modalOpen = false;
+            var components = client.getComponentTable();
+            if (components != null)
+            {
+                for (WidgetNode node : components)
+                {
+                    if (node.getModalMode() != WidgetModalMode.NON_MODAL)
+                    {
+                        if (!continuing) modalStartTick = tick;
+                        modalOpen = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return modalOpen;
+    }
 
     @Inject
     public QuestFarmingStateReader(Client client, ConfigManager config)
     {
+        this(client, config, Clock.systemUTC());
+    }
+
+    QuestFarmingStateReader(Client client, ConfigManager config, Clock clock)
+    {
+        this.clock = clock;
         this.client = client;
         this.config = config;
         handler = new FarmingHandler(client, config);
@@ -72,7 +111,7 @@ public final class QuestFarmingStateReader
 
     public enum Source
     {
-        LIVE, TIME_TRACKING, OBSERVED, ADVISOR, NONE
+        LIVE, LOCAL_SNAPSHOT, TIME_TRACKING, OBSERVED, NONE
     }
 
     public static final class Observation
@@ -83,6 +122,12 @@ public final class QuestFarmingStateReader
         @Nullable public final Boolean protectedByFarmer;
         public final String patchName;
         public final int rawValue;
+        private final int liveTick;
+
+        public boolean localGuidance()
+        {
+            return source == Source.LIVE || source == Source.LOCAL_SNAPSHOT;
+        }
 
         public Observation(@Nullable CropState state, Source source, long time,
                            @Nullable Boolean protection, String patchName)
@@ -93,6 +138,13 @@ public final class QuestFarmingStateReader
         public Observation(@Nullable CropState state, Source source, long time,
                            @Nullable Boolean protection, String patchName, int rawValue)
         {
+            this(state, source, time, protection, patchName, rawValue, -1);
+        }
+
+        private Observation(@Nullable CropState state, Source source, long time, @Nullable Boolean protection,
+                            String patchName, int rawValue, int liveTick)
+        {
+            this.liveTick = liveTick;
             this.rawValue = rawValue;
             this.state = state;
             this.source = source;
@@ -117,13 +169,12 @@ public final class QuestFarmingStateReader
     public Observation observeType(String patchType, String location,
                                    String patchName, WorldPoint worldPoint)
     {
-        if (client.getGameState() != GameState.LOGGED_IN ||
-            config.getRSProfileKey() == null)
+        String profile = config.getRSProfileKey();
+        if (client.getGameState() != GameState.LOGGED_IN || profile == null)
         {
             return new Observation(null, Source.NONE, 0, null, "");
         }
 
-        String profile=config.getRSProfileKey();
         if(!java.util.Objects.equals(profile,recentProfile)){recent.clear();staleCompost.clear();recentProfile=profile;}
         FarmingPatch match = lookup(patchType,location,patchName);
         if (match == null)
@@ -146,6 +197,16 @@ public final class QuestFarmingStateReader
                     : player.getPlane() == worldPoint.getPlane() && player.distanceTo(worldPoint) <= LIVE_TILE_RADIUS));
         boolean kastoriFlower = implementation==PatchImplementation.FLOWER && "Kastori".equals(location);
         boolean bin = implementation==PatchImplementation.COMPOST || implementation==PatchImplementation.BIG_COMPOST;
+        if (near && modalOpen())
+        {
+            // Keep the exchange and dialogue guidance for this visit. A held
+            // observation cannot advance progress or refresh a growth timestamp.
+            Observation previous = recent.get(match.configKey());
+            if (previous != null && previous.liveTick >= modalStartTick - 1 && previous.liveTick <= modalStartTick)
+                return new Observation(previous.state, Source.LOCAL_SNAPSHOT, previous.observedAtMillis,
+                    previous.protectedByFarmer, match.getName(), previous.rawValue);
+            return new Observation(null, Source.NONE, 0, protection, match.getName());
+        }
         if (near && (kastoriFlower || bin) && !confirmedObject(match,worldPoint,kastoriFlower))
             return new Observation(null,Source.NONE,0,protection,match.getName());
         if (near)
@@ -155,23 +216,15 @@ public final class QuestFarmingStateReader
             if (raw != null)
             {
                 CropState state = normalizedState(match.getImplementation(), value, raw);
-                long now=System.currentTimeMillis();
-                String key=match.configKey(),old=recent.get(key);
-                if(old==null || !old.startsWith(value+":"))
-                {
-                    if(old!=null&&(state==CropState.EMPTY||state==CropState.DEAD))
-                    {
-                        int prior=Integer.parseInt(old,0,old.indexOf(':'),10);
-                        CropState previous=normalizedState(implementation,prior,implementation.forVarbitValue(prior));
-                        if(previous!=null&&previous!=state)staleCompost.add(key);
-                    }
-                    recent.put(key,value+":"+(now/1000));
-                }
-                // An observed tracker reset permits a subsequent treatment record.
-                if(staleCompost.contains(key)&&config.getRSProfileConfiguration(TIME_TRACKING,key+".compost")==null)
+                String key = match.configKey();
+                Observation observation = new Observation(state, Source.LIVE, clock.millis(),
+                    protection, match.getName(), value, client.getTickCount());
+                Observation previous = recent.put(key, observation);
+                if (previous != null && previous.state != state && (state == CropState.EMPTY || state == CropState.DEAD))
+                    staleCompost.add(key);
+                if (staleCompost.contains(key) && config.getRSProfileConfiguration(TIME_TRACKING, key + "." + TimeTrackingConfig.COMPOST) == null)
                     staleCompost.remove(key);
-                return new Observation(state, Source.LIVE, now,
-                    protection, match.getName(), value);
+                return observation;
             }
             // A local undecodable value is not evidence that the historical crop
             // is still growing. Inspect rather than silently deferring or planting.
@@ -181,20 +234,24 @@ public final class QuestFarmingStateReader
         // Old or cross-region flower snapshots must never suppress a Kastori visit.
         if(kastoriFlower) return new Observation(null,Source.NONE,0,protection,match.getName());
         String raw = config.getConfiguration(TIME_TRACKING, profile, match.configKey());
-        String observed=recent.get(match.configKey());
-        long localTime=timestampMillis(observed),trackerTime=timestampMillis(raw);
-        // Tracker timestamps have one-second precision; retain our last verified
-        // live value on an equal-time conflict rather than resurrecting old state.
-        boolean own=localTime>0&&localTime>=trackerTime;
-        if(own)raw=observed;
-        long observedAtMillis = own ? localTime : trackerTime;
-        if (observedAtMillis <= 0 || observedAtMillis > System.currentTimeMillis())
+        Observation lastLive = recent.get(match.configKey());
+        long now = clock.millis();
+        long trackerTime = timestampMillis(raw);
+        if (trackerTime > 0 && trackerTime <= now && (lastLive == null || trackerTime > lastLive.observedAtMillis))
         {
-            return new Observation(null, Source.NONE, 0, protection, match.getName());
+            int value = Integer.parseInt(raw, 0, raw.indexOf(':'), 10);
+            return predicted(match, profile, value, trackerTime, now, Source.TIME_TRACKING, protection);
         }
-        CropState state = handler.predictObserved(match,profile,raw);
-        return new Observation(state, state == null ? Source.NONE : own?Source.OBSERVED:Source.TIME_TRACKING,
-            observedAtMillis, protection, match.getName(), Integer.parseInt(raw,0,raw.indexOf(':'),10));
+        if (lastLive != null && lastLive.observedAtMillis <= now)
+            return predicted(match, profile, lastLive.rawValue, lastLive.observedAtMillis, now, Source.OBSERVED, protection);
+        return new Observation(null, Source.NONE, 0, protection, match.getName());
+    }
+
+    private Observation predicted(FarmingPatch patch, String profile, int value, long time, long now,
+                                  Source source, Boolean protection)
+    {
+        CropState state = handler.predict(patch, profile, value, time / 1000, now / 1000);
+        return new Observation(state, state == null ? Source.NONE : source, time, protection, patch.getName(), value);
     }
 
     public static Produce livingProduce(String type,Observation o)
@@ -261,7 +318,7 @@ public final class QuestFarmingStateReader
     {
         FarmingPatch patch=lookup(type,location,name);
         if(patch==null)return 0;
-        String key=patch.configKey(),value=config.getRSProfileConfiguration(TIME_TRACKING,key+".compost");
+        String key=patch.configKey(),value=config.getRSProfileConfiguration(TIME_TRACKING,key+"."+TimeTrackingConfig.COMPOST);
         if(value==null){staleCompost.remove(key);return 0;}
         if(staleCompost.contains(key))return 0;
         switch(value.toUpperCase(Locale.ROOT))

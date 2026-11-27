@@ -29,14 +29,7 @@ dependencies {
 }
 
 group = 'com.farminghelper'
-version = '1.11'
-
-// Keep the sidebar version tied to the published plugin metadata.
-tasks.named('processResources') {
-    from('runelite-plugin.properties') {
-        into 'com/farminghelper'
-    }
-}
+version = '1.11.1'
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
@@ -106,12 +99,15 @@ tasks.named('test') { testLogging { exceptionFormat = 'full' } }
 tasks.register('auditRelease') {
     dependsOn 'auditInputApis'
     inputs.files(fileTree('src/main/java') { include '**/*.java' },
-        file('runelite-plugin.properties'), file('README.md'), file('CHANGELOG.md'))
+        file('runelite-plugin.properties'), file('README.md'), file('CHANGELOG.md'),
+        file('src/main/resources/com/farminghelper/runelite-plugin.properties'))
     doLast {
         def metadata = new Properties()
         file('runelite-plugin.properties').withInputStream { metadata.load(it) }
         def expected = project.version.toString()
-        if (metadata.getProperty('version') != expected ||
+        def sidebar = new Properties()
+        file('src/main/resources/com/farminghelper/runelite-plugin.properties').withInputStream { sidebar.load(it) }
+        if (sidebar.getProperty('version') != expected || metadata.getProperty('version') != expected ||
             !file('README.md').getText('UTF-8').contains("Version " + expected) ||
             !file('CHANGELOG.md').getText('UTF-8').contains("## v" + expected) ||
             metadata.getProperty('plugins') != 'com.farminghelper.FarmingHelperPlugin') {

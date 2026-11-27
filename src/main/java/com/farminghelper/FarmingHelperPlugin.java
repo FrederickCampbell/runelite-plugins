@@ -1452,7 +1452,7 @@ public class FarmingHelperPlugin extends Plugin
         if(current!=null)
         {
             PatchType type=current.getPatchType();QuestFarmingStateReader.Observation o=observations.get(current);
-            activeLive=o.source==QuestFarmingStateReader.Source.LIVE;
+            activeLive=o.localGuidance();
             boolean replacementCarried=activeCrop!=null&&plantingBag.getOrDefault(activeCrop.getItemId(),0)>=activeCrop.getQuantity();
             boolean keep=preserveReplacement(current,o);
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
@@ -1717,7 +1717,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             if(!site.equals(RunOrder.site(other))||!highlight.hasLocalPatch(other)||highlight.leprechaun(other)!=npc)continue;
             var o=observations.get(other);
-            if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE)continue;
+            if(o==null||!o.localGuidance())continue;
             PatchType type=other.getPatchType();
             if(type==PatchType.BIRDHOUSE||type==PatchType.COMPOST_BIN||type==PatchType.HESPORI)continue;
             Crop crop=seeds.get(other);

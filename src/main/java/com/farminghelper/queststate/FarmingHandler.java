@@ -25,13 +25,9 @@
 package com.farminghelper.queststate;
 
 import net.runelite.api.Client;
-import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.WorldType;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.timetracking.TimeTrackingConfig;
-import net.runelite.client.plugins.timetracking.farming.Produce;
-
-import javax.annotation.Nullable;
-import java.time.Instant;
 
 public class FarmingHandler
 {
@@ -44,61 +40,38 @@ public class FarmingHandler
 		this.configManager = configManager;
 	}
 
-	public CropState predictPatch(FarmingPatch patch)
-	{
-		return predictPatch(patch, configManager.getRSProfileKey());
-	}
-
-	@Nullable
-	public CropState predictPatch(FarmingPatch patch, String profile)
-	{
-        return predictObserved(patch,profile,configManager.getConfiguration("timetracking",profile,patch.configKey()));
-    }
-
-    CropState predictObserved(FarmingPatch patch,String profile,String storedValue)
+    CropState predict(FarmingPatch patch, String profile, int value, long unixTime, long unixNow)
     {
-        long unixNow=Instant.now().getEpochSecond();
-        long observedAt=QuestFarmingStateReader.timestampMillis(storedValue);
-        if(observedAt<=0||observedAt/1000L>unixNow)return null;
-        long unixTime=observedAt/1000L;
-        int value=Integer.parseInt(storedValue.substring(0,storedValue.indexOf(':')));
-
+        if (unixTime <= 0 || unixTime > unixNow) return null;
 		PatchState state = patch.getImplementation().forVarbitValue(value);
 		if (state == null) return null;
         CropState normalized = QuestFarmingStateReader.normalizedState(patch.getImplementation(), value, state);
         if (normalized != CropState.GROWING) return normalized;
         if (patch.getImplementation() == PatchImplementation.REDWOOD && state.getCropState() == CropState.HARVESTABLE)
             return CropState.GROWING;
+        if (patch.getImplementation() == PatchImplementation.SPIRIT_TREE && value == 20) return CropState.GROWING;
+
+        int tickrate = state.getTickRate();
+        var worldTypes = client.getWorldType();
+        if (worldTypes.contains(WorldType.SEASONAL) && !worldTypes.contains(WorldType.DEADMAN))
+        {
+            tickrate /= 5;
+        }
         if (state.getCropState() == CropState.HARVESTABLE)
         {
-            int minutes=state.getTickRate();
-            return minutes>0 && unixTime>0 && unixNow-unixTime>=minutes*60L ? CropState.HARVESTABLE : CropState.GROWING;
+            // A depleted perennial needs one aligned farming tick to regrow produce.
+            return tickrate > 0 && unixNow >= getTickTime(tickrate, 1, unixTime, profile)
+                ? CropState.HARVESTABLE : CropState.GROWING;
         }
-        if (patch.getImplementation() == PatchImplementation.SPIRIT_TREE && value==20) return CropState.GROWING;
-
-		if (unixTime <= 0)
-		{
-			return null;
-		}
-
-		int stage = state.getStage();
-		int stages = state.getStages();
-		int tickrate = state.getTickRate();
-
-		boolean botanist = client.getVarbitValue(VarbitID.LEAGUE_RELIC_SELECTION_4) == 1;
-
-		if (botanist)
-		{
-			tickrate /= 5;
-		}
+        int stage = state.getStage();
+        int stages = state.getStages();
 
 		// Unknown or malformed stage timing must not predict instant maturity.
 		if (tickrate <= 0 || stages <= 0 || stage < 0 || stage >= stages)
 		{
 			return null;
 		}
-		long tickTime = getTickTime(tickrate, 0, unixTime, profile);
-		long doneEstimate = getTickTime(tickrate, stages - 1 - stage, tickTime, profile);
+		long doneEstimate = getTickTime(tickrate, stages - 1 - stage, unixTime, profile);
 
 		if (unixNow >= doneEstimate)
 		{

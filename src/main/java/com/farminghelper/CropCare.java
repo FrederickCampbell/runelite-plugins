@@ -37,7 +37,7 @@ final class CropCare
     }
 
     static boolean waterNeeded(PatchType type,Observation o,boolean enabled)
-    {return enabled&&type.canBeWatered()&&liveGrowing(o)&&dryStage(type,o.rawValue);}
+    {return enabled&&type.canBeWatered()&&o!=null&&o.localGuidance()&&o.state==CropState.GROWING&&dryStage(type,o.rawValue);}
     static boolean watered(PatchType type,Observation o)
     {
         if(!liveGrowing(o))return false;

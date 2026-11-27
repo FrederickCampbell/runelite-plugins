@@ -43,3 +43,13 @@ Automated build and regression tests are tracked in GitHub Actions. Live accepta
 The paired withdrawal uses the remaining run's existing watering-can requirement, not just the current patch type; a herb stop can collect a can for a later hops/allotment stop. No can is added if the run has no remaining watering or seedling preparation requirement.
 
 16. Water one allotment ahead of the guide, skip watering the other, then advance a growth stage. Neither should request repeated watering until a verified empty/dead crop is replanted. Test a delayed Skip watering click after the action changes, disease interruptions, resupply and world hops. Watering remains optional and only verified live observations confirm wet state.
+
+## v1.11.1 release candidate
+
+Tested against RuneLite 1.13.8. The built-in tracker and Farming Helper share patch locations, varbits, produce definitions, profile keys and farming tick offsets. The guide keeps the Quest Helper stump distinction for clearing and replanting. RuneLite's patch type and raw decoder entry point are package-private. Its public tick-time helper belongs to a tracker constructed with Time Tracking's plugin-scoped services. Farming Helper can read the stored offsets even when Time Tracking is disabled.
+
+Growth and regrowth use accelerated ticks on seasonal worlds excluding Deadman. A valid newer tracker observation can supersede personal observations. While a modal interface is open, the guide may keep showing the last corroborated local instruction from the same visit. Only a fresh live observation confirms a crop transition. Birdhouse records with invalid timestamps cannot establish remote readiness.
+
+The standard Hub builder imports production source and resources. The sidebar version and distribution notices are included there. The runtime uses ordinary Swing actions, native container reads, local storage views and optional Shortest Path messages. Tests and comparison probes are outside those source paths.
+
+For live acceptance, open the leprechaun exchange at an active patch, withdraw a requested item, and close the exchange. Check the slot highlight, quantity and next instruction. Check a depleted cactus around its next growth tick, revisit a birdhouse after hopping, and verify the sidebar footer in the installed build.

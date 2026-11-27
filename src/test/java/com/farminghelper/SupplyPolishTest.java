@@ -82,6 +82,13 @@ public class SupplyPolishTest
         }
         String version=metadata.getProperty("version");
         assertNotNull(version);assertFalse(version.isBlank());
+        try (java.io.InputStream notices = FarmingHelperPanel.class.getResourceAsStream("THIRD-PARTY-NOTICES.txt"))
+        {
+            assertNotNull(notices);
+            String text = new String(notices.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            for (String author : java.util.List.of("hong-niu", "Kerpackie", "NotFoxtrot", "Abex", "Zoinkwiz", "elzerma", "Nate"))
+                assertTrue(author, text.contains(author));
+        }
         assertEquals("Farming Helper · v"+version,FarmingHelperPanel.versionLabel());
     }
 }

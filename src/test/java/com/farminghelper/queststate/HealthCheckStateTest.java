@@ -38,7 +38,7 @@ public class HealthCheckStateTest
         net.runelite.client.config.ConfigManager config=org.mockito.Mockito.mock(net.runelite.client.config.ConfigManager.class);
         FarmingPatch palm=QuestFarmingStateReader.lookup("FRUIT_TREE","Gnome Stronghold","");
         long now=java.time.Instant.now().getEpochSecond();
-        assertEquals(CropState.UNCHECKED,new FarmingHandler(client,config).predictObserved(palm,"test","226:"+now));
+        assertEquals(CropState.UNCHECKED,new FarmingHandler(client,config).predict(palm,"test",226,now,now));
     }
     private static CropState state(PatchImplementation t,int raw)
     {return QuestFarmingStateReader.normalizedState(t,raw,t.forVarbitValue(raw));}
