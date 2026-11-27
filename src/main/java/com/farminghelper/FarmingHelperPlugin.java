@@ -134,7 +134,7 @@ public class FarmingHelperPlugin extends Plugin
     private volatile Set<Integer> stepItems=Collections.emptySet();
     private volatile int spaceItem=-1;
     private boolean visitedStorage,explicitResupply;
-    private volatile boolean preparationVault;
+    private volatile boolean preparationVault,preparationAtStorage;
     private WorldPoint preparationOrigin;
     private RunOrder pinned;
     private Set<FarmRunPatch> preparedWave=Set.of();
@@ -250,7 +250,7 @@ public class FarmingHelperPlugin extends Plugin
         if(runBank!=null)runBank.close();
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
-        phase=Preparation.Phase.UNCHECKED;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationOrigin=null;
+        phase=Preparation.Phase.UNCHECKED;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationAtStorage=false;preparationOrigin=null;
         pinned=null;preparedWave=Set.of();preparedStock=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;clearWaterOffer();compostMissing=false;
@@ -1701,13 +1701,13 @@ public class FarmingHelperPlugin extends Plugin
         for(FarmRunPatch p:patches)if(runProgress.finished(p)&&!listed.contains(p))stops.add(new GuideView.Stop(p,runProgress.is(p,RunProgress.Status.PRESERVED)?"Preserved":"Completed",false,true));
         String prepMessage="";
         Set<WorldPoint> bankCandidates=Set.of();
-        preparationVault=false;
+        preparationVault=false;preparationAtStorage=false;
         RouteLeg leg=SpecialRoutes.leg(current,player,aboard,rowboat,instance,localApproach);
         if(preparing() && loggedIn)
         {
             Preparation.Bank preparationBank=Preparation.chooseSupplies(level,preparationOrigin,phase==Preparation.Phase.INITIAL,
                 startAt(),birdBankPhase(),plantingRequired,carried,bank.items,vault.items);
-            boolean atStorage=storageOpen();visitedStorage|=atStorage;
+            boolean atStorage=storageOpen();visitedStorage|=atStorage;preparationAtStorage=atStorage;
             boolean vaultOutstanding=level>=45&&Preparation.vaultNeeded(plantingRequired,carried,bank.items,vault.items);
             boolean vaultTarget=preparationBank==Preparation.SEED_VAULT;
             // A known vault shortage may still remain after visiting a regular
@@ -1935,6 +1935,7 @@ public class FarmingHelperPlugin extends Plugin
     private boolean preparing(){return phase==Preparation.Phase.INITIAL||phase==Preparation.Phase.RESUPPLY;}
     boolean preparationActive(){return guideRequested&&preparing()&&diseaseTarget==null;}
     boolean preparationVault(){return preparationVault;}
+    boolean preparationAtStorage(){return preparationAtStorage;}
     private void beginPreparation(Preparation.Phase next)
     {
         clearWaterOffer();preparationOrigin=LocationContext.capture(client).normalized;

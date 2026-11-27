@@ -44,6 +44,9 @@ final class PatchHighlight extends Overlay
     private FarmRunPatch transportPatch;
     private RouteLeg transportLeg;
     private boolean transportResolved;
+    private boolean preparationResolved,preparationResolvedVault;
+    private GameObject preparationObject;
+    private NPC preparationNpc;
     // Keep scene outlines below the interface; highlight native exchange and dialogue widgets above it.
     private final Overlay dialogue=new Overlay()
     {
@@ -133,9 +136,13 @@ final class PatchHighlight extends Overlay
     {
         ObjectComposition c=client.getObjectDefinition(id);
         if(c==null)return null;
-        if(isTransition(c)||isVine(c)||verificationObject(c))return true;
+        if(isTransition(c)||isVine(c)||verificationObject(c)||isStorage(c,true)||isStorage(c,false))return true;
         if(c.getImpostorIds()!=null)
-            for(int variant:c.getImpostorIds())if(knownObject(variant)||verificationObject(client.getObjectDefinition(variant)))return true;
+            for(int variant:c.getImpostorIds())
+            {
+                ObjectComposition v=client.getObjectDefinition(variant);
+                if(knownObject(variant)||verificationObject(v)||isStorage(v,true)||isStorage(v,false))return true;
+            }
         return false;
     }
     void despawned(GameObject o){if(objects.remove(o))invalidateSceneTargets();}
@@ -147,7 +154,7 @@ final class PatchHighlight extends Overlay
     }
     void clear(){objects.clear();classified.clear();invalidateSceneTargets();resolvedView=null;resolvedTick=-1;resolvedPlane=-1;}
     void transformed(){invalidateSceneTargets();}
-    void npcChanged(){leprechauns.clear();gardeners.clear();}
+    void npcChanged(){leprechauns.clear();gardeners.clear();preparationResolved=false;preparationObject=null;preparationNpc=null;}
     void transportChanged(){transportResolved=false;transportPatch=null;transportLeg=null;transportTarget=null;}
     private void invalidateSceneTargets()
     {
@@ -177,6 +184,13 @@ final class PatchHighlight extends Overlay
     private static boolean isVine(ObjectComposition c){String n=name(c);return n.contains("grape") || n.contains("vine patch");}
     private static boolean hasAction(ObjectComposition c,String action)
     {if(c==null || c.getActions()==null)return false;for(String a:c.getActions())if(a!=null && a.equalsIgnoreCase(action))return true;return false;}
+    static boolean isStorage(ObjectComposition c,boolean vault)
+    {
+        String n=name(c);
+        if(vault)return n.equals("seed vault")&&(hasAction(c,"Open")||hasAction(c,"Use")||hasAction(c,"Bank"));
+        return (n.equals("bank booth")||n.equals("bank chest")||n.equals("bank chest-wreck")||n.equals("bank"))
+            &&(hasAction(c,"Bank")||hasAction(c,"Use")||hasAction(c,"Open"));
+    }
     private static boolean isTransition(ObjectComposition c)
     {
         String n=name(c);
@@ -459,6 +473,50 @@ final class PatchHighlight extends Overlay
         }
         return gardeners.get(patch);
     }
+    private void renderPreparation(Graphics2D graphics,FarmingHelperPlugin helper)
+    {
+        Player local=client.getLocalPlayer();
+        WorldPoint here=local==null?null:local.getWorldLocation();
+        if(here==null)return;
+        boolean vault=helper.preparationVault();
+        if(!preparationResolved||preparationResolvedVault!=vault)
+        {
+            preparationResolved=true;preparationResolvedVault=vault;
+            preparationObject=nearest(here,15,o->isStorage(transformed(client.getObjectDefinition(o.getId())),vault));
+            preparationNpc=null;
+            if(!vault)
+            {
+                int distance=preparationObject==null?16:preparationObject.getWorldLocation().distanceTo(here);
+                for(NPC npc:resolvedView.npcs())
+                {
+                    WorldPoint point=npc.getWorldLocation();
+                    if(!"Banker".equalsIgnoreCase(npc.getName())||point==null||point.getPlane()!=here.getPlane())continue;
+                    int d=point.distanceTo(here);
+                    if(d<distance){preparationNpc=npc;distance=d;}
+                }
+                if(preparationNpc!=null)preparationObject=null;
+            }
+        }
+        boolean atStorage=helper.preparationAtStorage();
+        if(!atStorage&&preparationObject!=null)
+        {
+            Shape shape=preparationObject.getClickbox();
+            draw(graphics,shape,Color.GREEN);
+            if(shape!=null){Rectangle b=shape.getBounds();arrow(graphics,b.x+b.width/2,b.y-4);}
+        }
+        else if(!atStorage&&preparationNpc!=null)
+        {
+            draw(graphics,preparationNpc.getConvexHull(),Color.GREEN);
+            net.runelite.api.Point point=preparationNpc.getCanvasTextLocation(graphics," ",preparationNpc.getLogicalHeight()+20);
+            if(point!=null)arrow(graphics,point.getX(),point.getY());
+        }
+        if(atStorage||preparationObject!=null||preparationNpc!=null||helper.missingStorageItems().isEmpty())
+        {
+            String text="Collect supplies — continue when ready";
+            net.runelite.api.Point point=local.getCanvasTextLocation(graphics,text,local.getLogicalHeight()+28);
+            if(point!=null)label(graphics,text,point.getX()+graphics.getFontMetrics().stringWidth(text)/2,point.getY(),Color.GREEN);
+        }
+    }
     @Override public Dimension render(Graphics2D graphics)
     {
         if(!refreshScene())return null;
@@ -484,6 +542,7 @@ final class PatchHighlight extends Overlay
             }
             return null;
         }
+        if(helper.preparationActive()){renderPreparation(graphics,helper);return null;}
         FarmRunPatch patch=helper.activePatch();if(patch==null)return null;
         GameObject travel=transport(helper,patch,leg);
         if(travel!=null){draw(graphics,travel.getClickbox());return null;}

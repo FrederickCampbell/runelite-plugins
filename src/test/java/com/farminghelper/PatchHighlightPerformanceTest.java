@@ -32,6 +32,16 @@ public class PatchHighlightPerformanceTest
         return object;
     }
 
+    @Test public void onlyInteractiveBankAndVaultObjectsArePreparationTargets()
+    {
+        ObjectComposition bank=mock(ObjectComposition.class),vault=mock(ObjectComposition.class),deposit=mock(ObjectComposition.class);
+        when(bank.getName()).thenReturn("Bank chest");when(bank.getActions()).thenReturn(new String[]{"Use"});
+        when(vault.getName()).thenReturn("Seed Vault");when(vault.getActions()).thenReturn(new String[]{"Open"});
+        when(deposit.getName()).thenReturn("Bank deposit box");when(deposit.getActions()).thenReturn(new String[]{"Deposit"});
+        assertTrue(PatchHighlight.isStorage(bank,false));assertFalse(PatchHighlight.isStorage(bank,true));
+        assertTrue(PatchHighlight.isStorage(vault,true));assertFalse(PatchHighlight.isStorage(vault,false));
+        assertFalse(PatchHighlight.isStorage(deposit,false));
+    }
     @Test public void footprintUsesAllTilesAndTheCorrectWorldViewAndPlane()
     {
         WorldView view=mock(WorldView.class),other=mock(WorldView.class);
