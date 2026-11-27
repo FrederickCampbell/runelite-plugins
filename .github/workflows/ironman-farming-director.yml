@@ -73,10 +73,11 @@ jobs:
           baseline_sha=84e8bdff3f6dff7113be38975fcb302cd91ed8d7
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.09-workflow ]]; then baseline_sha=27349d1781ca4be611c127f1267b5114b900fa9b; fi
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.10-adaptive-planning ]]; then baseline_sha=7c72ead2d296dc978ccf3a6bd52cba7fa1fda9bd; fi
-          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation || "$GITHUB_REF_NAME" == farming-helper-v1.11.2-validation ]]; then baseline_sha=b488266d316690a8a3a0f133459c1f1890fe1938; fi
-          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.3-validation || "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=5fbef15b87b34693ed398a595ec50fe9be62604e; fi
-          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.4-validation || "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=5acd9eb9af7d359b847cdb3caef3eda784a2c791; fi
-          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.5-validation || "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=fe4c1abcc7a019f4ee6318ce784f12e2eae057c0; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.2-validation ]]; then baseline_sha=b488266d316690a8a3a0f133459c1f1890fe1938; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.3-validation ]]; then baseline_sha=5fbef15b87b34693ed398a595ec50fe9be62604e; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.4-validation ]]; then baseline_sha=5acd9eb9af7d359b847cdb3caef3eda784a2c791; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.5-validation ]]; then baseline_sha=fe4c1abcc7a019f4ee6318ce784f12e2eae057c0; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=4f9a3ee63b5df95dd0692e59a6f308b7333d3e07; fi
           git fetch --no-tags --depth=1 origin "$baseline_sha"
           git worktree add --detach "$baseline" FETCH_HEAD
           # Compare layout with identical display metadata, including the version shown on Home.

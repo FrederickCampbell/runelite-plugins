@@ -41,11 +41,11 @@ public class StockPreparationRegressionTest
         clientField.setAccessible(true);clientField.set(plugin,client);
         var first=plugin.stock();
         assertSame(first,plugin.stock());
-        org.mockito.Mockito.verify(client).getItemContainer(net.runelite.api.InventoryID.INVENTORY);
+        org.mockito.Mockito.verify(client).getItemContainer(net.runelite.api.gameval.InventoryID.INV);
         var event=org.mockito.Mockito.mock(net.runelite.api.events.ItemContainerChanged.class);
-        org.mockito.Mockito.when(event.getContainerId()).thenReturn(net.runelite.api.InventoryID.INVENTORY.getId());
+        org.mockito.Mockito.when(event.getContainerId()).thenReturn(net.runelite.api.gameval.InventoryID.INV);
         plugin.onItemContainerChanged(event);
         assertNotSame(first,plugin.stock());
-        org.mockito.Mockito.verify(client,org.mockito.Mockito.times(2)).getItemContainer(net.runelite.api.InventoryID.INVENTORY);
+        org.mockito.Mockito.verify(client,org.mockito.Mockito.times(2)).getItemContainer(net.runelite.api.gameval.InventoryID.INV);
     }
 }

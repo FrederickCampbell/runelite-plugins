@@ -44,7 +44,7 @@ final class SeedVaultViews
     private Widget parent;
     private int originalScrollHeight=-1,appliedLeftHeight=-1,originalChildCount;
     private VaultRanking.View active;
-    private boolean dirty=true, quantityDirty, nativeRefresh;
+    private boolean dirty=true, nativeRefresh;
     private int buildDepth;
     private int lastLevel=-1;
     private long lastConfig=Long.MIN_VALUE,lastAccess=Long.MIN_VALUE;
@@ -52,7 +52,7 @@ final class SeedVaultViews
     SeedVaultViews(Client client,ItemManager items,FarmingHelperPlugin plugin)
     {this.client=client;this.items=items;this.plugin=plugin;}
 
-    void invalidate(){quantityDirty=true;}
+    void invalidate(){dirty=true;nativeRefresh=true;}
     private static boolean nativeBuild(int id){return id==INIT||id==CATEGORY||id==BUILD||id==BUILD_CONTENTS;}
     void beforeScript(int id)
     {
@@ -76,7 +76,7 @@ final class SeedVaultViews
     void postClientTick()
     {
         if(buildDepth!=0)return;
-        if(nativeRefresh||quantityDirty)
+        if(nativeRefresh)
         {
             nativeRefresh=false;
             refresh();
@@ -92,7 +92,7 @@ final class SeedVaultViews
     {
         if(component==CATEGORIES||component==InterfaceID.SeedVault.SEARCH)leave();
     }
-    void close(){leave();removeButtons();buildDepth=0;nativeRefresh=false;quantityDirty=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastAccess=Long.MIN_VALUE;lastWidth=-1;runItems=null;opened=false;dirty=true;}
+    void close(){leave();removeButtons();buildDepth=0;nativeRefresh=false;lastLevel=-1;lastConfig=Long.MIN_VALUE;lastAccess=Long.MIN_VALUE;lastWidth=-1;runItems=null;opened=false;dirty=true;}
     void leave(){restore(true);active=null;paintButtons();dirty=true;customScroll=0;}
     private void rememberScroll(){if(active!=null&&scrollParent!=null&&client.getWidget(VIEWPORT)==scrollParent)customScroll=scrollParent.getScrollY();}
 
@@ -144,11 +144,6 @@ final class SeedVaultViews
         {dirty=true;return;}
         Widget viewport=client.getWidget(VIEWPORT);
         if(viewport!=null&&lastWidth!=viewport.getWidth()){lastWidth=viewport.getWidth();dirty=true;}
-        if(quantityDirty)
-        {
-            quantityDirty=false;
-            dirty=true;
-        }
         if(dirty&&active!=null)
         {
             rememberScroll();

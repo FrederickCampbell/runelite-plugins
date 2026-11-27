@@ -17,15 +17,17 @@ final class BankRoutePlan
     private List<Integer> published=List.of();
     void reset()
     {
-        origin=null;remaining.clear();routes.clear();resolved=Map.of();pending=null;site=null;
-        age=budget=0;started=finished=frozen=initialPublished=false;published=List.of();
+        closeVisit();resolved=Map.of();
     }
     void freeze(){frozen=true;}
     void refresh(){if(started){frozen=false;if(finished)resolved=Map.copyOf(routes);}}
-    void closeVisit(){remaining.clear();routes.clear();pending=null;site=null;started=false;finished=false;frozen=false;initialPublished=false;published=List.of();}
+    void closeVisit()
+    {
+        origin=null;remaining.clear();routes.clear();pending=null;site=null;
+        age=budget=0;started=finished=frozen=initialPublished=false;published=List.of();
+    }
     Map<String,List<String>> routes(){return resolved;}
     private void finish(){finished=true;if(!frozen)resolved=Map.copyOf(routes);}
-    boolean frozen(){return frozen;}
     boolean started(){return started;}
     boolean finished(){return finished;}
     static boolean bankMode(String mode)

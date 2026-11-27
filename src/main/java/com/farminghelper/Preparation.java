@@ -146,11 +146,6 @@ final class Preparation
         private int low,high,limit;
         Window(int count){high=limit=count;}
         int limit(){return limit;}
-        boolean restrict(int count)
-        {
-            if(low!=0||limit!=high||count<1||count>=limit)return false;
-            high=limit=count;return true;
-        }
         boolean advance(boolean fits)
         {
             if(!fits&&limit>1){high=limit-1;limit=Math.max(1,low+(high-low+1)/2);return true;}

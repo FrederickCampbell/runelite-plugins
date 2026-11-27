@@ -59,6 +59,12 @@ final class RunTeleports
     {
         if(ready.isEmpty()||eligible.isEmpty())return Map.of();
         Set<String> sites=new LinkedHashSet<>();for(FarmRunPatch p:ready)sites.add(RunOrder.site(p));
+        return selectSites(sites,eligible,carried,available,quantity);
+    }
+    static Map<Integer,Set<String>> selectSites(Set<String> sites,Map<Integer,List<String>> eligible,
+        Map<Integer,Integer> carried,Map<Integer,Integer> available,java.util.function.IntBinaryOperator quantity)
+    {
+        if(sites.isEmpty()||eligible.isEmpty())return Map.of();
         Map<Integer,Set<String>> result=new LinkedHashMap<>();
         for(String site:sites)
         {

@@ -64,6 +64,11 @@ public class GuideLifecycleTest
         when(definition.getName()).thenReturn("Ranarr seed");
         when(items.getItemComposition(anyInt())).thenReturn(definition);
         when(items.getImage(anyInt())).thenReturn(new net.runelite.client.util.AsyncBufferedImage(thread,1,1,java.awt.image.BufferedImage.TYPE_INT_ARGB));
+        when(plugins.getPlugins()).thenReturn(java.util.List.of(shortestPath));
+        when(plugins.isPluginActive(shortestPath)).thenReturn(true);
+        when(shortestPath.getName()).thenReturn("Shortest Path");
+        when(config.getConfiguration("shortestpath","useTeleportationItems")).thenReturn("INVENTORY_AND_BANK");
+        when(config.getRSProfileConfiguration("farming-helper","activeRunBank")).thenReturn("false");
         plugin.startUp();
         plugin.startManual(Set.of("Catherby~HERB~"));
         assertEquals(Preparation.DRAYNOR,plugin.activeLeg().point);
@@ -73,10 +78,14 @@ public class GuideLifecycleTest
         var root=mock(net.runelite.api.widgets.Widget.class);
         when(bank.getItems()).thenReturn(new net.runelite.api.Item[0]);
         when(vault.getItems()).thenReturn(new net.runelite.api.Item[]{new net.runelite.api.Item(seed,1)});
-        when(client.getItemContainer(net.runelite.api.InventoryID.BANK)).thenReturn(bank);
-        when(client.getItemContainer(net.runelite.api.InventoryID.SEED_VAULT)).thenReturn(vault);
+        when(client.getItemContainer(net.runelite.api.gameval.InventoryID.BANK)).thenReturn(bank);
+        when(client.getItemContainer(net.runelite.api.gameval.InventoryID.SEED_VAULT)).thenReturn(vault);
         when(client.getWidget(net.runelite.api.gameval.InterfaceID.Bankmain.UNIVERSE)).thenReturn(root);
         plugin.onGameTick(null);
+        var messages=ArgumentCaptor.forClass(Object.class);
+        verify(bus,atLeastOnce()).post(messages.capture());
+        assertTrue(messages.getAllValues().stream().filter(PluginMessage.class::isInstance).map(PluginMessage.class::cast)
+            .anyMatch(m->"query".equals(m.getName())&&m.getData().get("id").toString().startsWith("farming-helper-bank-")));
         when(client.getWidget(net.runelite.api.gameval.InterfaceID.Bankmain.UNIVERSE)).thenReturn(null);
         when(client.getWidget(net.runelite.api.gameval.InterfaceID.SeedVault.UNIVERSE)).thenReturn(root);
         plugin.onGameTick(null);
@@ -86,9 +95,9 @@ public class GuideLifecycleTest
 
         var inventory=mock(net.runelite.api.ItemContainer.class);
         when(inventory.getItems()).thenReturn(plugin.requiredItems().stream().map(id->new net.runelite.api.Item(id,1000)).toArray(net.runelite.api.Item[]::new));
-        when(client.getItemContainer(net.runelite.api.InventoryID.INVENTORY)).thenReturn(inventory);
+        when(client.getItemContainer(net.runelite.api.gameval.InventoryID.INV)).thenReturn(inventory);
         var changed=mock(net.runelite.api.events.ItemContainerChanged.class);
-        when(changed.getContainerId()).thenReturn(net.runelite.api.InventoryID.INVENTORY.getId());
+        when(changed.getContainerId()).thenReturn(net.runelite.api.gameval.InventoryID.INV);
         plugin.onItemContainerChanged(changed);plugin.onGameTick(null);
         assertTrue(plugin.missingStorageItems().isEmpty());
         assertNull(plugin.activeLeg().point);
@@ -285,6 +294,38 @@ public class GuideLifecycleTest
         assertNull(plugin.activePatch());
         verifyNoInteractions(bus);
         plugin.shutDown();
+    }
+
+    @Test public void maximumManualSelectionSurvivesPlanningAndItsNextTick()
+    {
+        Player player=mock(Player.class);
+        when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(new WorldPoint(2813,3463,0));
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(any(Skill.class))).thenReturn(99);
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(client.getVarbitValue(VarbitID.MORYTANIA_DIARY_ELITE_COMPLETE)).thenReturn(1);
+        when(config.getRSProfileKey()).thenReturn("all-plots");
+        when(reader.observeType(anyString(),anyString(),anyString(),any())).thenReturn(
+            new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
+        doAnswer(i->{((Runnable)i.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        plugin.startUp();
+        try
+        {
+            Set<String> all=ManualSelection.keys(plugin.patches(),p->true);
+            assertEquals(111,all.size());
+            plugin.startManual(all);
+            var types=java.util.EnumSet.noneOf(PatchType.class);
+            for(FarmRunPatch p:plugin.patches())types.add(p.getPatchType());
+            assertEquals(types,Set.copyOf(plugin.selectedRunTypes()));
+            FarmRunPatch current=plugin.activePatch();
+            assertNotNull(current);
+            plugin.onGameTick(null);
+            assertSame(current,plugin.activePatch());
+            assertEquals(types,Set.copyOf(plugin.selectedRunTypes()));
+            verifyNoInteractions(bus);
+        }
+        finally{plugin.shutDown();}
     }
 
     private static QuestFarmingStateReader.Observation liveHop(com.farminghelper.queststate.CropState state,int raw)

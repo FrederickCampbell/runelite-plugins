@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import net.runelite.api.*;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.InterfaceID;
@@ -27,6 +28,11 @@ import net.runelite.client.events.ProfileChanged;
 import net.runelite.client.events.RuneScapeProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.PluginDependency;
+import net.runelite.client.plugins.bank.BankSearch;
+import net.runelite.client.plugins.banktags.BankTagsPlugin;
+import net.runelite.client.plugins.banktags.BankTagsService;
+import net.runelite.client.plugins.banktags.TagManager;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.ClientToolbar;
@@ -36,6 +42,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 
+@PluginDependency(BankTagsPlugin.class)
 @PluginDescriptor(name = "Farming Helper", description = "Quest Helper for your farm runs! Includes Shortest Path integration.",
     tags = {"farming", "seed", "herb", "tree"})
 public class FarmingHelperPlugin extends Plugin
@@ -45,6 +52,9 @@ public class FarmingHelperPlugin extends Plugin
     @Inject private PluginManager plugins;
     private NavigationBridge navigation;
     private SeedVaultViews vaultViews;
+    @Inject private BankTagsService bankTags;
+    @Inject private TagManager tagManager;
+    @Inject private BankSearch bankSearch;
     private ActiveRunBank runBank;
     private final AtomicLong preferenceRevision=new AtomicLong();
     private volatile RouteLeg activeLeg;
@@ -172,7 +182,7 @@ public class FarmingHelperPlugin extends Plugin
             reader.useSceneObjects(highlight.objects());
             navigation=new NavigationBridge(bus::post);
             navigation.enabled(integrationActive("Shortest Path"));
-            if(itemManager!=null){vaultViews=new SeedVaultViews(client,itemManager,this);runBank=new ActiveRunBank(client,plugins,itemManager);}
+            if(itemManager!=null){vaultViews=new SeedVaultViews(client,itemManager,this);runBank=new ActiveRunBank(client,plugins,itemManager,bankTags,tagManager,bankSearch);}
             runtimeReady=true;
         });
         patches.addAll(FarmRunCatalog.patches());
@@ -444,7 +454,11 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onPluginChanged(PluginChanged event)
     {
         if(!"Shortest Path".equals(event.getPlugin().getName()))return;
-        onClient(()->{navigation.enabled(event.isLoaded());if(!run.isEmpty())update();});
+        onClient(()->{
+            navigation.enabled(event.isLoaded());
+            bankRoutes.reset();
+            if(!run.isEmpty())update();
+        });
     }
 
     @Subscribe public void onPluginMessage(PluginMessage event)
@@ -514,9 +528,9 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onItemContainerChanged(ItemContainerChanged event)
     {
         int id=event.getContainerId();
-        if(id==InventoryID.INVENTORY.getId()||id==InventoryID.EQUIPMENT.getId())quantities=null;
+        if(id==InventoryID.INV||id==InventoryID.WORN)quantities=null;
         if(config!=null&&client.getGameState()==GameState.LOGGED_IN)loadStock();
-        if(id==InventoryID.INVENTORY.getId()&&event.getItemContainer()!=null&&itemManager!=null)
+        if(id==InventoryID.INV&&event.getItemContainer()!=null&&itemManager!=null)
         {
             Map<Integer,Integer> bag=PhysicalStock.readChecked(event.getItemContainer(),itemManager::getItemComposition,null);
             if(bag!=null)
@@ -525,16 +539,16 @@ public class FarmingHelperPlugin extends Plugin
                 if(SeedBoxStock.boxId(bag)<0)seedBoxPlant=null;
             }
         }
-        if(id==net.runelite.api.gameval.InventoryID.SEED_BOX&&client.getGameState()==GameState.LOGGED_IN)
+        if(id==InventoryID.SEED_BOX&&client.getGameState()==GameState.LOGGED_IN)
         {
             loadStock();
-            if(stockProfile!=null&&itemManager!=null&&SeedBoxStock.boxId(readItems(client.getItemContainer(InventoryID.INVENTORY)))>0&&
+            if(stockProfile!=null&&itemManager!=null&&SeedBoxStock.boxId(readItems(client.getItemContainer(InventoryID.INV)))>0&&
                 seedBox.observe(event.getItemContainer(),client.getTickCount(),this::seedItem))
             {seedBoxPlant=null;seedBoxViewTick=client.getTickCount();seedBoxViewRevision=-1;seedBoxChanged();}
         }
-        if(id==InventoryID.BANK.getId()||id==InventoryID.SEED_VAULT.getId())
+        if(id==InventoryID.BANK||id==InventoryID.SEED_VAULT)
         {
-            Store store = id == bank.id.getId() ? bank : vault;
+            Store store = id == bank.id ? bank : vault;
             store.sampled = false;
             // Keep a valid visible packet if the widget closes before the next game tick.
             if (stockProfile != null && client.getGameState() == GameState.LOGGED_IN && visibleWidget(store.widget))
@@ -542,7 +556,7 @@ public class FarmingHelperPlugin extends Plugin
                 StorageRead observation = store.read(event.getItemContainer());
                 if (observation != null) store.pending = observation;
             }
-            if(vaultViews!=null&&id==InventoryID.SEED_VAULT.getId())vaultViews.invalidate();
+            if(vaultViews!=null&&id==InventoryID.SEED_VAULT)vaultViews.invalidate();
         }
     }
 
@@ -648,7 +662,7 @@ public class FarmingHelperPlugin extends Plugin
         if(group!=InterfaceID.INVENTORY&&group!=InterfaceID.INVENTORY_NOOPS&&group!=InterfaceID.BANKSIDE)return -1;
         if(id<=0)
         {
-            var inventory=client.getItemContainer(InventoryID.INVENTORY);
+            var inventory=client.getItemContainer(InventoryID.INV);
             int slot=widget.getIndex();
             Item item=inventory!=null&&slot>=0&&slot<inventory.size()?inventory.getItem(slot):null;
             if(item!=null)id=item.getId();
@@ -701,7 +715,7 @@ public class FarmingHelperPlugin extends Plugin
             if(seedBoxViewTick<0){seedBoxViewTick=tick;seedBoxViewRevision=seedBox.revision();}
             if(tick-seedBoxViewTick>=2&&seedBoxViewRevision==seedBox.revision()&&!seedBox.pending()&&seedBoxPlant==null)
             {
-                var nativeBox=client.getItemContainer(net.runelite.api.gameval.InventoryID.SEED_BOX);
+                var nativeBox=client.getItemContainer(InventoryID.SEED_BOX);
                 if(SeedBoxStock.boxId(stock().bag)>0&&seedBox.observe(nativeBox,tick,this::seedItem))
                     seedBoxChanged();
             }
@@ -804,15 +818,15 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(runBank==null)return "The farming bank view is unavailable.";
         boolean enabled=flag("activeRunBank",true);
-        if(!enabled||!guideRequested||run.isEmpty()||!runBank.bankOpen())
+        if(!guideRequested||run.isEmpty()||!runBank.bankOpen())
         {bankRoutes.closeVisit();runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
-        PhysicalStock supplies=stock();
-        Set<Integer> eligible=bankRunItems(supplies.shelf);
-        boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"))
-            &&!"false".equalsIgnoreCase(config.getConfiguration("shortestpath","includeBankPath"));
+        // Shortest Path enables bank traversal in both bank inventory modes.
+        boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"));
         if(bank.sampled&&!bankRoutes.started())
             bankRoutes.begin(bankAware?LocationContext.capture(client).pathStart():null,bankItinerary);
         if(bankAware&&bankRoutes.started())bankRoutes.tick(navigation);
+        if(!enabled){runBank.tick(null,Set.of(),false,birdBankPhase());return "";}
+        Set<Integer> eligible=bankRunItems(stock().shelf);
         List<Integer> priority=bankRoutes.started()
             ?bankRoutes.priority(bankFallback,manual)
             :List.copyOf(bankFallback.keySet());
@@ -878,7 +892,7 @@ public class FarmingHelperPlugin extends Plugin
 
     private final class Store
     {
-        final InventoryID id;
+        final int id;
         final int widget;
         final String key;
         Map<Integer,Integer> items = Map.of();
@@ -886,7 +900,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean sampled, inTransfer;
         StorageRead pending;
 
-        Store(InventoryID id, int widget, String key)
+        Store(int id, int widget, String key)
         {
             this.id = id;
             this.widget = widget;
@@ -973,15 +987,15 @@ public class FarmingHelperPlugin extends Plugin
         {
             boxEnabled=enabled;
             invalidateTravel();
-            Map<Integer,Integer> bag=readItems(client.getItemContainer(InventoryID.INVENTORY));
+            Map<Integer,Integer> bag=readItems(client.getItemContainer(InventoryID.INV));
             seedBoxOwned=SeedBoxStock.boxId(bag)>0||SeedBoxStock.boxId(bank.items)>0;
-            carriedHarvestContainers=HarvestContainers.find(bag,this::itemDefinition);
+            carriedHarvestContainers=HarvestContainers.find(bag);
             if(harvestBankSnapshot!=bank.items)
-            {harvestBankSnapshot=bank.items;bankHarvestContainers=HarvestContainers.find(bank.items,this::itemDefinition);}
+            {harvestBankSnapshot=bank.items;bankHarvestContainers=HarvestContainers.find(bank.items);}
             herbSackOwned=carriedHarvestContainers.containsKey(HarvestContainers.Kind.HERB)||bankHarvestContainers.containsKey(HarvestContainers.Kind.HERB);
             reagentPouchOwned=carriedHarvestContainers.containsKey(HarvestContainers.Kind.REAGENT)||bankHarvestContainers.containsKey(HarvestContainers.Kind.REAGENT);
             Map<Integer,Integer> confirmed=seedBox.carried(bag);
-            quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank.items,vault.items,enabled?confirmed:Map.of(),this::observedItemName,
+            quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.WORN)),bank.items,vault.items,enabled?confirmed:Map.of(),this::observedItemName,
                 id->itemManager==null?id:itemManager.canonicalize(id));
         }
         return quantities;
@@ -1354,7 +1368,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean probeBoundary=boundary&&!preparing()&&!progress.underway()&&phase==Preparation.Phase.ACTIVE;
         boolean needsResupply=false;
         if(probeBoundary)limit=1;
-        ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
+        ItemContainer inventory=client.getItemContainer(InventoryID.INV);
         int actualOccupied=Math.max(estimatedOccupied,inventory==null?0:inventory.count());
         boolean autoWeed=loggedIn&&client.getVarbitValue(VarbitID.FARMING_BLOCKWEEDS)==2;
         boolean barbarian=loggedIn&&client.getVarbitValue(VarbitID.BRUT_FARMING_PLANTING)==3;
@@ -1457,15 +1471,16 @@ public class FarmingHelperPlugin extends Plugin
         // Travel remains advisory; do not force a bank trip solely for optional teleports.
         List<FarmRunPatch> travelWave=wave;
         if(localSite!=null){travelWave=new ArrayList<>(wave);travelWave.removeIf(p->localSite.equals(RunOrder.site(p)));}
-        Map<Integer,Set<String>> fallbackTravel=RunTeleports.select(travelWave,travelOptions,carried,supplies.travel,
-                (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id)));
-        Set<String> travelSites=new LinkedHashSet<>();for(FarmRunPatch patch:travelWave)travelSites.add(RunOrder.site(patch));
-        List<?> routeInputs=List.of(travelSites,bankRouteSnapshot,fallbackTravel,supplies,travelOptions,pouch,pouchRunes,elite);
+        Set<String> travelSites=new LinkedHashSet<>();
+        for(FarmRunPatch patch:travelWave)travelSites.add(RunOrder.site(patch));
+        List<?> routeInputs=List.of(List.copyOf(travelSites),bankRouteSnapshot,supplies,travelOptions,pouch,pouchRunes,elite);
         if(!routeInputs.equals(routeSupplyInputs))
         {
-            routeSupplyInputs=routeInputs;
+            Map<Integer,Set<String>> fallbackTravel=RunTeleports.selectSites(travelSites,travelOptions,carried,supplies.travel,
+                (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id)));
             routeSupplyPlan=RouteSupplies.plan(travelSites,bankRouteSnapshot,fallbackTravel,travelOptions,supplies.travel,carried,equipped,
                 pouch,pouchRunes,!loggedIn||bankRouteSnapshot.isEmpty()?Map.of():RouteSupplies.looseRunes(client,supplies.travel),elite,this::observedItemName,this::stackable);
+            routeSupplyInputs=routeInputs;
         }
         Map<Integer,Set<String>> teleports=routeSupplyPlan.sites;
         Map<Integer,Integer> travelCounts=routeSupplyPlan.quantities,load=new LinkedHashMap<>(physicalRequired);
@@ -1821,8 +1836,8 @@ public class FarmingHelperPlugin extends Plugin
     private boolean immune(FarmRunPatch p)
     {
         return p!=null&&CropCare.siteImmune(p,
-            "Falador".equals(p.getLocation())&&client.getVarbitValue(net.runelite.api.Varbits.DIARY_FALADOR_ELITE)==1,
-            "Kourend".equals(p.getLocation())&&client.getVarbitValue(net.runelite.api.Varbits.DIARY_KOUREND_EASY)==1);
+            "Falador".equals(p.getLocation())&&client.getVarbitValue(VarbitID.FALADOR_DIARY_ELITE_COMPLETE)==1,
+            "Kourend".equals(p.getLocation())&&client.getVarbitValue(VarbitID.KOUREND_DIARY_EASY_COMPLETE)==1);
     }
     private static Crop observedCrop(PatchType type,QuestFarmingStateReader.Observation o)
     {

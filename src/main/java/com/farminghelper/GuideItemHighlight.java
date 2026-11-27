@@ -7,7 +7,7 @@ import java.awt.image.BufferedImage;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import net.runelite.api.Client;
-import net.runelite.api.InventoryID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.InterfaceID;
@@ -36,7 +36,7 @@ final class GuideItemHighlight extends WidgetItemOverlay
         if(group==InterfaceID.INVENTORY)
         {
             if(!helper.activeStepItems().contains(id))return;
-            ItemContainer inventory=client.getItemContainer(InventoryID.INVENTORY);
+            ItemContainer inventory=client.getItemContainer(InventoryID.INV);
             if(!StepItems.firstSlot(id,itemWidget.getIndex(),inventory))return;
             color=Color.CYAN;
         }

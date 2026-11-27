@@ -19,27 +19,26 @@ final class ActiveRunBank
     static final String TAG="farming helper active run";
     private final Client client;
     private final PluginManager plugins;
-    private TagManager tags;
-    private BankSearch search;
+    private final BankTagsService bankTags;
+    private final TagManager tags;
+    private final BankSearch search;
     private final ItemManager items;
     private Set<Integer> ids=Collections.emptySet(), admitted=Collections.emptySet();
     private int[] lastLayout=new int[0];
     private Set<Integer> layoutEligible=Set.of(),layoutOwned=Set.of();
     private List<Integer> layoutPriority=List.of();
     private boolean registered,opened,offered,birdPhase,stagePending;
-    ActiveRunBank(Client client,PluginManager plugins,ItemManager items)
-    {this.client=client;this.plugins=plugins;this.items=items;}
+    ActiveRunBank(Client client,PluginManager plugins,ItemManager items,BankTagsService bankTags,TagManager tags,BankSearch search)
+    {
+        this.client=client;this.plugins=plugins;this.items=items;
+        this.bankTags=bankTags;this.tags=tags;this.search=search;
+    }
     private BankTagsPlugin service()
     {
-        for(var p:plugins.getPlugins())if(p instanceof BankTagsPlugin&&plugins.isPluginActive(p))
-        {
-            // TagManager is deliberately bound inside the native plugin injector.
-            // Reuse that exact instance without requiring Bank Tags as a dependency.
-            TagManager actual=p.getInjector().getInstance(TagManager.class);
-            if(tags!=actual){release();tags=actual;search=p.getInjector().getInstance(BankSearch.class);}
-            return (BankTagsPlugin)p;
-        }
-        return null;
+        // The explicit-layout overload is on the native plugin implementing the exported service.
+        if(!(bankTags instanceof BankTagsPlugin))return null;
+        BankTagsPlugin api=(BankTagsPlugin)bankTags;
+        return plugins.isPluginActive(api)?api:null;
     }
     boolean bankOpen()
     {
@@ -75,7 +74,7 @@ final class ActiveRunBank
     {tick(next,owned,enabled,bird,List.of());}
     void tick(Set<Integer> next,Set<Integer> owned,boolean enabled,boolean bird,List<Integer> priority)
     {
-        if(!bankOpen()){release();return;}
+        if(!bankOpen()){if(opened||registered)release();return;}
         BankTagsPlugin api=service();
         if(!enabled||next==null||api==null){close(api);return;}
         updateEligible(next,owned);register();
@@ -139,6 +138,6 @@ final class ActiveRunBank
         if(registered&&tags!=null)tags.unregisterTag(TAG);
         // Never save or delete another plugin's configuration. Registration is
         // in-memory; no actual TagTab or permanent item tag is created.
-        registered=false;opened=false;offered=false;stagePending=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];layoutEligible=Set.of();layoutOwned=Set.of();layoutPriority=List.of();tags=null;search=null;
+        registered=false;opened=false;offered=false;stagePending=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];layoutEligible=Set.of();layoutOwned=Set.of();layoutPriority=List.of();
     }
 }

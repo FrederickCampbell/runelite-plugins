@@ -2,6 +2,7 @@ package com.farminghelper;
 
 import java.util.*;
 import net.runelite.api.*;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.ItemID;
@@ -43,7 +44,7 @@ public class StorageObservationLifecycleTest
 
         when(nativeBank.getItems()).thenReturn(new Item[]{new Item(seed,5)});
         ItemContainerChanged event=mock(ItemContainerChanged.class);
-        when(event.getContainerId()).thenReturn(InventoryID.BANK.getId());
+        when(event.getContainerId()).thenReturn(InventoryID.BANK);
         when(event.getItemContainer()).thenReturn(nativeBank);
         plugin.onItemContainerChanged(event);
         when(client.getWidget(InterfaceID.Bankmain.UNIVERSE)).thenReturn(null);
@@ -72,13 +73,13 @@ public class StorageObservationLifecycleTest
         when(itemManager.getItemComposition(ItemID.SEED_BOX)).thenReturn(def);
         ItemContainer bag=mock(ItemContainer.class);
         when(bag.getItems()).thenReturn(new Item[]{new Item(ItemID.SEED_BOX,1)});
-        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(bag);
+        when(client.getItemContainer(InventoryID.INV)).thenReturn(bag);
         assertEquals(Map.of(seed,12),plugin.stock().storage);
         assertTrue(plugin.stock().seedBox.isEmpty());
         Widget bank=mock(Widget.class);when(client.getWidget(InterfaceID.Bankmain.UNIVERSE)).thenReturn(bank);
         ItemContainer nativeBank=mock(ItemContainer.class);when(nativeBank.getItems()).thenReturn(new Item[]{new Item(seed,8)});
         ItemContainerChanged event=mock(ItemContainerChanged.class);
-        when(event.getContainerId()).thenReturn(InventoryID.BANK.getId());when(event.getItemContainer()).thenReturn(nativeBank);
+        when(event.getContainerId()).thenReturn(InventoryID.BANK);when(event.getItemContainer()).thenReturn(nativeBank);
         plugin.onItemContainerChanged(event);
         when(config.getRSProfileKey()).thenReturn("two");
         when(config.getRSProfileConfiguration("farming-helper","observedBankV1")).thenReturn(seed+":3");

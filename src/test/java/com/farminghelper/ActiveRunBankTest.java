@@ -2,7 +2,7 @@ package com.farminghelper;
 import java.util.Set;
 import java.util.Map;
 import net.runelite.api.Client;
-import net.runelite.api.InventoryID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.ItemComposition;
@@ -15,8 +15,8 @@ public class ActiveRunBankTest
     {return ownedStock(client,definitions,id->id);}
     private static Map<Integer,Integer> ownedStock(Client client,java.util.function.IntFunction<ItemComposition> definitions,java.util.function.IntUnaryOperator canonical)
     {
-        return new PhysicalStock(PhysicalStock.read(client.getItemContainer(InventoryID.INVENTORY),definitions),
-            PhysicalStock.read(client.getItemContainer(InventoryID.EQUIPMENT),definitions),
+        return new PhysicalStock(PhysicalStock.read(client.getItemContainer(InventoryID.INV),definitions),
+            PhysicalStock.read(client.getItemContainer(InventoryID.WORN),definitions),
             PhysicalStock.read(client.getItemContainer(InventoryID.BANK),definitions),Map.of(),id->"",canonical).shelf;
     }
     @Test public void admitsOnlyIdsAlreadyInSuppliedNativeLayout()
@@ -40,8 +40,8 @@ public class ActiveRunBankTest
         ItemContainer inventory=container(new Item(556,10),new Item(7409,1));
         ItemContainer equipment=container(new Item(11850,1));
         when(client.getItemContainer(InventoryID.BANK)).thenReturn(bank);
-        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(inventory);
-        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(equipment);
+        when(client.getItemContainer(InventoryID.INV)).thenReturn(inventory);
+        when(client.getItemContainer(InventoryID.WORN)).thenReturn(equipment);
         assertEquals(Map.of(952,1,556,100,7409,1,11850,1),
             ownedStock(client,id->id==999?placeholder:real));
     }
@@ -55,8 +55,8 @@ public class ActiveRunBankTest
         ItemContainer inventory=container(new Item(952,1));
         ItemContainer equipment=container(new Item(11850,1));
         when(client.getItemContainer(InventoryID.BANK)).thenReturn(initialBank,empty);
-        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(empty,inventory);
-        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(empty,equipment);
+        when(client.getItemContainer(InventoryID.INV)).thenReturn(empty,inventory);
+        when(client.getItemContainer(InventoryID.WORN)).thenReturn(empty,equipment);
         assertEquals(ownedStock(client,id->real),ownedStock(client,id->real));
     }
     @Test public void wornCanonicalizationDoesNotDuplicateOrNormalizeOtherSources()
@@ -66,8 +66,8 @@ public class ActiveRunBankTest
         when(real.getPlaceholderTemplateId()).thenReturn(-1);
         ItemContainer bank=container(new Item(11850,1)),bag=container(new Item(952,1)),worn=container(new Item(11851,1));
         when(client.getItemContainer(InventoryID.BANK)).thenReturn(bank);
-        when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(bag);
-        when(client.getItemContainer(InventoryID.EQUIPMENT)).thenReturn(worn);
+        when(client.getItemContainer(InventoryID.INV)).thenReturn(bag);
+        when(client.getItemContainer(InventoryID.WORN)).thenReturn(worn);
         assertEquals(Map.of(11850,2,952,1),ownedStock(client,id->real,id->id==11851?11850:id));
     }
     @Test public void combinedStockKeepsInputsAndAddsQuantities()
@@ -99,20 +99,20 @@ public class ActiveRunBankTest
         var manager=mock(net.runelite.client.plugins.PluginManager.class);
         var items=mock(net.runelite.client.game.ItemManager.class);
         var api=mock(net.runelite.client.plugins.banktags.BankTagsPlugin.class);
-        var injector=mock(com.google.inject.Injector.class);
         var tags=mock(net.runelite.client.plugins.banktags.TagManager.class);
         var search=mock(net.runelite.client.plugins.bank.BankSearch.class);
         var root=mock(net.runelite.api.widgets.Widget.class);
         when(client.getGameState()).thenReturn(net.runelite.api.GameState.LOGGED_IN);
         when(client.getWidget(net.runelite.api.gameval.InterfaceID.Bankmain.UNIVERSE)).thenReturn(root);
-        when(manager.getPlugins()).thenReturn(java.util.List.of(api));when(manager.isPluginActive(api)).thenReturn(true);
-        when(api.getInjector()).thenReturn(injector);
-        when(injector.getInstance(net.runelite.client.plugins.banktags.TagManager.class)).thenReturn(tags);
-        when(injector.getInstance(net.runelite.client.plugins.bank.BankSearch.class)).thenReturn(search);
         when(api.getActiveTag()).thenReturn(ActiveRunBank.TAG);
         ItemComposition def=mock(ItemComposition.class);when(def.getName()).thenReturn("Spade");
         when(items.getItemComposition(952)).thenReturn(def);
-        ActiveRunBank bank=new ActiveRunBank(client,manager,items);
+        ActiveRunBank bank=new ActiveRunBank(client,manager,items,api,tags,search);
+        when(manager.isPluginActive(api)).thenReturn(false);
+        assertEquals("Enable Bank Tags to show the farming layout.",bank.show(Set.of(952),Set.of(952),false,java.util.List.of()));
+        bank.tick(Set.of(952),Set.of(952),true,false);
+        verifyNoInteractions(tags,search);
+        when(manager.isPluginActive(api)).thenReturn(true);
         bank.tick(Set.of(952),Set.of(952),true,false);
         clearInvocations(items,search,api);
         bank.tick(Set.of(952),Set.of(952),true,false);

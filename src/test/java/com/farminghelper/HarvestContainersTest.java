@@ -1,9 +1,8 @@
 package com.farminghelper;
 import java.util.*;
-import net.runelite.api.ItemComposition;
+import net.runelite.api.gameval.ItemID;
 import org.junit.Test;
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 public class HarvestContainersTest
 {
@@ -23,21 +22,23 @@ public class HarvestContainersTest
         assertEquals(Set.of(3),GuideView.missingItems(Map.of(pouch.id,1),Map.of()));
         assertTrue(GuideView.missingItems(Map.of(silk.id,1),Map.of(silk.id,1)).isEmpty());
     }
-    @Test public void ownershipUsesExactNativeNamesAndOpenAction()
+    @Test public void eachPhysicalVariantIsRecognizedAndPreferredInOrder()
     {
-        ItemComposition sack=mock(ItemComposition.class),silk=mock(ItemComposition.class),pouch=mock(ItemComposition.class),other=mock(ItemComposition.class);
-        when(sack.getName()).thenReturn("Herb sack");
-        when(silk.getName()).thenReturn("Silklined herb sack");
-        when(silk.getInventoryActions()).thenReturn(new String[]{"Fill","Close"});
-        when(pouch.getName()).thenReturn("Reagent pouch (open)");
-        when(other.getName()).thenReturn("Herb sack ornament");
-        var defs=Map.of(1,sack,2,silk,3,pouch,4,other);
-        var found=HarvestContainers.find(Map.of(1,1,2,1,3,1,4,1),defs::get);
-        assertEquals(100,found.get(HarvestContainers.Kind.HERB).capacity);
-        assertTrue(found.get(HarvestContainers.Kind.HERB).open);
-        assertEquals(26,found.get(HarvestContainers.Kind.REAGENT).capacity);
-        assertTrue(found.get(HarvestContainers.Kind.REAGENT).open);
-        assertEquals(30,HarvestContainers.find(Map.of(1,1),defs::get).get(HarvestContainers.Kind.HERB).capacity);
-        assertTrue(HarvestContainers.find(Map.of(4,1),defs::get).isEmpty());
+        int[] sacks={ItemID.SLAYER_HERB_SACK,ItemID.SLAYER_HERB_SACK_OPEN,
+            ItemID.SLAYER_HERB_SACK_SILK,ItemID.SLAYER_HERB_SACK_SILK_OPEN};
+        Map<Integer,Integer> stock=new HashMap<>();
+        for(int i=0;i<sacks.length;i++)
+        {
+            stock.put(sacks[i],1);
+            var best=HarvestContainers.find(stock).get(HarvestContainers.Kind.HERB);
+            assertEquals(sacks[i],best.id);
+            assertEquals(i>=2?100:30,best.capacity);
+            assertEquals(i%2==1,best.open);
+        }
+        stock.put(ItemID.MM_SECONDARY_POUCH,1);
+        assertFalse(HarvestContainers.find(stock).get(HarvestContainers.Kind.REAGENT).open);
+        stock.put(ItemID.MM_SECONDARY_POUCH_OPEN,1);
+        assertTrue(HarvestContainers.find(stock).get(HarvestContainers.Kind.REAGENT).open);
+        assertTrue(HarvestContainers.find(Map.of(ItemID.SPADE,1,ItemID.SLAYER_HERB_SACK,0)).isEmpty());
     }
 }

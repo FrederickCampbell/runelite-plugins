@@ -59,91 +59,125 @@ final class RouteSupplies
     static Map<Integer,Integer> looseRunes(Client client,Map<Integer,Integer> available)
     {
         var values=client.getEnum(EnumID.RUNEPOUCH_RUNE);
-        if(values==null||values.getIntVals()==null)return Map.of();
+        int[] ids=values==null?null:values.getIntVals();
+        if(ids==null)return Map.of();
         Map<Integer,Integer> runes=new HashMap<>();
-        for(int id:values.getIntVals())if(available.getOrDefault(id,0)>0)runes.put(id,available.get(id));
+        for(int id:ids)if(available.getOrDefault(id,0)>0)runes.put(id,available.get(id));
         return runes;
     }
     static final class Plan
     {
         final Map<Integer,Set<String>> sites=new LinkedHashMap<>();
         final Map<Integer,Integer> quantities=new LinkedHashMap<>();
-        void add(int id,int count,Collection<String> destinations)
-        {if(id>0&&count>0){sites.computeIfAbsent(id,k->new LinkedHashSet<>()).addAll(destinations);quantities.merge(id,count,Math::max);}}
+        void add(int id,int count,String site)
+        {if(id>0&&count>0){sites.computeIfAbsent(id,k->new LinkedHashSet<>()).add(site);quantities.merge(id,count,Math::max);}}
     }
     static Plan plan(Set<String> sites,Map<String,List<String>> routes,Map<Integer,Set<String>> fallback,
         Map<Integer,List<String>> eligible,Map<Integer,Integer> available,Map<Integer,Integer> carried,Map<Integer,Integer> equipped,
         int pouch,Map<Integer,Integer> pouchRunes,Map<Integer,Integer> looseRunes,boolean elite,IntFunction<String> names,IntPredicate stackable)
     {
-        Plan result=new Plan();Set<String> unresolved=new HashSet<>();
-        Map<Integer,Integer> itemUses=new LinkedHashMap<>();Map<Integer,Set<String>> itemSites=new LinkedHashMap<>();
-        List<Map<String,Integer>> casts=new ArrayList<>();Set<String> spellSites=new LinkedHashSet<>(),fairySites=new LinkedHashSet<>();
+        Plan result=new Plan();
+        Map<Integer,Integer> visits=new LinkedHashMap<>();
+        Set<String> resolved=new HashSet<>();
+        int staff=ownedStaff(carried,available);
+        Set<String> staffElements=new HashSet<>();
+        if(elite||sites.stream().noneMatch(site->routes.getOrDefault(site,List.of()).contains(FAIRY)))
+            for(int id:equipped.keySet())staffElements.addAll(elements(names.apply(id)));
+
+        RunePool pouchPool=null,loosePool=null;
         for(String site:sites)
         {
             List<String> labels=routes.get(site);
-            if(labels==null){unresolved.add(site);continue;}
+            if(labels==null)continue;
+            if(labels.isEmpty()){resolved.add(site);continue;}
+
+            // Stage one destination. A failed edge must not consume another site's runes or charges.
+            Map<Integer,Integer> usedItems=new HashMap<>();
+            int[] pouchLeft=null,looseLeft=null;
+            boolean complete=true,usesPouch=false,usesStaff=false;
             for(String label:labels)
             {
-                if(FAIRY.equals(label)){if(!elite)fairySites.add(site);continue;}
+                if(FAIRY.equals(label))
+                {
+                    if(!elite&&staff<=0){complete=false;break;}
+                    usesStaff=!elite;
+                    continue;
+                }
                 Map<String,Integer> spell=SPELLS.get(label);
-                if(spell!=null){casts.add(spell);spellSites.add(site);continue;}
-                int id=bestItem(label,eligible,available,carried,itemUses,names,stackable);
-                if(id<0){unresolved.add(site);continue;}
-                itemUses.merge(id,1,Integer::sum);itemSites.computeIfAbsent(id,k->new LinkedHashSet<>()).add(site);
+                if(spell!=null)
+                {
+                    if(pouchPool==null)
+                    {
+                        pouchPool=new RunePool(pouch>0?pouchRunes:Map.of(),names);
+                        loosePool=new RunePool(looseRunes,names);
+                    }
+                    if(pouchLeft==null)
+                    {
+                        pouchLeft=pouchPool.remaining.clone();
+                        looseLeft=loosePool.remaining.clone();
+                    }
+                    Map<String,Integer> need=new HashMap<>(spell);
+                    for(String element:staffElements)need.remove(element+" rune");
+                    usesPouch|=pouchPool.pay(need,pouchLeft);
+                    loosePool.pay(need,looseLeft);
+                    if(!need.isEmpty()){complete=false;break;}
+                    continue;
+                }
+                int id=bestItem(label,eligible,available,carried,visits,usedItems,names,stackable);
+                if(id<0){complete=false;break;}
+                usedItems.merge(id,1,Integer::sum);
             }
-        }
-        if(!fairySites.isEmpty())
-        {
-            int staff=ownedStaff(carried,available);
-            if(staff>0)result.add(staff,1,fairySites);else unresolved.addAll(fairySites);
-        }
-        // Credit only positively identified, currently equipped elemental staves.
-        // If a fairy staff must also be carried, conservatively budget the runes.
-        Set<String> staffElements=new HashSet<>();
-        if(fairySites.isEmpty())for(int id:equipped.keySet())staffElements.addAll(elements(names.apply(id)));
-        if(!casts.isEmpty())
-        {
-            Map<Integer,Integer> pouchLeft=new HashMap<>(pouchRunes),looseLeft=new HashMap<>(looseRunes),loose=new LinkedHashMap<>();
-            boolean usesPouch=false,complete=true;
-            for(Map<String,Integer> cast:casts)
+            if(!complete)continue;
+            resolved.add(site);
+            if(usesStaff)result.add(staff,1,site);
+            if(usesPouch)result.add(pouch,1,site);
+            if(pouchLeft!=null)
             {
-                Map<String,Integer> need=new HashMap<>(cast);
-                for(String element:staffElements)need.remove(element+" rune");
-                usesPouch|=pouch>0&&allocate(need,pouchLeft,names,null);
-                allocate(need,looseLeft,names,loose);
-                if(need.values().stream().anyMatch(v->v>0)){complete=false;break;}
+                pouchPool.remaining=pouchLeft;
+                for(int i=0;i<looseLeft.length;i++)if(loosePool.remaining[i]!=looseLeft[i])
+                {
+                    int id=loosePool.ids[i];
+                    result.add(id,looseRunes.get(id)-looseLeft[i],site);
+                }
+                loosePool.remaining=looseLeft;
             }
-            if(!complete)unresolved.addAll(spellSites);
-            else
-            {
-                if(usesPouch)result.add(pouch,1,spellSites);
-                loose.forEach((id,n)->result.add(id,n,spellSites));
-            }
+            usedItems.forEach((id,n)->{
+                int total=visits.merge(id,n,Integer::sum);
+                result.add(id,RunTeleports.quantity(id,total,names.apply(id),stackable.test(id)),site);
+            });
         }
+        // Concrete routes have first claim on stock. A fallback may only spend the remainder.
         fallback.forEach((id,where)->{
-            Set<String> missing=new LinkedHashSet<>(where);missing.retainAll(unresolved);
-            Set<String> chosen=itemSites.computeIfAbsent(id,k->new LinkedHashSet<>());
-            missing.removeAll(chosen);
-            if(!missing.isEmpty()){chosen.addAll(missing);itemUses.merge(id,missing.size(),Integer::sum);}
+            for(String site:where)
+            {
+                if(!sites.contains(site)||resolved.contains(site))continue;
+                int count=visits.getOrDefault(id,0)+1;
+                int quantity=RunTeleports.quantity(id,count,names.apply(id),stackable.test(id));
+                if(quantity>available.getOrDefault(id,0))break;
+                visits.put(id,count);
+                result.add(id,quantity,site);
+            }
         });
-        itemUses.forEach((id,n)->result.add(id,RunTeleports.quantity(id,n,names.apply(id),stackable.test(id)),itemSites.get(id)));
         return result;
     }
     private static int ownedStaff(Map<Integer,Integer> carried,Map<Integer,Integer> available)
     {
-        for(int id:new int[]{772,9084})if(carried.getOrDefault(id,0)>0)return id;
-        for(int id:new int[]{772,9084})if(available.getOrDefault(id,0)>0)return id;
+        for(Map<Integer,Integer> stock:List.of(carried,available))
+        {
+            if(stock.getOrDefault(ItemID.DRAMEN_STAFF,0)>0)return ItemID.DRAMEN_STAFF;
+            if(stock.getOrDefault(ItemID.LUNAR_MOONCLAN_LIMINAL_STAFF,0)>0)return ItemID.LUNAR_MOONCLAN_LIMINAL_STAFF;
+        }
         return -1;
     }
     private static int bestItem(String label,Map<Integer,List<String>> eligible,Map<Integer,Integer> available,
-        Map<Integer,Integer> carried,Map<Integer,Integer> used,IntFunction<String> names,IntPredicate stackable)
+        Map<Integer,Integer> carried,Map<Integer,Integer> used,Map<Integer,Integer> staged,IntFunction<String> names,IntPredicate stackable)
     {
         int best=-1,rank=Integer.MAX_VALUE;
         for(var e:eligible.entrySet())
         {
-            int id=e.getKey(),visits=used.getOrDefault(id,0)+1;
+            int id=e.getKey(),visits=used.getOrDefault(id,0)+staged.getOrDefault(id,0)+1;
             if(!e.getValue().contains(label)||RunTeleports.quantity(id,visits,names.apply(id),stackable.test(id))>available.getOrDefault(id,0))continue;
-            int score=carried.getOrDefault(id,0)>0?0:used.containsKey(id)?1:2;
+            int score=carried.getOrDefault(id,0)>0?0:visits>1?1:2;
             if(score<rank||score==rank&&id<best){best=id;rank=score;}
         }
         return best;
@@ -156,33 +190,53 @@ final class RouteSupplies
         for(var c:COMBOS.entrySet())if(name.equals(c.getKey()+" battlestaff")||name.equals("mystic "+c.getKey()+" staff"))return c.getValue();
         return List.of();
     }
-    /** Combine two elements only within one cast; consume the actual pooled
-     * rune quantity so successive casts cannot reuse a spent rune. */
-    private static boolean allocate(Map<String,Integer> need,Map<Integer,Integer> stock,IntFunction<String> names,Map<Integer,Integer> output)
+    /** Classify each physical rune once. A destination spends a private copy of the
+     * balances and commits it only after every transport in that destination succeeds. */
+    private static final class RunePool
     {
-        boolean used=false;
-        List<Integer> ids=new ArrayList<>(stock.keySet());Collections.sort(ids);
-        for(int pass=0;pass<3;pass++)for(int id:ids)
+        final int[] ids;
+        final String[] first,second;
+        int[] remaining;
+
+        RunePool(Map<Integer,Integer> stock,IntFunction<String> names)
         {
-            int left=stock.getOrDefault(id,0);if(left<=0)continue;
-            String name=Objects.toString(names.apply(id),"").toLowerCase(Locale.ROOT);
-            if(!name.endsWith(" rune"))continue;
-            List<String> elements=COMBOS.get(name.substring(0,name.length()-5));
-            if((elements==null)!=(pass==1))continue;
-            int before=left;
-            if(pass==0)
+            ids=stock.keySet().stream().mapToInt(Integer::intValue).sorted().toArray();
+            first=new String[ids.length];second=new String[ids.length];remaining=new int[ids.length];
+            for(int i=0;i<ids.length;i++)
             {
-                String a=elements.get(0)+" rune",b=elements.get(1)+" rune";
-                int n=Math.min(left,Math.min(need.getOrDefault(a,0),need.getOrDefault(b,0)));
-                if(n>0){need.put(a,need.get(a)-n);need.put(b,need.get(b)-n);left-=n;}
+                String name=Objects.toString(names.apply(ids[i]),"").toLowerCase(Locale.ROOT);
+                if(!name.endsWith(" rune"))continue;
+                List<String> pair=COMBOS.get(name.substring(0,name.length()-5));
+                first[i]=pair==null?name:pair.get(0)+" rune";
+                if(pair!=null)second[i]=pair.get(1)+" rune";
+                remaining[i]=stock.get(ids[i]);
             }
-            else for(String rune:elements==null?List.of(name):List.of(elements.get(0)+" rune",elements.get(1)+" rune"))
-            {
-                int n=Math.min(left,need.getOrDefault(rune,0));if(n>0){need.put(rune,need.get(rune)-n);left-=n;}
-            }
-            if(before!=left){stock.put(id,left);used=true;if(output!=null)output.merge(id,before-left,Integer::sum);}
         }
-        return used;
+
+        boolean pay(Map<String,Integer> need,int[] balance)
+        {
+            boolean used=false;
+            // A combination rune can pay for both elements of the same cast. Then
+            // spend exact runes before using any remaining combinations for one element.
+            for(int pass=0;pass<3&&!need.isEmpty();pass++)for(int i=0;i<ids.length;i++)
+            {
+                if(balance[i]<=0||(pass==1)!=(second[i]==null))continue;
+                int a=need.getOrDefault(first[i],0);
+                int b=second[i]==null?0:need.getOrDefault(second[i],0);
+                int n=Math.min(balance[i],pass==0?Math.min(a,b):Math.max(a,b));
+                if(n==0)continue;
+                if(a>0)deduct(need,first[i],a,n);
+                if(b>0)deduct(need,second[i],b,n);
+                balance[i]-=n;used=true;
+            }
+            return used;
+        }
+
+        private static void deduct(Map<String,Integer> need,String rune,int wanted,int paid)
+        {
+            if(wanted<=paid)need.remove(rune);
+            else need.put(rune,wanted-paid);
+        }
     }
     private RouteSupplies(){}
 }

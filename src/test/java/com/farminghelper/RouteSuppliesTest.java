@@ -30,4 +30,21 @@ public class RouteSuppliesTest
         var plan=RouteSupplies.plan(Set.of("A","B"),Map.of("A",List.of("Teleport to House"),"B",List.of()),Map.of(10,Set.of("A"),11,Set.of("B")),Map.of(),Map.of(10,1,11,1),Map.of(),Map.of(),-1,Map.of(),Map.of(),false,id->"tablet",id->true);
         assertEquals(Map.of(10,1),plan.quantities);
     }
+    @Test public void unfundedSecondCastRollsBackOnlyItsOwnSite()
+    {
+        var sites=new LinkedHashSet<>(List.of("A","B","C"));
+        var routes=Map.of("A",List.of("Teleport to House"),"B",List.of("Teleport to House","Ardougne Teleport"),
+            "C",List.of("Teleport to House"));
+        var plan=RouteSupplies.plan(sites,routes,Map.of(10,Set.of("B")),Map.of(),Map.of(3,2,6,2,10,1),
+            Map.of(),Map.of(),-1,Map.of(),Map.of(3,2,6,2),false,NAMES::get,id->true);
+        assertEquals(Map.of(3,2,6,2,10,1),plan.quantities);
+        assertEquals(Set.of("A","C"),plan.sites.get(3));
+    }
+    @Test public void unresolvedFallbackCannotReuseTheOnlyTablet()
+    {
+        var plan=RouteSupplies.plan(Set.of("A","B"),Map.of("A",List.of("tablet")),Map.of(10,Set.of("B")),
+            Map.of(10,List.of("tablet")),Map.of(10,1),Map.of(),Map.of(),-1,Map.of(),Map.of(),false,id->"tablet",id->true);
+        assertEquals(Map.of(10,1),plan.quantities);
+        assertEquals(Set.of("A"),plan.sites.get(10));
+    }
 }

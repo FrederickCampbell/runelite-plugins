@@ -61,9 +61,6 @@ public class AdaptivePreparationTest
 
     @Test public void guildBoundaryIsOptionalAndDoesNotDeleteTheRun()
     {
-        Preparation.Window window=new Preparation.Window(42);
-        assertTrue(window.restrict(6));assertFalse(window.advance(true));
-        assertEquals(6,window.limit());
         Preparation.Window next=new Preparation.Window(36);
         do {}while(next.advance(next.limit()<=20));
         assertEquals(20,next.limit());

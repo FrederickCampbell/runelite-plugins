@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.11.6 — release audit candidate
+- Use RuneLite's exported Bank Tags services and native container IDs. The farming guide still works with Bank Tags turned off.
+- Budget route supplies independently per destination. An unaffordable spell no longer removes supplies for other stops, and a fallback cannot spend a tablet twice.
+- Honor both Shortest Path bank-item modes even with its separate bank-path toggle off or the farming shelf hidden. Reset route estimates when Shortest Path is disabled or enabled. Reuse unchanged transport selections and identify harvest containers by their native item IDs.
+- Coalesce queued Seed Vault updates when the interface is closed or disabled.
+
 ## v1.11.5 — transportation dependency resolution
 - Preserve fairy-ring and spell dependencies from public Shortest Path responses. Read owned rune pouch contents through RuneLite, recommend additional loose runes and required fairy-ring staff, and use one travel plan for the checklist, bank priority and inventory budgeting.
 - Retain conservative fallback for unresolved routes and quantities; no hidden API, automatic withdrawal or pathfinder duplication. Independent bank-origin routes remain estimates, not a globally optimized itinerary.
