@@ -29,6 +29,20 @@ public class Integration39Test
         assertTrue(NavigationBridge.matchesTarget(patch,List.of(patch)));
         assertFalse(NavigationBridge.matchesTarget(patch,List.of(patch,from)));
     }
+    @Test public void teleportInvalidatesPendingRouteFromOldOrigin()
+    {
+        List<PluginMessage> sent=new ArrayList<>();
+        NavigationBridge bridge=new NavigationBridge(sent::add);bridge.enabled(true);
+        WorldPoint start=new WorldPoint(3100,3200,0),als=new WorldPoint(2644,3495,0),patch=new WorldPoint(2661,3523,0);
+        bridge.request(start,patch,true);
+        Object oldId=sent.get(0).getData().get("id");
+        bridge.request(als,patch,true);
+        PluginMessage latest=sent.stream().filter(e->"query".equals(e.getName())).reduce((a,b)->b).get();
+        assertEquals(als,latest.getData().get("start"));
+        assertFalse(bridge.message(new PluginMessage("shortestpath","result",Map.of("id",oldId,"reached",true))));
+        assertTrue(bridge.message(new PluginMessage("shortestpath","result",Map.of("id",latest.getData().get("id"),"reached",true))));
+        assertTrue(sent.stream().anyMatch(e->"path".equals(e.getName())&&als.equals(e.getData().get("start"))));
+    }
     @Test public void modernClearChecksCurrentOwnership()
     {
         List<PluginMessage> sent=new ArrayList<>();

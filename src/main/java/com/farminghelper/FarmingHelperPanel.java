@@ -40,7 +40,7 @@ final class FarmingHelperPanel extends PluginPanel
     private GuideView latestGuide;
     private long guideSession=Long.MIN_VALUE;
     private boolean requiredOpen=false,completedOpen=false,lastPreparing=false,teleportsOpen=false;
-    private JButton requirementsHeader,bankShortcut;
+    private JButton requirementsHeader,bankShortcut,runDetailsHelp;
     private boolean guideRendered;
     private boolean settingsFromRun=false,patchByLocation=true,showLocked=false,manualByLocation=false;
     private String patchSearch="",individualSearch="";
@@ -218,23 +218,30 @@ final class FarmingHelperPanel extends PluginPanel
 
     private void heading(String value){heading(value,null);}
 
-    private void infoRow(JComponent label,String help)
+    private JButton infoRow(JComponent label,String help)
     {
-        if(help==null){addRow(label);return;}
+        if(help==null){addRow(label);return null;}
         JPanel row=transparent(new BorderLayout(2,0));
         String topic=label instanceof JLabel?((JLabel)label).getText():((JTextArea)label).getText();
-        row.add(label,BorderLayout.CENTER);row.add(infoButton(topic,help),BorderLayout.EAST);addRow(row);
+        JButton info=infoButton(topic,help);
+        row.add(label,BorderLayout.CENTER);row.add(info,BorderLayout.EAST);addRow(row);
+        return info;
     }
 
     /** Same icon treatment as the rest of the sidebar. Click or hover for help. */
     static JButton infoButton(String topic, String help)
     {
         JButton button = FarmingIcons.button(INFO, "Help for " + topic, FarmingTheme.MUTED);
+        updateHelp(button,help);
+        button.addActionListener(e -> showHelp(button,button.getAccessibleContext().getAccessibleDescription()));
+        return button;
+    }
+
+    private static void updateHelp(JButton button,String help)
+    {
         String html = "<html><div style='width:180px'>" + FarmingTheme.escape(help).replace("\n", "<br>") + "</div></html>";
         button.setToolTipText(html);
         button.getAccessibleContext().setAccessibleDescription(help);
-        button.addActionListener(e -> showHelp(button,help));
-        return button;
     }
 
     private static void showHelp(JButton button,String help)
@@ -260,10 +267,10 @@ final class FarmingHelperPanel extends PluginPanel
         popup.show(button,x-origin.x,y-origin.y);
     }
 
-    private void helpRow(String value,Color color,String help)
+    private JButton helpRow(String value,Color color,String help)
     {
         JTextArea label=text(value,color);label.setFont(FarmingTheme.font(Font.PLAIN,11));
-        infoRow(label,help);
+        return infoRow(label,help);
     }
 
     private void heading(String value,String help)
@@ -721,7 +728,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || !a.notes.equals(b.notes) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || !a.supplyNote.equals(b.supplyNote) || (a.notes.initial!=b.notes.initial || !a.notes.storageWarning.equals(b.notes.storageWarning) || !a.notes.preparationHelp.equals(b.notes.preparationHelp) || a.notes.details.isEmpty()!=b.notes.details.isEmpty()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)
         {
             GuideView.ItemRow old=a.items.get(i), next=b.items.get(i);
@@ -732,6 +739,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
     private void refreshRows(GuideView before, GuideView view)
     {
+        if(runDetailsHelp!=null&&!before.notes.details.equals(view.notes.details))updateHelp(runDetailsHelp,view.notes.details);
         if (requirementsHeader != null)
         {
             String title=requirementsTitle(view);
@@ -902,7 +910,7 @@ final class FarmingHelperPanel extends PluginPanel
             if(!isPreparing&&!plugin.diseaseInterruptActive())button("Resupply…",plugin::resupply);
         }
         if(!view.supplyNote.isEmpty()&&!plugin.diseaseInterruptActive())caption(view.supplyNote);
-        if(!view.notes.details.isEmpty())helpRow("Run details",FarmingTheme.MUTED,view.notes.details);
+        runDetailsHelp=view.notes.details.isEmpty()?null:helpRow("Run details",FarmingTheme.MUTED,view.notes.details);
         if(view.stops.stream().anyMatch(stop->!stop.done&&!stop.active))
         {
             heading("Upcoming patches");

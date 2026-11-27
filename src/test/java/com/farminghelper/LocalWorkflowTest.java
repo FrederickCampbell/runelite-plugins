@@ -100,5 +100,6 @@ public class LocalWorkflowTest
         assertEquals(melon,HarvestSpace.best(bag,Map.of(),"Falador",defs::get));
         assertEquals(-1,HarvestSpace.best(bag,Map.of(melon,1),"Falador",defs::get));
         assertEquals(-1,HarvestSpace.best(Map.of(melon,1),Map.of(),"Catherby",defs::get));
+        assertEquals(melon,HarvestSpace.best(Map.of(melon,1,melon+1,8),Map.of(),"Catherby",defs::get));
     }
 }

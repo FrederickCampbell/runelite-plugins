@@ -35,7 +35,10 @@ final class NavigationBridge
     void request(WorldPoint from,WorldPoint to,boolean verify)
     {
         if(!enabled)return;
-        if(Objects.equals(requested,to)&&probe==verify)return;
+        // In-flight queries from the pre-teleport origin must not supply hints
+        // or an approach for the post-teleport scene.
+        boolean jumped=from!=null&&start!=null&&(from.getPlane()!=start.getPlane()||from.distanceTo2D(start)>12);
+        if(Objects.equals(requested,to)&&probe==verify&&!(queryId!=null&&jumped))return;
         releaseDisplayed();
         requested=from==null?null:to;displayed=null;owned=false;start=from;probe=verify;ticks=0;status="";
         queryId=null;targetId=null;refreshPending=false;hints=Collections.emptyList();

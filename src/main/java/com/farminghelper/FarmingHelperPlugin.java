@@ -1009,7 +1009,8 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(run.isEmpty()||!guideRequested)return;
         refreshRunPreferences();
-        if(hopping)return;
+        // A loading scene is not evidence that the active itinerary is empty.
+        if(hopping||client.getGameState()==GameState.LOADING)return;
         String title=runLabel;
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         LocationContext location=LocationContext.capture(client);
@@ -1322,7 +1323,7 @@ public class FarmingHelperPlugin extends Plugin
         {
             Crop c=seeds.get(p);PatchType type=p.getPatchType();
             if(c!=null) required.merge(c.getItemId(),c.getQuantity(),Integer::sum);
-            if(c!=null && type.usesCompost()) compostCount++;
+            if(CropCare.usesCompost(c)) compostCount++;
             if((c!=null||clearOnly.contains(p))&&type.isTree()&&type!=PatchType.CRYSTAL_TREE&&type!=PatchType.CALQUAT)
             {
                 var o=observations.get(p);
@@ -1457,7 +1458,7 @@ public class FarmingHelperPlugin extends Plugin
             boolean keep=preserveReplacement(current,o);
             int stepCompost=CompostChoice.localItem(compostId,bag,storedUltra);
             int compostTier=0;
-            if(activeLive&&type.usesCompost()&&!activeClearOnly&&o.state==CropState.EMPTY)
+            if(activeLive&&CropCare.usesCompost(activeCrop)&&!activeClearOnly&&o.state==CropState.EMPTY)
             {
                 int liveTier=highlight==null?-1:highlight.liveCompostTier(current);
                 compostTier=liveTier>=0?liveTier:reader.compostTier(type.name(),current.getLocation(),current.getName());
@@ -1467,7 +1468,7 @@ public class FarmingHelperPlugin extends Plugin
             if(action!=StepEngine.Action.WATER||preparing())clearWaterOffer();
             else if(waterOfferPatch!=current)
             {waterOfferPatch=current;waterOfferTick=client.getTickCount();waterOfferOrigin=location.actual;}
-            if(activeLive&&type.usesCompost()&&!activeClearOnly&&(action==StepEngine.Action.COMPOST||action==StepEngine.Action.PLANT))
+            if(activeLive&&CropCare.usesCompost(activeCrop)&&!activeClearOnly&&(action==StepEngine.Action.COMPOST||action==StepEngine.Action.PLANT))
                 compostMissing=compostTier==0;
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
@@ -1527,9 +1528,11 @@ public class FarmingHelperPlugin extends Plugin
                 (action==StepEngine.Action.HARVEST||leprechaunWithdrawal!=null)&&type!=PatchType.HESPORI&&
                 type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)
             {
-                int free=Math.max(0,28-estimatedOccupied);
+                int free=Math.max(0,28-actualOccupied);
                 boolean localBin=ready.stream().anyMatch(p->p.getPatchType()==PatchType.COMPOST_BIN&&RunOrder.site(p).equals(RunOrder.site(current)));
-                if(free<=2)
+                var produce=QuestFarmingStateReader.livingProduce(type.name(),o);
+                boolean existingStack=produce!=null&&bag.getOrDefault(produce.getItemID(),0)>0&&stackable(produce.getItemID());
+                if(free==0&&((action==StepEngine.Action.HARVEST&&!existingStack)||leprechaunWithdrawal!=null&&leprechaunWithdrawal.quantity==0))
                 {
                     Map<Integer,Integer> reserved=required;
                     if(localBin)
@@ -1728,7 +1731,7 @@ public class FarmingHelperPlugin extends Plugin
             if(replacement)
             {
                 primary=LeprechaunWithdrawal.append(primary,LeprechaunWithdrawal.resolve(client,StepEngine.Action.PLANT,type,compost,barbarian,bag,carried,wateringCan,free,this::observedItemName),free);
-                if(CompostChoice.isOrdinary(compost)&&type.usesCompost()&&!(other==patch&&compostAcknowledged)&&
+                if(CompostChoice.isOrdinary(compost)&&CropCare.usesCompost(crop)&&!(other==patch&&compostAcknowledged)&&
                     (o.state==CropState.EMPTY||o.state==CropState.DEAD||o.state==CropState.STUMP||
                      o.state==CropState.HARVESTABLE||o.state==CropState.UNCHECKED||CropReplacement.mature(type,o)))
                 {
@@ -1768,7 +1771,7 @@ public class FarmingHelperPlugin extends Plugin
         if(o.state==CropState.EMPTY)
         {
             if(activeLive&&reader.hasWeeds(type.name(),o.rawValue))return StepEngine.Action.RAKE;
-            if(activeCrop!=null&&activeLive&&compostId>=0&&type.usesCompost()&&!activeClearOnly&&
+            if(activeLive&&compostId>=0&&CropCare.usesCompost(activeCrop)&&!activeClearOnly&&
                 !compostAcknowledged&&compostTier<CompostChoice.minimumTier(compostId))return StepEngine.Action.COMPOST;
             if(activeCrop!=null&&type.isTree()&&!replacementCarried)return StepEngine.Action.NEED_REPLACEMENT;
         }

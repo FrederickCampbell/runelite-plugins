@@ -36,6 +36,10 @@ final class CropCare
             ? name.charAt(name.length() - 2) - '0' : 0;
     }
 
+    /** Poison ivy is disease immune and compost does not improve its yield. */
+    static boolean usesCompost(Crop crop)
+    {return crop!=null&&crop.getPatchType().usesCompost()&&crop.getItemId()!=net.runelite.api.gameval.ItemID.POISONIVY_BUSH_SEED;}
+
     static boolean waterNeeded(PatchType type,Observation o,boolean enabled)
     {return enabled&&type.canBeWatered()&&o!=null&&o.localGuidance()&&o.state==CropState.GROWING&&dryStage(type,o.rawValue);}
     static boolean watered(PatchType type,Observation o)

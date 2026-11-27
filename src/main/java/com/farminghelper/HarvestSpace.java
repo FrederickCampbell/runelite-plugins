@@ -44,7 +44,7 @@ final class HarvestSpace
         for(var e:bag.entrySet())
         {
             int id=e.getKey(),count=e.getValue();
-            if(count<2||reserved.getOrDefault(id,0)>0)continue;
+            if(count<=0||reserved.getOrDefault(id,0)>0)continue;
             ItemComposition item=definitions.apply(id);
             if(item==null||item.getNote()!=-1||item.getLinkedNoteId()<=0||item.isStackable())continue;
             String name=item.getName();

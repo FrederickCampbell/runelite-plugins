@@ -8,6 +8,13 @@ import static org.junit.Assert.*;
 public class CropCareTest
 {
     private static Observation observation(CropState state,Source source,int raw){return new Observation(state,source,1,null,"",raw);}
+    @Test public void poisonIvyAloneDoesNotRequestCompost()
+    {
+        assertFalse(CropCare.usesCompost(CropCatalog.findByName(PatchType.BUSH,"Poison ivy")));
+        assertTrue(CropCare.usesCompost(CropCatalog.findByName(PatchType.BUSH,"Whiteberry")));
+        assertTrue(CropCare.usesCompost(CropCatalog.findByName(PatchType.CRYSTAL_TREE,"Crystal sapling")));
+        assertFalse(CropCare.usesCompost(null));
+    }
     @Test public void waterOnlyDryLiveSupportedCrops()
     {
         assertTrue(CropCare.waterNeeded(PatchType.FLOWER,observation(CropState.GROWING,Source.LIVE,37),true));

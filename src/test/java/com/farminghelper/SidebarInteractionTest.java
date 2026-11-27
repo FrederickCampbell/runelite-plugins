@@ -58,6 +58,21 @@ public class SidebarInteractionTest
             List.of(new GuideView.Stop(CATHERBY,"Harvest",!preparing,false)),preparing?null:CATHERBY,
             preparing?"Collect supplies.":"","",false,false,false,GuideView.Stats.UNKNOWN,new GuideView.Notes(preparing,"","",""));
     }
+    @Test public void changingRunDetailsRetainsCurrentPatchControls() throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            FarmingHelperPanel panel=new FarmingHelperPanel(new Character());
+            GuideView base=guide(false,2,0);
+            GuideView first=new GuideView(base.title,base.message,base.items,base.stops,base.active,base.preparation,base.supplyNote,false,false,false,base.stats,new GuideView.Notes(false,"","","Estimated occupied slots: 26 / 28"));
+            GuideView next=new GuideView(base.title,base.message,base.items,base.stops,base.active,base.preparation,base.supplyNote,false,false,false,base.stats,new GuideView.Notes(false,"","","Estimated occupied slots: 27 / 28"));
+            panel.guide(first,3);
+            JButton skip=button(panel,"Skip patch"),details=button(panel,"Help for Run details");
+            panel.guide(next,3);
+            assertSame(skip,button(panel,"Skip patch"));
+            assertSame(details,button(panel,"Help for Run details"));
+            assertEquals(next.notes.details,details.getAccessibleContext().getAccessibleDescription());
+        });
+    }
     @Test public void supplyHeadersPrecedeStepsAndFoldOnceWhenLeavingPreparation() throws Exception
     {
         SwingUtilities.invokeAndWait(()->{
