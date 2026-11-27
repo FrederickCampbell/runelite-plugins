@@ -112,6 +112,9 @@ public class FarmingHelperPlugin extends Plugin
     private Map<FarmRunPatch,Crop> allocated=Map.of();
     private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
     private List<?> shelfInputs=List.of();
+    private final BankRoutePlan bankRoutes=new BankRoutePlan();
+    private List<FarmRunPatch> bankItinerary=List.of();
+    private Map<Integer,Set<String>> bankFallback=Map.of();
     private Set<Integer> shelfItems=Set.of(), shelfCandidates=Set.of(), bankPlaceholders=Set.of();
     private String stockProfile;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
@@ -248,6 +251,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         run = Collections.emptySet();
         if(runBank!=null)runBank.close();
+        bankRoutes.reset();bankItinerary=List.of();bankFallback=Map.of();
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         phase=Preparation.Phase.UNCHECKED;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationAtStorage=false;preparationOrigin=null;
@@ -445,7 +449,10 @@ public class FarmingHelperPlugin extends Plugin
     {
         if(!"shortestpath".equals(event.getNamespace())||
             !("result".equals(event.getName())||"currentTarget".equals(event.getName())))return;
-        onClient(()->{if(navigation.message(event))highlight.transportChanged();});
+        onClient(()->{
+            if("result".equals(event.getName())&&event.getData()!=null&&bankRoutes.message(event.getData()))return;
+            if(navigation.message(event))highlight.transportChanged();
+        });
     }
 
     @Subscribe public void onProfileChanged(ProfileChanged event){onClient(this::reset);}
@@ -562,12 +569,18 @@ public class FarmingHelperPlugin extends Plugin
         {
             bank.sampled=false;
             if(runBank!=null)runBank.bankClosed();
+            bankRoutes.reset();
         }
         if(event.getGroupId()==InterfaceID.SEED_VAULT)vault.sampled=false;
     }
     @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
     {
         if(vaultViews!=null)vaultViews.nativeMenu(event.getParam1());
+        if(bankRoutes.started()&&runBank!=null&&runBank.bankOpen())
+        {
+            String option=event.getMenuOption().toLowerCase(Locale.ROOT);
+            if(option.startsWith("withdraw")||option.startsWith("deposit"))bankRoutes.freeze();
+        }
         if(client.getGameState()!=GameState.LOGGED_IN||itemManager==null||event.isConsumed())return;
         Map<Integer,Integer> bag=stock().bag;
         if(SeedBoxStock.boxId(bag)<0||stockProfile==null)return;
@@ -789,11 +802,18 @@ public class FarmingHelperPlugin extends Plugin
         if(runBank==null)return "The farming bank view is unavailable.";
         boolean enabled=flag("activeRunBank",true);
         if(!enabled||!guideRequested||run.isEmpty()||!runBank.bankOpen())
-        {runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
-        Map<Integer,Integer> owned=stock().shelf;
-        Set<Integer> eligible=bankRunItems(owned);
-        if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase());
-        runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase());return "";
+        {bankRoutes.reset();runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
+        PhysicalStock supplies=stock();
+        Set<Integer> eligible=bankRunItems(supplies.shelf);
+        boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"));
+        if(bankAware&&bank.sampled&&!bankRoutes.started())
+            bankRoutes.begin(LocationContext.capture(client).pathStart(),bankItinerary);
+        if(bankAware&&bankRoutes.started())bankRoutes.tick(navigation);
+        List<Integer> priority=bankAware&&bankRoutes.started()
+            ?bankRoutes.priority(teleports(supplies.travel.keySet()),supplies.travel,supplies.carried,bankFallback,manual)
+            :List.copyOf(bankFallback.keySet());
+        if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase(),priority);
+        runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase(),priority);return "";
     }
     void showActiveRunBank(java.util.function.Consumer<String> feedback)
     {
@@ -917,6 +937,7 @@ public class FarmingHelperPlugin extends Plugin
             if (!items.equals(latest.items))
             {
                 quantities = null;
+                if(this==bank&&bankRoutes.started())bankRoutes.freeze();
                 items = latest.items;
                 save(key, StockSnapshot.encode(items));
             }
@@ -1294,6 +1315,7 @@ public class FarmingHelperPlugin extends Plugin
                 localDistance(current,location.actual,observations)<=2);
             RunOrder.preferLocal(ready,visible,current,currentLive,p->localDistance(p,location.actual,observations));
         }
+        if(!bankItinerary.equals(ready))bankItinerary=List.copyOf(ready);
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current)
         {
@@ -1488,6 +1510,7 @@ public class FarmingHelperPlugin extends Plugin
             if(!row.satisfied()&&row.bank>0)missingTravel.add(id);
         });
         missingTeleports=Set.copyOf(missingTravel);
+        bankFallback=teleports;
         List<GuideView.Stop> stops=new ArrayList<>();
         GuideView.Stats summary=runProgress.stats();
         String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain.":"Run finished.";

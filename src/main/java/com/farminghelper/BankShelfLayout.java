@@ -47,25 +47,27 @@ final class BankShelfLayout
     {for(int i=0;i<ordered.length;i++)if(n.equals(ordered[i])||n.startsWith(ordered[i]+" ")||n.startsWith(ordered[i]+"("))return i;return ordered.length;}
     private static void pad(List<Integer> out){while(out.size()%WIDTH!=0)out.add(-1);}
     private static void block(List<Integer> out,List<Integer> ids)
-    {if(ids.isEmpty())return;pad(out);out.addAll(ids);pad(out);}
+    {out.addAll(ids);}
     private static List<Integer> take(Set<Integer> left,java.util.function.IntPredicate condition,Comparator<Integer> comparator)
     {List<Integer> result=new ArrayList<>();for(int id:left)if(condition.test(id))result.add(id);result.sort(comparator);left.removeAll(result);return result;}
     private static void familyRows(List<Integer> out,List<Integer> items,IntFunction<String> names)
     {
         Map<String,List<Integer>> families=new TreeMap<>();for(int id:items)families.computeIfAbsent(family(name(names,id)),k->new ArrayList<>()).add(id);
-        List<Integer> singletons=new ArrayList<>();
         for(List<Integer> group:families.values())
         {
             group.sort(Comparator.comparingInt((Integer id)->charge(name(names,id))).reversed().thenComparingInt(Integer::intValue));
-            if(group.size()==1&&charge(name(names,group.get(0)))==0)singletons.add(group.get(0));else block(out,group);
+            out.addAll(group);
         }
-        block(out,singletons);
     }
     static int[] build(Set<Integer> owned,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport)
+    {return build(owned,names,equipment,transport,List.of());}
+    static int[] build(Set<Integer> owned,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport,List<Integer> priority)
     {
         Set<Integer> left=new HashSet<>(owned);
         Comparator<Integer> byName=Comparator.comparing((Integer id)->name(names,id)).thenComparingInt(Integer::intValue);
         List<Integer> out=new ArrayList<>();
+        for(int id:priority)if(left.remove(id))out.add(id);
+        pad(out);
         // Two mannequins per row block. Extra recolors form further silhouettes,
         // never repeated IDs, and no synthetic unowned equipment.
         List<Integer> graceful=take(left,id->outfit(baseName(names,id),"graceful"),byName);
@@ -87,7 +89,6 @@ final class BankShelfLayout
             if(Arrays.stream(cells).anyMatch(id->id>=0)){for(int id:cells)out.add(id);}
         }
         block(out,overflow);
-        if(!out.isEmpty()&&!left.isEmpty()){pad(out);for(int i=0;i<WIDTH;i++)out.add(-1);}
         block(out,take(left,id->cape(name(names,id)),byName));
         block(out,take(left,id->CuratedBank.divingEquipment(name(names,id)),Comparator.comparingInt((Integer id)->slot(name(names,id),equipment.applyAsInt(id))).thenComparing(byName)));
         block(out,take(left,id->diary(name(names,id)),byName));
@@ -101,7 +102,6 @@ final class BankShelfLayout
         List<Integer> spell=take(left,id->spellGear(name(names,id)),Comparator.comparingInt((Integer id)->name(names,id).contains("rune pouch")?0:name(names,id).startsWith("tome of")?2:1).thenComparing(byName));
         if(!runes.isEmpty()||!spell.isEmpty())
         {
-            if(!out.isEmpty()){pad(out);for(int i=0;i<WIDTH;i++)out.add(-1);}
             pad(out);int highest=runes.stream().mapToInt(id->Arrays.asList(RUNES).indexOf(name(names,id).replaceFirst(" rune$",""))).max().orElse(-1);
             int rows=Math.max((highest+4)/4,(spell.size()+3)/4);
             int[] cells=new int[rows*WIDTH];Arrays.fill(cells,-1);

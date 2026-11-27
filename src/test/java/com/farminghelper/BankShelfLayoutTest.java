@@ -10,10 +10,19 @@ public class BankShelfLayoutTest
         Map<Integer,String> names=Map.ofEntries(Map.entry(11850,"Graceful hood"),Map.entry(11860,"Graceful boots"),Map.entry(13646,"Farmer's strawhat"),Map.entry(4251,"Ectophial"),Map.entry(11105,"Skills necklace(4)"),Map.entry(11968,"Skills necklace(6)"),Map.entry(556,"Air rune"),Map.entry(555,"Water rune"),Map.entry(557,"Earth rune"),Map.entry(554,"Fire rune"),Map.entry(563,"Law rune"),Map.entry(952,"Spade"),Map.entry(21483,"Ultracompost"),Map.entry(5295,"Ranarr seed"));
         int[] layout=BankShelfLayout.build(names.keySet(),names::get,id->-1,id->id==4251?BankShelfLayout.PERMANENT:id==11105||id==11968?BankShelfLayout.CHARGED:-1);
         assertEquals(1,position(layout,11850));assertEquals(33,position(layout,11860));assertEquals(5,position(layout,13646));
-        assertEquals(0,position(layout,11968)%8);assertEquals(position(layout,11968)+1,position(layout,11105));
+        assertEquals(position(layout,11968)+1,position(layout,11105));
         int air=position(layout,556);assertEquals(0,air%8);assertEquals(air+1,position(layout,555));assertEquals(air+2,position(layout,557));assertEquals(air+3,position(layout,554));assertEquals(air+8,position(layout,563));
         assertTrue(position(layout,952)<position(layout,21483));assertTrue(position(layout,21483)<position(layout,5295));
         assertEquals(names.size(),Arrays.stream(layout).filter(id->id>=0).count());
+    }
+    @Test public void recommendationsLeadAndOtherFamiliesAreCompact()
+    {
+        Map<Integer,String> names=Map.of(11978,"Amulet of glory(6)",11976,"Amulet of glory(5)",11105,"Skills necklace(4)",952,"Spade",1755,"Chisel");
+        int[] layout=BankShelfLayout.build(names.keySet(),names::get,id->-1,id->id==952||id==1755?-1:BankShelfLayout.CHARGED,List.of(11105,999,11105));
+        assertEquals(11105,layout[0]);assertEquals(-1,position(layout,999));
+        assertEquals(names.size(),Arrays.stream(layout).filter(id->id>=0).distinct().count());
+        assertEquals(position(layout,11978)+1,position(layout,11976));
+        assertEquals(5,BankShelfLayout.build(names.keySet(),names::get,id->-1,id->id==952||id==1755?-1:BankShelfLayout.CHARGED).length);
     }
     @Test public void bankBagAndWornItemsShareOneStableShelf()
     {

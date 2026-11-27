@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.11.3 — route-aware bank preparation
+- Query Shortest Path sequentially from an observed open bank for each distinct actionable destination; prefer matched owned transportation at the top of the native Bank Tags layout.
+- Keep static recommendations for unresolved routes; never infer item requirements from ambiguous object/spell edges or override Shortest Path settings.
+- Freeze bank promotion after withdrawals or deposits; explicit Show farming bank can refresh it. Compact ordinary categories while preserving equipment silhouettes and the rune matrix.
+- Bank-origin estimates are advisory, not a hypothetical multi-leg inventory optimizer. Live navigation and native bank interactions are unchanged.
+
 ## v1.11.2 — adaptive run management
 - Compact verified Seed Vault sections into one scrollable grid and retain later-wave materials.
 - Add optional seed box packing and harvest-container preferences; unknown contents are never credited as free capacity.

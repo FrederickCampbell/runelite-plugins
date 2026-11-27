@@ -25,6 +25,7 @@ final class ActiveRunBank
     private Set<Integer> ids=Collections.emptySet(), admitted=Collections.emptySet();
     private int[] lastLayout=new int[0];
     private Set<Integer> layoutEligible=Set.of(),layoutOwned=Set.of();
+    private List<Integer> layoutPriority=List.of();
     private boolean registered,opened,offered,birdPhase,stagePending;
     ActiveRunBank(Client client,PluginManager plugins,ItemManager items)
     {this.client=client;this.plugins=plugins;this.items=items;}
@@ -71,6 +72,8 @@ final class ActiveRunBank
         api.openTag(TAG,new Layout(TAG,layout),BankTagsService.OPTION_ITEMS_NOT_IN_LAYOUT_AT_BOTTOM);
     }
     void tick(Set<Integer> next,Set<Integer> owned,boolean enabled,boolean bird)
+    {tick(next,owned,enabled,bird,List.of());}
+    void tick(Set<Integer> next,Set<Integer> owned,boolean enabled,boolean bird,List<Integer> priority)
     {
         if(!bankOpen()){release();return;}
         BankTagsPlugin api=service();
@@ -82,28 +85,31 @@ final class ActiveRunBank
         if(!offered&&ids.isEmpty())
         {if(TAG.equals(api.getActiveTag()))api.closeBankTag();return;}
         boolean changed=!layoutEligible.equals(ids)||!layoutOwned.equals(owned);
-        if(offered&&!stagePending&&!changed)return;
-        int[] layout=reconcile(owned);
+        boolean reprioritize=!layoutPriority.equals(priority);
+        if(offered&&!stagePending&&!changed&&!reprioritize)return;
+        if(reprioritize)lastLayout=new int[0];
+        int[] layout=reconcile(owned,priority);
         if(!offered||stagePending||!Arrays.equals(layout,lastLayout)){offered=true;open(api,layout);}
         else if(changed&&search!=null)search.layoutBank();
         stagePending=false;
     }
-    String show(Set<Integer> next,Set<Integer> owned,boolean bird)
+    String show(Set<Integer> next,Set<Integer> owned,boolean bird,List<Integer> priority)
     {
         BankTagsPlugin api=service();
         if(api==null)return "Enable Bank Tags to show the farming layout.";
         if(!bankOpen())return "Open a bank, then choose Show farming bank.";
         updateEligible(next,owned);
         if(ids.isEmpty() && (!opened || birdPhase!=bird || lastLayout.length==0))return "No matching farming items or placeholders in this bank view.";
-        if(!opened||birdPhase!=bird)lastLayout=new int[0];birdPhase=bird;
+        if(!opened||birdPhase!=bird||!layoutPriority.equals(priority))lastLayout=new int[0];birdPhase=bird;
         register();opened=true;offered=true;
-        open(api,reconcile(owned));stagePending=false;
+        open(api,reconcile(owned,priority));stagePending=false;
         return "";
     }
-    private int[] reconcile(Set<Integer> owned)
+    private int[] reconcile(Set<Integer> owned,List<Integer> priority)
     {
-        int[] layout=BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory);
-        layoutEligible=ids;layoutOwned=Set.copyOf(owned);return layout;
+        int[] layout=lastLayout.length==0?BankShelfLayout.build(ids,this::name,this::slot,CuratedBank::transportCategory,priority)
+            :BankShelfLayout.reconcile(lastLayout,ids,owned,this::name,this::slot,CuratedBank::transportCategory);
+        layoutEligible=ids;layoutOwned=Set.copyOf(owned);layoutPriority=List.copyOf(priority);return layout;
     }
     private void updateEligible(Set<Integer> next,Set<Integer> owned)
     {
@@ -133,6 +139,6 @@ final class ActiveRunBank
         if(registered&&tags!=null)tags.unregisterTag(TAG);
         // Never save or delete another plugin's configuration. Registration is
         // in-memory; no actual TagTab or permanent item tag is created.
-        registered=false;opened=false;offered=false;stagePending=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];layoutEligible=Set.of();layoutOwned=Set.of();tags=null;search=null;
+        registered=false;opened=false;offered=false;stagePending=false;ids=Collections.emptySet();admitted=Collections.emptySet();lastLayout=new int[0];layoutEligible=Set.of();layoutOwned=Set.of();layoutPriority=List.of();tags=null;search=null;
     }
 }

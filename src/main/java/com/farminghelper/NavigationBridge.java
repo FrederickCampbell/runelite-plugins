@@ -23,6 +23,13 @@ final class NavigationBridge
     NavigationBridge(Consumer<PluginMessage> send){this.send=send;}
     void enabled(boolean value){if(enabled!=value){reset(false);modern=false;enabled=value;}}
     boolean enabled(){return enabled;}
+    boolean bankQueryReady(){return enabled&&queryId==null&&!refreshPending;}
+    String bankQuery(WorldPoint from,WorldPoint to)
+    {
+        if(!bankQueryReady()||from==null||to==null)return null;
+        String id="farming-helper-bank-"+SEQUENCE.incrementAndGet();
+        post("query",Map.of("id",id,"start",from,"target",to));return id;
+    }
     String status(){return status;}
     void begin(){reset(true);}
     void stop(){reset(true);}
