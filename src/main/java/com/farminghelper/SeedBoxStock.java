@@ -181,6 +181,27 @@ final class SeedBoxStock
         if(!checkValid||next.isEmpty()||tick-checkTick>6)return false;
         replace(next,true,false);cancel();return true;
     }
+    /** Hypothetical packing plan, never a physical stock observation. Only
+     * verified contents establish how many distinct types can still fit. */
+    static Map<Integer,Integer> packing(Map<Integer,Integer> required,Map<Integer,Integer> bag,
+        Map<Integer,Integer> storage,Map<Integer,Integer> confirmed,boolean complete,IntPredicate eligible)
+    {
+        if(!complete||confirmed.size()>6)return Map.of();
+        Map<Integer,Integer> result=new LinkedHashMap<>(confirmed);
+        List<Integer> candidates=new ArrayList<>(required.keySet());
+        candidates.sort(Comparator.comparing((Integer id)->!confirmed.containsKey(id))
+            .thenComparing(id->bag.getOrDefault(id,0)==0).thenComparingInt(Integer::intValue));
+        for(int id:candidates)
+        {
+            if(!eligible.test(id)||required.getOrDefault(id,0)<=0)continue;
+            int boxed=confirmed.getOrDefault(id,0),loose=bag.getOrDefault(id,0);
+            int needed=Math.max(0,required.get(id)-boxed-loose);
+            if(storage.getOrDefault(id,0)<needed||loose==0&&needed==0)continue;
+            if(!result.containsKey(id)&&result.size()>=6)continue;
+            result.put(id,PhysicalStock.sum(PhysicalStock.sum(boxed,loose),needed));
+        }
+        return Map.copyOf(result);
+    }
     static boolean direct(Crop target,Map<Integer,Integer> contents)
     {
         if(target==null)return false;

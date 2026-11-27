@@ -99,6 +99,8 @@ public class FarmingHelperPlugin extends Plugin
     }
     private PhysicalStock quantities;
     private final SeedBoxStock seedBox=new SeedBoxStock();
+    private volatile boolean seedBoxOwned;
+    private boolean boxEnabled=true;
     private FarmRunPatch seedBoxPlant;
     private Map<Integer,Integer> seedBoxPlantBag=Map.of();
     private int seedBoxPlantTick,seedBoxPlantRevision;
@@ -287,7 +289,7 @@ public class FarmingHelperPlugin extends Plugin
         accessNotes=Collections.emptyMap();
         invalidateStock();
         stores.forEach(Store::clear);
-        stockProfile=null;seedBox.clear();seedBoxPlant=null;seedBoxSaved="";seedBoxViewTick=-1;
+        stockProfile=null;seedBox.clear();seedBoxOwned=false;seedBoxPlant=null;seedBoxSaved="";seedBoxViewTick=-1;
         seedBoxPlantBag=Map.of();shelfItems=Set.of();shelfCandidates=Set.of();
         clearRun();
     }
@@ -471,6 +473,7 @@ public class FarmingHelperPlugin extends Plugin
         if(!run.isEmpty()&&!Objects.equals(runProfile,config.getRSProfileKey()))reset();
         if(hopping){hopping=false;lastView=null;}
         sampleStorage();
+        stock(); // refresh ownership even with no guide open; cached until inventory changes
         updateSeedBox();
         // Re-evaluate quest, diary, Hunter and Sailing gates even when Farming is unchanged.
         if(lastAccessLevel!=client.getRealSkillLevel(Skill.FARMING)||++accessTicks>=5){accessTicks=0;invalidateTravel();updateAccessNotes();}
@@ -615,6 +618,7 @@ public class FarmingHelperPlugin extends Plugin
     private boolean seedItem(int id)
     {
         if(id<=0||SeedBoxStock.isBox(id))return false;
+        if(id==ItemID.CORAL_ELKHORN_FRAG||id==ItemID.CORAL_PILLAR_FRAG||id==ItemID.CORAL_UMBRAL_FRAG)return true;
         String name=observedItemName(id).toLowerCase(Locale.ROOT);
         return name.endsWith(" seed")||name.endsWith(" seeds")||name.equals("acorn")||name.equals("crystal acorn")||name.equals("seaweed spore")||name.equals("mushroom spore");
     }
@@ -935,16 +939,21 @@ public class FarmingHelperPlugin extends Plugin
     PhysicalStock stock()
     {
         if(config!=null&&client.getGameState()==GameState.LOGGED_IN)loadStock();
-        if(quantities==null)
+        boolean enabled=flag("directorUseSeedBox",true);
+        if(quantities==null||boxEnabled!=enabled)
         {
+            boxEnabled=enabled;
             invalidateTravel();
             Map<Integer,Integer> bag=readItems(client.getItemContainer(InventoryID.INVENTORY));
-            quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank.items,vault.items,seedBox.carried(bag),this::observedItemName,
+            seedBoxOwned=SeedBoxStock.boxId(bag)>0||SeedBoxStock.boxId(bank.items)>0;
+            Map<Integer,Integer> confirmed=seedBox.carried(bag);
+            quantities=new PhysicalStock(bag,readItems(client.getItemContainer(InventoryID.EQUIPMENT)),bank.items,vault.items,enabled?confirmed:Map.of(),this::observedItemName,
                 id->itemManager==null?id:itemManager.canonicalize(id));
         }
         return quantities;
     }
 
+    boolean seedBoxOwned(){return seedBoxOwned;}
     private Map<Integer,List<String>> teleports(Set<Integer> candidates)
     {
         return eligibleTravel.computeIfAbsent(candidates,ids->
@@ -1392,7 +1401,14 @@ public class FarmingHelperPlugin extends Plugin
                 physicalRequired.values().removeIf(n->n<=0);
             }
         }
-        int slots=Preparation.loadedSlots(actualOccupied,bag,load,equipped,supplies.seedBox,this::stackable);
+        int looseSlots=Preparation.loadedSlots(actualOccupied,bag,load,equipped,supplies.seedBox,this::stackable);
+        Map<Integer,Integer> packing=boxEnabled&&SeedBoxStock.boxId(bag)>0&&seedBox.complete()&&!seedBox.pending()&&seedBoxPlant==null
+            ?SeedBoxStock.packing(physicalRequired,bag,storage,supplies.seedBox,true,
+                id->seedItem(id)&&stackable(id)&&!prepSeeds.containsKey(id)&&id!=ItemID.HESPORI_SEED)
+            :Map.of();
+        int packed=Preparation.packedSlots(actualOccupied,bag,load,equipped,supplies.seedBox,packing,this::stackable);
+        boolean requiresPacking=packed<looseSlots;
+        int slots=requiresPacking?packed:looseSlots;
         int reserve=Preparation.workingSlots(wave);
         boolean fits=slots<=28-reserve;
         if(probeBoundary)
@@ -1586,7 +1602,7 @@ public class FarmingHelperPlugin extends Plugin
         boolean rowboat=loggedIn && client.getVarbitValue(SpecialRoutes.ANGLER_ROWBOAT_VARBIT)==1;
         WorldPoint localApproach=current!=null && activeLive && highlight!=null?highlight.approach(current):null;
         String supplyNote=TreePreparation.instruction(rawSeeds,seedlings,watered);
-        if(SeedBoxStock.boxId(bag)>0)
+        if(boxEnabled&&SeedBoxStock.boxId(bag)>0)
         {
             if(!seedBox.complete())
                 supplyNote+=(supplyNote.isEmpty()?"":"\n")+(seedBox.cachedTotal()>0&&!seedBox.known()?
@@ -1594,6 +1610,15 @@ public class FarmingHelperPlugin extends Plugin
             else if(!supplies.seedBox.isEmpty())
                 supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Seed box counts included. Withdraw tree seeds and birdhouse bait manually when needed.";
         }
+        if(requiresPacking)
+        {
+            StringJoiner packedNames=new StringJoiner(", ");
+            for(var e:packing.entrySet())if(e.getValue()>supplies.seedBox.getOrDefault(e.getKey(),0))packedNames.add(observedItemName(e.getKey()));
+            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Fill seed box manually with "+packedNames+" (projected "+(looseSlots-slots)+" fewer slots).";
+        }
+        else if(boxEnabled&&SeedBoxStock.boxId(bag)<0&&SeedBoxStock.boxId(bank.items)>0&&
+            physicalRequired.keySet().stream().filter(id->seedItem(id)&&stackable(id)&&!prepSeeds.containsKey(id)&&id!=ItemID.HESPORI_SEED).limit(2).count()==2)
+            supplyNote+=(supplyNote.isEmpty()?"":"\n")+"If banking, bring the seed box and check its contents to pack eligible seeds.";
         if(yieldTool&&storedMagic&&carried.getOrDefault(magicSecateurs,0)==0)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Magic secateurs stored with tool leprechauns; carry or equip for the optional harvest bonus.";
         if(rawSeeds+seedlings>0&&wateringCan<=0&&storedCan>0)supplyNote+="\nCollect the stored watering can from a tool leprechaun before watering seedlings.";
@@ -1619,7 +1644,7 @@ public class FarmingHelperPlugin extends Plugin
             if(phase==Preparation.Phase.UNCHECKED)
             {
                 phase=Preparation.Phase.ACTIVE;
-                if(rawSeeds+seedlings>0||Preparation.storedShortage(physicalRequired,carried,paymentStorage)){
+                if(rawSeeds+seedlings>0||requiresPacking||Preparation.storedShortage(physicalRequired,carried,paymentStorage)){
                     beginPreparation(Preparation.Phase.INITIAL);
                 }
             }

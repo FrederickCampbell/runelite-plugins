@@ -117,6 +117,20 @@ final class Preparation
         }
         return (int)Math.min(Integer.MAX_VALUE,count);
     }
+    /** Starting inventory if a manual seed-box packing plan is followed. */
+    static int packedSlots(int occupied,Map<Integer,Integer> bag,Map<Integer,Integer> required,
+        Map<Integer,Integer> equipped,Map<Integer,Integer> confirmed,Map<Integer,Integer> planned,
+        java.util.function.IntPredicate stackable)
+    {
+        if(planned.isEmpty()||planned.equals(confirmed))return loadedSlots(occupied,bag,required,equipped,confirmed,stackable);
+        Map<Integer,Integer> loose=new HashMap<>(bag);
+        int removed=0;
+        for(var entry:planned.entrySet())
+            if(entry.getValue()>confirmed.getOrDefault(entry.getKey(),0)&&stackable.test(entry.getKey())
+                &&loose.getOrDefault(entry.getKey(),0)>0)
+            {loose.remove(entry.getKey());removed++;}
+        return loadedSlots(Math.max(0,occupied-removed),loose,required,equipped,planned,stackable);
+    }
     /** Bounded prefix search. If a single stop cannot fit it remains blocked. */
     static final class Window
     {

@@ -12,6 +12,20 @@ public class SeedBoxStockTest
 {
     private static final int RANARR=ItemID.RANARR_SEED;
     private static final int SNAP=ItemID.SNAPDRAGON_SEED;
+    @Test public void hypotheticalPackingNeverInventsCapacityOrStock()
+    {
+        var required=Map.of(1,8,2,6,3,4,4,1,5,1,6,1,7,1);
+        var carried=Map.of(1,8,2,6,3,4);
+        var storage=Map.of(4,1,5,1,6,1,7,1);
+        var plan=SeedBoxStock.packing(required,carried,storage,Map.of(),true,id->true);
+        assertEquals(6,plan.size());
+        assertFalse(plan.containsKey(7));
+        assertTrue(SeedBoxStock.packing(required,carried,storage,Map.of(),false,id->true).isEmpty());
+        assertFalse(SeedBoxStock.packing(required,carried,Map.of(),Map.of(),true,id->true).containsKey(4));
+        assertEquals(1,Preparation.packedSlots(4,carried,Map.of(1,8,2,6,3,4),Map.of(),Map.of(),plan,id->true));
+        assertEquals(6,SeedBoxStock.packing(Map.of(1,100),Map.of(1,1),Map.of(),
+            Map.of(2,1,3,1,4,1,5,1,6,1,7,1),true,id->true).size());
+    }
     @Test public void orderedNativeContentsAndRemoval()
     {
         SeedBoxStock box=new SeedBoxStock();

@@ -1030,6 +1030,10 @@ final class FarmingHelperPanel extends PluginPanel
         page(GENERAL,"Farming preferences",this::preferences,null,latestGuide!=null);
         heading("Run preparation");
         choice("Start at",Preparation.StartAt.values(),plugin.startAt(),null,v->plugin.save("startAtV1",v.name()));
+        JCheckBox seedBox=check("Use seed box",plugin.flag("directorUseSeedBox",true),on->plugin.save("directorUseSeedBox",Boolean.toString(on)));
+        seedBox.setEnabled(plugin.seedBoxOwned());
+        seedBox.setToolTipText(plugin.seedBoxOwned()?"Pack eligible seeds when it saves inventory space.":"Seed box not observed in inventory or bank.");
+        addRow(seedBox);
         heading("Default crop care");
         choice("Compost type",CompostChoice.values(),plugin.compostChoice(),"Bottomless bucket uses ultracompost if the bucket is unavailable.",
             v->plugin.save("directorCompostChoice",v.name()));
