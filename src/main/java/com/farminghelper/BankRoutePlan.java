@@ -21,6 +21,7 @@ final class BankRoutePlan
         age=budget=0;started=finished=frozen=initialPublished=false;published=List.of();
     }
     void freeze(){frozen=true;}
+    void refresh(){if(started){frozen=false;if(finished)resolved=Map.copyOf(routes);}}
     void closeVisit(){remaining.clear();routes.clear();pending=null;site=null;started=false;finished=false;frozen=false;initialPublished=false;published=List.of();}
     Map<String,List<String>> routes(){return resolved;}
     private void finish(){finished=true;if(!frozen)resolved=Map.copyOf(routes);}
@@ -55,7 +56,7 @@ final class BankRoutePlan
     {
         if(pending==null||!pending.equals(data.get("id")))return false;
         pending=null;
-        if(Boolean.TRUE.equals(data.get("reached")))routes.put(site,descriptions(data.get("transports")));
+        if(Boolean.TRUE.equals(data.get("reached"))&&data.get("transports") instanceof Collection)routes.put(site,descriptions(data.get("transports")));
         if(remaining.isEmpty())finish();
         return true;
     }

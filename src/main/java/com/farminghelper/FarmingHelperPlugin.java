@@ -824,7 +824,7 @@ public class FarmingHelperPlugin extends Plugin
         long id=session.get();
         inRun(()->{
             if(!flag("activeRunBank",true))return;
-            sampleStorage();update();
+            sampleStorage();bankRoutes.refresh();update();
             String message=updateRunBank(true);
             if(!message.isEmpty())SwingUtilities.invokeLater(()->{if(id==session.get()&&guideRequested)feedback.accept(message);});
         });
@@ -1362,6 +1362,10 @@ public class FarmingHelperPlugin extends Plugin
         int hunter=client.getRealSkillLevel(Skill.HUNTER),crafting=client.getRealSkillLevel(Skill.CRAFTING);
         String localSite=loggedIn&&current!=null&&location.actual!=null&&highlight!=null&&localDistance(current,location.actual,observations)<70?RunOrder.site(current):null;
         Map<Integer,List<String>> travelOptions=loggedIn&&config!=null&&itemManager!=null&&!ready.isEmpty()?teleports(supplies.travel.keySet()):Map.of();
+        int pouch=RouteSupplies.pouch(carried,supplies.travel);
+        Map<String,List<String>> bankRouteSnapshot=bankRoutes.routes();
+        Map<Integer,Integer> pouchRunes=!loggedIn||bankRouteSnapshot.isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
+        boolean elite=loggedIn&&client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)==1;
         for(;;)
         {
         final List<FarmRunPatch> wave=ready.subList(0,limit);
@@ -1456,15 +1460,12 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Set<String>> fallbackTravel=RunTeleports.select(travelWave,travelOptions,carried,supplies.travel,
                 (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id)));
         Set<String> travelSites=new LinkedHashSet<>();for(FarmRunPatch patch:travelWave)travelSites.add(RunOrder.site(patch));
-        int pouch=RouteSupplies.pouch(carried,supplies.travel);
-        Map<Integer,Integer> pouchRunes=!loggedIn||bankRoutes.routes().isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
-        boolean elite=loggedIn&&client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)==1;
-        List<?> routeInputs=List.of(travelSites,bankRoutes.routes(),fallbackTravel,supplies,travelOptions,pouch,pouchRunes,elite);
+        List<?> routeInputs=List.of(travelSites,bankRouteSnapshot,fallbackTravel,supplies,travelOptions,pouch,pouchRunes,elite);
         if(!routeInputs.equals(routeSupplyInputs))
         {
             routeSupplyInputs=routeInputs;
-            routeSupplyPlan=RouteSupplies.plan(travelSites,bankRoutes.routes(),fallbackTravel,travelOptions,supplies.travel,carried,equipped,
-                pouch,pouchRunes,elite,this::observedItemName,this::stackable);
+            routeSupplyPlan=RouteSupplies.plan(travelSites,bankRouteSnapshot,fallbackTravel,travelOptions,supplies.travel,carried,equipped,
+                pouch,pouchRunes,!loggedIn||bankRouteSnapshot.isEmpty()?Map.of():RouteSupplies.looseRunes(client,supplies.travel),elite,this::observedItemName,this::stackable);
         }
         Map<Integer,Set<String>> teleports=routeSupplyPlan.sites;
         Map<Integer,Integer> travelCounts=routeSupplyPlan.quantities,load=new LinkedHashMap<>(physicalRequired);

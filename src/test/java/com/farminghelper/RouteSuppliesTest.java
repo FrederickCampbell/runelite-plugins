@@ -8,18 +8,26 @@ public class RouteSuppliesTest
     @Test public void houseThenFairyRingIncludesBankedPouchAndLawRunes()
     {
         var routes=Map.of("A",List.of("Teleport to House",RouteSupplies.FAIRY),"B",List.of("Watchtower Teleport"));
-        var plan=RouteSupplies.plan(Set.of("A","B"),routes,Map.of(),Map.of(),Map.of(7,1,772,1,3,10),Map.of(),Map.of(),7,Map.of(1,10,2,10),false,NAMES::get,id->id<7);
+        var plan=RouteSupplies.plan(Set.of("A","B"),routes,Map.of(),Map.of(),Map.of(7,1,772,1,3,10),Map.of(),Map.of(),7,Map.of(1,10,2,10),Map.of(3,10),false,NAMES::get,id->id<7);
         assertEquals(Map.of(7,1,772,1,3,3),plan.quantities);
         assertEquals(Set.of("A","B"),plan.sites.get(3));
     }
     @Test public void eliteAndEquippedStaffAndCombinationRuneAreHandledConservatively()
     {
-        var plan=RouteSupplies.plan(Set.of("A"),Map.of("A",List.of("Teleport to House",RouteSupplies.FAIRY)),Map.of(),Map.of(),Map.of(3,1,6,1,8,1),Map.of(8,1),Map.of(8,1),-1,Map.of(),true,NAMES::get,id->id<7);
+        var plan=RouteSupplies.plan(Set.of("A"),Map.of("A",List.of("Teleport to House",RouteSupplies.FAIRY)),Map.of(),Map.of(),Map.of(3,1,6,1,8,1),Map.of(8,1),Map.of(8,1),-1,Map.of(),Map.of(3,1,6,1),true,NAMES::get,id->id<7);
         assertEquals(Map.of(3,1,6,1),plan.quantities);
+    }
+    @Test public void combinationRuneCoversTwoElementsOnlyWithinACast()
+    {
+        var route=Map.of("A",List.of("Teleport to House","Teleport to House"));
+        var plan=RouteSupplies.plan(Set.of("A"),route,Map.of(),Map.of(),Map.of(3,2,6,2),Map.of(),Map.of(),-1,Map.of(),Map.of(3,2,6,2),false,NAMES::get,id->true);
+        assertEquals(Map.of(3,2,6,2),plan.quantities);
+        var insufficient=RouteSupplies.plan(Set.of("A"),route,Map.of(10,Set.of("A")),Map.of(),Map.of(3,2,6,1,10,1),Map.of(),Map.of(),-1,Map.of(),Map.of(3,2,6,1),false,NAMES::get,id->true);
+        assertEquals(Map.of(10,1),insufficient.quantities);
     }
     @Test public void unresolvedSpellKeepsFallbackAndWalkingDoesNot()
     {
-        var plan=RouteSupplies.plan(Set.of("A","B"),Map.of("A",List.of("Teleport to House"),"B",List.of()),Map.of(10,Set.of("A"),11,Set.of("B")),Map.of(),Map.of(10,1,11,1),Map.of(),Map.of(),-1,Map.of(),false,id->"tablet",id->true);
+        var plan=RouteSupplies.plan(Set.of("A","B"),Map.of("A",List.of("Teleport to House"),"B",List.of()),Map.of(10,Set.of("A"),11,Set.of("B")),Map.of(),Map.of(10,1,11,1),Map.of(),Map.of(),-1,Map.of(),Map.of(),false,id->"tablet",id->true);
         assertEquals(Map.of(10,1),plan.quantities);
     }
 }

@@ -247,7 +247,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 LICENSE-SHORTEST-PATH
 
-Source attribution: selected transportation data from https://github.com/Skretzo/shortest-path (retrieved November 24, 2026).
+Source attribution: selected transportation data from https://github.com/Skretzo/shortest-path (retrieved November 24, 2026); farming-route-spells.tsv derives unambiguous rune costs from commit 9c83c978c082618ac0a045b0c9fdba253955f75e.
 Upstream license follows verbatim.
 
 BSD 2-Clause License
