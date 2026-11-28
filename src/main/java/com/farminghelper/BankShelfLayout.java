@@ -57,6 +57,29 @@ final class BankShelfLayout
             out.addAll(group);
         }
     }
+    private static int priorityKind(String n,int slot)
+    {
+        if(n.endsWith(" rune"))return 0;
+        if(slot==2||n.startsWith("amulet ")||n.contains("necklace")||n.contains("pendant")||n.equals("xeric's talisman"))return 1;
+        if(slot==12||n.startsWith("ring ")||n.startsWith("slayer ring")||n.startsWith("explorer's ring"))return 2;
+        if(n.contains("book")||n.startsWith("tome of "))return 3;
+        if(slot>=0||n.contains("staff")||n.contains("cape")||diary(n))return 4;
+        if(n.contains("rune pouch"))return 5;
+        if(consumableTeleport(n))return 6;
+        if(jewellery(n))return 7;
+        return 8;
+    }
+    static List<Integer> priorityOrder(Collection<Integer> ids,IntFunction<String> names,IntUnaryOperator equipment)
+    {
+        List<Integer> result=new ArrayList<>(new LinkedHashSet<>(ids));
+        Map<Integer,String> labels=new HashMap<>();
+        Map<Integer,Integer> kinds=new HashMap<>();
+        for(int id:result){String n=name(names,id);labels.put(id,n);kinds.put(id,priorityKind(n,equipment.applyAsInt(id)));}
+        result.sort(Comparator.comparingInt((Integer id)->kinds.get(id))
+            .thenComparingInt(id->kinds.get(id)==0?order(labels.get(id).replaceFirst(" rune$",""),RUNES):0)
+            .thenComparing(id->family(labels.get(id))).thenComparing(Comparator.comparingInt((Integer id)->charge(labels.get(id))).reversed()).thenComparingInt(Integer::intValue));
+        return result;
+    }
     static int[] build(Set<Integer> owned,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport)
     {return build(owned,names,equipment,transport,List.of());}
     static int[] build(Set<Integer> owned,IntFunction<String> names,IntUnaryOperator equipment,IntUnaryOperator transport,List<Integer> priority)

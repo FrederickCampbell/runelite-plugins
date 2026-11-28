@@ -1,7 +1,7 @@
 name: Farming Helper build and regression tests
 on:
   push:
-    branches: [master, farming-helper-v1.13-consolidation, farming-helper-v1.12-workflow, farming-helper-v1.07-stabilization, farming-helper-v1.08-refactor, farming-helper-v1.09-workflow, farming-helper-v1.10-adaptive-planning, farming-helper-v1.11-consolidation, farming-helper-v1.11.2-validation, farming-helper-v1.11.3-validation, farming-helper-v1.11.4-validation, farming-helper-v1.11.5-validation]
+    branches: [master, farming-helper-v1.13.1-stabilization, farming-helper-v1.13-consolidation, farming-helper-v1.12-workflow, farming-helper-v1.07-stabilization, farming-helper-v1.08-refactor, farming-helper-v1.09-workflow, farming-helper-v1.10-adaptive-planning, farming-helper-v1.11-consolidation, farming-helper-v1.11.2-validation, farming-helper-v1.11.3-validation, farming-helper-v1.11.4-validation, farming-helper-v1.11.5-validation]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -41,14 +41,14 @@ jobs:
       - name: Screen compiled JAR references
         run: python3 tools/audit-jar.py "$(find build/libs -name '*.jar' ! -name '*-all.jar' | head -1)"
       - name: Smoke-test local installer in isolated directory
-        if: github.ref_name == 'farming-helper-v1.13-consolidation' || github.ref_name == 'farming-helper-v1.12-workflow'
+        if: github.ref_name == 'farming-helper-v1.13.1-stabilization' || github.ref_name == 'farming-helper-v1.13-consolidation' || github.ref_name == 'farming-helper-v1.12-workflow'
         shell: pwsh
         run: |
           $testHome = Join-Path $env:RUNNER_TEMP "farming-helper-install-test"
           & ./tools/Install-FarmingHelper.ps1 -RuneliteDirectory $testHome
           if (-not (Test-Path (Join-Path $testHome "sideloaded-plugins/FarmingHelper.jar"))) { throw "Installer did not copy JAR" }
       - uses: actions/upload-artifact@v4
-        if: github.ref_name == 'farming-helper-v1.13-consolidation' || github.ref_name == 'farming-helper-v1.12-workflow'
+        if: github.ref_name == 'farming-helper-v1.13.1-stabilization' || github.ref_name == 'farming-helper-v1.13-consolidation' || github.ref_name == 'farming-helper-v1.12-workflow'
         with:
           name: farming-helper-local-test
           path: |

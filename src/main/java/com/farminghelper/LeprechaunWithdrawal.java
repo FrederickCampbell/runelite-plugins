@@ -141,6 +141,12 @@ final class LeprechaunWithdrawal
         if(child<0||stored<=0)return null;
         return new LeprechaunWithdrawal(child,free>0?1:0,name,null);
     }
+    /** Empty bucket widget IDs are not assumed. The overlay resolves the visible native item. */
+    static LeprechaunWithdrawal buckets(int demand,int stored,int free)
+    {
+        if(demand<=0||stored<=0)return null;
+        return new LeprechaunWithdrawal(-1,Math.min(Math.min(demand,stored),Math.max(0,free)),"empty bucket(s)",null);
+    }
     String label()
     {
         if(quantity==0)return "Free a slot";

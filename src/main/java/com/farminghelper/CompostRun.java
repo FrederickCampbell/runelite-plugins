@@ -97,6 +97,50 @@ final class CompostRun
         {collectNeeds(needs,available,b.count);return new Plan("Collect "+b.count+" ultracompost. "+collection(available)+" Refill if you want another batch; Skip to leave it empty.",needs,true);}
         return new Plan("Inspect the bin to confirm its contents.",needs,true);
     }
+    enum Action { INSPECT, WAIT, OPEN, POTION, ASH, COLLECT, FILL, CLOSE, TOMATO }
+    static final class Step
+    {
+        final Action action;final int item,quantity;final String instruction;
+        Step(Action action,int item,int quantity,String instruction){this.action=action;this.item=item;this.quantity=quantity;this.instruction=instruction;}
+        boolean missing(Map<Integer,Integer> bag){return item>0&&bag.getOrDefault(item,0)<quantity;}
+    }
+    /** Derive one immediate interaction from verified bin state; the plan remains the full supply budget. */
+    static Step step(FarmRunPatch patch,QuestFarmingStateReader.Observation observation,Plan plan,Map<Integer,Integer> bag,int free)
+    {
+        BinContents b=QuestFarmingStateReader.binContents("Farming Guild".equals(patch.getLocation()),observation);
+        if(b==null||plan==null)return new Step(Action.INSPECT,-1,0,"Inspect the compost bin to confirm its contents.");
+        if(b.state==CropState.GROWING)return new Step(Action.WAIT,-1,0,"Compost is decomposing.");
+        if(b.kind.equals("ROTTEN_TOMATO"))return new Step(Action.TOMATO,-1,0,"Remove rotten tomatoes manually, or skip this bin.");
+        if(b.state==CropState.EMPTY||b.state==CropState.FILLING)
+        {
+            int need=b.capacity-b.count;
+            if(need<=0)return new Step(Action.CLOSE,-1,0,"Close the full compost bin.");
+            int item=plan.supplies.keySet().stream().filter(CompostRun::material).filter(id->bag.getOrDefault(id,0)>0).min(Integer::compareTo).orElse(-1);
+            if(item<0)item=plan.supplies.keySet().stream().filter(CompostRun::material).min(Integer::compareTo).orElse(-1);
+            return new Step(Action.FILL,item,1,"Add compatible produce to the bin ("+b.count+"/"+b.capacity+").");
+        }
+        if(b.state!=CropState.HARVESTABLE)return new Step(Action.INSPECT,-1,0,"Inspect the compost bin.");
+        if(b.closed)return new Step(Action.OPEN,-1,0,"Open the mature compost bin.");
+        if(b.kind.equals("COMPOST")&&Arrays.stream(POTIONS).anyMatch(plan.supplies::containsKey))
+        {
+            int potion=Arrays.stream(POTIONS).filter(id->bag.getOrDefault(id,0)>0).findFirst().orElseGet(()->choosePotion(plan.supplies));
+            return new Step(Action.POTION,potion,1,"Use one dose of compost potion on the bin.");
+        }
+        if(b.kind.equals("SUPERCOMPOST")&&plan.supplies.containsKey(ASH))
+            return new Step(Action.ASH,ASH,plan.supplies.get(ASH),"Use "+plan.supplies.get(ASH)+" volcanic ash on the bin.");
+        int container=bucket(bag);
+        if(bag.getOrDefault(container,0)==0)
+            container=plan.supplies.keySet().stream().filter(id->id==BUCKET||id==BOTTOMLESS||id==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED).findFirst().orElse(BUCKET);
+        return new Step(Action.COLLECT,container,1,"Collect "+b.count+" "+b.kind.toLowerCase(Locale.ROOT).replace('_',' ')+". "+(container==BUCKET?"Use empty buckets.":"Confirm your bottomless bucket has the correct compost type and capacity."));
+    }
+    static int heldRefill(FarmRunPatch patch,QuestFarmingStateReader.Observation observation,Map<Integer,Integer> bag,Production production,Material material)
+    {
+        BinContents b=QuestFarmingStateReader.binContents("Farming Guild".equals(patch.getLocation()),observation);
+        if(b==null||b.state!=CropState.EMPTY&&b.state!=CropState.FILLING)return 0;
+        int[] allowed=b.state==CropState.FILLING?(b.kind.equals("SUPERCOMPOST")?SUPER:REGULAR):
+            material.id!=0?new int[]{material.id}:production==Production.REGULAR?REGULAR:SUPER;
+        return total(allowed,bag);
+    }
     static Set<Integer> stepItems(FarmRunPatch patch,QuestFarmingStateReader.Observation o,Plan plan,Map<Integer,Integer> bag)
     {
         BinContents b=QuestFarmingStateReader.binContents("Farming Guild".equals(patch.getLocation()),o);

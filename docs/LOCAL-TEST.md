@@ -1,4 +1,4 @@
-# Local test — v1.13.0-rc1
+# Local test — v1.13.1
 
 Use a successful build on the development branch only. Download and extract the `farming-helper-local-test` artifact, preserving its folder structure. Close RuneLite, then from the extracted directory use PowerShell:
 

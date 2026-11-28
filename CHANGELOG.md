@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.13.1 — workflow stabilization
+- Add a dedicated Guild compost preparation/production/resupply phase before local crop work; harvest refill produce without replanting and rebank before ordinary Guild activity.
+- Present a single bin interaction at a time, show missing ash/potion/buckets, and guide empty bucket collection and compost storage.
+- Categorize top-row travel priority, restore birdhouse-only supply/bank staging, and show later bird supplies as a collapsible reference.
+- Independently fold Guild, external and birdhouse requirements and preserve sidebar scroll position.
+
 ## v1.13.0-rc1 — architecture consolidation candidate
 - Replace independent Guild stage and preparation phase flags with one finite workflow state, preserving explicit manual resupply.
 - Consolidate scoped consumable and reusable requirement accounting and attribute Guild payment forms from the actual allocation.

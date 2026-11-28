@@ -40,6 +40,7 @@ final class FarmingHelperPanel extends PluginPanel
     private GuideView latestGuide;
     private long guideSession=Long.MIN_VALUE;
     private boolean requiredOpen=false,completedOpen=false,lastPreparing=false,teleportsOpen=false,seedPreparationOpen=true;
+    private final Map<Integer,Boolean> supplySections=new HashMap<>();
     private JButton requirementsHeader,bankShortcut,runDetailsHelp;
     private JTextArea supplyNoteLabel;
     private boolean guideRendered;
@@ -398,7 +399,7 @@ final class FarmingHelperPanel extends PluginPanel
     private void resetGuide(long session,boolean preparing)
     {
         guideSession=session;lastActive=null;previousGuide=null;guideRendered=false;mountedPage=null;
-        positions.clear();expanded.clear();supplyRows.clear();stepText.clear();
+        positions.clear();expanded.clear();supplyRows.clear();stepText.clear();supplySections.clear();
         requiredOpen=lastPreparing=preparing;completedOpen=false;teleportsOpen=false;seedPreparationOpen=true;
     }
     private void showHome()
@@ -665,7 +666,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
 
     // Required and optional rows for the same physical item have separate controls.
-    private static int rowKey(GuideView.ItemRow row){return row.recommended?~row.id:row.id*3+row.section;}
+    private static int rowKey(GuideView.ItemRow row){return row.recommended?~row.id:row.id*4+row.section;}
     private static Color itemColor(GuideView.ItemRow row){return row.satisfied()?FarmingTheme.SUCCESS:row.recommended?FarmingTheme.WARNING:FarmingTheme.DANGER;}
     private static String observedSource(GuideView.ItemRow row)
     {
@@ -784,6 +785,7 @@ final class FarmingHelperPanel extends PluginPanel
         section.add(header,BorderLayout.NORTH);
         if(open)section.add(supplies(view,optional),BorderLayout.CENTER);
         fold.addActionListener(e->{
+            Position saved=position();
             boolean show=optional?!teleportsOpen:!requiredOpen;
             if(optional)teleportsOpen=show;else requiredOpen=show;
             disclosureState(fold,topic,show,FarmingTheme.MUTED);
@@ -793,7 +795,7 @@ final class FarmingHelperPanel extends PluginPanel
                 removeBody(section);
                 for(GuideView.ItemRow item:latestGuide.items)if(item.recommended==optional)supplyRows.remove(rowKey(item));
             }
-            refreshLayout(section);
+            refreshLayout(section);restorePosition(saved);
         });
         addRow(section);
         return fold;
@@ -832,17 +834,16 @@ final class FarmingHelperPanel extends PluginPanel
     private JPanel supplies(GuideView view,boolean optional)
     {
         JPanel body=supplyBody(true);
-        if(!optional&&view.notes.guildSplit)
+        if(!optional&&(view.notes.guildSplit||view.items.stream().anyMatch(i->i.section==3)))
         {
-            for(int section=1;section<=2;section++)
+            boolean birdReference=view.items.stream().anyMatch(i->i.section==3);
+            if(view.notes.guildSplit)
             {
-                if(section==2)body.add(new JSeparator());
-                body.add(text(section==1?"At Farming Guild":"After Farming Guild",FarmingTheme.TEXT));
-                boolean any=false;
-                for(GuideView.ItemRow item:view.items)if(!item.recommended&&item.section==section)
-                {appendSupplyRow(body,item);any=true;}
-                if(!any)body.add(text("No outstanding requirements.",FarmingTheme.MUTED));
+                scopedSupplySection(body,view,1,"At Farming Guild");
+                body.add(new JSeparator());scopedSupplySection(body,view,2,"After Farming Guild");
             }
+            else scopedSupplySection(body,view,0,"Farming supplies");
+            if(birdReference){body.add(new JSeparator());scopedSupplySection(body,view,3,"Birdhouse Run");}
         }
         else for(GuideView.ItemRow item:view.items)if(item.recommended==optional)
         {
@@ -851,6 +852,30 @@ final class FarmingHelperPanel extends PluginPanel
         if(body.getComponentCount()==0)body.add(text(optional?"No teleports recommended for the remaining patches.":"No items needed for this run.",FarmingTheme.MUTED));
         FarmingTheme.apply(body);
         return body;
+    }
+
+    private void scopedSupplySection(JPanel body,GuideView view,int scope,String label)
+    {
+        boolean open=supplySections.getOrDefault(scope,scope==0||scope==1&&view.items.stream().anyMatch(i->i.section==1&&!i.recommended)||scope==2&&view.items.stream().noneMatch(i->i.section==1&&!i.recommended));
+        JPanel section=transparent(new BorderLayout(0,2));
+        JButton fold=disclosure(label,open);fold.setName("Supply scope "+scope);
+        section.add(fold,BorderLayout.NORTH);
+        if(open)section.add(scopedSupplyRows(view,scope),BorderLayout.CENTER);
+        fold.addActionListener(e->{
+            Position saved=position();boolean show=!supplySections.getOrDefault(scope,open);
+            supplySections.put(scope,show);disclosureState(fold,label,show,FarmingTheme.MUTED);
+            if(show)section.add(scopedSupplyRows(latestGuide,scope),BorderLayout.CENTER);
+            else {removeBody(section);for(GuideView.ItemRow item:latestGuide.items)if(!item.recommended&&item.section==scope)supplyRows.remove(rowKey(item));}
+            refreshLayout(section);restorePosition(saved);
+        });
+        body.add(section);
+    }
+    private JPanel scopedSupplyRows(GuideView view,int scope)
+    {
+        JPanel rows=supplyBody(false);
+        for(GuideView.ItemRow item:view.items)if(!item.recommended&&item.section==scope)appendSupplyRow(rows,item);
+        if(rows.getComponentCount()==0)rows.add(text("No outstanding requirements.",FarmingTheme.MUTED));
+        FarmingTheme.apply(rows);return rows;
     }
 
     void guide(GuideView view,long session)
@@ -863,7 +888,7 @@ final class FarmingHelperPanel extends PluginPanel
         if(navigation.acceptGuide())renderGuide(view);
     }
     private String requirementsTitle(GuideView view)
-    {long missing=view.items.stream().filter(r->!r.recommended&&!r.satisfied()).count();return (view.notes.guildSplit?"Required Items":"Recommended items")+(missing>0?" · "+missing+" missing":"");}
+    {long missing=view.items.stream().filter(r->!r.recommended&&r.section!=3&&!r.satisfied()).count();return (view.notes.guildSplit?"Required Items":"Recommended items")+(missing>0?" · "+missing+" missing":"");}
     private void renderGuide(GuideView view)
     {
         if(sameStructure(previousGuide,view)){refreshRows(previousGuide,view);previousGuide=view;return;}
@@ -977,7 +1002,8 @@ final class FarmingHelperPanel extends PluginPanel
             addRow(history);
         }
         finish();
-        if (!sameActive) restorePosition(null);
+        // Preserve the user's viewport even when the active patch advances.
+        // page() already restores the saved guide position.
     }
 
     private void preparationButton(boolean preparing,boolean initial)

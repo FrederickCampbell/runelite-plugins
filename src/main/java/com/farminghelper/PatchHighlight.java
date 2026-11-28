@@ -87,8 +87,16 @@ final class PatchHighlight extends Overlay
     {
         Widget root=client.getWidget(InterfaceID.FarmingTools.UNIVERSE);
         if(root==null||root.isHidden())return null;
-        Widget slot=client.getWidget(InterfaceID.FARMING_TOOLS,withdrawal.child);
+        Widget slot=withdrawal.child<0?bucketWidget(root):client.getWidget(InterfaceID.FARMING_TOOLS,withdrawal.child);
         return slot==null||slot.isHidden()?null:slot;
+    }
+    private static Widget bucketWidget(Widget parent)
+    {
+        if(parent==null||parent.isHidden())return null;
+        if(parent.getItemId()==CompostRun.BUCKET)return parent;
+        Widget[] children=parent.getChildren();
+        if(children!=null)for(Widget child:children){Widget found=bucketWidget(child);if(found!=null)return found;}
+        return null;
     }
     static boolean matchesRowChoice(String text)
     {
@@ -558,7 +566,7 @@ final class PatchHighlight extends Overlay
                 if(point!=null)arrow(graphics,point.getX(),point.getY());
             }
         }
-        if(helper.spaceRelief())return null;
+        if(helper.spaceRelief()||withdrawal!=null&&patch.getPatchType()==PatchType.COMPOST_BIN)return null;
         PatchType type=patch.getPatchType();
         if(type==PatchType.HESPORI&&action==StepEngine.Action.HARVEST)return null;
         if(action==StepEngine.Action.PAY_REMOVE||action==StepEngine.Action.PROTECT_TREE)
