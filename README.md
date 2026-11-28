@@ -1,44 +1,31 @@
 # Farming Helper
 
-<img src="icon.png" alt="Farming Helper icon" align="right" width="48">
-
 **Quest Helper for your farm runs!** · Version 1.13.3
 
-Pick a run, grab your supplies and follow the guide. Farming Helper helps you decide what to plant, what to bring and where to go next.
+Plan farming runs, choose crops, prepare supplies and follow step-by-step guidance tailored to your account.
 
 ## Getting started
 
-Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, the Farming Guild Seed Vault to refresh your supplies. Pick a run and follow the highlighted patch. Recommended items and Recommended teleports sit above the steps. Check your supplies, then choose Start Run at the top of the guide. Both lists fold when the route starts, and you can reopen either at any patch. The checklist covers the full remaining run even when it exceeds inventory capacity. Choose what to carry and when to bank; manual Resupply remains available. Manual runs starting at the Farming Guild prepare seedlings, guide local activities, and offer a separate Continue step before the protected external route. Premade and Bank-start runs retain ordinary preparation. Watered seedlings count toward sapling preparation but must mature before planting.
+1. Open Farming Helper in the RuneLite sidebar.
+2. Visit your bank and, if unlocked, the Farming Guild Seed Vault to refresh your supplies.
+3. Select a run, review the recommended items and teleports, and choose **Start Run**.
+4. Follow the highlighted patches and instructions. Use **Resupply** when needed.
 
 ## Features
 
-- Grouped, individual and custom runs, including compost and birdhouses.
-- Crop recommendations based on your Farming level, available seeds and preferences, including observed carried seed-box contents.
-- Step-by-step instructions, patch highlights and supply checklists.
-- Farming bank and compact Seed Vault views that preserve native placeholders while filtering irrelevant items. Only physical stacks count toward supplies.
-- Custom crop priorities, patch selections and plants to keep.
-- Optional crop watering and tool leprechaun assistance, with character defaults and temporary run overrides.
-- Dedicated seaweed-to-birdhouse guidance, including local banking and boat travel.
-- Optional teleport recommendations and navigation with [Shortest Path](https://runelite.net/plugin-hub/show/shortest-path).
+- Premade and custom farming runs, including herbs, trees, compost, seaweed and birdhouses.
+- Crop recommendations based on your Farming level, available seeds and preferences.
+- Step-by-step guidance, patch highlights and supply checklists.
+- Farming Guild contract guidance, seed box support, and organized bank and Seed Vault views.
+- Custom crop priorities, patch selections and crop care preferences.
+- Optional [Shortest Path](https://runelite.net/plugin-hub/show/shortest-path) integration for navigation and transportation recommendations.
 
 All gameplay actions are manual. Quest Helper is not required.
-
-## Local development testing
-
-This branch is an unpublished release candidate. See [local testing](docs/LOCAL-TEST.md) for the CI installer and developer-client instructions. All game actions must be performed manually. Do not treat a passing build as Plugin Hub approval.
 
 ## Credits
 
 Developed by Freddy (FrederickCampbell) with AI assistance.
 
-Thanks to [Farming Patch Advisor](https://github.com/Seadeadmeat/farming-patch-advisor) by Seadeadmeat for farming catalogs and highlighting foundations, and [Quest Helper](https://github.com/Zoinkwiz/quest-helper) by Zoinkwiz and contributors for farming-state logic, patch targets and inspiration.
+Thanks to [Farming Patch Advisor](https://github.com/Seadeadmeat/farming-patch-advisor), [Quest Helper](https://github.com/Zoinkwiz/quest-helper), [RuneLite](https://github.com/runelite/runelite) (including Abex and NotFoxtrot), [Shortest Path](https://github.com/Skretzo/shortest-path), [Farm Run Autopilot](https://github.com/elzerma/farm-run-autopilot) and [Birdhouse Overlay](https://github.com/hong-niu/runelite-birdhouse-overlay) for their code, data and inspiration.
 
-Additional thanks to the [RuneLite](https://github.com/runelite/runelite) contributors (including Abex and NotFoxtrot), [Shortest Path](https://github.com/Skretzo/shortest-path), [Farm Run Autopilot](https://github.com/elzerma/farm-run-autopilot) and [Birdhouse Overlay](https://github.com/hong-niu/runelite-birdhouse-overlay) for their code, data and ideas.
-
-Licensed under [BSD 2-Clause](LICENSE). Upstream licenses and detailed attribution are retained in the repository and [technical notes](docs/IMPLEMENTATION.md).
-
----
-
-[Changelog](CHANGELOG.md) · [Technical notes](docs/IMPLEMENTATION.md)
-
-The development version in this repository may be newer than the Plugin Hub release.
+Licensed under [BSD 2-Clause](LICENSE). Upstream licenses and detailed attribution are retained in the repository.
