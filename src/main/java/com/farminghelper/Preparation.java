@@ -43,12 +43,12 @@ final class Preparation
         UNCHECKED(false,false,false), ORDINARY_PREP(false,true,true), ORDINARY_ACTIVE(false,false,false),
         ORDINARY_RESUPPLY(false,true,false), GUILD_ARRIVAL(true,true,true), GUILD_SEEDLINGS(true,true,true),
         GUILD_COMPOST_PREP(true,true,true), GUILD_COMPOST(true,false,false), GUILD_COMPOST_RESUPPLY(true,true,false),
-        GUILD_LOCAL_PREP(true,true,true), GUILD_LOCAL(true,false,false), GUILD_LOCAL_RESUPPLY(true,true,false),
+        GUILD_POST_COMPOST(true,true,false), GUILD_LOCAL_PREP(true,true,true), GUILD_LOCAL(true,false,false), GUILD_LOCAL_RESUPPLY(true,true,false),
         GUILD_DEPARTURE(true,true,true), GUILD_EXTERNAL(true,false,false), GUILD_EXTERNAL_RESUPPLY(true,true,false);
         final boolean guild,preparing,initial;
         Workflow(boolean guild,boolean preparing,boolean initial)
         {this.guild=guild;this.preparing=preparing;this.initial=initial;}
-        boolean local(){return this==GUILD_LOCAL||this==GUILD_LOCAL_PREP||this==GUILD_LOCAL_RESUPPLY;}
+        boolean local(){return this==GUILD_POST_COMPOST||this==GUILD_LOCAL||this==GUILD_LOCAL_PREP||this==GUILD_LOCAL_RESUPPLY;}
         boolean external(){return this==GUILD_EXTERNAL||this==GUILD_EXTERNAL_RESUPPLY;}
         boolean compost(){return this==GUILD_COMPOST_PREP||this==GUILD_COMPOST||this==GUILD_COMPOST_RESUPPLY;}
         boolean splitGuild(){return compost()||local()||external()||this==GUILD_DEPARTURE;}
@@ -58,7 +58,7 @@ final class Preparation
             {
                 case GUILD_ARRIVAL:return this;
                 case GUILD_COMPOST_PREP:case GUILD_COMPOST_RESUPPLY:return GUILD_COMPOST;
-                case GUILD_SEEDLINGS:case GUILD_LOCAL_PREP:case GUILD_LOCAL_RESUPPLY:return GUILD_LOCAL;
+                case GUILD_SEEDLINGS:case GUILD_POST_COMPOST:case GUILD_LOCAL_PREP:case GUILD_LOCAL_RESUPPLY:return GUILD_LOCAL;
                 case GUILD_DEPARTURE:case GUILD_EXTERNAL_RESUPPLY:return GUILD_EXTERNAL;
                 case UNCHECKED:case ORDINARY_PREP:case ORDINARY_RESUPPLY:return ORDINARY_ACTIVE;
                 default:return this;

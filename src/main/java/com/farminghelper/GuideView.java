@@ -14,7 +14,7 @@ final class GuideView
         final String name;
         final int owned,needed,bank,vault;
         final boolean recommended;
-        final int section; // 0 ordinary, 1 Guild, 2 external, 3 birdhouse reference
+        final int section; // 0 ordinary, 1 Guild, 2 external, 3 birdhouse reference, 4 active birdhouse
         ItemRow(int id,String name,int owned,int needed,int bank,int vault,boolean recommended)
         {this(id,name,owned,needed,bank,vault,recommended,0);}
         boolean satisfied(){return owned>=needed;}
@@ -25,7 +25,7 @@ final class GuideView
         List<ItemRow> result=new ArrayList<>(rows.size()+local.size());
         for(ItemRow row:rows)
         {
-            if(row.recommended||row.section==3){result.add(row);continue;}
+            if(row.recommended||row.section>=3){result.add(row);continue;}
             int n=Math.min(row.needed,Math.max(0,local.getOrDefault(row.id,0)));
             int held=Math.min(n,row.owned),fromBank=Math.min(Math.max(0,n-held),row.bank);
             int fromVault=Math.min(Math.max(0,n-held-fromBank),row.vault);

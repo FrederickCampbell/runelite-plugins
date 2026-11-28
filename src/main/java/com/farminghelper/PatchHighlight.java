@@ -96,6 +96,8 @@ final class PatchHighlight extends Overlay
         if(parent.getItemId()==CompostRun.BUCKET)return parent;
         Widget[] children=parent.getChildren();
         if(children!=null)for(Widget child:children){Widget found=bucketWidget(child);if(found!=null)return found;}
+        Widget[] fixed=parent.getStaticChildren();
+        if(fixed!=null)for(Widget child:fixed){Widget found=bucketWidget(child);if(found!=null)return found;}
         return null;
     }
     static boolean matchesRowChoice(String text)

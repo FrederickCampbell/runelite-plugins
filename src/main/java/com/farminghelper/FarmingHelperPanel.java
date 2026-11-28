@@ -666,7 +666,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
 
     // Required and optional rows for the same physical item have separate controls.
-    private static int rowKey(GuideView.ItemRow row){return row.recommended?~row.id:row.id*4+row.section;}
+    private static int rowKey(GuideView.ItemRow row){return row.recommended?~row.id:row.id*5+row.section;}
     private static Color itemColor(GuideView.ItemRow row){return row.satisfied()?FarmingTheme.SUCCESS:row.recommended?FarmingTheme.WARNING:FarmingTheme.DANGER;}
     private static String observedSource(GuideView.ItemRow row)
     {
@@ -834,7 +834,9 @@ final class FarmingHelperPanel extends PluginPanel
     private JPanel supplies(GuideView view,boolean optional)
     {
         JPanel body=supplyBody(true);
-        if(!optional&&(view.notes.guildSplit||view.items.stream().anyMatch(i->i.section==3)))
+        if(!optional&&view.items.stream().anyMatch(i->i.section==4))
+            scopedSupplySection(body,view,4,"Birdhouse Run");
+        else if(!optional&&(view.notes.guildSplit||view.items.stream().anyMatch(i->i.section==3)))
         {
             boolean birdReference=view.items.stream().anyMatch(i->i.section==3);
             if(view.notes.guildSplit)
@@ -856,7 +858,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private void scopedSupplySection(JPanel body,GuideView view,int scope,String label)
     {
-        boolean open=supplySections.getOrDefault(scope,scope==0||scope==1&&view.items.stream().anyMatch(i->i.section==1&&!i.recommended)||scope==2&&view.items.stream().noneMatch(i->i.section==1&&!i.recommended));
+        boolean open=supplySections.getOrDefault(scope,scope==4||scope==0||scope==1&&view.items.stream().anyMatch(i->i.section==1&&!i.recommended)||scope==2&&view.items.stream().noneMatch(i->i.section==1&&!i.recommended));
         JPanel section=transparent(new BorderLayout(0,2));
         JButton fold=disclosure(label,open);fold.setName("Supply scope "+scope);
         section.add(fold,BorderLayout.NORTH);
@@ -893,7 +895,6 @@ final class FarmingHelperPanel extends PluginPanel
     {
         if(sameStructure(previousGuide,view)){refreshRows(previousGuide,view);previousGuide=view;return;}
         stepText.clear();supplyNoteLabel=null;
-        boolean sameActive=guideRendered && lastActive==view.active;
         guideRendered=true;
         previousGuide=view;
         if(lastActive!=view.active)

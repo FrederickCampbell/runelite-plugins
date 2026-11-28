@@ -58,7 +58,7 @@ final class CompostRun
             // Preserve partial bin type. For an empty bin prefer supercompostable stock
             // only if enough for the whole batch; otherwise use ordinary cheap produce.
             boolean useSuper=b.kind.equals("SUPERCOMPOST") || b.state==CropState.EMPTY && (material.id!=0?contains(SUPER,material.id):
-                production!=Production.REGULAR&&(total(CHEAP_SUPER,available)>=missing||total(SUPER,carried)>0));
+                production!=Production.REGULAR&&(total(SUPER,carried)>0||total(REGULAR,carried)==0&&total(CHEAP_SUPER,available)>=missing));
             int[] ordinary=useSuper?CHEAP_SUPER:REGULAR;
             int[] list=ordinary;
             if(material.id!=0&&contains(useSuper?SUPER:REGULAR,material.id))
@@ -137,9 +137,14 @@ final class CompostRun
     {
         BinContents b=QuestFarmingStateReader.binContents("Farming Guild".equals(patch.getLocation()),observation);
         if(b==null||b.state!=CropState.EMPTY&&b.state!=CropState.FILLING)return 0;
-        int[] allowed=b.state==CropState.FILLING?(b.kind.equals("SUPERCOMPOST")?SUPER:REGULAR):
-            material.id!=0?new int[]{material.id}:production==Production.REGULAR?REGULAR:SUPER;
-        return total(allowed,bag);
+        if(b.state==CropState.FILLING)return total(b.kind.equals("SUPERCOMPOST")?SUPER:REGULAR,bag);
+        if(material.id!=0)return bag.getOrDefault(material.id,0);
+        return production==Production.REGULAR?total(REGULAR,bag):Math.max(total(REGULAR,bag),total(SUPER,bag));
+    }
+    static int refillRemaining(FarmRunPatch patch,QuestFarmingStateReader.Observation observation)
+    {
+        BinContents b=QuestFarmingStateReader.binContents("Farming Guild".equals(patch.getLocation()),observation);
+        return b!=null&&(b.state==CropState.EMPTY||b.state==CropState.FILLING)?Math.max(0,b.capacity-b.count):0;
     }
     static Set<Integer> stepItems(FarmRunPatch patch,QuestFarmingStateReader.Observation o,Plan plan,Map<Integer,Integer> bag)
     {
@@ -234,6 +239,9 @@ final class CompostRun
     /** Move only a verified compatible Guild allotment before its empty/partial bin. */
     static FarmRunPatch guildRefillCrop(FarmRunPatch bin,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
         Production production,Material material)
+    {return guildRefillCrop(bin,ready,observations,production,material,Map.of());}
+    static FarmRunPatch guildRefillCrop(FarmRunPatch bin,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
+        Production production,Material material,Map<Integer,Integer> bag)
     {
         if(bin==null||bin.getPatchType()!=PatchType.COMPOST_BIN||!"Farming Guild".equals(bin.getLocation()))return null;
         BinContents b=QuestFarmingStateReader.binContents(true,observations.get(bin));
@@ -247,6 +255,12 @@ final class CompostRun
             if(produce==null)continue;
             int id=produce.getItemID();
             if(material.id!=0&&id!=material.id)continue;
+            // Do not collect a second incompatible material while carrying a refill batch.
+            if(b.state==CropState.EMPTY&&material.id==0)
+            {
+                int regular=total(REGULAR,bag),superior=total(SUPER,bag);
+                if(regular>0&&superior==0&&!contains(REGULAR,id)||superior>0&&regular==0&&!contains(SUPER,id))continue;
+            }
             if(b.state==CropState.EMPTY?material(id)&&(production!=Production.REGULAR||contains(REGULAR,id)):
                 contains(b.kind.equals("SUPERCOMPOST")?SUPER:REGULAR,id))return p;
         }

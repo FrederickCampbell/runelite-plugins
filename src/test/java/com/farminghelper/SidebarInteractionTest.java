@@ -102,6 +102,27 @@ public class SidebarInteractionTest
             assertFalse(named(panel,"Recommended items",JButton.class).getText().contains("missing"));
         });
     }
+    @Test public void guildAndFutureBirdSectionsFoldIndependentlyAcrossUpdates() throws Exception
+    {
+        SwingUtilities.invokeAndWait(()->{
+            FarmingHelperPanel panel=new FarmingHelperPanel(new Character());
+            GuideView base=guide(true,1,0);
+            GuideView view=new GuideView(base.title,base.message,List.of(
+                new GuideView.ItemRow(1,"Guild seeds",0,3,5,0,false,1),
+                new GuideView.ItemRow(2,"External seeds",0,3,5,0,false,2),
+                new GuideView.ItemRow(3,"Future bird logs",0,4,20,0,false,3)),base.stops,null,
+                "Collect supplies.","",false,false,false,base.stats,new GuideView.Notes(true,"","","",false,true,java.util.Set.of()));
+            panel.guide(view,1);
+            assertNotNull(line(panel,"Guild seeds"));assertNull(line(panel,"External seeds"));assertNull(line(panel,"Future bird logs"));
+            named(panel,"Supply scope 2",JButton.class).doClick(0);
+            assertNotNull(line(panel,"External seeds"));assertNotNull(line(panel,"Guild seeds"));
+            named(panel,"Supply scope 1",JButton.class).doClick(0);
+            assertNull(line(panel,"Guild seeds"));assertNotNull(line(panel,"External seeds"));
+            named(panel,"Supply scope 3",JButton.class).doClick(0);
+            assertNotNull(line(panel,"Future bird logs"));
+            panel.guide(view,1);assertNull(line(panel,"Guild seeds"));assertNotNull(line(panel,"Future bird logs"));
+        });
+    }
     @Test public void anEmptyChecklistKeepsBothDisclosuresAboveTheActivePatch() throws Exception
     {
         SwingUtilities.invokeAndWait(()->{

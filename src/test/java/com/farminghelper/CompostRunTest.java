@@ -50,6 +50,29 @@ public class CompostRunTest
         assertTrue(FarmingHelperPlugin.actionable(PatchType.COMPOST_BIN,CropState.FILLING));
         assertFalse(FarmingHelperPlugin.actionable(PatchType.COMPOST_BIN,CropState.GROWING));
     }
+    @Test public void productionPresentsOneVerifiedActionAndExactAshRequirement()
+    {
+        var b=bin("Farming Guild");
+        var normal=obs(CropState.HARVESTABLE,93);
+        var stock=Map.of(6470,1,CompostRun.BOTTOMLESS,1,CompostRun.ASH,50);
+        var p=CompostRun.plan(b,normal,stock);
+        assertEquals(CompostRun.Action.OPEN,CompostRun.step(b,normal,p,Map.of(),28).action);
+        var ultra=obs(CropState.HARVESTABLE,205);
+        p=CompostRun.plan(b,ultra,stock);
+        var step=CompostRun.step(b,ultra,p,Map.of(),28);
+        assertEquals(CompostRun.Action.COLLECT,step.action);assertTrue(step.missing(Map.of()));
+        var full=obs(CropState.FILLING,77);
+        assertEquals(CompostRun.Action.CLOSE,CompostRun.step(b,full,CompostRun.plan(b,full,Map.of()),Map.of(),28).action);
+    }
+    @Test public void refillRespectsExistingCarriedMaterialAndCapacity()
+    {
+        var b=bin("Farming Guild");var empty=obs(CropState.EMPTY,0);
+        assertEquals(30,CompostRun.refillRemaining(b,empty));
+        var bag=Map.of(CompostRun.WOAD,15);
+        assertEquals(15,CompostRun.heldRefill(b,empty,bag,CompostRun.Production.ULTRA,CompostRun.Material.AUTO));
+        var plan=CompostRun.plan(b,empty,Map.of(CompostRun.WOAD,30,CompostRun.PINEAPPLE,30),bag,CompostRun.Production.ULTRA,CompostRun.Material.AUTO);
+        assertEquals(Map.of(CompostRun.WOAD,30),plan.supplies);
+    }
     @Test public void potionDosesAndAshAreAggregatedAcrossBins()
     {
         var a=bin("Falador");var b=bin("Farming Guild");Map<Integer,Integer> supplies=new HashMap<>();

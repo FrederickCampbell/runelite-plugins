@@ -17,6 +17,8 @@ public class Stabilization131Test
         assertEquals(Preparation.Workflow.GUILD_COMPOST,Preparation.Workflow.GUILD_COMPOST_PREP.resume());
         assertEquals(Preparation.Workflow.GUILD_COMPOST,Preparation.Workflow.GUILD_COMPOST.resupply().resume());
         assertTrue(Preparation.Workflow.GUILD_COMPOST.splitGuild());
+        assertTrue(Preparation.Workflow.GUILD_POST_COMPOST.preparing);
+        assertEquals(Preparation.Workflow.GUILD_LOCAL,Preparation.Workflow.GUILD_POST_COMPOST.resume());
     }
     @Test public void futureBirdRowsDoNotGetAssignedToGuild()
     {
