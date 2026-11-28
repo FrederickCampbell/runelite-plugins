@@ -1,0 +1,5 @@
+# v1.13.2 transportation dependency fix
+
+Baseline 3e89e772ee6b3bc7e2ecd132c790fc9aaa8a5de7. Public Shortest Path messages only. Incremental route results replace the old visit-wide freeze. Optional pouch priority is based on observed rune stock, not a claim that the spell is unlocked or optimal. A complete recognized route must still be funded; an unknown edge or unavailable cast still triggers conservative fallback. Staff fallback uses one owned elemental staff per cast; the player must equip it manually. No tome charge assumption. No automated withdrawals, casts or configuration overrides. No changes to master or Plugin Hub PR.
+
+Live test: with air/earth/law in a banked pouch and a Catherby run, use Shortest Path Inventory and Bank mode; check that the pouch is promoted before withdrawal, and that loose air/law are not recommended for a funded Camelot route. Withdraw a seed during calculation; ensure a late route still updates. Check route changes, bank reopen, and ordinary compost/birdhouse workflows. Synthetic tests do not establish actual live route output.

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.13.2 — transportation dependencies
+- Publish completed Shortest Path bank-origin legs incrementally, without suppressing results after a withdrawal or deposit.
+- Recognize a banked rune pouch before route results arrive; show a funded pouch as optional until the route is verified, without marking it missing.
+- Normalize transport labels, retry one cancelled bank query, and account for owned elemental staves when a recognized cast cannot otherwise be funded.
+- Preserve existing route rollback, bank-mode settings and manual gameplay. Charged tomes are not assumed usable.
+
 ## v1.13.1 — workflow stabilization
 - Add a dedicated Guild compost preparation/production/resupply phase before local crop work; harvest refill produce without replanting and rebank before ordinary Guild activity.
 - Present a single bin interaction at a time, show missing ash/potion/buckets, and guide empty bucket collection and compost storage.

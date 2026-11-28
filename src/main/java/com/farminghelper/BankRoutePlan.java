@@ -13,21 +13,21 @@ final class BankRoutePlan
     private Map<String,List<String>> resolved=Map.of();
     private String pending,site;
     private int age,budget;
-    private boolean started,finished,frozen,initialPublished;
+    private boolean started,finished;
+    private int retries;
+    private WorldPoint pendingTarget;
     private List<Integer> published=List.of();
     void reset()
     {
         closeVisit();resolved=Map.of();
     }
-    void freeze(){frozen=true;}
-    void refresh(){if(started){frozen=false;if(finished)resolved=Map.copyOf(routes);}}
     void closeVisit()
     {
         origin=null;remaining.clear();exits.clear();routes.clear();pending=null;site=null;
-        age=budget=0;started=finished=frozen=initialPublished=false;published=List.of();
+        age=budget=retries=0;pendingTarget=null;started=finished=false;published=List.of();
     }
     Map<String,List<String>> routes(){return resolved;}
-    private void finish(){finished=true;if(!frozen)resolved=Map.copyOf(routes);}
+    private void finish(){finished=true;resolved=Map.copyOf(routes);}
     boolean started(){return started;}
     boolean finished(){return finished;}
     static boolean bankMode(String mode)
@@ -50,15 +50,28 @@ final class BankRoutePlan
         if(pending!=null||!navigation.bankQueryReady())return;
         if(remaining.isEmpty()){finish();return;}
         var next=remaining.entrySet().iterator().next();
-        site=next.getKey();WorldPoint target=next.getValue();remaining.remove(site);
-        pending=navigation.bankQuery(origin,target);age=0;
+        site=next.getKey();pendingTarget=next.getValue();remaining.remove(site);
+        pending=navigation.bankQuery(origin,pendingTarget);age=0;
         if(pending==null)finish();
     }
     boolean message(Map<String,Object> data)
     {
         if(pending==null||!pending.equals(data.get("id")))return false;
         pending=null;
-        if(Boolean.TRUE.equals(data.get("reached"))&&data.get("transports") instanceof Collection)routes.put(site,descriptions(data.get("transports")));
+        // A displayed path can cancel a queued background query. Retry once, within the original budget.
+        if("CANCELLED".equals(data.get("reason"))&&retries++==0)
+        {
+            Map<String,WorldPoint> tail=new LinkedHashMap<>(remaining);
+            remaining.clear();remaining.put(site,pendingTarget);remaining.putAll(tail);
+            return true;
+        }
+        retries=0;
+        if(Boolean.TRUE.equals(data.get("reached"))&&data.get("transports") instanceof Collection)
+        {
+            routes.put(site,descriptions(data.get("transports")));
+            // Publish each completed leg, even while the player is withdrawing supplies.
+            resolved=Map.copyOf(routes);
+        }
         // Estimate each leg from the preceding visit; this does not simulate inventory.
         origin=exits.getOrDefault(site,origin);
         if(remaining.isEmpty())finish();
@@ -85,8 +98,7 @@ final class BankRoutePlan
     }
     List<Integer> priority(Map<Integer,Set<String>> supplies,boolean manual)
     {
-        if(!manual&&initialPublished&&(frozen||!finished))return published;
-        initialPublished=true;
+        // Stable for unchanged dependency sets, never suppress newly verified items.
         if(!manual&&published.size()==supplies.size()&&supplies.keySet().containsAll(published))return published;
         return published=List.copyOf(supplies.keySet());
     }

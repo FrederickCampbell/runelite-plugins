@@ -32,11 +32,30 @@ final class RouteSupplies
                     if(line.startsWith("#"))continue;String[] cols=line.split("\\t");if(cols.length!=2)continue;
                     Map<String,Integer> costs=new LinkedHashMap<>();
                     for(String term:cols[1].split(",")){String[] pair=term.split(":");costs.put(pair[0],Integer.parseInt(pair[1]));}
-                    result.put(cols[0],Map.copyOf(costs));
+                    result.put(labelKey(cols[0]),Map.copyOf(costs));
                 }
             }
         }catch(IOException|RuntimeException ignored){return Map.of();}
         return Map.copyOf(result);
+    }
+    private static String labelKey(String label)
+    {return Objects.toString(label,"").strip().replaceAll("\\s+"," ").toLowerCase(Locale.ROOT);}
+    /** Optional convenience only: never present a banked pouch as a verified dependency
+     * while the public route response is missing. Require a usable rune-only spell budget. */
+    static boolean optionalPouch(Set<String> sites,Map<String,List<String>> routes,int pouch,
+        Map<Integer,Integer> pouchRunes,IntFunction<String> names)
+    {
+        if(pouch<=0||pouchRunes.isEmpty()||sites.stream().allMatch(routes::containsKey))return false;
+        RunePool pool=new RunePool(pouchRunes,names);
+        for(String label:List.of("Camelot Teleport","Teleport to House","Watchtower Teleport","Falador Teleport","Ardougne Teleport","Varrock Teleport","Lumbridge Teleport"))
+        {
+            Map<String,Integer> cost=SPELLS.get(labelKey(label));
+            if(cost==null)continue;
+            Map<String,Integer> need=new HashMap<>(cost);
+            pool.pay(need,pool.remaining.clone());
+            if(need.isEmpty())return true;
+        }
+        return false;
     }
     static int pouch(Map<Integer,Integer> carried,Map<Integer,Integer> available)
     {
@@ -103,7 +122,7 @@ final class RouteSupplies
                     usesStaff=!elite;
                     continue;
                 }
-                Map<String,Integer> spell=SPELLS.get(label);
+                Map<String,Integer> spell=SPELLS.get(labelKey(label));
                 if(spell!=null)
                 {
                     if(pouchPool==null)
@@ -116,11 +135,32 @@ final class RouteSupplies
                         pouchLeft=pouchPool.remaining.clone();
                         looseLeft=loosePool.remaining.clone();
                     }
+                    // Try the currently equipped rune source first. If a cast cannot
+                    // be funded, try an owned elemental staff, never assume tome charges.
+                    int[] beforePouch=pouchLeft.clone(),beforeLoose=looseLeft.clone();
                     Map<String,Integer> need=new HashMap<>(spell);
                     for(String element:staffElements)need.remove(element+" rune");
-                    usesPouch|=pouchPool.pay(need,pouchLeft);
+                    boolean paidByPouch=pouchPool.pay(need,pouchLeft);
                     loosePool.pay(need,looseLeft);
-                    if(!need.isEmpty()){complete=false;break;}
+                    if(!need.isEmpty())
+                    {
+                        boolean funded=false;
+                        List<Integer> candidates=new ArrayList<>(available.keySet());
+                        candidates.sort(Comparator.comparingInt((Integer id)->carried.getOrDefault(id,0)>0?0:1).thenComparingInt(Integer::intValue));
+                        for(int id:candidates)
+                        {
+                            List<String> source=elements(names.apply(id));
+                            if(source.isEmpty()||source.stream().noneMatch(e->spell.containsKey(e+" rune")))continue;
+                            need=new HashMap<>(spell);for(String element:source)need.remove(element+" rune");
+                            int[] trialPouch=beforePouch.clone(),trialLoose=beforeLoose.clone();
+                            boolean trialUsed=pouchPool.pay(need,trialPouch);loosePool.pay(need,trialLoose);
+                            if(!need.isEmpty())continue;
+                            pouchLeft=trialPouch;looseLeft=trialLoose;paidByPouch=trialUsed;
+                            usedItems.put(id,1);funded=true;break;
+                        }
+                        if(!funded){complete=false;break;}
+                    }
+                    usesPouch|=paidByPouch;
                     continue;
                 }
                 int id=bestItem(label,eligible,available,carried,visits,usedItems,names,stackable);
@@ -142,6 +182,7 @@ final class RouteSupplies
                 loosePool.remaining=looseLeft;
             }
             usedItems.forEach((id,n)->{
+                if(!elements(names.apply(id)).isEmpty()){result.add(id,1,site);return;}
                 int total=visits.merge(id,n,Integer::sum);
                 result.add(id,RunTeleports.quantity(id,total,names.apply(id),stackable.test(id)),site);
             });
@@ -176,7 +217,7 @@ final class RouteSupplies
         for(var e:eligible.entrySet())
         {
             int id=e.getKey(),visits=used.getOrDefault(id,0)+staged.getOrDefault(id,0)+1;
-            if(!e.getValue().contains(label)||RunTeleports.quantity(id,visits,names.apply(id),stackable.test(id))>available.getOrDefault(id,0))continue;
+            if(e.getValue().stream().noneMatch(v->labelKey(v).equals(labelKey(label)))||RunTeleports.quantity(id,visits,names.apply(id),stackable.test(id))>available.getOrDefault(id,0))continue;
             int score=carried.getOrDefault(id,0)>0?0:visits>1?1:2;
             if(score<rank||score==rank&&id<best){best=id;rank=score;}
         }

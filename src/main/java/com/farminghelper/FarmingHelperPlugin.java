@@ -599,11 +599,6 @@ public class FarmingHelperPlugin extends Plugin
     @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
     {
         if(vaultViews!=null)vaultViews.nativeMenu(event.getParam1());
-        if(bankRoutes.started()&&runBank!=null&&runBank.bankOpen())
-        {
-            String option=event.getMenuOption().toLowerCase(Locale.ROOT);
-            if(option.startsWith("withdraw")||option.startsWith("deposit"))bankRoutes.freeze();
-        }
         if(client.getGameState()!=GameState.LOGGED_IN||itemManager==null||event.isConsumed())return;
         Map<Integer,Integer> bag=stock().bag;
         if(SeedBoxStock.boxId(bag)<0||stockProfile==null)return;
@@ -966,7 +961,6 @@ public class FarmingHelperPlugin extends Plugin
             if (!items.equals(latest.items))
             {
                 quantities = null;
-                if(this==bank&&bankRoutes.started())bankRoutes.freeze();
                 items = latest.items;
                 save(key, StockSnapshot.encode(items));
             }
@@ -1417,7 +1411,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,List<String>> travelOptions=loggedIn&&config!=null&&itemManager!=null&&!ready.isEmpty()?teleports(supplies.travel.keySet()):Map.of();
         int pouch=RouteSupplies.pouch(carried,supplies.travel);
         Map<String,List<String>> bankRouteSnapshot=bankRoutes.routes();
-        Map<Integer,Integer> pouchRunes=!loggedIn||bankRouteSnapshot.isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
+        Map<Integer,Integer> pouchRunes=!loggedIn?Map.of():RouteSupplies.pouchContents(client,pouch);
         boolean elite=loggedIn&&client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)==1;
         // Birdhouse supplies are a reference-only future stage until the banking transition.
         boolean laterBirds=specialtyStaged&&!specialtyBirdPhase;
@@ -1638,7 +1632,15 @@ public class FarmingHelperPlugin extends Plugin
             if(!row.satisfied()&&row.bank>0)missingTravel.add(id);
         });
         missingTeleports=Set.copyOf(missingTravel);
-        bankFallback=teleports;
+        // A stocked banked pouch can be useful before Shortest Path returns; keep
+        // it optional and do not highlight it as an actual missing requirement.
+        if(!teleports.containsKey(pouch)&&RouteSupplies.optionalPouch(travelSites,bankRouteSnapshot,pouch,pouchRunes,this::observedItemName))
+        {
+            items.add(itemRow(pouch,1,supplies,true," — optional; route not verified"));
+            Map<Integer,Set<String>> provisional=new LinkedHashMap<>(teleports);
+            provisional.put(pouch,Set.of());bankFallback=Map.copyOf(provisional);
+        }
+        else bankFallback=teleports;
         List<GuideView.Stop> stops=new ArrayList<>();
         GuideView.Stats summary=runProgress.stats();
         String instruction=!loggedIn?"Log in to start this guide.":summary.total==0?"No enabled, unlocked patches.":summary.deferred>0||summary.seedless>0?"No ready patches remain.":"Run finished.";

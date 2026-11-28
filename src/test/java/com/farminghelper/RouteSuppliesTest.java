@@ -5,6 +5,23 @@ import static org.junit.Assert.*;
 public class RouteSuppliesTest
 {
     private static final Map<Integer,String> NAMES=Map.of(1,"Air rune",2,"Earth rune",3,"Law rune",4,"Water rune",5,"Fire rune",6,"Dust rune",7,"Rune pouch",772,"Dramen staff",8,"Staff of earth");
+    @Test public void camelotUsesBankedPouchBeforeWithdrawalWithoutDuplicateLooseRunes()
+    {
+        var sites=Set.of("Catherby");
+        var contents=Map.of(1,100,2,100,3,100);
+        var plan=RouteSupplies.plan(sites,Map.of("Catherby",List.of("  Camelot   Teleport ")),Map.of(),Map.of(),Map.of(7,1,1,100,3,100),Map.of(),Map.of(),7,contents,Map.of(1,100,3,100),false,NAMES::get,id->id<7);
+        assertEquals(Map.of(7,1),plan.quantities);
+        assertEquals(Set.of("Catherby"),plan.sites.get(7));
+        assertTrue(RouteSupplies.optionalPouch(sites,Map.of(),7,contents,NAMES::get));
+        assertFalse(RouteSupplies.optionalPouch(sites,Map.of("Catherby",List.of()),7,contents,NAMES::get));
+        assertFalse(RouteSupplies.optionalPouch(sites,Map.of(),7,Map.of(2,100),NAMES::get));
+    }
+    @Test public void ownedElementalStaffCanCoverMissingRunesWithoutDuplicatingEquipment()
+    {
+        var plan=RouteSupplies.plan(new LinkedHashSet<>(List.of("A","B")),Map.of("A",List.of("Watchtower Teleport"),"B",List.of("Watchtower Teleport")),Map.of(),Map.of(),Map.of(8,1,7,1),Map.of(),Map.of(),7,Map.of(3,4),Map.of(),false,NAMES::get,id->id<7);
+        assertEquals(Map.of(8,1,7,1),plan.quantities);
+        assertEquals(Set.of("A","B"),plan.sites.get(8));
+    }
     @Test public void houseThenFairyRingIncludesBankedPouchAndLawRunes()
     {
         var routes=Map.of("A",List.of("Teleport to House",RouteSupplies.FAIRY),"B",List.of("Watchtower Teleport"));

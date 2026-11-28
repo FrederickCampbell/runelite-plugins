@@ -5,8 +5,8 @@ param(
 $ErrorActionPreference = "Stop"
 if (-not $JarPath) {
     $lib = Join-Path (Split-Path $PSScriptRoot -Parent) "build/libs"
-    $jars = @(Get-ChildItem -LiteralPath $lib -Filter "*1.13.1*.jar" -File | Where-Object { $_.Name -notlike "*-all.jar" })
-    if ($jars.Count -ne 1) { throw "Pass -JarPath to the single standard 1.13.1 plugin JAR." }
+    $jars = @(Get-ChildItem -LiteralPath $lib -Filter "*1.13.2*.jar" -File | Where-Object { $_.Name -notlike "*-all.jar" })
+    if ($jars.Count -ne 1) { throw "Pass -JarPath to the single standard 1.13.2 plugin JAR." }
     $JarPath = $jars[0].FullName
 }
 $source = (Resolve-Path -LiteralPath $JarPath).Path
@@ -19,7 +19,7 @@ try {
     if (-not $entry) { throw "Missing version resource." }
     $reader = New-Object System.IO.StreamReader($entry.Open())
     try { $metadata = $reader.ReadToEnd() } finally { $reader.Dispose() }
-    if ($metadata.Trim() -ne "version=1.13.1") { throw "Wrong release candidate version." }
+    if ($metadata.Trim() -ne "version=1.13.2") { throw "Wrong release candidate version." }
 } finally { $archive.Dispose() }
 $dir = Join-Path $RuneliteDirectory "sideloaded-plugins"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -30,5 +30,5 @@ if (Test-Path -LiteralPath $target) {
     Copy-Item -LiteralPath $target -Destination ($target + ".bak") -Force
 }
 Copy-Item -LiteralPath $source -Destination $target -Force
-Write-Host "Installed 1.13.1 at $target"
+Write-Host "Installed 1.13.2 at $target"
 Write-Host "Launch a compatible RuneLite developer client. This does not install a Plugin Hub release."
