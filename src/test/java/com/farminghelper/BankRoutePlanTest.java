@@ -16,6 +16,7 @@ public class BankRoutePlanTest
         assertFalse(plan.message(Map.of("id","old","reached",true)));
         assertTrue(plan.message(Map.of("id",first.getData().get("id"),"reached",true,"transports",List.of(Map.of("displayInfo","Camelot tablet","objectInfo","")))));
         plan.tick(nav);assertEquals(2,sent.size());
+        assertEquals(RunOrder.surface(new FarmRunPatch("Catherby","",PatchType.FRUIT_TREE)),sent.get(1).getData().get("start"));
         assertTrue(plan.message(Map.of("id",sent.get(1).getData().get("id"),"reached",true,"transports",List.of())));
         assertTrue(plan.finished());assertTrue(sent.stream().allMatch(m->"query".equals(m.getName())));
         assertEquals(List.of("Camelot tablet"),plan.routes().get("Catherby"));assertEquals(List.of(),plan.routes().get("Yanille"));

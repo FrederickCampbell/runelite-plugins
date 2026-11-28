@@ -49,5 +49,18 @@ final class GuideItemHighlight extends WidgetItemOverlay
         BufferedImage outline=items.getItemOutline(id,widget.getQuantity(),color);
         Rectangle bounds=widget.getCanvasBounds();
         if(outline!=null && bounds!=null) graphics.drawImage(outline,bounds.x,bounds.y,null);
+        if(bounds!=null&&group!=InterfaceID.INVENTORY)
+        {
+            String label=helper.withdrawalLabel(id);
+            net.runelite.api.Point mouse=client.getMouseCanvasPosition();
+            if(label!=null&&mouse!=null&&bounds.contains(mouse.getX(),mouse.getY()))
+            {
+                Graphics2D g=(Graphics2D)graphics.create();
+                try{int width=g.getFontMetrics().stringWidth(label);int x=Math.max(0,bounds.x+(bounds.width-width)/2),y=Math.max(g.getFontMetrics().getHeight(),bounds.y-3);
+                    g.setColor(new Color(0,0,0,220));g.fillRect(x-2,y-g.getFontMetrics().getAscent(),width+4,g.getFontMetrics().getHeight());
+                    g.setColor(Color.WHITE);g.drawString(label,x,y);}
+                finally{g.dispose();}
+            }
+        }
     }
 }

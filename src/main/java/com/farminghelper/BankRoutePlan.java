@@ -8,7 +8,7 @@ import net.runelite.api.coords.WorldPoint;
 final class BankRoutePlan
 {
     private WorldPoint origin;
-    private final Map<String,WorldPoint> remaining=new LinkedHashMap<>();
+    private final Map<String,WorldPoint> remaining=new LinkedHashMap<>(), exits=new HashMap<>();
     private final Map<String,List<String>> routes=new LinkedHashMap<>();
     private Map<String,List<String>> resolved=Map.of();
     private String pending,site;
@@ -23,7 +23,7 @@ final class BankRoutePlan
     void refresh(){if(started){frozen=false;if(finished)resolved=Map.copyOf(routes);}}
     void closeVisit()
     {
-        origin=null;remaining.clear();routes.clear();pending=null;site=null;
+        origin=null;remaining.clear();exits.clear();routes.clear();pending=null;site=null;
         age=budget=0;started=finished=frozen=initialPublished=false;published=List.of();
     }
     Map<String,List<String>> routes(){return resolved;}
@@ -38,7 +38,7 @@ final class BankRoutePlan
         for(FarmRunPatch patch:patches)
         {
             WorldPoint point=RunOrder.surface(patch);
-            if(point!=null)remaining.putIfAbsent(RunOrder.site(patch),point);
+            if(point!=null){String key=RunOrder.site(patch);remaining.putIfAbsent(key,point);exits.put(key,point);}
         }
         finished=from==null||remaining.isEmpty();
     }
@@ -59,6 +59,8 @@ final class BankRoutePlan
         if(pending==null||!pending.equals(data.get("id")))return false;
         pending=null;
         if(Boolean.TRUE.equals(data.get("reached"))&&data.get("transports") instanceof Collection)routes.put(site,descriptions(data.get("transports")));
+        // Estimate each leg from the preceding visit; this does not simulate inventory.
+        origin=exits.getOrDefault(site,origin);
         if(remaining.isEmpty())finish();
         return true;
     }

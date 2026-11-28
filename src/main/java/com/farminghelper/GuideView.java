@@ -14,7 +14,25 @@ final class GuideView
         final String name;
         final int owned,needed,bank,vault;
         final boolean recommended;
+        final int section; // 0 ordinary, 1 Guild, 2 external
+        ItemRow(int id,String name,int owned,int needed,int bank,int vault,boolean recommended)
+        {this(id,name,owned,needed,bank,vault,recommended,0);}
         boolean satisfied(){return owned>=needed;}
+    }
+    /** Partition already-allocated quantities, reserving carried stock for local work first. */
+    static List<ItemRow> guildSections(List<ItemRow> rows,Map<Integer,Integer> local)
+    {
+        List<ItemRow> result=new ArrayList<>(rows.size()+local.size());
+        for(ItemRow row:rows)
+        {
+            if(row.recommended){result.add(row);continue;}
+            int n=Math.min(row.needed,Math.max(0,local.getOrDefault(row.id,0)));
+            int held=Math.min(n,row.owned),fromBank=Math.min(Math.max(0,n-held),row.bank);
+            int fromVault=Math.min(Math.max(0,n-held-fromBank),row.vault);
+            if(n>0)result.add(new ItemRow(row.id,row.name,held,n,fromBank,fromVault,false,1));
+            if(row.needed>n)result.add(new ItemRow(row.id,row.name,Math.max(0,row.owned-held),row.needed-n,row.bank-fromBank,row.vault-fromVault,false,2));
+        }
+        return result;
     }
     /** Shared quantity semantics; overlays do not change native storage layouts. */
     static Set<Integer> missingItems(Map<Integer,Integer> required,Map<Integer,Integer> carried)
@@ -53,9 +71,12 @@ final class GuideView
         final boolean initial;
         final String storageWarning,preparationHelp,details;
         final boolean seedPreparation;
+        final boolean guildSplit;
         final Set<Integer> preparationItems;
         Notes(boolean initial,String storageWarning,String preparationHelp,String details)
-        {this(initial,storageWarning,preparationHelp,details,false,Set.of());}
+        {this(initial,storageWarning,preparationHelp,details,false,false,Set.of());}
+        Notes(boolean initial,String storageWarning,String preparationHelp,String details,boolean seedPreparation,Set<Integer> preparationItems)
+        {this(initial,storageWarning,preparationHelp,details,seedPreparation,false,preparationItems);}
     }
     final Notes notes;
     final Stats stats;

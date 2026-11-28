@@ -665,7 +665,7 @@ final class FarmingHelperPanel extends PluginPanel
     }
 
     // Required and optional rows for the same physical item have separate controls.
-    private static int rowKey(GuideView.ItemRow row){return row.recommended?~row.id:row.id;}
+    private static int rowKey(GuideView.ItemRow row){return row.recommended?~row.id:row.id*3+row.section;}
     private static Color itemColor(GuideView.ItemRow row){return row.satisfied()?FarmingTheme.SUCCESS:row.recommended?FarmingTheme.WARNING:FarmingTheme.DANGER;}
     private static String observedSource(GuideView.ItemRow row)
     {
@@ -729,11 +729,11 @@ final class FarmingHelperPanel extends PluginPanel
 
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || a.supplyNote.isEmpty()!=b.supplyNote.isEmpty() || (a.notes.initial!=b.notes.initial || a.notes.seedPreparation!=b.notes.seedPreparation || !a.notes.preparationItems.equals(b.notes.preparationItems) || !a.notes.storageWarning.equals(b.notes.storageWarning) || !a.notes.preparationHelp.equals(b.notes.preparationHelp) || a.notes.details.isEmpty()!=b.notes.details.isEmpty()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || a.supplyNote.isEmpty()!=b.supplyNote.isEmpty() || (a.notes.initial!=b.notes.initial || a.notes.guildSplit!=b.notes.guildSplit || a.notes.seedPreparation!=b.notes.seedPreparation || !a.notes.preparationItems.equals(b.notes.preparationItems) || !a.notes.storageWarning.equals(b.notes.storageWarning) || !a.notes.preparationHelp.equals(b.notes.preparationHelp) || a.notes.details.isEmpty()!=b.notes.details.isEmpty()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)
         {
             GuideView.ItemRow old=a.items.get(i), next=b.items.get(i);
-            if(old.id!=next.id || old.recommended!=next.recommended)return false;
+            if(old.id!=next.id || old.section!=next.section || old.recommended!=next.recommended)return false;
         }
         for(int i=0;i<a.stops.size();i++)if(a.stops.get(i).patch!=b.stops.get(i).patch || a.stops.get(i).done!=b.stops.get(i).done || a.stops.get(i).active!=b.stops.get(i).active)return false;
         return true;
@@ -825,7 +825,19 @@ final class FarmingHelperPanel extends PluginPanel
     {
         JPanel body=column();body.setOpaque(true);body.setBackground(FarmingTheme.CARD);
         body.setBorder(BorderFactory.createEmptyBorder(2,5,4,5));
-        for(GuideView.ItemRow item:view.items)if(item.recommended==optional)
+        if(!optional&&view.notes.guildSplit)
+        {
+            for(int section=1;section<=2;section++)
+            {
+                if(section==2)body.add(new JSeparator());
+                body.add(text(section==1?"At Farming Guild":"After Farming Guild",FarmingTheme.TEXT));
+                boolean any=false;
+                for(GuideView.ItemRow item:view.items)if(!item.recommended&&item.section==section)
+                {SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));row.update(item);body.add(row);any=true;}
+                if(!any)body.add(text("No outstanding requirements.",FarmingTheme.MUTED));
+            }
+        }
+        else for(GuideView.ItemRow item:view.items)if(item.recommended==optional)
         {
             SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));
             row.update(item);body.add(row);
@@ -845,7 +857,7 @@ final class FarmingHelperPanel extends PluginPanel
         if(navigation.acceptGuide())renderGuide(view);
     }
     private String requirementsTitle(GuideView view)
-    {long missing=view.items.stream().filter(r->!r.recommended&&!r.satisfied()).count();return "Recommended items"+(missing>0?" · "+missing+" missing":"");}
+    {long missing=view.items.stream().filter(r->!r.recommended&&!r.satisfied()).count();return (view.notes.guildSplit?"Required Items":"Recommended items")+(missing>0?" · "+missing+" missing":"");}
     private void renderGuide(GuideView view)
     {
         if(sameStructure(previousGuide,view)){refreshRows(previousGuide,view);previousGuide=view;return;}
@@ -1054,7 +1066,8 @@ final class FarmingHelperPanel extends PluginPanel
         seedBox.setEnabled(plugin.seedBoxOwned());
         seedBox.setToolTipText(plugin.seedBoxOwned()?"Pack eligible seeds when it saves inventory space.":"Seed box not observed in inventory or bank.");
         addRow(seedBox);
-        containerPreference("Use herb sack","directorUseHerbSack",plugin.herbSackOwned());
+        containerPreference("Use silklined herb sack","directorUseHerbSack",plugin.herbSackOwned());
+        preferenceCheck("Allow ordinary herb sack","directorUseOrdinaryHerbSack",false);
         containerPreference("Use reagent pouch","directorUseReagentPouch",plugin.reagentPouchOwned());
         heading("Default crop care");
         choice("Compost type",CompostChoice.values(),plugin.compostChoice(),"Bottomless bucket uses ultracompost if the bucket is unavailable.",
