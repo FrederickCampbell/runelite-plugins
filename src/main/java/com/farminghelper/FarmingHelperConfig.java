@@ -5,6 +5,8 @@ import net.runelite.client.config.*;
 @ConfigGroup("farming-helper")
 public interface FarmingHelperConfig extends Config
 {
+    @ConfigItem(keyName="routeAudit",name="Transportation diagnostic log",description="Opt-in local RuneLite log: route responses, relevant item counts and bank priority IDs. No upload.")
+    default boolean routeAudit(){return false;}
 	@ConfigItem(keyName = "includeMorytania", name = "Morytania", description = "Include patches in Morytania", hidden = true)
 	default boolean includeMorytania() { return true; }
 	@ConfigItem(keyName = "includeKourend", name = "Kourend", description = "Include patches in Kourend", hidden = true)

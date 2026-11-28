@@ -16,17 +16,29 @@ final class BankRoutePlan
     private boolean started,finished;
     private int retries;
     private WorldPoint pendingTarget;
+    private RouteSupplies.Plan committed;
+    private Set<String> plannedSites=Set.of();
     private List<Integer> published=List.of();
     void reset()
     {
-        closeVisit();resolved=Map.of();
+        committed=null;closeVisit();resolved=Map.of();plannedSites=Set.of();
     }
     void closeVisit()
     {
         origin=null;remaining.clear();exits.clear();routes.clear();pending=null;site=null;
-        age=budget=retries=0;pendingTarget=null;started=finished=false;published=List.of();
+        age=budget=retries=0;pendingTarget=null;started=finished=false;
+        if(committed==null){resolved=Map.of();published=List.of();plannedSites=Set.of();}
     }
     Map<String,List<String>> routes(){return resolved;}
+    Set<String> plannedSites(){return plannedSites;}
+    RouteSupplies.Plan committed(){return committed;}
+    boolean awaitingPublication(){return started&&committed==null;}
+    boolean commit(RouteSupplies.Plan plan)
+    {
+        if(!started||!finished||committed!=null)return false;
+        committed=plan;return true;
+    }
+    static boolean routingConfig(String key){return !"lastSeenBankItems".equals(key);}
     private void finish(){finished=true;resolved=Map.copyOf(routes);}
     boolean started(){return started;}
     boolean finished(){return finished;}
@@ -40,6 +52,7 @@ final class BankRoutePlan
             WorldPoint point=RunOrder.surface(patch);
             if(point!=null){String key=RunOrder.site(patch);remaining.putIfAbsent(key,point);exits.put(key,point);}
         }
+        plannedSites=Collections.unmodifiableSet(new LinkedHashSet<>(remaining.keySet()));
         finished=from==null||remaining.isEmpty();
     }
     void tick(NavigationBridge navigation)
@@ -69,8 +82,7 @@ final class BankRoutePlan
         if(Boolean.TRUE.equals(data.get("reached"))&&data.get("transports") instanceof Collection)
         {
             routes.put(site,descriptions(data.get("transports")));
-            // Publish each completed leg, even while the player is withdrawing supplies.
-            resolved=Map.copyOf(routes);
+            // Publish only after all queries settle or the bounded budget expires.
         }
         // Estimate each leg from the preceding visit; this does not simulate inventory.
         origin=exits.getOrDefault(site,origin);
@@ -93,6 +105,7 @@ final class BankRoutePlan
                 if(display instanceof String&&!((String)display).isBlank())labels.add((String)display);
                 else labels.add(RouteSupplies.UNKNOWN);
             }
+            else if(!RouteSupplies.freeObject(action))labels.add(RouteSupplies.UNKNOWN);
         }
         return labels;
     }

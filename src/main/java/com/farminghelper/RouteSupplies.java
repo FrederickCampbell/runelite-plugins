@@ -14,6 +14,7 @@ import net.runelite.api.gameval.VarbitID;
 final class RouteSupplies
 {
     private static final Map<String,Map<String,Integer>> SPELLS=spells();
+    private static final Set<String> FREE_LABELS=freeEntries("/farming-route-free-labels.tsv"),FREE_OBJECTS=freeEntries("/farming-route-free-objects.tsv");
     private static final int[] POUCHES={ItemID.BH_RUNE_POUCH,ItemID.BH_RUNE_POUCH_TROUVER,ItemID.DIVINE_RUNE_POUCH,ItemID.DIVINE_RUNE_POUCH_TROUVER};
     private static final int[] TYPES={VarbitID.RUNE_POUCH_TYPE_1,VarbitID.RUNE_POUCH_TYPE_2,VarbitID.RUNE_POUCH_TYPE_3,VarbitID.RUNE_POUCH_TYPE_4,VarbitID.RUNE_POUCH_TYPE_5,VarbitID.RUNE_POUCH_TYPE_6};
     private static final int[] AMOUNTS={VarbitID.RUNE_POUCH_QUANTITY_1,VarbitID.RUNE_POUCH_QUANTITY_2,VarbitID.RUNE_POUCH_QUANTITY_3,VarbitID.RUNE_POUCH_QUANTITY_4,VarbitID.RUNE_POUCH_QUANTITY_5,VarbitID.RUNE_POUCH_QUANTITY_6};
@@ -38,6 +39,17 @@ final class RouteSupplies
         }catch(IOException|RuntimeException ignored){return Map.of();}
         return Map.copyOf(result);
     }
+    private static Set<String> freeEntries(String resource)
+    {
+        Set<String> entries=new HashSet<>();
+        try(InputStream in=RouteSupplies.class.getResourceAsStream(resource))
+        {
+            if(in!=null)try(BufferedReader reader=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8)))
+            {for(String line;(line=reader.readLine())!=null;)if(!line.isBlank()&&!line.startsWith("#"))entries.add(labelKey(line));}
+        }catch(IOException ignored){}
+        return Set.copyOf(entries);
+    }
+    static boolean freeObject(String action){return FREE_OBJECTS.contains(labelKey(action));}
     private static String labelKey(String label)
     {return Objects.toString(label,"").strip().replaceAll("\\s+"," ").toLowerCase(Locale.ROOT);}
     /** Optional convenience only: never present a banked pouch as a verified dependency
@@ -88,6 +100,8 @@ final class RouteSupplies
     {
         final Map<Integer,Set<String>> sites=new LinkedHashMap<>();
         final Map<Integer,Integer> quantities=new LinkedHashMap<>();
+        final Set<String> unresolved=new LinkedHashSet<>();
+        int optionalPouch=-1;
         void add(int id,int count,String site)
         {if(id>0&&count>0){sites.computeIfAbsent(id,k->new LinkedHashSet<>()).add(site);quantities.merge(id,count,Math::max);}}
     }
@@ -107,10 +121,10 @@ final class RouteSupplies
         for(String site:sites)
         {
             List<String> labels=routes.get(site);
-            if(labels==null)continue;
+            if(labels==null){result.unresolved.add(site);continue;}
             if(labels.isEmpty()){resolved.add(site);continue;}
 
-            // Stage one destination. A failed edge must not consume another site's runes or charges.
+            // Preserve funded edges independently; roll back only the failed cast.
             Map<Integer,Integer> usedItems=new HashMap<>();
             int[] pouchLeft=null,looseLeft=null;
             boolean complete=true,usesPouch=false,usesStaff=false;
@@ -118,10 +132,11 @@ final class RouteSupplies
             {
                 if(FAIRY.equals(label))
                 {
-                    if(!elite&&staff<=0){complete=false;break;}
+                    if(!elite&&staff<=0){complete=false;continue;}
                     usesStaff=!elite;
                     continue;
                 }
+                if(FREE_LABELS.contains(labelKey(label)))continue;
                 Map<String,Integer> spell=SPELLS.get(labelKey(label));
                 if(spell!=null)
                 {
@@ -158,17 +173,17 @@ final class RouteSupplies
                             pouchLeft=trialPouch;looseLeft=trialLoose;paidByPouch=trialUsed;
                             usedItems.put(id,1);funded=true;break;
                         }
-                        if(!funded){complete=false;break;}
+                        if(!funded){pouchLeft=beforePouch;looseLeft=beforeLoose;complete=false;continue;}
                     }
                     usesPouch|=paidByPouch;
                     continue;
                 }
                 int id=bestItem(label,eligible,available,carried,visits,usedItems,names,stackable);
-                if(id<0){complete=false;break;}
+                if(id<0){complete=false;continue;}
                 usedItems.merge(id,1,Integer::sum);
             }
-            if(!complete)continue;
-            resolved.add(site);
+            if(complete)resolved.add(site);else result.unresolved.add(site);
+            if(usesStaff||usesPouch||!usedItems.isEmpty()||pouchLeft!=null&&!Arrays.equals(looseLeft,loosePool.remaining))resolved.add(site);
             if(usesStaff)result.add(staff,1,site);
             if(usesPouch)result.add(pouch,1,site);
             if(pouchLeft!=null)

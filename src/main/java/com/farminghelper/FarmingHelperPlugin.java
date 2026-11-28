@@ -126,10 +126,12 @@ public class FarmingHelperPlugin extends Plugin
     private final Map<Set<Integer>,Map<Integer,List<String>>> eligibleTravel=new HashMap<>();
     private List<?> shelfInputs=List.of();
     private final BankRoutePlan bankRoutes=new BankRoutePlan();
+    private static final org.slf4j.Logger ROUTE_LOG=org.slf4j.LoggerFactory.getLogger("FarmingHelper.RouteAudit");
     private List<FarmRunPatch> bankItinerary=List.of();
     private Map<Integer,Set<String>> bankFallback=Map.of();
     private List<?> routeSupplyInputs=List.of();
     private RouteSupplies.Plan routeSupplyPlan;
+    private List<Integer> tracedPriority=List.of();
     private Set<Integer> shelfItems=Set.of(), shelfCandidates=Set.of(), bankPlaceholders=Set.of();
     private String stockProfile;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
@@ -408,7 +410,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         inRun(()->{
             for(FarmRunPatch p:patches)if(p.getPatchType()==type&&selected(p)&&!runProgress.finished(p))runProgress.skip(p);
-            lastView=null;update();
+            bankRoutes.reset();routeSupplyInputs=List.of();lastView=null;update();
         });
     }
     List<PatchType> selectedRunTypes()
@@ -430,7 +432,7 @@ public class FarmingHelperPlugin extends Plugin
             else if(diseaseTarget==null&&current!=null&&current==displayed&&water==(activeAction==StepEngine.Action.WATER))
             {
                 if(water)settleWater(current);
-                else runProgress.skip(current);
+                else {runProgress.skip(current);bankRoutes.reset();routeSupplyInputs=List.of();}
             }
             update();
         });
@@ -473,7 +475,12 @@ public class FarmingHelperPlugin extends Plugin
         if(!"shortestpath".equals(event.getNamespace())||
             !("result".equals(event.getName())||"currentTarget".equals(event.getName())))return;
         onClient(()->{
-            if("result".equals(event.getName())&&event.getData()!=null&&bankRoutes.message(event.getData()))return;
+            if("result".equals(event.getName())&&event.getData()!=null&&bankRoutes.message(event.getData()))
+            {
+                if(legacy.routeAudit())ROUTE_LOG.info("FH_ROUTE result id={} start={} target={} reached={} reason={} bankVisited={} transports={}",
+                    event.getData().get("id"),event.getData().get("start"),event.getData().get("target"),event.getData().get("reached"),event.getData().get("reason"),event.getData().get("bankVisited"),event.getData().get("transports"));
+                return;
+            }
             if(navigation.message(event))highlight.transportChanged();
         });
     }
@@ -574,7 +581,8 @@ public class FarmingHelperPlugin extends Plugin
     }
     @Subscribe public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
     {
-        if("shortestpath".equals(event.getGroup()))onClient(()->{invalidateTravel();bankRoutes.reset();routeSupplyInputs=List.of();});
+        if("shortestpath".equals(event.getGroup())&&BankRoutePlan.routingConfig(event.getKey()))
+            onClient(()->{invalidateTravel();bankRoutes.reset();routeSupplyInputs=List.of();});
         if("farming-helper".equals(event.getGroup())&&!event.getKey().startsWith("observed"))preferenceRevision.incrementAndGet();
     }
 
@@ -826,16 +834,21 @@ public class FarmingHelperPlugin extends Plugin
         {bankRoutes.closeVisit();runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
         // Shortest Path enables bank traversal in both bank inventory modes.
         boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"));
-        if(bank.sampled&&!bankRoutes.started())
-            bankRoutes.begin(bankAware?LocationContext.capture(client).pathStart():null,bankItinerary);
-        if(bankAware&&bankRoutes.started())bankRoutes.tick(navigation);
         if(!enabled){runBank.tick(null,Set.of(),false,birdBankPhase());return "";}
+        if(bank.sampled&&!bankRoutes.started()&&bankRoutes.committed()==null)
+        {
+            bankRoutes.begin(bankAware?LocationContext.capture(client).pathStart():null,bankItinerary);
+            if(legacy.routeAudit())ROUTE_LOG.info("FH_ROUTE begin bankAware={} sites={}",bankAware,bankRoutes.plannedSites());
+        }
+        if(bankAware&&bankRoutes.started())bankRoutes.tick(navigation);
+        if(!bank.sampled||bankRoutes.awaitingPublication())return "Calculating transportation for the run. The farming bank appears when the plan is ready.";
         Set<Integer> eligible=bankRunItems(stock().shelf);
         List<Integer> priority=bankRoutes.started()
             ?bankRoutes.priority(bankFallback,manual)
             :List.copyOf(bankFallback.keySet());
         LinkedHashSet<Integer> prioritized=new LinkedHashSet<>(preparationBankPriority);
         prioritized.addAll(BankShelfLayout.priorityOrder(priority,this::observedItemName,id->{var stats=itemManager.getItemStats(id);return stats==null||stats.getEquipment()==null?-1:stats.getEquipment().getSlot();}));prioritized.addAll(containerBankPriority);priority=List.copyOf(prioritized);
+        if(legacy.routeAudit()&&!tracedPriority.equals(priority)){tracedPriority=priority;ROUTE_LOG.info("FH_ROUTE priority={} admittedPriority={}",priority,priority.stream().filter(id->eligible!=null&&eligible.contains(id)&&shelfCandidates.contains(id)).collect(java.util.stream.Collectors.toList()));}
         if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase(),priority);
         runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase(),priority);return "";
     }
@@ -844,7 +857,7 @@ public class FarmingHelperPlugin extends Plugin
         long id=session.get();
         inRun(()->{
             if(!flag("activeRunBank",true))return;
-            sampleStorage();bankRoutes.closeVisit();update();
+            sampleStorage();update();
             String message=updateRunBank(true);
             if(!message.isEmpty())SwingUtilities.invokeLater(()->{if(id==session.get()&&guideRequested)feedback.accept(message);});
         });
@@ -1562,12 +1575,21 @@ public class FarmingHelperPlugin extends Plugin
         Set<String> travelSites=new LinkedHashSet<>();
         for(FarmRunPatch patch:remaining){String site=RunOrder.site(patch);if(!site.equals(localSite))travelSites.add(site);}
         List<?> routeInputs=List.of(List.copyOf(travelSites),bankRouteSnapshot,supplies,travelOptions,pouch,pouchRunes,elite);
-        if(!routeInputs.equals(routeSupplyInputs))
+        if(bankRoutes.committed()!=null)routeSupplyPlan=bankRoutes.committed();
+        else if(bankRoutes.awaitingPublication()&&!bankRoutes.finished())routeSupplyPlan=new RouteSupplies.Plan();
+        else if(bankRoutes.awaitingPublication()||!routeInputs.equals(routeSupplyInputs)||routeSupplyPlan==null)
         {
-            Map<Integer,Set<String>> fallbackTravel=RunTeleports.selectSites(travelSites,travelOptions,carried,supplies.travel,
+            Set<String> sites=bankRoutes.awaitingPublication()?bankRoutes.plannedSites():travelSites;
+            Map<Integer,Set<String>> fallbackTravel=RunTeleports.selectSites(sites,travelOptions,carried,supplies.travel,
                 (id,visits)->RunTeleports.quantity(id,visits,observedItemName(id),stackable(id)));
-            routeSupplyPlan=RouteSupplies.plan(travelSites,bankRouteSnapshot,fallbackTravel,travelOptions,supplies.travel,carried,equipped,
+            routeSupplyPlan=RouteSupplies.plan(sites,bankRouteSnapshot,fallbackTravel,travelOptions,supplies.travel,carried,equipped,
                 pouch,pouchRunes,!loggedIn||bankRouteSnapshot.isEmpty()?Map.of():RouteSupplies.looseRunes(client,supplies.travel),elite,this::observedItemName,this::stackable);
+            if(!routeSupplyPlan.sites.containsKey(pouch)&&RouteSupplies.optionalPouch(sites,bankRouteSnapshot,pouch,pouchRunes,this::observedItemName))
+                routeSupplyPlan.optionalPouch=pouch;
+            if(bankRoutes.commit(routeSupplyPlan)&&legacy.routeAudit())
+                ROUTE_LOG.info("FH_ROUTE commit items={} sites={} unresolved={} optionalPouch={} pouchContents={} carried={} equipped={} relevantBank={}",
+                    routeSupplyPlan.quantities,routeSupplyPlan.sites,routeSupplyPlan.unresolved,routeSupplyPlan.optionalPouch,pouchRunes,carried,equipped,
+                    bank.items.entrySet().stream().filter(e->routeSupplyPlan.quantities.containsKey(e.getKey())||e.getKey()==pouch||observedItemName(e.getKey()).toLowerCase(Locale.ROOT).endsWith(" rune")||observedItemName(e.getKey()).toLowerCase(Locale.ROOT).contains("staff")).collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,Map.Entry::getValue)));
             routeSupplyInputs=routeInputs;
         }
         Map<Integer,Set<String>> teleports=routeSupplyPlan.sites;
@@ -1634,11 +1656,12 @@ public class FarmingHelperPlugin extends Plugin
         missingTeleports=Set.copyOf(missingTravel);
         // A stocked banked pouch can be useful before Shortest Path returns; keep
         // it optional and do not highlight it as an actual missing requirement.
-        if(!teleports.containsKey(pouch)&&RouteSupplies.optionalPouch(travelSites,bankRouteSnapshot,pouch,pouchRunes,this::observedItemName))
+        if(routeSupplyPlan.optionalPouch>0)
         {
-            items.add(itemRow(pouch,1,supplies,true," — optional; route not verified"));
+            int optional=routeSupplyPlan.optionalPouch;
+            items.add(itemRow(optional,1,supplies,true," — optional; route not verified"));
             Map<Integer,Set<String>> provisional=new LinkedHashMap<>(teleports);
-            provisional.put(pouch,Set.of());bankFallback=Map.copyOf(provisional);
+            provisional.put(optional,Set.of());bankFallback=Map.copyOf(provisional);
         }
         else bankFallback=teleports;
         List<GuideView.Stop> stops=new ArrayList<>();
@@ -1831,6 +1854,8 @@ public class FarmingHelperPlugin extends Plugin
         if(compostCount>0&&(compostId==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED||required.containsKey(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)))
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Check the bottomless bucket's compost type and charges.";
         StringJoiner details=new StringJoiner("\n");
+        if(bankRoutes.awaitingPublication()&&!bankRoutes.finished())details.add("Calculating transportation for this banking stage…");
+        else if(bankRoutes.committed()!=null&&!routeSupplyPlan.unresolved.isEmpty())details.add("Transportation estimate: "+routeSupplyPlan.unresolved.size()+" destination(s) partially resolved or unchecked. Check Shortest Path before leaving.");
         long now=System.currentTimeMillis();
         boolean bankStale=GuidePresentation.stale(bank.at,now);
         boolean vaultStale=GuidePresentation.stale(vault.at,now);
@@ -2121,6 +2146,7 @@ public class FarmingHelperPlugin extends Plugin
     private void beginPreparation(Preparation.Workflow next)
     {
         clearWaterOffer();preparationOrigin=LocationContext.capture(client).normalized;
+        if(workflow!=next){bankRoutes.reset();routeSupplyInputs=List.of();}
         workflow=next;visitedStorage=false;explicitResupply=false;
     }
     void continueRun()
