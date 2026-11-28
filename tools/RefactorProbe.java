@@ -85,14 +85,12 @@ public final class RefactorProbe
         for(int i=1;i<=38;i++)demand.put(i,i%3==0?10:1);
         java.util.function.IntPredicate stackable=id->id%3==0;
         measure("loaded-slots",()->Preparation.loadedSlots(bag,demand,Map.of(30,1),Map.of(33,10),stackable));
-        measure("prefix-search",()->{
-            Preparation.Window window=new Preparation.Window(48);
-            do {
-                Map<Integer,Integer> req=new HashMap<>();
-                req.put(1,window.limit());req.put(3,window.limit()*3);
-                if(!window.advance(Preparation.loadedSlots(bag,req,Map.of(),Map.of(),stackable)<=24))break;
-            }while(true);
-            return window.limit();
+        // Same 48-patch demand fixture as v1.11.6, but no prefix fitting:
+        // the result is occupied slots for the full plan, not a fitting prefix.
+        measure("full-run-planning",()->{
+            Map<Integer,Integer> req=new HashMap<>();
+            req.put(1,48);req.put(3,48*3);
+            return Preparation.loadedSlots(bag,req,Map.of(),Map.of(),stackable);
         });
         measure("bank-choice",()->Preparation.choose(80,tile,false,false).name.hashCode());
         Map<Integer,Integer> other=new HashMap<>();

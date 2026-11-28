@@ -2,13 +2,13 @@
 
 <img src="icon.png" alt="Farming Helper icon" align="right" width="48">
 
-**Quest Helper for your farm runs!** · Version 1.11.6
+**Quest Helper for your farm runs!** · Version 1.12.0-rc1
 
 Pick a run, grab your supplies and follow the guide. Farming Helper helps you decide what to plant, what to bring and where to go next.
 
 ## Getting started
 
-Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, the Farming Guild Seed Vault to refresh your supplies. Pick a run and follow the highlighted patch. Recommended items and Recommended teleports sit above the steps. Check your supplies, then choose Start Run at the top of the guide. Both lists fold when the route starts, and you can reopen either at any patch. The preparation checklist covers a feasible portion of large runs, while the guide retains your complete selected itinerary. You can start or continue with a partial inventory; the guide suggests resupply when the next patch needs stored supplies.
+Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, the Farming Guild Seed Vault to refresh your supplies. Pick a run and follow the highlighted patch. Recommended items and Recommended teleports sit above the steps. Check your supplies, then choose Start Run at the top of the guide. Both lists fold when the route starts, and you can reopen either at any patch. The checklist covers the full remaining run even when it exceeds inventory capacity. Choose what to carry and when to bank; manual Resupply remains available. Manual runs starting at the Farming Guild prepare seedlings, guide local activities, and offer a separate Continue step before the protected external route. Premade and Bank-start runs retain ordinary preparation. Watered seedlings count toward sapling preparation but must mature before planting.
 
 ## Features
 
@@ -22,6 +22,10 @@ Open Farming Helper in the RuneLite sidebar. Visit your bank and, if unlocked, t
 - Optional teleport recommendations and navigation with [Shortest Path](https://runelite.net/plugin-hub/show/shortest-path).
 
 All gameplay actions are manual. Quest Helper is not required.
+
+## Local development testing
+
+This branch is an unpublished release candidate. See [local testing](docs/LOCAL-TEST.md) for the CI installer and developer-client instructions. All game actions must be performed manually. Do not treat a passing build as Plugin Hub approval.
 
 ## Credits
 

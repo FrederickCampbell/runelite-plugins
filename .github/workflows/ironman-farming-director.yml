@@ -38,6 +38,24 @@ jobs:
           print('Plugin classes:', len(majors), 'classfile versions:', set(majors))
           assert set(majors) == {55}
           PY
+      - name: Screen compiled JAR references
+        run: python3 tools/audit-jar.py "$(find build/libs -name '*.jar' ! -name '*-all.jar' | head -1)"
+      - name: Smoke-test local installer in isolated directory
+        if: github.ref_name == 'farming-helper-v1.12-workflow'
+        shell: pwsh
+        run: |
+          $testHome = Join-Path $env:RUNNER_TEMP "farming-helper-install-test"
+          & ./tools/Install-FarmingHelper.ps1 -RuneliteDirectory $testHome
+          if (-not (Test-Path (Join-Path $testHome "sideloaded-plugins/FarmingHelper.jar"))) { throw "Installer did not copy JAR" }
+      - uses: actions/upload-artifact@v4
+        if: github.ref_name == 'farming-helper-v1.12-workflow'
+        with:
+          name: farming-helper-local-test
+          path: |
+            build/libs/*.jar
+            tools/Install-FarmingHelper.ps1
+            docs/LOCAL-TEST.md
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: farming-helper-jar
@@ -56,7 +74,7 @@ jobs:
           if-no-files-found: ignore
 
   comparison:
-    if: github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning' || github.ref == 'refs/heads/farming-helper-v1.11-consolidation' || github.ref == 'refs/heads/farming-helper-v1.11.2-validation' || github.ref == 'refs/heads/farming-helper-v1.11.3-validation' || github.ref == 'refs/heads/farming-helper-v1.11.4-validation' || github.ref == 'refs/heads/farming-helper-v1.11.5-validation'
+    if: github.ref == 'refs/heads/farming-helper-v1.12-workflow' || github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning' || github.ref == 'refs/heads/farming-helper-v1.11-consolidation' || github.ref == 'refs/heads/farming-helper-v1.11.2-validation' || github.ref == 'refs/heads/farming-helper-v1.11.3-validation' || github.ref == 'refs/heads/farming-helper-v1.11.4-validation' || github.ref == 'refs/heads/farming-helper-v1.11.5-validation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +96,7 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.4-validation ]]; then baseline_sha=5acd9eb9af7d359b847cdb3caef3eda784a2c791; fi
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11.5-validation ]]; then baseline_sha=fe4c1abcc7a019f4ee6318ce784f12e2eae057c0; fi
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=4f9a3ee63b5df95dd0692e59a6f308b7333d3e07; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.12-workflow ]]; then baseline_sha=0ab13686110ccf3b38e685668f830f4651572196; fi
           git fetch --no-tags --depth=1 origin "$baseline_sha"
           git worktree add --detach "$baseline" FETCH_HEAD
           # Compare layout with identical display metadata, including the version shown on Home.
@@ -90,11 +109,13 @@ jobs:
             cp="$(cat build/refactor-classpath.txt)"
             out="$RUNNER_TEMP/probe-$revision"
             mkdir -p "$out"
-            javac --release 11 -proc:none -cp "$cp" -d "$out" "$root/tools/RefactorProbe.java"
+            probe="$root/tools/RefactorProbe.java"
+            if [[ "$GITHUB_REF_NAME" == farming-helper-v1.12-workflow && "$revision" == baseline ]]; then probe="$baseline/tools/RefactorProbe.java"; fi
+            javac --release 11 -proc:none -cp "$cp" -d "$out" "$probe"
             java -Xms256m -Xmx256m -cp "$out:$cp" com.farminghelper.RefactorProbe | tee "$RUNNER_TEMP/$revision.txt"
             xvfb-run -a java -cp "$fixtures:$out:$cp" com.farminghelper.RefactorProbe preview
           done
-          java -cp "$out:$cp" com.farminghelper.RefactorProbe pixels "$baseline"
+          if [[ "$GITHUB_REF_NAME" != farming-helper-v1.12-workflow ]]; then java -cp "$out:$cp" com.farminghelper.RefactorProbe pixels "$baseline"; fi
           python3 - <<'PY'
           import os
           from pathlib import Path
@@ -103,7 +124,12 @@ jobs:
               rows = [s.split() for s in (temp / (name + '.txt')).read_text().splitlines() if s.startswith('PROBE ')]
               return {op: (int(value), int(size)) for _, op, value, size in rows}
           base, tip = read('baseline'), read('candidate')
-          assert len(base) == 16 and base.keys() == tip.keys()
+          workflow = os.environ.get('GITHUB_REF_NAME') == 'farming-helper-v1.12-workflow'
+          if workflow:
+              assert len(base) == 16 and len(tip) == 16
+              print('48-patch planner fixture: baseline fitting-prefix result, bytes/op=', base.pop('prefix-search'))
+              print('48-patch planner fixture: candidate full-demand slots result, bytes/op=', tip.pop('full-run-planning'))
+          assert len(base) == (15 if workflow else 16) and base.keys() == tip.keys()
           for op, (result, size) in base.items():
               assert result == tip[op][0], op
               print(f'{op}: result={result}, bytes/op={size} -> {tip[op][1]}')
@@ -111,6 +137,8 @@ jobs:
               rows = [s.split() for s in (temp / (name + '.txt')).read_text().splitlines() if s.startswith('TIME ')]
               return {op: int(ns) for _, op, ns in rows}
           a, b = timings('baseline'), timings('candidate')
+          if workflow:
+              print('48-patch planner fixture median ns/op:', a.pop('prefix-search'), '->', b.pop('full-run-planning'))
           assert a.keys() == b.keys() == base.keys()
           for op in a:
               print(f'{op}: median ns/op={a[op]} -> {b[op]}')

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.12.0-rc1 — workflow test candidate
+- Replace inventory-constrained patch waves with full remaining-run requirements and player-chosen resupply.
+- Add the protected manual Guild-start itinerary, preparation and departure stages, Guild/external supply sections, and watered-seedling display accounting.
+- Add separate compost production/material preferences, reserved-payment accounting, sequential travel estimates, local tool and bucket guidance, and contextual withdrawal labels.
+- Maintain native bank/vault controls and manual interactions. Add candidate-specific baseline comparison, bytecode reference screening, and a local installer. Live acceptance and remaining edge cases are tracked in docs/V112-VALIDATION.md.
+
 ## v1.11.6 — release audit candidate
 - Use RuneLite's exported Bank Tags services and native container IDs. The farming guide still works with Bank Tags turned off.
 - Budget route supplies independently per destination. An unaffordable spell no longer removes supplies for other stops, and a fallback cannot spend a tablet twice.
