@@ -41,9 +41,6 @@ public class GuideLifecycleTest
     @Mock QuestFarmingStateReader reader;
     @InjectMocks FarmingHelperPlugin plugin;
 
-    // Legacy lifecycle fixtures exercise Bank-start; Guild-start has an explicit preparation workflow.
-    @org.junit.Before public void bankStartByDefault()
-    {lenient().when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");}
 
     @Test public void preparationRetargetsAfterStorageObservationsAndReleasesWhenCarried() throws Exception
     {
@@ -271,6 +268,7 @@ public class GuideLifecycleTest
     }
     @Test public void manualRunFiltersPhysicalPatchesAndKeepsClusterTogether()
     {
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");
         Player player=mock(Player.class);
         when(client.getLocalPlayer()).thenReturn(player);
         when(player.getWorldLocation()).thenReturn(new WorldPoint(2813,3463,0));
@@ -300,8 +298,36 @@ public class GuideLifecycleTest
         plugin.shutDown();
     }
 
+    @Test public void manualGuildStartRoutesToGuildThenOffersDepartureWithoutForcingUnselectedPatches()
+    {
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("GUILD");
+        Player player=mock(Player.class);when(client.getLocalPlayer()).thenReturn(player);
+        when(player.getWorldLocation()).thenReturn(Preparation.DRAYNOR);
+        when(client.getGameState()).thenReturn(GameState.LOGGED_IN);
+        when(client.getRealSkillLevel(Skill.FARMING)).thenReturn(72);
+        when(client.getIntStack()).thenReturn(new int[]{2});
+        when(config.getRSProfileKey()).thenReturn("guild-workflow");
+        when(reader.observeType(anyString(),anyString(),anyString(),any())).thenReturn(
+            new QuestFarmingStateReader.Observation(null,QuestFarmingStateReader.Source.NONE,0,null,""));
+        doAnswer(i->{((Runnable)i.getArgument(0)).run();return null;}).when(thread).invokeLater(any(Runnable.class));
+        plugin.startUp();
+        try
+        {
+            plugin.startManual(Set.of("Catherby~HERB~"));
+            assertEquals(Preparation.GUILD,plugin.activeLeg().point);
+            assertNull(plugin.activePatch());
+            when(player.getWorldLocation()).thenReturn(Preparation.GUILD);
+            plugin.onGameTick(null);
+            assertNull("Departure preparation remains explicit",plugin.activePatch());
+            plugin.continueRun();
+            assertEquals("Catherby",plugin.activePatch().getLocation());
+        }
+        finally {plugin.shutDown();}
+    }
+
     @Test public void maximumManualSelectionSurvivesPlanningAndItsNextTick()
     {
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");
         Player player=mock(Player.class);
         when(client.getLocalPlayer()).thenReturn(player);
         when(player.getWorldLocation()).thenReturn(new WorldPoint(2813,3463,0));
@@ -337,6 +363,7 @@ public class GuideLifecycleTest
 
     @Test public void deadHopsFollowSeedlessPolicyAndReopenAfterVerifiedLoss()
     {
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");
         var state=com.farminghelper.queststate.CropState.DEAD;
         Player player=mock(Player.class);
         when(client.getLocalPlayer()).thenReturn(player);
@@ -378,6 +405,7 @@ public class GuideLifecycleTest
 
     @Test public void deadHopsDuringWateringDetourReturnToNormalClearing()
     {
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");
         Player player=mock(Player.class);
         when(client.getLocalPlayer()).thenReturn(player);
         when(player.getWorldLocation()).thenReturn(new WorldPoint(2572,3102,0));
@@ -405,6 +433,7 @@ public class GuideLifecycleTest
 
     @Test public void queuedCallbacksCannotReenableNavigationAfterAPluginRestart() throws Exception
     {
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");
         var queue=new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
         doAnswer(i->{queue.add(i.getArgument(0));return null;}).when(thread).invokeLater(any(Runnable.class));
         Player player=mock(Player.class);
@@ -437,6 +466,7 @@ public class GuideLifecycleTest
 
     @Test public void wateringAheadAndSkippedWaterDoNotReturnWhenGrowthAdvances()
     {
+        when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");
         Player player=mock(Player.class);
         when(client.getLocalPlayer()).thenReturn(player);
         when(player.getWorldLocation()).thenReturn(new WorldPoint(2809,3463,0));
