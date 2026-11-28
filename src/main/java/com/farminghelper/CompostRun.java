@@ -12,8 +12,26 @@ final class CompostRun
 {
     static final int ASH=21622, BUCKET=1925, BOTTOMLESS=22994, WEEDS=6055, PINEAPPLE=2114, WATERMELON=5982, WOAD=1793;
     static final int[] POTIONS={6476,6474,6472,6470}; // 1 to 4 doses
-    static final int[] REGULAR={WOAD,WEEDS,1942,1957,1965,5986};
-    static final int[] SUPER={WATERMELON,PINEAPPLE};
+    static final int[] REGULAR={WOAD,WEEDS,1942,1957,1965,5986,5504,5984};
+    static final int[] SUPER={WATERMELON,PINEAPPLE,ItemID.SNAPE_GRASS};
+    // Snape grass is a useful herblore secondary; never choose banked snape
+    // grass automatically. It is available as an explicit preference.
+    private static final int[] CHEAP_SUPER={WATERMELON,PINEAPPLE};
+    enum Production
+    {
+        REGULAR("Compost"), SUPER("Supercompost"), ULTRA("Ultracompost");
+        final String label;Production(String label){this.label=label;}
+        static Production load(String value){try{return valueOf(value);}catch(IllegalArgumentException|NullPointerException e){return ULTRA;}}
+        @Override public String toString(){return label;}
+    }
+    enum Material
+    {
+        AUTO("Automatic (cheap compatible produce)",0), WEEDS("Weeds",CompostRun.WEEDS), WOAD("Woad leaves",CompostRun.WOAD),
+        WATERMELON("Watermelons",CompostRun.WATERMELON), PINEAPPLE("Pineapples",CompostRun.PINEAPPLE), SNAPE("Snape grass",ItemID.SNAPE_GRASS);
+        final String label;final int id;Material(String label,int id){this.label=label;this.id=id;}
+        static Material load(String value){try{return valueOf(value);}catch(IllegalArgumentException|NullPointerException e){return AUTO;}}
+        @Override public String toString(){return label;}
+    }
     static final class Plan
     {
         final String instruction;
@@ -23,8 +41,8 @@ final class CompostRun
         {this.instruction=instruction;this.supplies=Map.copyOf(supplies);this.ready=ready;}
     }
     static Plan plan(FarmRunPatch patch,QuestFarmingStateReader.Observation o,Map<Integer,Integer> available)
-    {return plan(patch,o,available,Map.of());}
-    private static Plan plan(FarmRunPatch patch,QuestFarmingStateReader.Observation o,Map<Integer,Integer> available,Map<Integer,Integer> carried)
+    {return plan(patch,o,available,Map.of(),Production.ULTRA,Material.AUTO);}
+    static Plan plan(FarmRunPatch patch,QuestFarmingStateReader.Observation o,Map<Integer,Integer> available,Map<Integer,Integer> carried,Production production,Material material)
     {
         boolean large="Farming Guild".equals(patch.getLocation());
         int cap=large?30:15,ash=large?50:25;
@@ -39,27 +57,39 @@ final class CompostRun
             if(missing<=0)return new Plan("Close the full compost bin to start decomposition.",needs,true);
             // Preserve partial bin type. For an empty bin prefer supercompostable stock
             // only if enough for the whole batch; otherwise use ordinary cheap produce.
-            boolean useSuper=b.kind.equals("SUPERCOMPOST") || b.state==CropState.EMPTY && (total(SUPER,available)>=missing||total(SUPER,carried)>0);
-            int[] list=useSuper?SUPER:REGULAR;
+            boolean useSuper=b.kind.equals("SUPERCOMPOST") || b.state==CropState.EMPTY && (material.id!=0?contains(SUPER,material.id):
+                production!=Production.REGULAR&&(total(CHEAP_SUPER,available)>=missing||total(SUPER,carried)>0));
+            int[] ordinary=useSuper?CHEAP_SUPER:REGULAR;
+            int[] list=ordinary;
+            if(material.id!=0&&contains(useSuper?SUPER:REGULAR,material.id))
+            {
+                list=new int[ordinary.length+1];list[0]=material.id;System.arraycopy(ordinary,0,list,1,ordinary.length);
+            }
+            else if(useSuper&&carried.getOrDefault(ItemID.SNAPE_GRASS,0)>0)
+            {list=SUPER;}
             int left=missing;
             for(int id:list)
             {int n=Math.min(left,Math.min(carried.getOrDefault(id,0),available.getOrDefault(id,0)));if(n>0)needs.put(id,n);left-=n;}
             for(int id:list)
             {int n=Math.min(left,Math.max(0,available.getOrDefault(id,0)-needs.getOrDefault(id,0)));if(n>0)needs.merge(id,n,Integer::sum);left-=n;}
-            if(left>0)needs.merge(useSuper?PINEAPPLE:WOAD,left,Integer::sum);
+            if(left>0)needs.merge(material.id!=0&&contains(useSuper?SUPER:REGULAR,material.id)?material.id:useSuper?PINEAPPLE:WOAD,left,Integer::sum);
             return new Plan("Add "+missing+" compatible "+(useSuper?"supercompostable":"regular compostable")+" items ("+b.count+"/"+cap+"). "+(useSuper?"Do not add ordinary produce.":"Use cheap produce; regular compost can be upgraded later.")+" Fill in batches if needed; close when full.",needs,true);
         }
         if(b.state!=CropState.HARVESTABLE)return new Plan("Inspect the bin to confirm its state.",needs,true);
         String prefix=b.closed?"Open the mature bin. ":"";
         if(b.kind.equals("COMPOST"))
         {
-            int potion=choosePotion(available);needs.put(potion,1);needs.put(ASH,ash);
+            if(production!=Production.REGULAR)needs.put(choosePotion(available),1);
+            if(production==Production.ULTRA)needs.put(ASH,ash);
             collectNeeds(needs,available,b.count);
-            return new Plan(prefix+"Use one dose of compost potion to make supercompost, then "+ash+" volcanic ash to make ultracompost. "+collection(available),needs,true);
+            String upgrade=production==Production.REGULAR?"":production==Production.SUPER?"Use one dose of compost potion to make supercompost. ":"Use one dose of compost potion to make supercompost, then "+ash+" volcanic ash to make ultracompost. ";
+            return new Plan(prefix+upgrade+collection(available),needs,true);
         }
         if(b.kind.equals("SUPERCOMPOST"))
         {
-            needs.put(ASH,ash);collectNeeds(needs,available,b.count);
+            collectNeeds(needs,available,b.count);
+            if(production!=Production.ULTRA)return new Plan(prefix+"Collect "+b.count+" supercompost. "+collection(available),needs,true);
+            needs.put(ASH,ash);
             String partial=b.count*2<ash?" The bin costs the full "+ash+" ash even when partly empty; alternatively use 2 ash per withdrawn bucket.":"";
             return new Plan(prefix+"Use "+ash+" volcanic ash on the bin to make ultracompost."+partial+" "+collection(available),needs,true);
         }
@@ -74,9 +104,9 @@ final class CompostRun
         if(b.state==CropState.EMPTY||b.state==CropState.FILLING)
             return plan.supplies.keySet().stream().filter(id->bag.getOrDefault(id,0)>0).sorted().findFirst().map(Set::of).orElse(Collections.emptySet());
         if(b.state!=CropState.HARVESTABLE)return Collections.emptySet();
-        if(b.kind.equals("COMPOST"))return Arrays.stream(POTIONS).filter(id->bag.getOrDefault(id,0)>0).boxed().findFirst().map(Set::of).orElse(Collections.emptySet());
-        if(b.kind.equals("SUPERCOMPOST"))return Set.of(ASH);
-        if(b.kind.equals("ULTRACOMPOST"))return Set.of(bucket(bag));
+        if(b.kind.equals("COMPOST")&&Arrays.stream(POTIONS).anyMatch(plan.supplies::containsKey))return Arrays.stream(POTIONS).filter(id->bag.getOrDefault(id,0)>0).boxed().findFirst().map(Set::of).orElse(Collections.emptySet());
+        if(b.kind.equals("SUPERCOMPOST")&&plan.supplies.containsKey(ASH))return Set.of(ASH);
+        if(b.kind.equals("ULTRACOMPOST")||b.kind.equals("SUPERCOMPOST")||b.kind.equals("COMPOST"))return Set.of(bucket(bag));
         return Collections.emptySet();
     }
     private static int total(int[] ids,Map<Integer,Integer> stock){int n=0;for(int id:ids)n+=stock.getOrDefault(id,0);return n;}
@@ -87,7 +117,7 @@ final class CompostRun
     private static void collectNeeds(Map<Integer,Integer> needs,Map<Integer,Integer> stock,int count)
     {int id=bucket(stock);needs.put(id,id==BUCKET?Math.min(count,28):1);}
     private static String collection(Map<Integer,Integer> stock)
-    {return bucket(stock)==BUCKET?"Collect into empty buckets; bank in batches if needed.":"Use the bottomless bucket only if empty or already contains ultracompost and has capacity; otherwise use empty buckets. Never empty a filled bucket just for this run.";}
+    {return bucket(stock)==BUCKET?"Collect into empty buckets; bank in batches if needed.":"Use the bottomless bucket only if empty or already contains the compost being collected and has capacity; otherwise use empty buckets. Never empty a filled bucket just for this run.";}
     /** Aggregate consumables, reusing the same collection container and counting potion doses
      * across stops rather than recommending a full potion for every bin. */
     static void addSupplies(Map<Integer,Integer> required,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,Map<Integer,Integer> stock,Map<FarmRunPatch,Plan> plans)
@@ -95,13 +125,18 @@ final class CompostRun
     static void addSupplies(Map<Integer,Integer> required,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
         Map<Integer,Integer> stock,Map<Integer,Integer> bag,Map<FarmRunPatch,Plan> plans)
     {
+        addSupplies(required,ready,observations,stock,bag,plans,Production.ULTRA,Material.AUTO,true);
+    }
+    static void addSupplies(Map<Integer,Integer> required,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
+        Map<Integer,Integer> stock,Map<Integer,Integer> bag,Map<FarmRunPatch,Plan> plans,Production production,Material material,boolean localFirst)
+    {
         Map<Integer,Integer> left=null;
         int doses=0;
         for(FarmRunPatch p:ready)if(p.getPatchType()==PatchType.COMPOST_BIN)
         {
             if (left == null) left = new HashMap<>(stock);
-            Plan plan=plan(p,observations.get(p),left,bag);
-            if(localHarvest(p,ready,observations,plan))
+            Plan plan=plan(p,observations.get(p),left,bag,production,material);
+            if(localFirst&&localHarvest(p,ready,observations,plan))
             {
                 plans.put(p,new Plan("Harvest the selected compatible local crop first, then use confirmed produce for this bin. Resupply only for the remainder.",Map.of(),true));
                 continue;
@@ -130,13 +165,34 @@ final class CompostRun
         for(FarmRunPatch p:ready)
         {
             if(p.equals(bin))break;
-            if(!RunOrder.site(p).equals(RunOrder.site(bin)))continue;
+            if(p.getPatchType()!=PatchType.ALLOTMENT||!RunOrder.site(p).equals(RunOrder.site(bin)))continue;
             var o=observations.get(p);
             if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.HARVESTABLE)continue;
             var produce=QuestFarmingStateReader.livingProduce(p.getPatchType().name(),o);
             if(produce!=null&&(contains(superOnly?SUPER:REGULAR,produce.getItemID())||b.state==CropState.EMPTY&&material(produce.getItemID())))return true;
         }
         return false;
+    }
+    /** Move only a verified compatible Guild allotment before its empty/partial bin. */
+    static FarmRunPatch guildRefillCrop(FarmRunPatch bin,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
+        Production production,Material material)
+    {
+        if(bin==null||bin.getPatchType()!=PatchType.COMPOST_BIN||!"Farming Guild".equals(bin.getLocation()))return null;
+        BinContents b=QuestFarmingStateReader.binContents(true,observations.get(bin));
+        if(b==null||b.state!=CropState.EMPTY&&b.state!=CropState.FILLING||b.count>=30)return null;
+        for(FarmRunPatch p:ready)
+        {
+            if(p.getPatchType()!=PatchType.ALLOTMENT||!"Farming Guild".equals(p.getLocation()))continue;
+            var o=observations.get(p);
+            if(o==null||o.source!=QuestFarmingStateReader.Source.LIVE||o.state!=CropState.HARVESTABLE)continue;
+            var produce=QuestFarmingStateReader.livingProduce(p.getPatchType().name(),o);
+            if(produce==null)continue;
+            int id=produce.getItemID();
+            if(material.id!=0&&id!=material.id)continue;
+            if(b.state==CropState.EMPTY?material(id)&&(production!=Production.REGULAR||contains(REGULAR,id)):
+                contains(b.kind.equals("SUPERCOMPOST")?SUPER:REGULAR,id))return p;
+        }
+        return null;
     }
     private static boolean contains(int[] ids,int id){for(int candidate:ids)if(candidate==id)return true;return false;}
     static boolean material(int id){return contains(SUPER,id)||contains(REGULAR,id);}

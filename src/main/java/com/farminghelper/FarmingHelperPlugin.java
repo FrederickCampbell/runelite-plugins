@@ -316,6 +316,8 @@ public class FarmingHelperPlugin extends Plugin
     }
 
     CompostChoice compostChoice(){return CompostChoice.load(setting("directorCompostChoice",""),flag("directorUseCompost",true));}
+    CompostRun.Production compostProduction(){return CompostRun.Production.load(setting("compostProductionV112","ULTRA"));}
+    CompostRun.Material compostMaterial(){return CompostRun.Material.load(setting("compostMaterialV112","AUTO"));}
     SeedlessPolicy seedlessDefault(){return SeedlessPolicy.load(setting("seedlessPolicyV1","GUIDE"));}
     Preparation.StartAt startAt(){return Preparation.StartAt.load(setting("startAtV1","GUILD"));}
     private void refreshRunPreferences()
@@ -1354,6 +1356,11 @@ public class FarmingHelperPlugin extends Plugin
             if(ready.isEmpty())guildStage=Preparation.GuildStage.EXTERNAL;
             else {guildStage=Preparation.GuildStage.DEPARTURE;beginPreparation(Preparation.Phase.INITIAL);}
         }
+        if(guildStage==Preparation.GuildStage.LOCAL&&!preparing()&&!ready.isEmpty()&&flag("compostLocalProduceV112",true))
+        {
+            FarmRunPatch refill=CompostRun.guildRefillCrop(ready.get(0),ready,observations,compostProduction(),compostMaterial());
+            if(refill!=null){ready.remove(refill);ready.add(0,refill);}
+        }
         if(!bankItinerary.equals(ready))bankItinerary=List.copyOf(ready);
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
         if(next!=current)
@@ -1421,7 +1428,6 @@ public class FarmingHelperPlugin extends Plugin
         // stock must not create a mandatory banking route.
         if(yieldTool&&(carried.getOrDefault(magicSecateurs,0)>0||!storedMagic&&stock.getOrDefault(magicSecateurs,0)>0))required.put(magicSecateurs,1);
         Map<FarmRunPatch,CompostRun.Plan> binPlans=new HashMap<>();
-        CompostRun.addSupplies(required,remaining,observations,stock,bag,binPlans);
         int compostCount=0,coins=0,axeId=0;boolean needsAxe=false;
         for(FarmRunPatch p:remaining)
         {
@@ -1429,7 +1435,6 @@ public class FarmingHelperPlugin extends Plugin
             boolean guildPatch=splitGuild&&"Farming Guild".equals(p.getLocation());
             if(c!=null){required.merge(c.getItemId(),c.getQuantity(),Integer::sum);if(guildPatch)guildNeeds.merge(c.getItemId(),c.getQuantity(),Integer::sum);}
             if(CropCare.usesCompost(c,immune(p))){compostCount++;if(guildPatch)guildCompost++;}
-            if(guildPatch&&p.getPatchType()==PatchType.COMPOST_BIN&&binPlans.containsKey(p))binPlans.get(p).supplies.forEach((id,n)->guildNeeds.merge(id,n,Integer::sum));
             if((c!=null||clearOnly.contains(p))&&type.isTree()&&type!=PatchType.CRYSTAL_TREE&&type!=PatchType.CALQUAT)
             {
                 var o=observations.get(p);
@@ -1444,6 +1449,11 @@ public class FarmingHelperPlugin extends Plugin
                     {paymentNeeds.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);if(guildPatch)guildPayments.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);}
             }
         }
+        // Reserve actual crop and gardener-payment materials before choosing bin produce.
+        Map<Integer,Integer> compostStock=new HashMap<>(stock),compostBag=new HashMap<>(bag);
+        paymentNeeds.forEach((id,n)->{compostStock.computeIfPresent(id,(k,v)->Math.max(0,v-n));compostBag.computeIfPresent(id,(k,v)->Math.max(0,v-n));});
+        CompostRun.addSupplies(required,remaining,observations,compostStock,compostBag,binPlans,compostProduction(),compostMaterial(),flag("compostLocalProduceV112",true));
+        if(splitGuild)for(FarmRunPatch p:guildReady)if(binPlans.containsKey(p))binPlans.get(p).supplies.forEach((id,n)->guildNeeds.merge(id,n,Integer::sum));
         if(coins>0) required.merge(ItemID.COINS,coins,Integer::sum);
         if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;required.put(axeId,1);}
         Map<Integer,Integer> prepSeeds=TreePreparation.preparation(remainingSeeds,stock,aliases,bag,this::observedItemName);

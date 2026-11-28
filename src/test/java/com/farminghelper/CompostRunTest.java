@@ -32,6 +32,16 @@ public class CompostRunTest
         assertEquals(Map.of(CompostRun.BOTTOMLESS,1),p.supplies);
         assertTrue(p.instruction.contains("30 ultracompost"));
     }
+    @Test public void productionTierDoesNotWasteUpgrades()
+    {
+        var b=bin("Farming Guild");var o=obs(CropState.HARVESTABLE,93);
+        var stock=Map.of(6470,1,CompostRun.BOTTOMLESS,1);
+        var regular=CompostRun.plan(b,o,stock,Map.of(),CompostRun.Production.REGULAR,CompostRun.Material.AUTO);
+        assertEquals(Map.of(CompostRun.BOTTOMLESS,1),regular.supplies);
+        var superior=CompostRun.plan(b,o,stock,Map.of(),CompostRun.Production.SUPER,CompostRun.Material.AUTO);
+        assertEquals(Map.of(6470,1,CompostRun.BOTTOMLESS,1),superior.supplies);
+        assertTrue(CompostRun.material(net.runelite.api.gameval.ItemID.SNAPE_GRASS));
+    }
     @Test public void noWorkOnDecomposingAndUnknownIsNotEmpty()
     {
         assertFalse(CompostRun.plan(bin("Falador"),obs(CropState.GROWING,31),Map.of()).ready);

@@ -1072,6 +1072,9 @@ final class FarmingHelperPanel extends PluginPanel
         heading("Default crop care");
         choice("Compost type",CompostChoice.values(),plugin.compostChoice(),"Bottomless bucket uses ultracompost if the bucket is unavailable.",
             v->plugin.save("directorCompostChoice",v.name()));
+        choice("Compost production",CompostRun.Production.values(),plugin.compostProduction(),"Target tier for selected bins; separate from compost application.",v->plugin.save("compostProductionV112",v.name()));
+        choice("Bin refill material",CompostRun.Material.values(),plugin.compostMaterial(),"Prefer compatible cheap produce unless explicitly selected.",v->plugin.save("compostMaterialV112",v.name()));
+        preferenceCheck("Prefer local allotment produce for bins","compostLocalProduceV112",true);
         preferenceCheck("Pay for crop protection","directorProtectTrees",true);
         preferenceCheck("Water crops","directorWater",true);
         preferenceCheck("Tool leprechaun assistance","directorLeprechaun",true);
