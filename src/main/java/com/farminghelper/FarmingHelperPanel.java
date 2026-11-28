@@ -39,7 +39,7 @@ final class FarmingHelperPanel extends PluginPanel
     private ManualPicker manualPicker;
     private GuideView latestGuide;
     private long guideSession=Long.MIN_VALUE;
-    private boolean requiredOpen=false,completedOpen=false,lastPreparing=false,teleportsOpen=false;
+    private boolean requiredOpen=false,completedOpen=false,lastPreparing=false,teleportsOpen=false,seedPreparationOpen=true;
     private JButton requirementsHeader,bankShortcut,runDetailsHelp;
     private JTextArea supplyNoteLabel;
     private boolean guideRendered;
@@ -399,7 +399,7 @@ final class FarmingHelperPanel extends PluginPanel
     {
         guideSession=session;lastActive=null;previousGuide=null;guideRendered=false;mountedPage=null;
         positions.clear();expanded.clear();supplyRows.clear();stepText.clear();
-        requiredOpen=lastPreparing=preparing;completedOpen=false;teleportsOpen=false;
+        requiredOpen=lastPreparing=preparing;completedOpen=false;teleportsOpen=false;seedPreparationOpen=true;
     }
     private void showHome()
     {
@@ -729,7 +729,7 @@ final class FarmingHelperPanel extends PluginPanel
 
     private boolean sameStructure(GuideView a,GuideView b)
     {
-        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || a.supplyNote.isEmpty()!=b.supplyNote.isEmpty() || (a.notes.initial!=b.notes.initial || !a.notes.storageWarning.equals(b.notes.storageWarning) || !a.notes.preparationHelp.equals(b.notes.preparationHelp) || a.notes.details.isEmpty()!=b.notes.details.isEmpty()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
+        if(a==null || !a.stats.equals(b.stats) || !a.message.equals(b.message)&&a.active==null || a.hideSeedless!=b.hideSeedless || a.clearSeedless!=b.clearSeedless || a.compostStep!=b.compostStep || a.waterStep!=b.waterStep || !a.preparation.equals(b.preparation) || a.supplyNote.isEmpty()!=b.supplyNote.isEmpty() || (a.notes.initial!=b.notes.initial || a.notes.seedPreparation!=b.notes.seedPreparation || !a.notes.preparationItems.equals(b.notes.preparationItems) || !a.notes.storageWarning.equals(b.notes.storageWarning) || !a.notes.preparationHelp.equals(b.notes.preparationHelp) || a.notes.details.isEmpty()!=b.notes.details.isEmpty()) || b.active!=a.active || !a.title.equals(b.title) || a.items.size()!=b.items.size() || a.stops.size()!=b.stops.size())return false;
         for(int i=0;i<a.items.size();i++)
         {
             GuideView.ItemRow old=a.items.get(i), next=b.items.get(i);
@@ -804,6 +804,23 @@ final class FarmingHelperPanel extends PluginPanel
         Component body=((BorderLayout)section.getLayout()).getLayoutComponent(BorderLayout.CENTER);
         if(body!=null)section.remove(body);
     }
+    private void seedPreparationSection(GuideView view)
+    {
+        JButton fold=disclosure("Preparation",seedPreparationOpen);fold.setName("Preparation");
+        JPanel section=transparent(new BorderLayout(0,2));section.add(fold,BorderLayout.NORTH);
+        if(seedPreparationOpen)section.add(seedPreparationBody(view),BorderLayout.CENTER);
+        fold.addActionListener(e->{seedPreparationOpen=!seedPreparationOpen;disclosureState(fold,"Preparation",seedPreparationOpen,FarmingTheme.MUTED);
+            if(seedPreparationOpen)section.add(seedPreparationBody(latestGuide),BorderLayout.CENTER);else removeBody(section);refreshLayout(section);});
+        addRow(section);
+    }
+    private JPanel seedPreparationBody(GuideView view)
+    {
+        JPanel body=column();body.setOpaque(true);body.setBackground(FarmingTheme.CARD);
+        body.add(text(view.preparation,FarmingTheme.TEXT));
+        for(GuideView.ItemRow item:view.items)if(!item.recommended&&view.notes.preparationItems.contains(item.id))
+        {SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));row.update(item);body.add(row);}
+        FarmingTheme.apply(body);return body;
+    }
     private JPanel supplies(GuideView view,boolean optional)
     {
         JPanel body=column();body.setOpaque(true);body.setBackground(FarmingTheme.CARD);
@@ -846,7 +863,7 @@ final class FarmingHelperPanel extends PluginPanel
         if(isPreparing!=lastPreparing){requiredOpen=isPreparing;teleportsOpen=false;lastPreparing=isPreparing;}
         Set<Integer> visibleItems=new HashSet<>();
         for(GuideView.ItemRow item:view.items)
-            if(item.recommended?teleportsOpen:requiredOpen)visibleItems.add(rowKey(item));
+            if(view.notes.seedPreparation?seedPreparationOpen&&!item.recommended&&view.notes.preparationItems.contains(item.id):item.recommended?teleportsOpen:requiredOpen)visibleItems.add(rowKey(item));
         supplyRows.keySet().retainAll(visibleItems);
         page(GUIDE,view.title,null,this::runSettings,true);
         preparationButton(isPreparing,view.notes.initial);
@@ -865,12 +882,13 @@ final class FarmingHelperPanel extends PluginPanel
             progress.setPreferredSize(new Dimension(1,6));addRow(progress);
         }
         requirementsHeader=null;
-        if(isPreparing || view.active!=null || !view.items.isEmpty())
+        if(view.notes.seedPreparation)seedPreparationSection(view);
+        else if(isPreparing || view.active!=null || !view.items.isEmpty())
         {
             requirementsHeader=supplySection(requirementsTitle(view),"Recommended items",GuidePresentation.ITEMS_HELP,false,view);
             supplySection("Recommended teleports","Recommended teleports",GuidePresentation.TRAVEL_HELP,true,view);
         }
-        if(isPreparing)
+        if(isPreparing&&!view.notes.seedPreparation)
         {
             heading(view.notes.initial?"Preparation":"Resupply",view.notes.preparationHelp.isEmpty()?GuidePresentation.PREPARATION_HELP:view.notes.preparationHelp);
             line(view.preparation,true);

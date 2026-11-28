@@ -41,6 +41,10 @@ public class GuideLifecycleTest
     @Mock QuestFarmingStateReader reader;
     @InjectMocks FarmingHelperPlugin plugin;
 
+    // Legacy lifecycle fixtures exercise Bank-start; Guild-start has an explicit preparation workflow.
+    @org.junit.Before public void bankStartByDefault()
+    {lenient().when(config.getRSProfileConfiguration("farming-helper","startAtV1")).thenReturn("BANK");}
+
     @Test public void preparationRetargetsAfterStorageObservationsAndReleasesWhenCarried() throws Exception
     {
         int seed=net.runelite.api.gameval.ItemID.RANARR_SEED;

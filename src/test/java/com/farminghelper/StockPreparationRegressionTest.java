@@ -6,6 +6,17 @@ import static org.junit.Assert.*;
 
 public class StockPreparationRegressionTest
 {
+    @Test public void wateredSeedlingsCountForDisplayNotPhysicalPlanting()
+    {
+        Crop maple=CropCatalog.findByName(PatchType.TREE,"Maple sapling");
+        int watered=60001,seedling=60002,seed=60003,id=maple.getItemId();
+        Map<Integer,Integer> bag=Map.of(watered,1,seedling,2,seed,5);
+        Map<Integer,Integer> aliases=Map.of(watered,id,seedling,id,seed,id);
+        assertEquals(Map.of(id,1),TreePreparation.wateredTotals(bag,aliases,i->i==watered?"Maple seedling(w)":i==seedling?"Maple seedling":"Maple seed"));
+        assertEquals(0,bag.getOrDefault(id,0).intValue());
+        assertTrue(Preparation.atGuild(Preparation.GUILD));
+        assertFalse(Preparation.atGuild(Preparation.DRAYNOR));
+    }
     @Test public void absentCalquatSeedAndSaplingExcludePatch()
     {
         FarmRunPatch p=new FarmRunPatch("Tai Bwo Wannai","",PatchType.CALQUAT);

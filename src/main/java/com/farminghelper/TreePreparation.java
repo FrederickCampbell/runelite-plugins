@@ -97,6 +97,14 @@ final class TreePreparation
         return result;
     }
 
+    /** Watered seedlings satisfy preparation counts, never actual planting readiness. */
+    static Map<Integer,Integer> wateredTotals(Map<Integer,Integer> physical,Map<Integer,Integer> aliases,IntFunction<String> name)
+    {
+        Map<Integer,Integer> result=new HashMap<>();
+        aliases.forEach((id,sapling)->{int n=physical.getOrDefault(id,0);if(n>0&&stage(id,sapling,name)==Stage.WATERED)result.merge(sapling,n,PhysicalStock::sum);});
+        return result;
+    }
+
     static Map<Stage,Integer> counts(Map<Integer,Integer> preparation,Map<Integer,Integer> aliases,IntFunction<String> name)
     {
         if(preparation.isEmpty())return Map.of();

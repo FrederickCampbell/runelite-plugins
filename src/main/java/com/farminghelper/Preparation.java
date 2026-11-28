@@ -38,6 +38,9 @@ final class Preparation
         return choose(level,from,initial,entrana,StartAt.GUILD,false);
     }
     enum Phase { UNCHECKED, INITIAL, ACTIVE, RESUPPLY }
+    enum GuildStage { NONE, ARRIVAL, SEEDLINGS, LOCAL, DEPARTURE, EXTERNAL }
+    static boolean atGuild(WorldPoint point)
+    {return point!=null&&point.getPlane()==0&&point.distanceTo2D(GUILD)<=32;}
     enum StartAt { GUILD("Farming Guild"), BANK("Bank");
         final String label; StartAt(String label){this.label=label;}
         @Override public String toString(){return label;}

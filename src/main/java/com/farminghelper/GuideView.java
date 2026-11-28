@@ -52,6 +52,10 @@ final class GuideView
         static final Notes EMPTY=new Notes(false,"","","");
         final boolean initial;
         final String storageWarning,preparationHelp,details;
+        final boolean seedPreparation;
+        final Set<Integer> preparationItems;
+        Notes(boolean initial,String storageWarning,String preparationHelp,String details)
+        {this(initial,storageWarning,preparationHelp,details,false,Set.of());}
     }
     final Notes notes;
     final Stats stats;

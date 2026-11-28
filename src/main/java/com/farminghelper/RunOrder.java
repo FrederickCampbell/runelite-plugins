@@ -143,6 +143,16 @@ final class RunOrder
         int n=PROTECTED.indexOf(site);if(n>=0)return n;
         int m=MIXED.indexOf(site);return PROTECTED.size()+(m<0?MIXED.size():m);
     }
+    private static int guildOrder(FarmRunPatch p)
+    {
+        switch(p.getPatchType())
+        {
+            case COMPOST_BIN:return 0;case HERB:return 1;case TREE:return 2;case FLOWER:return 3;
+            case BUSH:return 4;case ALLOTMENT:return 5;case CACTUS:return 6;case ANIMA:return 7;
+            case CELASTRUS:return 8;case FRUIT_TREE:return 9;case REDWOOD:return 10;case SPIRIT_TREE:return 11;
+            default:return 12;
+        }
+    }
     private static int localOrder(FarmRunPatch p)
     {
         if(p.getPatchType()==PatchType.HESPORI||p.getPatchType()==PatchType.CORAL||p.getPatchType()==PatchType.SEAWEED)return 5;
@@ -173,7 +183,7 @@ final class RunOrder
         byBlock.forEach((site,ps)->{
             // Mixed Catherby visits finish the selected farm plots before the fruit tree.
             boolean catherbyMixed=!protectedManual&&"Catherby".equals(site)&&ps.stream().anyMatch(p->p.getPatchType()==PatchType.FRUIT_TREE);
-            ps.sort(Comparator.comparingInt((FarmRunPatch p)->catherbyMixed?
+            ps.sort(Comparator.comparingInt((FarmRunPatch p)->protectedManual&&"Farming Guild".equals(site)?guildOrder(p):catherbyMixed?
                     p.getPatchType()==PatchType.HERB?-2:
                     p.getPatchType()==PatchType.ALLOTMENT||p.getPatchType()==PatchType.FLOWER||p.getPatchType()==PatchType.COMPOST_BIN?-1:localOrder(p):localOrder(p))
                 .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?(reverse?-BirdhouseRun.order(p):BirdhouseRun.order(p)):0));

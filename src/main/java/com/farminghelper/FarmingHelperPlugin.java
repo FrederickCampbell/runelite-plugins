@@ -144,6 +144,7 @@ public class FarmingHelperPlugin extends Plugin
     private boolean hopping;
     private String runProfile;
     private volatile Preparation.Phase phase=Preparation.Phase.UNCHECKED;
+    private Preparation.GuildStage guildStage=Preparation.GuildStage.NONE;
     private volatile boolean hideSeedless,clearSeedless;
     private boolean activeClearOnly, compostAcknowledged;
     private volatile Set<Integer> stepItems=Collections.emptySet();
@@ -240,7 +241,7 @@ public class FarmingHelperPlugin extends Plugin
             run = selected;
             manualKeys=chosen;runLabel=label;
             runPolicyKey=policyKey;
-            specialtyStaged=SpecialtyStages.stageBirds(policyKey,run);
+            specialtyStaged=SpecialtyStages.stageBirds(policyKey,run)&&!("manual".equals(policyKey)&&startAt()==Preparation.StartAt.GUILD&&client.getRealSkillLevel(Skill.FARMING)>=45);
             runProfile=config.getRSProfileKey();
             updateAccessNotes();
             runHasTrees=patches.stream().anyMatch(p->eligible(p)&&p.getPatchType().isTree());
@@ -264,7 +265,7 @@ public class FarmingHelperPlugin extends Plugin
         bankRoutes.reset();bankItinerary=List.of();bankFallback=Map.of();routeSupplyInputs=List.of();routeSupplyPlan=null;
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
-        phase=Preparation.Phase.UNCHECKED;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationAtStorage=false;preparationOrigin=null;
+        phase=Preparation.Phase.UNCHECKED;guildStage=Preparation.GuildStage.NONE;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationAtStorage=false;preparationOrigin=null;
         pinned=null;leprechaunWithdrawal=null;allocationInputs=List.of();allocated=Map.of();
         current = null;
         birdhouseTouched.clear();wateredThisRun.clear();activeCareOnly=false;clearWaterOffer();compostMissing=false;
@@ -1105,6 +1106,11 @@ public class FarmingHelperPlugin extends Plugin
         boolean loggedIn = client.getLocalPlayer()!=null && client.getGameState()==GameState.LOGGED_IN;
         LocationContext location=LocationContext.capture(client);
         int level = client.getRealSkillLevel(Skill.FARMING);
+        if(loggedIn&&guildStage==Preparation.GuildStage.NONE&&phase==Preparation.Phase.UNCHECKED&&"manual".equals(runPolicyKey)&&startAt()==Preparation.StartAt.GUILD&&level>=45)
+        {
+            guildStage=Preparation.GuildStage.ARRIVAL;beginPreparation(Preparation.Phase.INITIAL);
+        }
+        if(guildStage==Preparation.GuildStage.ARRIVAL&&Preparation.atGuild(location.normalized))guildStage=Preparation.GuildStage.SEEDLINGS;
         PhysicalStock supplies=stock();
         Map<Integer,Integer> bag=supplies.bag,equipped=supplies.equipped,carried=supplies.carried,plantingBag=supplies.plantingBag;
         // Run this before normal planning, even during banking or birdhouses. No
@@ -1275,6 +1281,8 @@ public class FarmingHelperPlugin extends Plugin
             for(FarmRunPatch p:localWater)
             {
                 PatchType type=p.getPatchType();
+                if(guildStage!=Preparation.GuildStage.NONE&&guildStage!=Preparation.GuildStage.EXTERNAL&&!"Farming Guild".equals(p.getLocation()))continue;
+                if(guildStage==Preparation.GuildStage.EXTERNAL&&current!=null&&!RunOrder.site(current).equals(RunOrder.site(p)))continue;
                 // Do not let routine watering pull Fossil Island ahead of remaining mainland work.
                 // Verified disease interruptions remain independent and can still interrupt.
                 if(SpecialtyStages.fossilLastRequired(runPolicyKey)&&SpecialtyStages.fossil(p)&&ready.stream().anyMatch(other->!SpecialtyStages.fossil(other)))continue;
@@ -1333,6 +1341,11 @@ public class FarmingHelperPlugin extends Plugin
             if("manual".equals(runPolicyKey)&&startAt()==Preparation.StartAt.GUILD&&level>=45)
                 RunOrder.preferProtectedLocal(ready,visible,current,currentLive,location.actual,p->localDistance(p,location.actual,observations));
             else RunOrder.preferLocal(ready,visible,current,currentLive,p->localDistance(p,location.actual,observations));
+        }
+        if(guildStage==Preparation.GuildStage.LOCAL&&!preparing()&&ready.stream().noneMatch(p->"Farming Guild".equals(p.getLocation())))
+        {
+            if(ready.isEmpty())guildStage=Preparation.GuildStage.EXTERNAL;
+            else {guildStage=Preparation.GuildStage.DEPARTURE;beginPreparation(Preparation.Phase.INITIAL);}
         }
         if(!bankItinerary.equals(ready))bankItinerary=List.copyOf(ready);
         FarmRunPatch next=ready.isEmpty()?null:ready.get(0);
@@ -1432,6 +1445,14 @@ public class FarmingHelperPlugin extends Plugin
         if(needsCan&&wateringCan<=0&&storedCan<=0)
             required.put(CropCare.preferredCan(wateringCan,storedCan,CropCare.wateringCan(stock,this::observedItemName)),1);
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
+        Set<Integer> preparationIds=new HashSet<>(prepSeeds.keySet());
+        if(rawSeeds>0){preparationIds.add(TreePreparation.FILLED_POT);preparationIds.add(Supplies.GARDENING_TROWEL);}
+        if(rawSeeds+seedlings>0&&needsCan&&wateringCan<=0&&storedCan<=0)preparationIds.add(CropCare.preferredCan(wateringCan,storedCan,CropCare.wateringCan(stock,this::observedItemName)));
+        Map<Integer,Integer> wateredCarried=TreePreparation.wateredTotals(bag,aliases,this::observedItemName);
+        if(guildStage==Preparation.GuildStage.SEEDLINGS&&rawSeeds+seedlings==0&&wateredCarried.isEmpty()&&(!runHasTrees||bank.at>0&&vault.at>0))
+        {
+            guildStage=Preparation.GuildStage.LOCAL;phase=Preparation.Phase.ACTIVE;current=null;activeCrop=null;progress.reset();update();return;
+        }
         if(compostId!=ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED||storedBucket==0)
             CompostChoice.addRequired(required,compostId,compostId==ItemID.BUCKET_ULTRACOMPOST?compostCount:Math.max(0,compostCount-storedCompost),storedUltra,stock,bag);
         if(diving)DivingKit.require(required,supplies.travel,carried);
@@ -1493,19 +1514,28 @@ public class FarmingHelperPlugin extends Plugin
         {
             int n=required.get(id);
             if((CompostChoice.isOrdinary(id)||id==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)&&bag.getOrDefault(id,0)>=n&&binPlans.isEmpty())continue;
+            if(guildStage==Preparation.GuildStage.NONE&&prepSeeds.containsKey(id)&&aliases.containsKey(id)&&TreePreparation.stage(id,aliases.get(id),this::observedItemName)==TreePreparation.Stage.WATERED)continue;
             int pending=pendingSaplings.getOrDefault(id,0);
             Integer base=paymentNotes.get(id);
             if(base!=null)
                 items.add(new GuideView.ItemRow(id,observedItemName(base)+" (noted — withdraw as note)",
                     bag.getOrDefault(id,0),n,paymentStorage.getOrDefault(id,0),0,false));
-            else items.add(itemRow(id,n,supplies,false,pending>0?" ("+pending+" to prepare)":""));
+            else
+            {
+                GuideView.ItemRow row=itemRow(id,n,supplies,false,pending>0?" ("+pending+" to prepare)":"");
+                if(guildStage==Preparation.GuildStage.NONE&&wateredCarried.containsKey(id))
+                    row=new GuideView.ItemRow(id,row.name,Math.min(n,PhysicalStock.sum(row.owned,wateredCarried.get(id))),n,row.bank,row.vault,false);
+                items.add(row);
+            }
         }
         if(yieldTool&&!required.containsKey(magicSecateurs))
             items.add(itemRow(magicSecateurs,1,supplies,false," (optional yield boost)"));
         Set<Integer> shelfRequirements=new HashSet<>(required.keySet());
         shelfRequirements.addAll(paymentNotes.values());
+        if(guildStage==Preparation.GuildStage.SEEDLINGS)shelfRequirements.retainAll(preparationIds);
         requiredItems=Set.copyOf(shelfRequirements);
         missingStorageItems=GuideView.missingItems(physicalRequired,carried,paymentNotes);
+        if(guildStage==Preparation.GuildStage.SEEDLINGS){Set<Integer> prepMissing=new HashSet<>(missingStorageItems);prepMissing.retainAll(preparationIds);missingStorageItems=Set.copyOf(prepMissing);}
         Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
         Set<Integer> missingTravel=new HashSet<>();
         teleports.forEach((id,sites)->{
@@ -1707,7 +1737,7 @@ public class FarmingHelperPlugin extends Plugin
         }
         if(!seedless.isEmpty())details.add(seedless.size()+" patch(es) skipped for missing seeds.");
         if(!clearOnly.isEmpty())details.add(clearOnly.size()+" patch(es) to harvest / clear without replanting.");
-        if(current==null&&preparing())phase=Preparation.Phase.ACTIVE;
+        if(current==null&&preparing()&&guildStage!=Preparation.GuildStage.ARRIVAL&&guildStage!=Preparation.GuildStage.SEEDLINGS)phase=Preparation.Phase.ACTIVE;
         // All processed patches remain visible in the completed history across stages.
         Set<FarmRunPatch> listed=new HashSet<>();for(GuideView.Stop stop:stops)listed.add(stop.patch);
         for(FarmRunPatch p:patches)if(runProgress.finished(p)&&!listed.contains(p))stops.add(new GuideView.Stop(p,runProgress.is(p,RunProgress.Status.PRESERVED)?"Preserved":"Completed",false,true));
@@ -1752,10 +1782,19 @@ public class FarmingHelperPlugin extends Plugin
                 if(flexible)bankCandidates=Preparation.bankCandidates(level);
             }
         }
+        if(guildStage==Preparation.GuildStage.ARRIVAL||guildStage==Preparation.GuildStage.SEEDLINGS)
+        {
+            boolean arrived=Preparation.atGuild(player);
+            prepMessage=arrived?"Prepare outstanding seeds and seedlings. Bank watered seedlings while they mature, then continue with the Guild.":"Travel to the Farming Guild.";
+            if(arrived&&(bank.at==0||vault.at==0)&&runHasTrees)prepMessage+=" Open the bank and Seed Vault to confirm planting stock.";
+            if(!arrived)leg=RouteLeg.approach(Preparation.GUILD,"Travel to the Farming Guild bank approach.",RouteLeg.Interaction.NONE);
+            bankCandidates=Set.of();
+        }
+        if(guildStage==Preparation.GuildStage.DEPARTURE&&preparing())prepMessage="Farming Guild activities complete. Collect remaining supplies — continue when ready.";
         if(loggedIn&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE)&&
             (SpecialRoutes.onSeaweedIsland(player)||!preparing()&&seaweedBirdTransfer))
         {
-            boolean missing=Preparation.missing(physicalRequired,plantingBag);
+            boolean missing=(guildStage==Preparation.GuildStage.NONE||preparing())&&Preparation.missing(physicalRequired,plantingBag);
             RouteLeg transfer=SpecialRoutes.insideSeaweed(player)?SpecialRoutes.seaweedExit(instance):
                 aboard||instance&&!location.inHouse()?leg:SpecialRoutes.birdTransfer(player,missing,storageOpen(),level);
             if(transfer!=null)
@@ -1792,7 +1831,7 @@ public class FarmingHelperPlugin extends Plugin
         if(preparing()&&!routeWarning.isEmpty())prepMessage+="\n"+routeWarning;
         cacheIcons(items);
         GuideView view=new GuideView(title,instruction,items,stops,preparing()?null:current,prepMessage,supplyNote,hideSeedless,clearSeedless,!preparing()&&activeAction==StepEngine.Action.COMPOST,!preparing()&&activeAction==StepEngine.Action.WATER,summary,
-            new GuideView.Notes(phase==Preparation.Phase.INITIAL,storageWarning,prepHelp,details.toString()));
+            new GuideView.Notes(phase==Preparation.Phase.INITIAL&&guildStage!=Preparation.GuildStage.DEPARTURE,storageWarning,prepHelp,details.toString(),guildStage==Preparation.GuildStage.SEEDLINGS,Set.copyOf(preparationIds)));
         normalView=view;
         publishView(view);
     }
@@ -1962,7 +2001,10 @@ public class FarmingHelperPlugin extends Plugin
     void continueRun()
     {
         inRun(()->{
-            if(phase==Preparation.Phase.INITIAL){pinned=null;current=null;activeCrop=null;progress.reset();}
+            if(guildStage==Preparation.GuildStage.ARRIVAL)return;
+            if(guildStage==Preparation.GuildStage.SEEDLINGS){guildStage=Preparation.GuildStage.LOCAL;current=null;activeCrop=null;progress.reset();}
+            else if(guildStage==Preparation.GuildStage.DEPARTURE){guildStage=Preparation.GuildStage.EXTERNAL;current=null;activeCrop=null;progress.reset();}
+            else if(phase==Preparation.Phase.INITIAL){pinned=null;current=null;activeCrop=null;progress.reset();}
             phase=Preparation.Phase.ACTIVE;explicitResupply=false;update();});
     }
     void resupply()
