@@ -1426,22 +1426,22 @@ public class FarmingHelperPlugin extends Plugin
         for(FarmRunPatch p:remaining)
         {
             Crop c=seeds.get(p);PatchType type=p.getPatchType();
-            boolean local=splitGuild&&"Farming Guild".equals(p.getLocation());
-            if(c!=null){required.merge(c.getItemId(),c.getQuantity(),Integer::sum);if(local)guildNeeds.merge(c.getItemId(),c.getQuantity(),Integer::sum);}
-            if(CropCare.usesCompost(c,immune(p))){compostCount++;if(local)guildCompost++;}
-            if(local&&p.getPatchType()==PatchType.COMPOST_BIN&&binPlans.containsKey(p))binPlans.get(p).supplies.forEach((id,n)->guildNeeds.merge(id,n,Integer::sum));
+            boolean guildPatch=splitGuild&&"Farming Guild".equals(p.getLocation());
+            if(c!=null){required.merge(c.getItemId(),c.getQuantity(),Integer::sum);if(guildPatch)guildNeeds.merge(c.getItemId(),c.getQuantity(),Integer::sum);}
+            if(CropCare.usesCompost(c,immune(p))){compostCount++;if(guildPatch)guildCompost++;}
+            if(guildPatch&&p.getPatchType()==PatchType.COMPOST_BIN&&binPlans.containsKey(p))binPlans.get(p).supplies.forEach((id,n)->guildNeeds.merge(id,n,Integer::sum));
             if((c!=null||clearOnly.contains(p))&&type.isTree()&&type!=PatchType.CRYSTAL_TREE&&type!=PatchType.CALQUAT)
             {
                 var o=observations.get(p);
                 if(o!=null&&(o.state==null||CropReplacement.mature(type,o)))
                 {int cost=type==PatchType.REDWOOD?2000:pay&&reader.gardenerId(type.name(),p.getLocation(),p.getName())>0?200:0;
-                    if(cost>0){coins+=cost;if(local)guildNeeds.merge(ItemID.COINS,cost,Integer::sum);}else needsAxe=true;}
+                    if(cost>0){coins+=cost;if(guildPatch)guildNeeds.merge(ItemID.COINS,cost,Integer::sum);}else needsAxe=true;}
             }
             if(protect && (c!=null || (p==current && progress.planted() && activeCrop!=null)))
             {
                 Crop paymentCrop=c!=null?c:activeCrop;
                 if(!immune(p)&&type.supportsProtection()) for(ProtectionPayment cost:CropCatalog.protection(paymentCrop))
-                    {paymentNeeds.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);if(local)guildPayments.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);}
+                    {paymentNeeds.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);if(guildPatch)guildPayments.merge(cost.getItemId(),cost.getQuantity(),Integer::sum);}
             }
         }
         if(coins>0) required.merge(ItemID.COINS,coins,Integer::sum);
