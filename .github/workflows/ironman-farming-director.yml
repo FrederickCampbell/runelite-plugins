@@ -74,7 +74,7 @@ jobs:
           if-no-files-found: ignore
 
   comparison:
-    if: github.ref == 'refs/heads/farming-helper-v1.13-consolidation' || github.ref == 'refs/heads/farming-helper-v1.12-workflow' || github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning' || github.ref == 'refs/heads/farming-helper-v1.11-consolidation' || github.ref == 'refs/heads/farming-helper-v1.11.2-validation' || github.ref == 'refs/heads/farming-helper-v1.11.3-validation' || github.ref == 'refs/heads/farming-helper-v1.11.4-validation' || github.ref == 'refs/heads/farming-helper-v1.11.5-validation'
+    if: github.ref == 'refs/heads/farming-helper-v1.13.3-stable-transport' || github.ref == 'refs/heads/farming-helper-v1.13-consolidation' || github.ref == 'refs/heads/farming-helper-v1.12-workflow' || github.ref == 'refs/heads/farming-helper-v1.08-refactor' || github.ref == 'refs/heads/farming-helper-v1.09-workflow' || github.ref == 'refs/heads/farming-helper-v1.10-adaptive-planning' || github.ref == 'refs/heads/farming-helper-v1.11-consolidation' || github.ref == 'refs/heads/farming-helper-v1.11.2-validation' || github.ref == 'refs/heads/farming-helper-v1.11.3-validation' || github.ref == 'refs/heads/farming-helper-v1.11.4-validation' || github.ref == 'refs/heads/farming-helper-v1.11.5-validation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -98,6 +98,7 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.11-consolidation ]]; then baseline_sha=4f9a3ee63b5df95dd0692e59a6f308b7333d3e07; fi
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.12-workflow ]]; then baseline_sha=0ab13686110ccf3b38e685668f830f4651572196; fi
           if [[ "$GITHUB_REF_NAME" == farming-helper-v1.13-consolidation ]]; then baseline_sha=71a988e63b3794193610a71b8d50faad17a16c93; fi
+          if [[ "$GITHUB_REF_NAME" == farming-helper-v1.13.3-stable-transport ]]; then baseline_sha=8cc105f341b4b7106288b403d56eccf02e9ed0ac; fi
           git fetch --no-tags --depth=1 origin "$baseline_sha"
           git worktree add --detach "$baseline" FETCH_HEAD
           # Compare layout with identical display metadata, including the version shown on Home.

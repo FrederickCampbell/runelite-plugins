@@ -835,18 +835,17 @@ public class FarmingHelperPlugin extends Plugin
         {bankRoutes.closeVisit();runBank.tick(null,Collections.emptySet(),enabled,birdBankPhase());return "Open a bank, then choose Show farming bank.";}
         // Shortest Path enables bank traversal in both bank inventory modes.
         boolean bankAware=navigation!=null&&navigation.enabled()&&BankRoutePlan.bankMode(config.getConfiguration("shortestpath","useTeleportationItems"));
-        if(!enabled){runBank.tick(null,Set.of(),false,birdBankPhase());return "";}
+        // Route estimates belong to the guide, not the optional Bank Tags view.
         if(bank.sampled&&!bankRoutes.started()&&bankRoutes.committed()==null)
         {
             bankRoutes.begin(bankAware?LocationContext.capture(client).pathStart():null,bankItinerary);
             if(legacy.routeAudit())ROUTE_LOG.info("FH_ROUTE begin bankAware={} sites={}",bankAware,bankRoutes.plannedSites());
         }
         if(bankAware&&bankRoutes.started())bankRoutes.tick(navigation);
+        if(!enabled){runBank.tick(null,Set.of(),false,birdBankPhase());return "";}
         if(!bank.sampled||bankRoutes.awaitingPublication())return "Calculating transportation for the run. The farming bank appears when the plan is ready.";
         Set<Integer> eligible=bankRunItems(stock().shelf);
-        List<Integer> priority=bankRoutes.started()
-            ?bankRoutes.priority(bankFallback,manual)
-            :List.copyOf(bankFallback.keySet());
+        List<Integer> priority=bankRoutes.priority(bankFallback,manual);
         LinkedHashSet<Integer> prioritized=new LinkedHashSet<>(preparationBankPriority);
         prioritized.addAll(BankShelfLayout.priorityOrder(priority,this::observedItemName,id->{var stats=itemManager.getItemStats(id);return stats==null||stats.getEquipment()==null?-1:stats.getEquipment().getSlot();}));prioritized.addAll(containerBankPriority);priority=List.copyOf(prioritized);
         if(legacy.routeAudit()&&!tracedPriority.equals(priority)){tracedPriority=priority;ROUTE_LOG.info("FH_ROUTE priority={} admittedPriority={}",priority,priority.stream().filter(id->eligible!=null&&eligible.contains(id)&&shelfCandidates.contains(id)).collect(java.util.stream.Collectors.toList()));}
