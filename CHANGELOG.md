@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.13.0-rc1 — architecture consolidation candidate
+- Replace independent Guild stage and preparation phase flags with one finite workflow state, preserving explicit manual resupply.
+- Consolidate scoped consumable and reusable requirement accounting and attribute Guild payment forms from the actual allocation.
+- Cache the derived tree preparation plan on stock and allocation changes, retaining separate mature planting and watered seedling display counts.
+- Reuse a single protected route ranking for initial and newly actionable patches; share supply-row rendering.
+- Add calquat target/region regressions without speculative region widening. Live acceptance is still required.
+
 ## v1.12.0-rc1 — workflow test candidate
 - Replace inventory-constrained patch waves with full remaining-run requirements and player-chosen resupply.
 - Add the protected manual Guild-start itinerary, preparation and departure stages, Guild/external supply sections, and watered-seedling display accounting.

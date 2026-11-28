@@ -81,6 +81,25 @@ final class TreePreparation
         return result;
     }
 
+    static final class Plan
+    {
+        static final Plan EMPTY=new Plan(Map.of(),Map.of(),Map.of(),Map.of());
+        final Map<Integer,Integer> materials,pending,wateredCarried;
+        final Map<Stage,Integer> stages;
+        Plan(Map<Integer,Integer> materials,Map<Integer,Integer> pending,Map<Stage,Integer> stages,Map<Integer,Integer> wateredCarried)
+        {this.materials=Collections.unmodifiableMap(materials);this.pending=Map.copyOf(pending);this.stages=Map.copyOf(stages);this.wateredCarried=Map.copyOf(wateredCarried);}
+    }
+    static Plan plan(Map<FarmRunPatch,Crop> allocated,Map<Integer,Integer> stock,Map<Integer,Integer> aliases,
+        Map<Integer,Integer> carried,IntFunction<String> names)
+    {
+        if(aliases.isEmpty())return Plan.EMPTY;
+        // Item definitions are immutable within an observation. Classify each material once.
+        Map<Integer,String> observedNames=new HashMap<>();
+        IntFunction<String> name=id->observedNames.computeIfAbsent(id,names::apply);
+        Map<Integer,Integer> selected=preparation(allocated,stock,aliases,carried,name);
+        return new Plan(selected,pending(selected,aliases),counts(selected,aliases,name),wateredTotals(carried,aliases,name));
+    }
+
     static Map<Integer,Integer> pending(Map<Integer,Integer> preparation,Map<Integer,Integer> aliases)
     {
         if(preparation.isEmpty())return Map.of();

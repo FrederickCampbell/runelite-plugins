@@ -37,8 +37,32 @@ final class Preparation
     {
         return choose(level,from,initial,entrana,StartAt.GUILD,false);
     }
-    enum Phase { UNCHECKED, INITIAL, ACTIVE, RESUPPLY }
-    enum GuildStage { NONE, ARRIVAL, SEEDLINGS, LOCAL, DEPARTURE, EXTERNAL }
+    /** One legal workflow state instead of a Cartesian product of preparation and Guild stages. */
+    enum Workflow
+    {
+        UNCHECKED(false,false,false), ORDINARY_PREP(false,true,true), ORDINARY_ACTIVE(false,false,false),
+        ORDINARY_RESUPPLY(false,true,false), GUILD_ARRIVAL(true,true,true), GUILD_SEEDLINGS(true,true,true),
+        GUILD_LOCAL_PREP(true,true,true), GUILD_LOCAL(true,false,false), GUILD_LOCAL_RESUPPLY(true,true,false),
+        GUILD_DEPARTURE(true,true,true), GUILD_EXTERNAL(true,false,false), GUILD_EXTERNAL_RESUPPLY(true,true,false);
+        final boolean guild,preparing,initial;
+        Workflow(boolean guild,boolean preparing,boolean initial)
+        {this.guild=guild;this.preparing=preparing;this.initial=initial;}
+        boolean local(){return this==GUILD_LOCAL||this==GUILD_LOCAL_PREP||this==GUILD_LOCAL_RESUPPLY;}
+        boolean external(){return this==GUILD_EXTERNAL||this==GUILD_EXTERNAL_RESUPPLY;}
+        boolean splitGuild(){return local()||external()||this==GUILD_DEPARTURE;}
+        Workflow resume()
+        {
+            switch(this)
+            {
+                case GUILD_ARRIVAL:return this;
+                case GUILD_SEEDLINGS:case GUILD_LOCAL_PREP:case GUILD_LOCAL_RESUPPLY:return GUILD_LOCAL;
+                case GUILD_DEPARTURE:case GUILD_EXTERNAL_RESUPPLY:return GUILD_EXTERNAL;
+                case UNCHECKED:case ORDINARY_PREP:case ORDINARY_RESUPPLY:return ORDINARY_ACTIVE;
+                default:return this;
+            }
+        }
+        Workflow resupply(){return preparing?this:local()?GUILD_LOCAL_RESUPPLY:external()?GUILD_EXTERNAL_RESUPPLY:ORDINARY_RESUPPLY;}
+    }
     static boolean atGuild(WorldPoint point)
     {return point!=null&&point.getPlane()==0&&point.distanceTo2D(GUILD)<=32;}
     enum StartAt { GUILD("Farming Guild"), BANK("Bank");

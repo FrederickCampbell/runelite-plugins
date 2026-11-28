@@ -6,14 +6,15 @@ import net.runelite.api.coords.WorldPoint;
 final class RunOrder
 {
     private final List<FarmRunPatch> itinerary;
-    private final boolean protectedManual;
+    private final boolean protectedManual,reverseBirds;
     private final Map<FarmRunPatch,Integer> ranks = new HashMap<>();
     private final Comparator<FarmRunPatch> byRank = Comparator.comparingInt(ranks::get);
 
     RunOrder(List<Group> groups){this(groups,false);}
-    RunOrder(List<Group> groups,boolean protectedManual)
+    RunOrder(List<Group> groups,boolean protectedManual){this(groups,protectedManual,null);}
+    RunOrder(List<Group> groups,boolean protectedManual,WorldPoint start)
     {
-        this.protectedManual=protectedManual;
+        this.protectedManual=protectedManual;this.reverseBirds=reverseBirds(start);
         itinerary = flatten(groups);
         index();
     }
@@ -23,7 +24,7 @@ final class RunOrder
         if (!ranks.keySet().containsAll(ready))
         {
             appendReady(itinerary, ready);
-            if(protectedManual)itinerary.sort(Comparator.comparingInt(p->protectedRank(block(site(p)))));
+            if(protectedManual)itinerary.sort(protectedComparator(reverseBirds));
             index();
         }
         for (List<FarmRunPatch> patches : List.of(ready, plant, visible))
@@ -137,11 +138,26 @@ final class RunOrder
     private static String block(String site)
     {return "Lumbridge farm".equals(site)?"Champions' Guild":site;}
     private static final List<String> PROTECTED=List.of("Farming Guild","Gnome Stronghold","Tree Gnome Village","Lumbridge Castle","Varrock","Falador Park","Taverley","Catherby","Brimhaven","Tai Bwo Wannai","South Falador","Draynor Manor","Kastori","Auburnvale","Auburnvale belladonna");
-    private static int protectedRank(String site)
+    private static final Map<String,Integer> PROTECTED_RANK=protectedRanks();
+    private static Map<String,Integer> protectedRanks()
     {
-        if(terminalOrder(site)>0)return 1000+terminalOrder(site);
-        int n=PROTECTED.indexOf(site);if(n>=0)return n;
-        int m=MIXED.indexOf(site);return PROTECTED.size()+(m<0?MIXED.size():m);
+        Map<String,Integer> result=new HashMap<>();
+        for(int i=0;i<MIXED.size();i++)result.put(MIXED.get(i),PROTECTED.size()+i);
+        for(int i=0;i<PROTECTED.size();i++)result.put(PROTECTED.get(i),i);
+        result.put("Entrana",1001);result.put("Fossil Island",1002);
+        return Map.copyOf(result);
+    }
+    private static int protectedRank(String site){return PROTECTED_RANK.getOrDefault(site,PROTECTED.size()+MIXED.size());}
+    private static int protectedActivity(FarmRunPatch p){return "Farming Guild".equals(site(p))?guildOrder(p):localOrder(p);}
+    private static int birdRank(FarmRunPatch p,boolean reverse){return p.getPatchType()==PatchType.BIRDHOUSE?(reverse?-BirdhouseRun.order(p):BirdhouseRun.order(p)):0;}
+    private static Comparator<FarmRunPatch> protectedComparator(boolean reverse)
+    {return Comparator.comparingInt((FarmRunPatch p)->protectedRank(block(site(p))))
+        .thenComparingInt(RunOrder::protectedActivity).thenComparingInt(p->birdRank(p,reverse));}
+    private static boolean reverseBirds(WorldPoint start)
+    {
+        WorldPoint south=BirdhouseRun.Site.MEADOW_SOUTH.approach,north=BirdhouseRun.Site.VALLEY_NORTH.approach;
+        double distance=proxy(start,north);
+        return start!=null&&distance<100&&distance<proxy(start,south);
     }
     private static int guildOrder(FarmRunPatch p)
     {
@@ -177,16 +193,14 @@ final class RunOrder
             byBlock.computeIfAbsent(block(site(patch)),k->new ArrayList<>()).add(patch);
         List<Group> ordered=new ArrayList<>();
         // Direction is run-wide, not different for every physical group.
-        WorldPoint south=BirdhouseRun.Site.MEADOW_SOUTH.approach,north=BirdhouseRun.Site.VALLEY_NORTH.approach;
-        double northDistance=proxy(start,north);
-        boolean reverse=start!=null&&northDistance<100&&northDistance<proxy(start,south);
+        boolean reverse=reverseBirds(start);
         byBlock.forEach((site,ps)->{
             // Mixed Catherby visits finish the selected farm plots before the fruit tree.
             boolean catherbyMixed=!protectedManual&&"Catherby".equals(site)&&ps.stream().anyMatch(p->p.getPatchType()==PatchType.FRUIT_TREE);
-            ps.sort(Comparator.comparingInt((FarmRunPatch p)->protectedManual&&"Farming Guild".equals(site)?guildOrder(p):catherbyMixed?
+            ps.sort(Comparator.comparingInt((FarmRunPatch p)->protectedManual?protectedActivity(p):catherbyMixed?
                     p.getPatchType()==PatchType.HERB?-2:
                     p.getPatchType()==PatchType.ALLOTMENT||p.getPatchType()==PatchType.FLOWER||p.getPatchType()==PatchType.COMPOST_BIN?-1:localOrder(p):localOrder(p))
-                .thenComparingInt(p->p.getPatchType()==PatchType.BIRDHOUSE?(reverse?-BirdhouseRun.order(p):BirdhouseRun.order(p)):0));
+                .thenComparingInt(p->birdRank(p,reverse)));
             ordered.add(new Group(site,ps));
         });
         if(protectedManual)
@@ -210,7 +224,7 @@ final class RunOrder
             if(near!=null){ordered.remove(near);ordered.add(0,near);}
             else if(guild!=null){ordered.remove(guild);ordered.add(Math.min(1,ordered.size()),guild);}
         }
-        // Preserve explicit selected pairs even when initial proximity or saplings promote a site.
+        // Preserve explicit selected pairs after initial proximity promotion.
         pair(ordered,"South Falador","Draynor Manor");
         pair(ordered,"Falador Park","Taverley");
         // Entrana comes before Fossil Island, both after ordinary surface work.

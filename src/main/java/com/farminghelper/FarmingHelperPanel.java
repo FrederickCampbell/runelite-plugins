@@ -813,18 +813,25 @@ final class FarmingHelperPanel extends PluginPanel
             if(seedPreparationOpen)section.add(seedPreparationBody(latestGuide),BorderLayout.CENTER);else removeBody(section);refreshLayout(section);});
         addRow(section);
     }
-    private JPanel seedPreparationBody(GuideView view)
+    private JPanel supplyBody(boolean padded)
     {
         JPanel body=column();body.setOpaque(true);body.setBackground(FarmingTheme.CARD);
+        if(padded)body.setBorder(BorderFactory.createEmptyBorder(2,5,4,5));
+        return body;
+    }
+    private void appendSupplyRow(JPanel body,GuideView.ItemRow item)
+    {SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));row.update(item);body.add(row);}
+    private JPanel seedPreparationBody(GuideView view)
+    {
+        JPanel body=supplyBody(false);
         body.add(text(view.preparation,FarmingTheme.TEXT));
         for(GuideView.ItemRow item:view.items)if(!item.recommended&&view.notes.preparationItems.contains(item.id))
-        {SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));row.update(item);body.add(row);}
+        appendSupplyRow(body,item);
         FarmingTheme.apply(body);return body;
     }
     private JPanel supplies(GuideView view,boolean optional)
     {
-        JPanel body=column();body.setOpaque(true);body.setBackground(FarmingTheme.CARD);
-        body.setBorder(BorderFactory.createEmptyBorder(2,5,4,5));
+        JPanel body=supplyBody(true);
         if(!optional&&view.notes.guildSplit)
         {
             for(int section=1;section<=2;section++)
@@ -833,14 +840,13 @@ final class FarmingHelperPanel extends PluginPanel
                 body.add(text(section==1?"At Farming Guild":"After Farming Guild",FarmingTheme.TEXT));
                 boolean any=false;
                 for(GuideView.ItemRow item:view.items)if(!item.recommended&&item.section==section)
-                {SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));row.update(item);body.add(row);any=true;}
+                {appendSupplyRow(body,item);any=true;}
                 if(!any)body.add(text("No outstanding requirements.",FarmingTheme.MUTED));
             }
         }
         else for(GuideView.ItemRow item:view.items)if(item.recommended==optional)
         {
-            SupplyRow row=supplyRows.computeIfAbsent(rowKey(item),key->new SupplyRow(item));
-            row.update(item);body.add(row);
+            appendSupplyRow(body,item);
         }
         if(body.getComponentCount()==0)body.add(text(optional?"No teleports recommended for the remaining patches.":"No items needed for this run.",FarmingTheme.MUTED));
         FarmingTheme.apply(body);

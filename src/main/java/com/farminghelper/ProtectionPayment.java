@@ -28,9 +28,15 @@ final class ProtectionPayment
     static void reserve(Map<Integer,Integer> required,Map<Integer,Integer> payments,Map<Integer,Integer> bag,
         IntFunction<ItemComposition> definitions,Map<Integer,Integer> noteSources)
     {
+        reserve(required,payments,bag,definitions,noteSources,Map.of(),null);
+    }
+    static void reserve(Map<Integer,Integer> required,Map<Integer,Integer> payments,Map<Integer,Integer> bag,
+        IntFunction<ItemComposition> definitions,Map<Integer,Integer> noteSources,Map<Integer,Integer> local,Map<Integer,Integer> localRequired)
+    {
         for(var entry:payments.entrySet())
         {
             int id=entry.getKey(),need=entry.getValue(),note=noteId(id,definitions);
+            int localNeed=Math.min(need,local.getOrDefault(id,0));
             if(note>0)
             {
                 int noted=Math.min(need,Math.max(0,bag.getOrDefault(note,0)-required.getOrDefault(note,0)));
@@ -41,8 +47,15 @@ final class ProtectionPayment
                     required.merge(note,need-loose,PhysicalStock::sum);
                     noteSources.put(note,id);
                 }
+                // Attribute only the payment quantities actually allocated above, not unrelated uses of the same item.
+                if(localRequired!=null&&localNeed>0)
+                {
+                    int localNote=Math.min(localNeed,need-loose);
+                    if(localNote>0)localRequired.merge(note,localNote,PhysicalStock::sum);
+                    if(localNeed>localNote)localRequired.merge(id,localNeed-localNote,PhysicalStock::sum);
+                }
             }
-            else required.merge(id,need,PhysicalStock::sum);
+            else {required.merge(id,need,PhysicalStock::sum);if(localRequired!=null&&localNeed>0)localRequired.merge(id,localNeed,PhysicalStock::sum);}
         }
     }
 }
