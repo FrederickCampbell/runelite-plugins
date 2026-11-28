@@ -132,6 +132,7 @@ public class FarmingHelperPlugin extends Plugin
     private List<?> routeSupplyInputs=List.of();
     private RouteSupplies.Plan routeSupplyPlan;
     private List<Integer> tracedPriority=List.of();
+    private int[] tracedLayout=new int[0];
     private Set<Integer> shelfItems=Set.of(), shelfCandidates=Set.of(), bankPlaceholders=Set.of();
     private String stockProfile;
     private volatile Map<Integer,ImageIcon> icons = Collections.emptyMap();
@@ -269,7 +270,7 @@ public class FarmingHelperPlugin extends Plugin
     {
         run = Collections.emptySet();
         if(runBank!=null)runBank.close();
-        bankRoutes.reset();bankItinerary=List.of();bankFallback=Map.of();routeSupplyInputs=List.of();routeSupplyPlan=null;
+        bankRoutes.reset();bankItinerary=List.of();bankFallback=Map.of();routeSupplyInputs=List.of();routeSupplyPlan=null;tracedPriority=List.of();tracedLayout=new int[0];
         hideSeedless=false;clearSeedless=true;activeClearOnly=false;compostAcknowledged=false;stepItems=Collections.emptySet();runPolicyKey=null;runHasTrees=false;
         manualKeys=null;runLabel=null;
         workflow=Preparation.Workflow.UNCHECKED;treeStock=null;treeAllocation=Map.of();treePlan=TreePreparation.Plan.EMPTY;visitedStorage=false;explicitResupply=false;preparationVault=false;preparationAtStorage=false;preparationOrigin=null;
@@ -849,8 +850,15 @@ public class FarmingHelperPlugin extends Plugin
         LinkedHashSet<Integer> prioritized=new LinkedHashSet<>(preparationBankPriority);
         prioritized.addAll(BankShelfLayout.priorityOrder(priority,this::observedItemName,id->{var stats=itemManager.getItemStats(id);return stats==null||stats.getEquipment()==null?-1:stats.getEquipment().getSlot();}));prioritized.addAll(containerBankPriority);priority=List.copyOf(prioritized);
         if(legacy.routeAudit()&&!tracedPriority.equals(priority)){tracedPriority=priority;ROUTE_LOG.info("FH_ROUTE priority={} admittedPriority={}",priority,priority.stream().filter(id->eligible!=null&&eligible.contains(id)&&shelfCandidates.contains(id)).collect(java.util.stream.Collectors.toList()));}
-        if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase(),priority);
-        runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase(),priority);return "";
+        String message="";
+        if(manual)message=runBank.show(eligible,shelfCandidates,birdBankPhase(),priority);
+        else runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase(),priority);
+        if(legacy.routeAudit())
+        {
+            int[] layout=runBank.layoutSnapshot();
+            if(!Arrays.equals(tracedLayout,layout)){tracedLayout=layout;ROUTE_LOG.info("FH_ROUTE layout length={} prefix={}",layout.length,Arrays.toString(Arrays.copyOf(layout,Math.min(layout.length,Math.max(8,priority.size()+8)))));}
+        }
+        return message;
     }
     void showActiveRunBank(java.util.function.Consumer<String> feedback)
     {

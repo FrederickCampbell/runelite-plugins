@@ -124,6 +124,7 @@ final class ActiveRunBank
         Set<Integer> filtered=new HashSet<>(smaller);filtered.retainAll(larger);
         ids=Set.copyOf(filtered);
     }
+    int[] layoutSnapshot(){return lastLayout.clone();}
     void bankClosed(){release();}
     void close(){close(bankOpen()?service():null);}
     private void close(BankTagsService api)

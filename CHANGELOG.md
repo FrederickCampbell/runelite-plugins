@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.13.3 — stable transportation candidate
+- Publish one bounded itinerary estimate per banking stage, not each individual response; retain it through withdrawals and ordinary bank reopening.
+- Ignore Shortest Path's bank snapshot configuration updates; reset for actual settings changes, selected skips and explicit preparation stages.
+- Preserve funded route edges if another edge cannot be resolved. Identify known free POH portal actions, home and minigame labels from pinned upstream data; flag unresolved destinations.
+- Add opt-in local transportation trace. No extra plugin, upstream change or private cross-plugin access.
+
 ## v1.13.2 — transportation dependencies
 - Publish completed Shortest Path bank-origin legs incrementally, without suppressing results after a withdrawal or deposit.
 - Recognize a banked rune pouch before route results arrive; show a funded pouch as optional until the route is verified, without marking it missing.
