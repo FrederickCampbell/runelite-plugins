@@ -4,8 +4,8 @@ Baseline: 71a988e63b3794193610a71b8d50faad17a16c93 (v1.12.0-rc1). Development br
 
 ## Scope
 - Single workflow state with explicit legal preparation and resupply transitions.
-- Scoped resource accumulator with sum/max semantics; actual payment allocations determine Guild quantities. Specialized compost, travel and planting-form accounting remain explicit.
-- Tree preparation result cached by physical-stock snapshot and allocated crops. No changed-state claim for unrelated systems.
+- Scoped resource accumulator with sum/max semantics; actual payment allocations determine Guild quantities. Bin supplies, potion doses, compost applications, tools and harvest containers now use the same scope accounting. Physical travel and planting-form accounting remain explicit.
+- Tree preparation result cached by physical-stock snapshot and allocated crops. Skip redundant packed-load calculation, duplicate supply sorting, intermediate route copies and per-item name-based stage attribution.
 - Protected route insertion uses the same activity ordering as initial routing.
 - Shared Swing supply body/row rendering; no intentional visual redesign.
 - Calquat registry test, not a verified live fix. Tai Bwo Wannai, Kastori and Great Conch already have region mappings; no speculative acceptance of shared growth varbits outside their mapped regions.

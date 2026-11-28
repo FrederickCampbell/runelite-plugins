@@ -178,8 +178,6 @@ final class RunOrder
         if(p.getPatchType().isTree())return 1;
         return 2;
     }
-    static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,Set<PatchType> ignored)
-    {return shared(patches,start,guildFirst,false);}
     static List<Group> shared(List<FarmRunPatch> patches,WorldPoint start,boolean guildFirst,boolean protectedManual)
     {
         Set<PatchType> types=EnumSet.noneOf(PatchType.class);

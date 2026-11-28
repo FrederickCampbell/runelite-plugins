@@ -40,6 +40,18 @@ public class WorkflowConsolidationTest
         assertEquals(Map.of(2,10,1,5),required);
         assertEquals(Map.of(1,3),local);
     }
+    @Test public void storedCompostAndBucketsAreAllocatedOnceAcrossStages()
+    {
+        SupplyLedger s=new SupplyLedger();
+        int ultra=net.runelite.api.gameval.ItemID.BUCKET_ULTRACOMPOST,filled=net.runelite.api.gameval.ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED;
+        CompostChoice.addRequired(s,ultra,12,4,5,Map.of(),Map.of());
+        assertEquals(Map.of(ultra,7),s.total);assertTrue(s.guild.isEmpty());
+        s.reuse(CompostRun.BUCKET,30,true);s.reuse(CompostRun.BUCKET,15,false);s.deduct(CompostRun.BUCKET,20);
+        assertEquals(Integer.valueOf(10),s.total.get(CompostRun.BUCKET));assertEquals(Integer.valueOf(10),s.guild.get(CompostRun.BUCKET));
+        SupplyLedger shared=new SupplyLedger();shared.reuse(filled,1,false);
+        CompostChoice.addRequired(shared,ultra,10,2,0,Map.of(filled,1),Map.of());
+        assertEquals(Map.of(filled,1),shared.total);assertEquals(Map.of(filled,1),shared.guild);
+    }
     @Test public void newlyReadyProtectedPatchesUseSameActivityRanksAsInitialRoute()
     {
         FarmRunPatch herb=new FarmRunPatch("Catherby","",PatchType.HERB),fruit=new FarmRunPatch("Catherby","",PatchType.FRUIT_TREE);

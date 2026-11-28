@@ -10,7 +10,7 @@ public class FixedRouteCompostTest
 {
     private static FarmRunPatch p(String location,PatchType type){return new FarmRunPatch(location,"",type);}
     private static List<FarmRunPatch> order(FarmRunPatch... patches)
-    {return RunOrder.flatten(RunOrder.shared(List.of(patches),null,true,Set.of()));}
+    {return RunOrder.flatten(RunOrder.shared(List.of(patches),null,true,false));}
 
     @Test public void mixedRouteKeepsRequestedPairings()
     {
@@ -30,8 +30,8 @@ public class FixedRouteCompostTest
     {
         FarmRunPatch park=p("Falador",PatchType.TREE),taverley=p("Taverley",PatchType.TREE),
             farm=p("Falador",PatchType.HERB),manor=p("Draynor Manor",PatchType.BELLADONNA);
-        assertEquals(List.of(park,taverley),RunOrder.flatten(RunOrder.shared(List.of(park,taverley),new WorldPoint(2936,3438,0),false,Set.of())));
-        assertEquals(List.of(farm,manor),RunOrder.flatten(RunOrder.shared(List.of(farm,manor),new WorldPoint(3084,3356,0),false,Set.of())));
+        assertEquals(List.of(park,taverley),RunOrder.flatten(RunOrder.shared(List.of(park,taverley),new WorldPoint(2936,3438,0),false,false)));
+        assertEquals(List.of(farm,manor),RunOrder.flatten(RunOrder.shared(List.of(farm,manor),new WorldPoint(3084,3356,0),false,false)));
     }
 
     @Test public void leprechaunAndBucketReduceSupplyRequirements()

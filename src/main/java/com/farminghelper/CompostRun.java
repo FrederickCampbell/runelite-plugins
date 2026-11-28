@@ -130,8 +130,15 @@ final class CompostRun
     static void addSupplies(Map<Integer,Integer> required,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
         Map<Integer,Integer> stock,Map<Integer,Integer> bag,Map<FarmRunPatch,Plan> plans,Production production,Material material,boolean localFirst)
     {
+        // Preserve the ordinary no-bin fast path for all callers.
+        for(FarmRunPatch p:ready)if(p.getPatchType()==PatchType.COMPOST_BIN)
+        {addSupplies(new SupplyLedger(required,new HashMap<>()),ready,observations,stock,bag,plans,production,material,localFirst,false);return;}
+    }
+    static void addSupplies(SupplyLedger demands,List<FarmRunPatch> ready,Map<FarmRunPatch,QuestFarmingStateReader.Observation> observations,
+        Map<Integer,Integer> stock,Map<Integer,Integer> bag,Map<FarmRunPatch,Plan> plans,Production production,Material material,boolean localFirst,boolean splitGuild)
+    {
         Map<Integer,Integer> left=null;
-        int doses=0;
+        int doses=0,guildDoses=0;
         for(FarmRunPatch p:ready)if(p.getPatchType()==PatchType.COMPOST_BIN)
         {
             if (left == null) left = new HashMap<>(stock);
@@ -142,17 +149,24 @@ final class CompostRun
                 continue;
             }
             plans.put(p,plan);
+            boolean local=splitGuild&&"Farming Guild".equals(p.getLocation());
             for(Map.Entry<Integer,Integer> e:plan.supplies.entrySet())
             {
                 int id=e.getKey(),n=e.getValue();
-                if(Arrays.stream(POTIONS).anyMatch(i->i==id)){doses++;continue;}
-                if(id==BUCKET||id==BOTTOMLESS||id==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)required.merge(id,n,Math::max);
-                else {required.merge(id,n,Integer::sum);left.compute(id,(k,v)->Math.max(0,(v==null?0:v)-n));}
+                if(contains(POTIONS,id)){doses++;if(local)guildDoses++;continue;}
+                if(id==BUCKET||id==BOTTOMLESS||id==ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED)demands.reuse(id,n,local);
+                else {demands.consume(id,n,local);left.compute(id,(k,v)->Math.max(0,(v==null?0:v)-n));}
             }
         }
         for(int i=POTIONS.length-1;i>=0&&doses>0;i--)
-        {int id=POTIONS[i],n=Math.min(stock.getOrDefault(id,0),(doses+i)/(i+1));if(n>0){required.merge(id,n,Integer::sum);doses-=n*(i+1);}}
-        if(doses>0)required.merge(POTIONS[0],doses,Integer::sum);
+        {
+            int id=POTIONS[i],n=Math.min(stock.getOrDefault(id,0),(doses+i)/(i+1));
+            if(n<=0)continue;
+            int local=Math.min(n,(guildDoses+i)/(i+1));
+            demands.consumeSplit(id,n,local);
+            doses-=n*(i+1);guildDoses=Math.max(0,guildDoses-local*(i+1));
+        }
+        if(doses>0)demands.consumeSplit(POTIONS[0],doses,guildDoses);
     }
     /** Only defer bank produce when a selected earlier local plot has a
      * verified compatible harvest. Never add its expected yield to stock. */

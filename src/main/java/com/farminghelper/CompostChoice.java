@@ -39,13 +39,18 @@ enum CompostChoice
     static void addRequired(Map<Integer,Integer> required,int item,int count,int storedUltra,
         Map<Integer,Integer> stock,Map<Integer,Integer> bag)
     {
-        if(item!=ULTRA.item){Supplies.addCompost(required,item,count);return;}
-        int deficit=Math.max(0,count-Math.max(0,storedUltra));
-        // A known filled bucket in storage is an alternative to collecting
-        // additional loose compost; no extra bucket if carried loose covers it.
-        if(deficit>bag.getOrDefault(ULTRA.item,0)&&stock.getOrDefault(BOTTOMLESS.item,0)>0)
-            Supplies.addCompost(required,BOTTOMLESS.item,1);
-        else Supplies.addCompost(required,item,deficit);
+        addRequired(new SupplyLedger(required,new java.util.HashMap<>()),item,count,0,item==ULTRA.item?storedUltra:0,stock,bag);
+    }
+    static void addRequired(SupplyLedger demands,int item,int count,int guildCount,int stored,
+        Map<Integer,Integer> stock,Map<Integer,Integer> bag)
+    {
+        int deficit=Math.max(0,count-Math.max(0,stored));
+        int local=Math.max(0,guildCount-Math.max(0,stored));
+        if(item<0||deficit==0)return;
+        // Pick the physical representation once for the whole run, then scope it.
+        if(item==ULTRA.item&&deficit>bag.getOrDefault(ULTRA.item,0)&&stock.getOrDefault(BOTTOMLESS.item,0)>0)item=BOTTOMLESS.item;
+        if(item==BOTTOMLESS.item)demands.reuse(item,1,local>0);
+        else demands.consumeSplit(item,deficit,local);
     }
     static int localItem(int planned,Map<Integer,Integer> bag,int storedUltra)
     {

@@ -15,17 +15,17 @@ public class RouteAndReplacement41Test
         FarmRunPatch guild=p("Farming Guild",PatchType.BUSH),champ=p("Champions' Guild",PatchType.BUSH),
             hops=p("Lumbridge",PatchType.HOPS),entrana=p("Entrana",PatchType.HOPS),tree=p("Lumbridge",PatchType.TREE),
             fossil=p("Fossil Island",PatchType.HARDWOOD_TREE);
-        List<FarmRunPatch> result=RunOrder.flatten(RunOrder.shared(List.of(hops,fossil,entrana,champ,tree,guild),null,true,java.util.Set.of()));
+        List<FarmRunPatch> result=RunOrder.flatten(RunOrder.shared(List.of(hops,fossil,entrana,champ,tree,guild),null,true,false));
         assertEquals(guild,result.get(0));assertEquals(result.indexOf(champ)+1,result.indexOf(hops));
         assertNotEquals(RunOrder.site(tree),RunOrder.site(hops));
         assertEquals(entrana,result.get(result.size()-2));assertEquals(fossil,result.get(result.size()-1));
-        assertEquals(result,RunOrder.flatten(RunOrder.shared(List.of(guild,tree,champ,entrana,fossil,hops),null,true,java.util.Set.of())));
+        assertEquals(result,RunOrder.flatten(RunOrder.shared(List.of(guild,tree,champ,entrana,fossil,hops),null,true,false)));
     }
     @Test public void carriedSaplingsDoNotOverrideRoute()
     {
         FarmRunPatch guild=p("Farming Guild",PatchType.HERB),tree=p("Varrock",PatchType.TREE),
             fruit=p("Catherby",PatchType.FRUIT_TREE),herb=p("Catherby",PatchType.HERB);
-        List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(List.of(guild,tree,herb,fruit),null,true,Set.of(PatchType.FRUIT_TREE)));
+        List<FarmRunPatch> ordered=RunOrder.flatten(RunOrder.shared(List.of(guild,tree,herb,fruit),null,true,false));
         assertEquals(List.of(guild,tree,herb,fruit),ordered);
     }
     @Test public void bankPreferenceAndVaultFallback()
