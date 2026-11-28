@@ -92,6 +92,8 @@ public class FarmingHelperPlugin extends Plugin
     private volatile Set<Integer> requiredItems = Collections.emptySet();
     private volatile Set<Integer> missingStorageItems = Collections.emptySet();
     private volatile Map<Integer,String> withdrawalLabels=Map.of();
+    private List<Integer> preparationBankPriority=List.of(),containerBankPriority=List.of();
+    private FarmRunPatch lastLocalVisit;
     private volatile Set<Integer> missingTeleports = Collections.emptySet();
     private final AtomicLong session=new AtomicLong();
     private volatile long lifecycle;
@@ -280,7 +282,7 @@ public class FarmingHelperPlugin extends Plugin
         activeLive=false;
         requiredItems = Collections.emptySet();
         missingStorageItems = Collections.emptySet();
-        withdrawalLabels=Map.of();
+        withdrawalLabels=Map.of();preparationBankPriority=List.of();containerBankPriority=List.of();lastLocalVisit=null;
         missingTeleports = Collections.emptySet();
         lastView = null;
         activeLeg=null;
@@ -833,6 +835,8 @@ public class FarmingHelperPlugin extends Plugin
         List<Integer> priority=bankRoutes.started()
             ?bankRoutes.priority(bankFallback,manual)
             :List.copyOf(bankFallback.keySet());
+        LinkedHashSet<Integer> prioritized=new LinkedHashSet<>(preparationBankPriority);
+        prioritized.addAll(priority);prioritized.addAll(containerBankPriority);priority=List.copyOf(prioritized);
         if(manual)return runBank.show(eligible,shelfCandidates,birdBankPhase(),priority);
         runBank.tick(eligible,shelfCandidates,enabled,birdBankPhase(),priority);return "";
     }
@@ -841,7 +845,7 @@ public class FarmingHelperPlugin extends Plugin
         long id=session.get();
         inRun(()->{
             if(!flag("activeRunBank",true))return;
-            sampleStorage();bankRoutes.refresh();update();
+            sampleStorage();bankRoutes.closeVisit();update();
             String message=updateRunBank(true);
             if(!message.isEmpty())SwingUtilities.invokeLater(()->{if(id==session.get()&&guideRequested)feedback.accept(message);});
         });
@@ -1391,7 +1395,15 @@ public class FarmingHelperPlugin extends Plugin
         Map<String,List<String>> bankRouteSnapshot=bankRoutes.routes();
         Map<Integer,Integer> pouchRunes=!loggedIn||bankRouteSnapshot.isEmpty()?Map.of():RouteSupplies.pouchContents(client,pouch);
         boolean elite=loggedIn&&client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE)==1;
-        final List<FarmRunPatch> remaining=ready;
+        // Keep later specialty supplies in the complete plan while preserving the
+        // existing seaweed exit and birdhouse interaction stage.
+        final List<FarmRunPatch> remaining=new ArrayList<>(ready);
+        if(specialtyStaged&&!specialtyBirdPhase)for(FarmRunPatch p:eligible)
+        {
+            if(p.getPatchType()!=PatchType.BIRDHOUSE||runProgress.finished(p))continue;
+            var observed=observations.computeIfAbsent(p,this::observe);
+            if(observed!=null&&observed.state!=CropState.GROWING)remaining.add(p);
+        }
         Map<FarmRunPatch,Crop> remainingSeeds=new LinkedHashMap<>();
         boolean yieldTool=false,needsWater=false,diving=false;
         int vines=0;
@@ -1450,9 +1462,12 @@ public class FarmingHelperPlugin extends Plugin
             }
         }
         // Reserve actual crop and gardener-payment materials before choosing bin produce.
-        Map<Integer,Integer> compostStock=new HashMap<>(stock),compostBag=new HashMap<>(bag);
-        paymentNeeds.forEach((id,n)->{compostStock.computeIfPresent(id,(k,v)->Math.max(0,v-n));compostBag.computeIfPresent(id,(k,v)->Math.max(0,v-n));});
-        CompostRun.addSupplies(required,remaining,observations,compostStock,compostBag,binPlans,compostProduction(),compostMaterial(),flag("compostLocalProduceV112",true));
+        if(remaining.stream().anyMatch(p->p.getPatchType()==PatchType.COMPOST_BIN))
+        {
+            Map<Integer,Integer> compostStock=new HashMap<>(stock),compostBag=new HashMap<>(bag);
+            paymentNeeds.forEach((id,n)->{compostStock.computeIfPresent(id,(k,v)->Math.max(0,v-n));compostBag.computeIfPresent(id,(k,v)->Math.max(0,v-n));});
+            CompostRun.addSupplies(required,remaining,observations,compostStock,compostBag,binPlans,compostProduction(),compostMaterial(),flag("compostLocalProduceV112",true));
+        }
         if(splitGuild)for(FarmRunPatch p:guildReady)if(binPlans.containsKey(p))binPlans.get(p).supplies.forEach((id,n)->guildNeeds.merge(id,n,Integer::sum));
         if(coins>0) required.merge(ItemID.COINS,coins,Integer::sum);
         if(needsAxe){Map<Integer,Integer> axeStock=new HashMap<>(stock);equipped.forEach((id,n)->axeStock.merge(id,n,Integer::sum));int axe=TreeAxes.best(axeStock,client.getRealSkillLevel(Skill.WOODCUTTING),this::observedItemName);axeId=axe>0?axe:1351;required.put(axeId,1);}
@@ -1470,13 +1485,23 @@ public class FarmingHelperPlugin extends Plugin
         if(needsCan&&wateringCan<=0&&storedCan<=0)
             required.put(CropCare.preferredCan(wateringCan,storedCan,CropCare.wateringCan(stock,this::observedItemName)),1);
         if(vines>0){required.merge(Supplies.SALTPETRE,vines,Integer::sum);required.put(Supplies.GARDENING_TROWEL,1);}
+        int storedEmptyBuckets=loggedIn&&runLeprechaun&&!binPlans.isEmpty()?LeprechaunWithdrawal.stored(client,CompostRun.BUCKET):0;
+        if(storedEmptyBuckets>0)required.computeIfPresent(CompostRun.BUCKET,(id,n)->Math.max(0,n-storedEmptyBuckets));
+        if(loggedIn&&runLeprechaun)
+        {
+            for(int tool:new int[]{Supplies.GARDENING_TROWEL,ItemID.PLANT_CURE,ItemID.SECATEURS})
+                if(carried.getOrDefault(tool,0)==0&&required.getOrDefault(tool,0)>0&&LeprechaunWithdrawal.stored(client,tool)>=required.get(tool))required.remove(tool);
+        }
+        required.values().removeIf(n->n<=0);
         Set<Integer> preparationIds=new HashSet<>(prepSeeds.keySet());
         if(rawSeeds>0){preparationIds.add(TreePreparation.FILLED_POT);preparationIds.add(Supplies.GARDENING_TROWEL);}
         if(rawSeeds+seedlings>0&&needsCan&&wateringCan<=0&&storedCan<=0)preparationIds.add(CropCare.preferredCan(wateringCan,storedCan,CropCare.wateringCan(stock,this::observedItemName)));
         Map<Integer,Integer> wateredCarried=TreePreparation.wateredTotals(bag,aliases,this::observedItemName);
         if(guildStage==Preparation.GuildStage.SEEDLINGS&&rawSeeds+seedlings==0&&wateredCarried.isEmpty()&&(!runHasTrees||bank.at>0&&vault.at>0))
         {
-            guildStage=Preparation.GuildStage.LOCAL;phase=Preparation.Phase.ACTIVE;current=null;activeCrop=null;progress.reset();update();return;
+            guildStage=Preparation.GuildStage.LOCAL;phase=Preparation.Phase.ACTIVE;
+            if(ready.stream().anyMatch(p->"Farming Guild".equals(p.getLocation())))beginPreparation(Preparation.Phase.INITIAL);
+            current=null;activeCrop=null;progress.reset();update();return;
         }
         if(compostId!=ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED||storedBucket==0)
             CompostChoice.addRequired(required,compostId,compostId==ItemID.BUCKET_ULTRACOMPOST?compostCount:Math.max(0,compostCount-storedCompost),storedUltra,stock,bag);
@@ -1506,6 +1531,14 @@ public class FarmingHelperPlugin extends Plugin
         java.util.function.IntPredicate boxEligible=id->seedItem(id)&&stackable(id)&&!prepSeeds.containsKey(id)&&id!=ItemID.HESPORI_SEED;
         int requiredBox=boxEnabled?SeedBoxStock.requiredBox(physicalRequired,bag,bank.items,storage,supplies.seedBox,seedBox.complete(),boxEligible):-1;
         if(requiredBox>0){required.put(requiredBox,1);physicalRequired.put(requiredBox,1);if(!guildReady.isEmpty())guildNeeds.putIfAbsent(requiredBox,1);}
+        List<Integer> prepPriority=new ArrayList<>();
+        if(preparing()&&(rawSeeds+seedlings>0||guildStage==Preparation.GuildStage.SEEDLINGS))
+            for(int id:SupplyOrder.ordered(required,this::observedItemName))if(preparationIds.contains(id))prepPriority.add(id);
+        preparationBankPriority=List.copyOf(prepPriority);
+        List<Integer> containers=new ArrayList<>();
+        if(requiredBox>0)containers.add(requiredBox);
+        for(int id:required.keySet())if(id!=requiredBox&&(id==DivingKit.HELMET||id==DivingKit.APPARATUS||id==DivingKit.MEDALLION||observedItemName(id).toLowerCase(Locale.ROOT).contains("herb sack")||observedItemName(id).toLowerCase(Locale.ROOT).contains("reagent pouch")))containers.add(id);
+        containerBankPriority=List.copyOf(containers);
         Map<Integer,Integer> paymentStorage=paymentNotes.isEmpty()?storage:new HashMap<>(storage);
         paymentNotes.forEach((note,base)->paymentStorage.merge(note,
             Math.max(0,bank.items.getOrDefault(base,0)-Math.max(0,physicalRequired.getOrDefault(base,0)-bag.getOrDefault(base,0))),PhysicalStock::sum));
@@ -1529,13 +1562,7 @@ public class FarmingHelperPlugin extends Plugin
         if(remaining.size()==1&&remaining.get(0).getPatchType()==PatchType.COMPOST_BIN)
         {
             CompostRun.batch(load,bag,equipped,supplies.seedBox,actualOccupied,this::stackable);
-            required.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
-            required.values().removeIf(n->n<=0);
-            if(physicalRequired!=required)
-            {
-                physicalRequired.replaceAll((id,n)->CompostRun.batchItem(id)?load.getOrDefault(id,0):n);
-                physicalRequired.values().removeIf(n->n<=0);
-            }
+            // Only the immediate feasible load is batched; full requirements remain visible.
         }
         int looseSlots=Preparation.loadedSlots(actualOccupied,bag,load,equipped,supplies.seedBox,this::stackable);
         Map<Integer,Integer> packing=boxEnabled&&SeedBoxStock.boxId(bag)>0&&seedBox.complete()&&!seedBox.pending()&&seedBoxPlant==null
@@ -1572,13 +1599,17 @@ public class FarmingHelperPlugin extends Plugin
         shelfRequirements.addAll(paymentNotes.values());
         if(guildStage==Preparation.GuildStage.SEEDLINGS)shelfRequirements.retainAll(preparationIds);
         requiredItems=Set.copyOf(shelfRequirements);
-        missingStorageItems=GuideView.missingItems(physicalRequired,carried,paymentNotes);
+        Map<Integer,Integer> storageNeeds=new LinkedHashMap<>(physicalRequired);
+        if(guildStage==Preparation.GuildStage.SEEDLINGS)storageNeeds.keySet().retainAll(preparationIds);
+        else if(guildStage==Preparation.GuildStage.LOCAL&&preparing())storageNeeds.replaceAll((id,n)->Math.min(n,guildNeeds.getOrDefault(id,0)));
+        storageNeeds.values().removeIf(n->n<=0);
+        missingStorageItems=GuideView.missingItems(storageNeeds,carried,paymentNotes);
         if(guildStage==Preparation.GuildStage.SEEDLINGS){Set<Integer> prepMissing=new HashSet<>(missingStorageItems);prepMissing.retainAll(preparationIds);missingStorageItems=Set.copyOf(prepMissing);}
         Map<Integer,String> labels=new HashMap<>();
-        physicalRequired.forEach((id,n)->{int missing=n-carried.getOrDefault(id,0);if(missing>0&&missingStorageItems.contains(id)){
+        storageNeeds.forEach((id,n)->{int missing=n-carried.getOrDefault(id,0);if(missing>0&&missingStorageItems.contains(id)){
             int base=paymentNotes.getOrDefault(id,id);String label="Withdraw "+missing+" "+observedItemName(base)+(base==id?"":" (noted)");labels.put(id,label);labels.put(base,label);}});
         withdrawalLabels=Map.copyOf(labels);
-        Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(physicalRequired,this::observedItemName);
+        Map<Integer,Integer> plantingRequired=SupplyOrder.plantingRequirements(storageNeeds,this::observedItemName);
         Set<Integer> missingTravel=new HashSet<>();
         teleports.forEach((id,sites)->{
             GuideView.ItemRow row=itemRow(id,travelCounts.get(id),supplies,true," — "+String.join(", ",sites));
@@ -1615,6 +1646,9 @@ public class FarmingHelperPlugin extends Plugin
                 compostMissing=compostTier==0;
             instruction=type==PatchType.BIRDHOUSE?birdhousePlans.get(current):type==PatchType.COMPOST_BIN?binPlans.get(current).instruction:
                 StepEngine.instruction(action,activeCrop,type,keep,activeClearOnly,o.state==CropState.EMPTY);
+            if(activeLive&&!preparing()&&highlight!=null&&highlight.hasLocalPatch(current)&&highlight.leprechaun(current)!=null)lastLocalVisit=current;
+            if(type==PatchType.COMPOST_BIN&&storedEmptyBuckets>0&&binPlans.get(current).supplies.getOrDefault(CompostRun.BUCKET,0)>bag.getOrDefault(CompostRun.BUCKET,0))
+                instruction="Withdraw empty buckets from the tool leprechaun as needed ("+storedEmptyBuckets+" stored); collect in batches. "+instruction;
             if(activeLive&&!preparing()&&type!=PatchType.BIRDHOUSE&&type!=PatchType.COMPOST_BIN)
                 leprechaunWithdrawal=contextualWithdrawal(current,action,stepCompost,bag,carried,wateringCan,needsCan,estimatedOccupied);
             if(activeLive&&!preparing()&&action==StepEngine.Action.HARVEST&&Supplies.secateursUseful(type,o)&&
@@ -1750,6 +1784,10 @@ public class FarmingHelperPlugin extends Plugin
         if(!harvestContainers.isEmpty())supplyNote+=(supplyNote.isEmpty()?"":"\n")+harvestContainers;
         if(yieldTool&&storedMagic&&carried.getOrDefault(magicSecateurs,0)==0)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Magic secateurs stored with tool leprechauns; carry or equip for the optional harvest bonus.";
+        if(rawSeeds>0&&runLeprechaun&&LeprechaunWithdrawal.stored(client,Supplies.GARDENING_TROWEL)>0&&bag.getOrDefault(Supplies.GARDENING_TROWEL,0)==0)
+            supplyNote+="\nCollect the stored gardening trowel from a tool leprechaun.";
+        if(!preparing()&&runLeprechaun&&lastLocalVisit!=null&&current!=null&&!RunOrder.site(lastLocalVisit).equals(RunOrder.site(current))&&highlight!=null&&highlight.leprechaun(lastLocalVisit)!=null)
+            supplyNote+="\nBefore leaving this area, return surplus farming tools and compost to the nearby leprechaun; keep tools needed at destinations without accessible storage.";
         if(rawSeeds+seedlings>0&&wateringCan<=0&&storedCan>0)supplyNote+="\nCollect the stored watering can from a tool leprechaun before watering seedlings.";
         if(compostCount>0&&compostId==ItemID.BUCKET_ULTRACOMPOST&&storedUltra>0)
             supplyNote+=(supplyNote.isEmpty()?"":"\n")+"Ultracompost: "+storedUltra+" stored with tool leprechauns; withdraw as needed.";
@@ -1796,7 +1834,7 @@ public class FarmingHelperPlugin extends Plugin
             boolean vaultTarget=preparationBank==Preparation.SEED_VAULT;
             // A known vault shortage may still remain after visiting a regular
             // bank. Only the explicit preparation session can suggest it.
-            boolean bankOutstanding=Preparation.storedShortage(physicalRequired,carried,bank.items);
+            boolean bankOutstanding=Preparation.storedShortage(storageNeeds,carried,bank.items);
             boolean routeToStorage=(!missingStorageItems.isEmpty()||explicitResupply) &&
                 (!visitedStorage||!atStorage&&(vaultTarget?vaultOutstanding:bankOutstanding));
             preparationVault=vaultTarget&&vaultOutstanding;
@@ -1832,7 +1870,7 @@ public class FarmingHelperPlugin extends Plugin
             if(!arrived)leg=RouteLeg.approach(Preparation.GUILD,"Travel to the Farming Guild bank approach.",RouteLeg.Interaction.NONE);
             bankCandidates=Set.of();
         }
-        if(guildStage==Preparation.GuildStage.DEPARTURE&&preparing())prepMessage="Farming Guild activities complete. Collect remaining supplies — continue when ready.";
+        if(guildStage==Preparation.GuildStage.DEPARTURE&&preparing())prepMessage="Farming Guild activities complete. Deposit unnecessary local tools and harvests. Collect remaining supplies — continue when ready.";
         if(loggedIn&&SpecialRoutes.isType(current,PatchType.BIRDHOUSE)&&
             (SpecialRoutes.onSeaweedIsland(player)||!preparing()&&seaweedBirdTransfer))
         {

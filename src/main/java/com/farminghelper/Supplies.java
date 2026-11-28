@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Set;
 import net.runelite.api.gameval.ItemID;
 
-/** Conservative per-wave tools and compost using the existing Advisor patch traits. */
+/** Conservative full-run tools and compost using the existing Advisor patch traits. */
 final class Supplies
 {
     private Supplies() {}

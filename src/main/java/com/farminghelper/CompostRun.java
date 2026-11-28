@@ -71,7 +71,7 @@ final class CompostRun
             for(int id:list)
             {int n=Math.min(left,Math.min(carried.getOrDefault(id,0),available.getOrDefault(id,0)));if(n>0)needs.put(id,n);left-=n;}
             for(int id:list)
-            {int n=Math.min(left,Math.max(0,available.getOrDefault(id,0)-needs.getOrDefault(id,0)));if(n>0)needs.merge(id,n,Integer::sum);left-=n;}
+            {int n=Math.min(left,Math.max(0,(id==ItemID.SNAPE_GRASS&&material!=Material.SNAPE?carried:available).getOrDefault(id,0)-needs.getOrDefault(id,0)));if(n>0)needs.merge(id,n,Integer::sum);left-=n;}
             if(left>0)needs.merge(material.id!=0&&contains(useSuper?SUPER:REGULAR,material.id)?material.id:useSuper?PINEAPPLE:WOAD,left,Integer::sum);
             return new Plan("Add "+missing+" compatible "+(useSuper?"supercompostable":"regular compostable")+" items ("+b.count+"/"+cap+"). "+(useSuper?"Do not add ordinary produce.":"Use cheap produce; regular compost can be upgraded later.")+" Fill in batches if needed; close when full.",needs,true);
         }
@@ -115,7 +115,7 @@ final class CompostRun
     private static int bucket(Map<Integer,Integer> stock)
     {return stock.getOrDefault(BOTTOMLESS,0)>0?BOTTOMLESS:stock.getOrDefault(ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED,0)>0?ItemID.BOTTOMLESS_COMPOST_BUCKET_FILLED:BUCKET;}
     private static void collectNeeds(Map<Integer,Integer> needs,Map<Integer,Integer> stock,int count)
-    {int id=bucket(stock);needs.put(id,id==BUCKET?Math.min(count,28):1);}
+    {int id=bucket(stock);needs.put(id,id==BUCKET?count:1);}
     private static String collection(Map<Integer,Integer> stock)
     {return bucket(stock)==BUCKET?"Collect into empty buckets; bank in batches if needed.":"Use the bottomless bucket only if empty or already contains the compost being collected and has capacity; otherwise use empty buckets. Never empty a filled bucket just for this run.";}
     /** Aggregate consumables, reusing the same collection container and counting potion doses

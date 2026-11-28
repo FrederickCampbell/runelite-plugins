@@ -41,6 +41,7 @@ final class LeprechaunWithdrawal
     {
         switch(item)
         {
+            case CompostRun.BUCKET:return c.getVarbitValue(FARMING_TOOLS_BUCKETS)+32*c.getVarbitValue(FARMING_TOOLS_EXTRABUCKETS)+256*c.getVarbitValue(FARMING_TOOLS_EXTRA2BUCKETS);
             case ItemID.RAKE:return 2*c.getVarbitValue(FARMING_TOOLS_EXTRARAKES)+c.getVarbitValue(FARMING_TOOLS_RAKE);
             case ItemID.DIBBER:return 2*c.getVarbitValue(FARMING_TOOLS_EXTRADIBBERS)+c.getVarbitValue(FARMING_TOOLS_DIBBER);
             case ItemID.SPADE:return 2*c.getVarbitValue(FARMING_TOOLS_EXTRASPADES)+c.getVarbitValue(FARMING_TOOLS_SPADE);
