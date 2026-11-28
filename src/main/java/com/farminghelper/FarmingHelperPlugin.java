@@ -1414,12 +1414,12 @@ public class FarmingHelperPlugin extends Plugin
         for(FarmRunPatch p:remaining)
         {
             Crop crop=seeds.get(p);PatchType type=p.getPatchType();
-            boolean local=splitGuild&&"Farming Guild".equals(p.getLocation());
-            if(crop!=null){remainingSeeds.put(p,crop);if(type==PatchType.GRAPEVINE){vines++;if(local)guildVines++;}}
+            boolean guildPatch=splitGuild&&"Farming Guild".equals(p.getLocation());
+            if(crop!=null){remainingSeeds.put(p,crop);if(type==PatchType.GRAPEVINE){vines++;if(guildPatch)guildVines++;}}
             boolean yield=!careOnly.contains(p)&&Supplies.secateursUseful(type,observations.get(p));
             boolean water=runWater&&type.canBeWatered()&&!immune(p)&&(crop!=null||!wateredThisRun.contains(p)&&CropCare.waterNeeded(type,observations.get(p),true));
-            yieldTool|=yield;guildYield|=local&&yield;
-            needsWater|=water;guildWater|=local&&water;
+            yieldTool|=yield;guildYield|=guildPatch&&yield;
+            needsWater|=water;guildWater|=guildPatch&&water;
             diving|=type==PatchType.CORAL;
         }
         SupplyLedger payments=new SupplyLedger();
@@ -1523,7 +1523,7 @@ public class FarmingHelperPlugin extends Plugin
         Map<Integer,Integer> physicalRequired=pendingSaplings.isEmpty()?required:TreePreparation.physicalRequirements(required,pendingSaplings);
         java.util.function.IntPredicate boxEligible=id->seedItem(id)&&stackable(id)&&!prepSeeds.containsKey(id)&&id!=ItemID.HESPORI_SEED;
         int requiredBox=boxEnabled?SeedBoxStock.requiredBox(physicalRequired,bag,bank.items,storage,supplies.seedBox,seedBox.complete(),boxEligible):-1;
-        if(requiredBox>0){demands.reuse(requiredBox,1,guildNeeds.keySet().stream().anyMatch(boxEligible));physicalRequired.put(requiredBox,1);}
+        if(requiredBox>0){demands.reuse(requiredBox,1,guildNeeds.keySet().stream().anyMatch(id->boxEligible.test(id)));physicalRequired.put(requiredBox,1);}
         List<Integer> orderedSupplyIds=SupplyOrder.ordered(required,this::observedItemName);
         List<Integer> prepPriority=new ArrayList<>();
         if(preparing()&&(rawSeeds+seedlings>0||workflow==Preparation.Workflow.GUILD_SEEDLINGS))
